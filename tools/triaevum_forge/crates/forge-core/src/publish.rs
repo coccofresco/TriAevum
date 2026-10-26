@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use forge_base::fsutil::{self, atomic_write_json, file_error, load_json_object};
 use forge_base::hashing::{hex, sha256_file};
 use forge_base::{legacy_json, CancelToken, ErrorKind, ForgeError, Result};
-use forge_native::{ensure_runtime_config, query_product, NativeServices};
+use forge_native::{ensure_runtime_config, query_product_at, NativeServices};
 use forge_prepare::paths::{expanduser, path_string, resolve};
 use forge_prepare::pyvalue::{objects_eq, py_eq};
 use forge_prepare::{load_prepared_content, InstallationContext};
@@ -261,7 +261,8 @@ pub fn publish_private_runtime(
         None => place_installed_runtime(&package, &platform)?,
         Some(android) => resolve(android.runtime)?,
     };
-    let product = query_product(services, &runtime_executable, "", None)?;
+    let diagnostic = crate::log::preflight_error_path(&private_root);
+    let product = query_product_at(services, &runtime_executable, "", None, Some(&diagnostic))?;
     let profile_directory = profile_path.parent().map(Path::to_path_buf).unwrap_or_default();
     // The Android title library stays in the read-only native library folder.
     let plugin_directory = request.android.is_none().then(|| destination.parent().unwrap_or(&installation));
@@ -403,7 +404,7 @@ pub fn publish_private_runtime(
     }
     // Query the exact immutable generation in a short-lived process before the
     // single launch-profile replacement makes it visible to direct launches.
-    query_product(services, &runtime_executable, "", Some(&destination))?;
+    query_product_at(services, &runtime_executable, "", Some(&destination), Some(&diagnostic))?;
     atomic_write_json(&profile_path, &profile)?;
 
     let title = prepared.directory.clone();

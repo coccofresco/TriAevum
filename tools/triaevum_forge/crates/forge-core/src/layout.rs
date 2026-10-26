@@ -97,7 +97,8 @@ pub fn for_package(package: &Path, env: &dyn Fn(&str) -> Option<String>, os: Hos
         }
         let activation = resolve(&Path::new(&data_home).join("TriAevum"))?;
         if activation.starts_with(&appdir) {
-            return Err(ForgeError::invalid("AppImage activation must be outside the read-only package"));
+            return Err(ForgeError::invalid("AppImage activation must be outside the read-only package")
+                .because(forge_base::Reason::ReadOnlyDestination));
         }
         return Ok(HostLayout { package, activation, use_file_portal: false });
     }
@@ -110,7 +111,8 @@ pub fn for_package(package: &Path, env: &dyn Fn(&str) -> Option<String>, os: Hos
     }
     let activation = resolve(&Path::new(&data_home).join("TriAevum"))?;
     if activation.starts_with(&package) {
-        return Err(ForgeError::invalid("Flatpak activation must be outside the read-only package"));
+        return Err(ForgeError::invalid("Flatpak activation must be outside the read-only package")
+            .because(forge_base::Reason::ReadOnlyDestination));
     }
     Ok(HostLayout { package, activation, use_file_portal: true })
 }
@@ -216,7 +218,10 @@ pub fn ensure_runtime_closed(root: &Path, platform: &ReleasePlatform) -> Result<
                 runtime.display(),
                 holders.join(", ")
             );
-            return Err(ForgeError::new(forge_base::ErrorKind::Busy, message).with_path(runtime));
+            return Err(ForgeError::new(forge_base::ErrorKind::Busy, message)
+                .with_path(runtime)
+                .during(forge_base::Operation::PackageReplace)
+                .because(forge_base::Reason::VerifiedFileHolder));
         }
     }
     Ok(())

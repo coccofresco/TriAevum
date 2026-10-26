@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use forge_base::hashing::{hex, sha256_file};
-use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
+use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Reason, Result};
 use serde_json::{Map, Value};
 
 use crate::adapters::validate_adapter;
@@ -28,7 +28,11 @@ pub const CATALOG: &str = "recipes/precompiled-titles.json";
 pub const RENDERER_CONTRACT: &str = "triaevum_renderer_shader_compiler_v1";
 
 fn integrity(message: String) -> ForgeError {
-    ForgeError::integrity(message)
+    ForgeError::integrity(message).during(Operation::PackageVerify)
+}
+
+fn missing_artifact(relative: &str) -> ForgeError {
+    integrity(format!("Precompiled artifact is missing: {relative}")).because(Reason::MissingModule)
 }
 
 /// Where an Android catalog records the APK's libraries.
@@ -84,14 +88,14 @@ pub fn checked_file(root: &Path, record: &Value, cancel: &CancelToken) -> Result
         }
     }
     if !resolve(&path).starts_with(&root) {
-        return Err(integrity(format!("Precompiled artifact is missing: {relative}")));
+        return Err(missing_artifact(&relative));
     }
     verified(&path, fields, &relative, cancel)
 }
 
 fn verified(path: &Path, fields: &Map<String, Value>, relative: &str, cancel: &CancelToken) -> Result<PathBuf> {
     if !path.is_file() {
-        return Err(integrity(format!("Precompiled artifact is missing: {relative}")));
+        return Err(missing_artifact(relative));
     }
     let size = std::fs::metadata(path)
         .map_err(|error| ForgeError::io(format!("Cannot read {}", path.display()), error))?
@@ -104,7 +108,8 @@ fn verified(path: &Path, fields: &Map<String, Value>, relative: &str, cancel: &C
 
 /// `load_catalog(root)`.
 pub fn load_catalog(root: &Path) -> Result<Map<String, Value>> {
-    let payload = forge_base::fsutil::load_json_object(&join_posix(root, CATALOG))?;
+    let payload = forge_base::fsutil::load_json_object(&join_posix(root, CATALOG))
+        .map_err(|error| error.during(Operation::PackageVerify).because(Reason::MissingCatalogue))?;
     if !eq_str(get(&payload, "format"), FORMAT) || !eq_str(get(&payload, "install_model"), MODEL) {
         return Err(integrity("Unsupported precompiled-title catalog".into()));
     }
@@ -123,7 +128,8 @@ pub fn load_catalog(root: &Path) -> Result<Map<String, Value>> {
     let titles = match payload.get("titles") {
         Some(Value::Array(titles)) if !titles.is_empty() => titles,
         _ => {
-            return Err(integrity("This release contains no precompiled titles; obtain a complete package".into()));
+            return Err(integrity("This release contains no precompiled titles; obtain a complete package".into())
+                .because(Reason::MissingModule));
         }
     };
     let ids: Vec<&Value> = titles.iter().filter_map(Value::as_object).map(|item| get(item, "recipe")).collect();
@@ -181,7 +187,9 @@ pub fn validate_title(
         return Err(ForgeError::new(
             ErrorKind::UnsupportedRevision,
             "No precompiled module for this ROM revision; obtain a compatible release",
-        ));
+        )
+        .during(Operation::PackageVerify)
+        .because(Reason::MissingModule));
     }
     let item_value = matches[0];
     let item = attr_object(item_value)?;

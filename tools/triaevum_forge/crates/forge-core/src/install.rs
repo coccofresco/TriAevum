@@ -22,7 +22,7 @@ use forge_assets::topscreen::{prepare_topscreen_assets, topscreen_link_animation
 use forge_assets::water::prepare_water_textures;
 use forge_base::fsutil::atomic_write_json;
 use forge_base::hashing::{hex, sha256_file};
-use forge_base::{CancelToken, ForgeError, Result};
+use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Reason, Result};
 use forge_catalog::family::{self, InputPaths};
 use forge_catalog::precompiled::{
     artifact_path, checked_file, load_catalog, runtime_record, select_title, set_native_library_directory, MODEL,
@@ -34,7 +34,7 @@ use forge_mods::{prepare_romfs_mods, prepare_ui_texture_pack, romfs_service_view
 use forge_mods::{Catalog, PrepareContext, SystemBsdtar, UiTexturePack};
 use forge_native::{
     adopt_existing_cache, installation_cache_directory, prepare_device_pipelines, prepare_renderer_shader_cache,
-    prepare_shader_seed, query_product, InteriorSunRequest, NativeServices,
+    prepare_shader_seed, query_product_at, InteriorSunRequest, NativeServices,
 };
 use forge_prepare::paths::{expanduser, path_string, resolve};
 use forge_prepare::{
@@ -209,6 +209,20 @@ pub(crate) fn target_runtime(package_root: &Path, target: &InstallTarget) -> Res
     }
 }
 
+/// Names the install step an error came from (`stage`, `operation`); a
+/// failed step without a more specific cause is `step_failed`.
+fn step(stage: &'static str, operation: Operation) -> impl Fn(ForgeError) -> ForgeError {
+    move |error| {
+        let failed = error.kind == ErrorKind::PreparationFailed;
+        let error = error.at_stage(stage).during(operation);
+        if failed {
+            error.because(Reason::StepFailed)
+        } else {
+            error
+        }
+    }
+}
+
 /// A unique `.rom-import-<32 hex>` staging folder name.
 fn staging_name() -> String {
     let mut value = 0u128;
@@ -301,7 +315,8 @@ pub fn install_private_title(
             layout::ensure_runtime_closed(&package_root, &layout::host_platform()?)?;
         }
         let runtime = target_runtime(&package_root, &request.target)?;
-        query_product(services, &runtime, "", None)?;
+        let diagnostic = crate::log::preflight_error_path(&data_root);
+        query_product_at(services, &runtime, "", None, Some(&diagnostic))?;
         let recipes = recipes_path(&package_root);
         let ids: Vec<String> = load_recipe_options(&recipes)?.into_iter().map(|option| option.id).collect();
         let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
@@ -316,8 +331,10 @@ pub fn install_private_title(
 
         stage = "verify";
         report(stage, "Identifying and verifying the supported game revision...");
-        let recipe = match_extracted_recipe(&title_inputs(&extracted), &recipes, cancel)?;
-        select_title(&root, &recipe, Some(&catalog), &target, cancel)?;
+        let recipe = match_extracted_recipe(&title_inputs(&extracted), &recipes, cancel)
+            .map_err(|error| error.during(Operation::Verify))?;
+        select_title(&root, &recipe, Some(&catalog), &target, cancel)
+            .map_err(|error| error.during(Operation::PackageVerify))?;
         let mut adaptation = Value::Null;
         if !recipe.get("input_adapter").unwrap_or(&Value::Null).is_null() {
             stage = "adapt";
@@ -376,7 +393,9 @@ pub fn install_private_title(
             report,
             cancel,
         )?;
-        forge_native::language::install_preferring(&data_root, &Value::Object(languages), game_language.as_deref())?;
+        // The activation is committed: a failure here leaves a playable title.
+        forge_native::language::install_preferring(&data_root, &Value::Object(languages), game_language.as_deref())
+            .map_err(|error| error.during(Operation::SettingsSave).because(Reason::AfterActivationCommitted))?;
         Ok((recipe.get("id").cloned().unwrap_or(Value::Null), prepared.as_json()?, built, adaptation))
     })();
     if staging.exists() {
@@ -502,9 +521,10 @@ pub fn install_precompiled_title(
     cancel: &CancelToken,
 ) -> Result<Value> {
     let PrecompiledRequest { prepared_directory, root, recipe, data_root, android, .. } = *request;
-    let catalog = load_catalog(root)?;
+    let verify = |error: ForgeError| error.during(Operation::PackageVerify);
+    let catalog = load_catalog(root).map_err(verify)?;
     let platform = if android.is_some() { forge_catalog::ANDROID } else { forge_catalog::host_platform()? };
-    let item = select_title(root, recipe, Some(&catalog), &platform, cancel)?;
+    let item = select_title(root, recipe, Some(&catalog), &platform, cancel).map_err(verify)?;
     let prepared = load_prepared_content(prepared_directory, &["code", "exheader", "romfs"], cancel)?;
     if !forge_prepare::pyvalue::py_eq(prepared.index.get("recipe").unwrap_or(&Value::Null), &item["recipe"]) {
         return Err(ForgeError::invalid("Prepared title differs from the precompiled revision"));
@@ -521,21 +541,24 @@ pub fn install_precompiled_title(
             InputPaths { code: &input("code")?.path, exheader: &input("exheader")?.path, romfs: &input("romfs")?.path };
         family::verify(recipe, paths, "execution", cancel)?;
     }
-    let plugin = checked_file(root, &item["plugin"], cancel)?;
+    let plugin = checked_file(root, &item["plugin"], cancel).map_err(verify)?;
     // Android binds no native module (load_catalog checked the binding).
     let native_module = match android {
-        None => Some(checked_file(root, &catalog["native_module"], cancel)?),
+        None => Some(checked_file(root, &catalog["native_module"], cancel).map_err(verify)?),
         Some(_) => None,
     };
     let item_value = Value::Object(item.clone());
-    let tables = title_tables(&item_value, &mut |record| checked_file(root, record, cancel))?;
+    let tables = title_tables(&item_value, &mut |record| checked_file(root, record, cancel)).map_err(verify)?;
     let recipe_value = Value::Object(recipe.clone());
     let romfs = input("romfs")?;
 
     // The HD UI texture pack, when the user has obtained it: the runtime loads
     // it beneath the user's own texture pack, and TopScreen takes its HD atlas.
+    let assets = |error: ForgeError| error.at_stage("assets");
+    let required_assets = step("assets", Operation::RequiredAssets);
     let ui_textures =
-        prepare_ui_texture_pack(root, data_root, &recipe_value, &UiTexturePack::vanilla_ui_hud(), report, cancel)?;
+        prepare_ui_texture_pack(root, data_root, &recipe_value, &UiTexturePack::vanilla_ui_hud(), report, cancel)
+            .map_err(assets)?;
     let texture_pack = prepare_topscreen_assets(
         root,
         data_root,
@@ -544,10 +567,13 @@ pub fn install_precompiled_title(
         ui_atlas_hd(ui_textures.as_deref()).as_deref(),
         report,
         cancel,
-    )?;
-    let water_textures = prepare_water_textures(data_root, &recipe_value, &romfs.path, report, cancel)?;
+    )
+    .map_err(&required_assets)?;
+    let water_textures =
+        prepare_water_textures(data_root, &recipe_value, &romfs.path, report, cancel).map_err(&required_assets)?;
     let scene_lights =
-        prepare_scene_lights(data_root, &recipe_value, &romfs.path, tables.scene_lights.as_deref(), report, cancel)?;
+        prepare_scene_lights(data_root, &recipe_value, &romfs.path, tables.scene_lights.as_deref(), report, cancel)
+            .map_err(&required_assets)?;
     // The user's enabled RomFS mods (none by default): a local overlay over the
     // verified RomFS, never a change to the prepared inputs.
     let manifest = prepared.directory.join("process-manifest.json");
@@ -563,14 +589,15 @@ pub fn install_precompiled_title(
         extractor: &extractor,
         cancel,
     };
-    let romfs_overlay = prepare_romfs_mods(&context, &mut || romfs_service_view(&manifest), report)?;
-    let shader_pack = prepare_shader_seed(services, root, data_root, &item, report)?;
-    let renderer_cache = installation_cache_directory(data_root)?;
+    let romfs_overlay = prepare_romfs_mods(&context, &mut || romfs_service_view(&manifest), report).map_err(assets)?;
+    let helper = step("shaders", Operation::NativeHelper);
+    let shader_pack = prepare_shader_seed(services, root, data_root, &item, report).map_err(&helper)?;
+    let renderer_cache = installation_cache_directory(data_root).map_err(&helper)?;
     adopt_existing_cache(&renderer_cache, None, report);
     let bridge = InteriorSunBridge {
         services,
         root,
-        runtime_record: runtime_record(root, &catalog)?,
+        runtime_record: runtime_record(root, &catalog).map_err(verify)?,
         runtime: std::cell::OnceCell::new(),
     };
     let interior_sun = prepare_interior_sun(
@@ -582,9 +609,10 @@ pub fn install_precompiled_title(
         tables.interior_sun_masks.as_deref(),
         report,
         cancel,
-    )?;
+    )
+    .map_err(step("shaders", Operation::InteriorSun))?;
     let renderer_preparation =
-        prepare_renderer_shader_cache(services, root, data_root, &item, &renderer_cache, report)?;
+        prepare_renderer_shader_cache(services, root, data_root, &item, &renderer_cache, report).map_err(&helper)?;
     let pipeline_preparation = prepare_device_pipelines(
         services,
         root,
@@ -594,7 +622,8 @@ pub fn install_precompiled_title(
         Some(&renderer_cache),
         report,
         cancel,
-    )?;
+    )
+    .map_err(&helper)?;
     cancel.check()?;
 
     let assets = RuntimeAssets {
@@ -650,7 +679,8 @@ pub fn install_precompiled_title(
         )?;
         let activation = activate_prepared_title(&prepared.directory, request.active_title_state, cancel)?;
         Ok((packaged, runtime, activation))
-    })?;
+    })
+    .map_err(|error| error.during(Operation::Activate))?;
     Ok(json!({
         "status": "ready",
         "install_model": MODEL,

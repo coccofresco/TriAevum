@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use forge_base::fsutil::atomic_write_json;
 use forge_base::hashing::{hex, sha256_file};
-use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
+use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Reason, Result};
 use forge_catalog::pyjson::{eq_str, get, py_eq};
 use serde_json::{json, Map, Value};
 
@@ -154,10 +154,47 @@ pub fn query_product(
     source_commit: &str,
     plugin: Option<&Path>,
 ) -> Result<ProductQuery> {
-    let executable = resolve_strict(executable)?;
-    let cannot_query = |error: ForgeError| preflight(&format!("Cannot query the playable runtime: {}", error.message));
+    query_product_at(services, executable, source_commit, plugin, None)
+}
+
+/// The loader cause a Windows exit status names (`describe_exit_status`).
+fn exit_reason(status: i64) -> Option<Reason> {
+    match (status as u64) & 0xFFFF_FFFF {
+        0xC000_0139 | 0xC000_0135 | 0xC000_007B => Some(Reason::MissingLoaderDependency),
+        0xC000_001D => Some(Reason::UnsupportedCpu),
+        _ => None,
+    }
+}
+
+/// [`query_product`] whose diagnostic file goes to `diagnostic` (an
+/// installation's `D/logs/preflight-error.json`) instead of beside the
+/// executable. Errors name the runtime query and keep the cause of a failed
+/// start (the OS error, the loader status).
+pub fn query_product_at(
+    services: &dyn NativeServices,
+    executable: &Path,
+    source_commit: &str,
+    plugin: Option<&Path>,
+    diagnostic: Option<&Path>,
+) -> Result<ProductQuery> {
+    let executable = resolve_strict(executable)
+        .map_err(|error| error.because(Reason::MissingRuntime).during(Operation::PackageVerify))?;
+    query_resolved(services, &executable, source_commit, plugin, diagnostic)
+        .map_err(|error| error.during(Operation::RuntimeQuery))
+}
+
+fn query_resolved(
+    services: &dyn NativeServices,
+    executable: &Path,
+    source_commit: &str,
+    plugin: Option<&Path>,
+    diagnostic: Option<&Path>,
+) -> Result<ProductQuery> {
+    let cannot_query = |error: ForgeError| {
+        preflight(&format!("Cannot query the playable runtime: {}", error.message)).caused_by(&error)
+    };
     let plugin = plugin.map(resolve_strict).transpose().map_err(cannot_query)?;
-    let output = services.product_info(&executable, plugin.as_deref()).map_err(cannot_query)?;
+    let output = services.product_info(executable, plugin.as_deref()).map_err(cannot_query)?;
     let parsed = if output.status == 0 { Some(product_document(&output.stdout)) } else { None };
     let info = match parsed {
         Some(Ok(info)) => info,
@@ -166,11 +203,14 @@ pub fn query_product(
                 Some(Err(decode_error)) => format!("exited normally without product information ({decode_error})"),
                 _ => describe_exit_status(output.status),
             };
-            let log = executable.parent().unwrap_or(Path::new("")).join(PREFLIGHT_LOG);
+            let log = match diagnostic {
+                Some(path) => path.to_path_buf(),
+                None => executable.parent().unwrap_or(Path::new("")).join(PREFLIGHT_LOG),
+            };
             let report = json!({
                 "format": "triaevum_preflight_error_v1",
                 "platform": crate::pyplatform::platform(),
-                "runtime_sha256": file_sha256(&executable).map_err(cannot_query)?,
+                "runtime_sha256": file_sha256(executable).map_err(cannot_query)?,
                 "operation": if plugin.is_some() { "verify-title-plugin" } else { "product-info" },
                 "exit_status": format!("0x{:08X}", (output.status as u64) & 0xFFFF_FFFF),
                 "description": status,
@@ -182,7 +222,12 @@ pub fn query_product(
                 Err(error) => format!("Could not save diagnostic log at {}: {}", log.display(), error.message),
             };
             let streams = if !output.stderr.is_empty() { &output.stderr } else { &output.stdout };
-            return Err(preflight(&format!("Runtime preflight failed ({status}): {}\n{logging}", tail(streams, 2000))));
+            let failure =
+                preflight(&format!("Runtime preflight failed ({status}): {}\n{logging}", tail(streams, 2000)));
+            return Err(match exit_reason(output.status) {
+                Some(reason) if parsed.is_none() => failure.because(reason),
+                _ => failure,
+            });
         }
     };
     let Value::Object(info) = info else {
@@ -192,7 +237,7 @@ pub fn query_product(
     if plugin.is_some() && info.get("private_title_loaded") != Some(&Value::Bool(true)) {
         return Err(preflight("The selected private title failed its native ABI preflight"));
     }
-    Ok(ProductQuery { runtime_sha256: file_sha256(&executable)?, product: info })
+    Ok(ProductQuery { runtime_sha256: file_sha256(executable)?, product: info })
 }
 
 /// `ensure_runtime_config(path, product)`: writes the runtime's published

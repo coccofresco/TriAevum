@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use forge_base::fsutil::{self, atomic_write_json, file_error, load_json_object};
 use forge_base::hashing::{copy_hashing, hex, sha256_file};
-use forge_base::{CancelToken, ForgeError, Result};
+use forge_base::{CancelToken, ForgeError, Reason, Result};
 use forge_prepare::paths::resolve;
 use serde_json::{json, Value};
 
@@ -75,7 +75,8 @@ fn restore(journal: &Path, targets: &[PathBuf]) -> Result<()> {
             return Err(ForgeError::new(
                 forge_base::ErrorKind::RecoveryRequired,
                 "Invalid Forge activation recovery journal",
-            ))
+            )
+            .because(Reason::RollbackFailure))
         }
     };
     let directory = journal.parent().unwrap_or(Path::new("."));
@@ -92,7 +93,8 @@ fn restore(journal: &Path, targets: &[PathBuf]) -> Result<()> {
                 return Err(ForgeError::new(
                     forge_base::ErrorKind::RecoveryRequired,
                     "Forge activation backup is damaged",
-                ));
+                )
+                .because(Reason::RollbackFailure));
             }
         }
     }

@@ -16,7 +16,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use forge_base::hashing::hex;
-use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
+use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Result, Subject};
 use sha2::{Digest, Sha256};
 
 use crate::archive::{keep_archive, part_file, ArchiveContract};
@@ -148,6 +148,7 @@ pub fn download_archive(
     cancel: &CancelToken,
 ) -> Result<std::path::PathBuf> {
     let mut failures = Vec::new();
+    let mut causes: Vec<ForgeError> = Vec::new();
     for url in urls.unwrap_or(archive.downloads()) {
         match download_once(url, data_root, contract, archive, progress, downloader, cancel) {
             Ok(path) => return Ok(path),
@@ -155,12 +156,20 @@ pub fn download_archive(
             Err(error) => {
                 failures.push(format!("{url}: {}", error.message));
                 report(&format!("Download from {url} failed ({}); trying the next source...", error.message));
+                causes.push(error);
             }
         }
     }
     let message =
         if failures.is_empty() { "no download source is configured".to_string() } else { failures.join("; ") };
-    Err(ForgeError::new(ErrorKind::PreparationFailed, message))
+    // One shared cause (every source refused to write, or the disk is full)
+    // keeps its family and OS facts; different causes stay aggregated.
+    let shared = causes.first().filter(|first| causes.iter().all(|cause| cause.kind == first.kind));
+    let aggregated = match shared {
+        Some(cause) => ForgeError::new(cause.kind, message).caused_by(cause),
+        None => ForgeError::new(ErrorKind::PreparationFailed, message),
+    };
+    Err(aggregated.during(Operation::OptionalDownload).about(Subject::OptionalEnhancement))
 }
 
 /// Contract and limits of [`download_verified`].

@@ -13,7 +13,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
+use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Result};
 use forge_catalog::{recipe_label, recognize_recipes};
 use forge_native::{LanguageQuery, NativeServices};
 use forge_prepare::paths::{expanduser, resolve};
@@ -137,12 +137,26 @@ pub fn recognize_rom(
     report: Report<'_>,
     cancel: &CancelToken,
 ) -> Result<Value> {
+    // Every failure names its stage; setting up the paths counts as `identify`.
+    let mut stage = "identify";
+    recognize_stages(request, services, report, cancel, &mut stage)
+        .map_err(|error| error.at_stage(stage).during(Operation::Recognize))
+}
+
+fn recognize_stages(
+    request: RecognizeRequest,
+    services: &dyn NativeServices,
+    report: Report<'_>,
+    cancel: &CancelToken,
+    stage: &mut &'static str,
+) -> Result<Value> {
     let (package_root, data_root) =
         installation_paths(&request.package_root, request.data_root.as_deref(), &request.target)?;
     report("identify", "Reading the cartridge layout");
     let executable = read_executable(request.source, cancel)?;
     cancel.check()?;
 
+    *stage = "verify";
     report("verify", "Identifying the supported game revision...");
     let recipes =
         recognize_recipes(executable.program_id, &executable.code, &executable.exheader, &recipes_path(&package_root))?;
@@ -160,6 +174,7 @@ pub fn recognize_rom(
     }
     cancel.check()?;
 
+    *stage = "languages";
     report("languages", "Reading the game languages...");
     let languages = target_runtime(&package_root, &request.target)
         .and_then(|runtime| forge_native::language::discover_query(services, &runtime, &executable.romfs));

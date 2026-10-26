@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use forge_base::hashing::{hex, sha256_bytes, sha256_file};
-use forge_base::{CancelToken, ErrorKind, ForgeError, Result};
+use forge_base::{CancelToken, ErrorKind, ForgeError, Reason, Result};
 use serde_json::{json, Map, Value};
 
 use crate::adapters::import_contract;
@@ -108,6 +108,7 @@ fn unsupported_revision(program_id: u64) -> ForgeError {
         ErrorKind::UnsupportedRevision,
         format!("the decrypted ROM does not match any supported game revision (program ID {program_id:016X})"),
     )
+    .because(Reason::IdentityMismatch)
 }
 
 /// Rust addition: the recipes a ROM's executable identifies before its

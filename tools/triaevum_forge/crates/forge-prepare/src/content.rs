@@ -11,7 +11,7 @@ use serde_json::{json, Map, Value};
 
 use forge_base::fsutil::{atomic_write_json, load_json_object};
 use forge_base::hashing::{hex, sha256_file, sha256_hex};
-use forge_base::{legacy_json, CancelToken, ErrorKind, ForgeError, Result, LEGACY_TOOL_VERSION};
+use forge_base::{legacy_json, CancelToken, ErrorKind, ForgeError, Operation, Reason, Result, LEGACY_TOOL_VERSION};
 
 use crate::hash_cache::HashCache;
 use crate::paths::{expanduser, path_string, resolve, resolve_reference, InstallationContext};
@@ -239,7 +239,9 @@ pub fn check_title_path_length(output_root: &Path, recipe_ids: &[&str], windows:
                  shorter, such as D:\\Games\\TriAevum, and run Forge again.",
                 longest - WINDOWS_MAX_PATH
             ),
-        ));
+        )
+        .during(Operation::Preflight)
+        .because(Reason::PathTooLong));
     }
     Ok(())
 }

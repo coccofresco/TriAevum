@@ -1,0 +1,1070 @@
+{
+ "format": "triaevum_explain_fixtures_v1",
+ "note": "Synthetic events shared by the forge-core table test and the desktop, CLI and Android consumers.",
+ "cases": [
+  {
+   "name": "invalid_input, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_input",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "invalid_input"
+  },
+  {
+   "name": "invalid_input, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_input",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "invalid_input"
+  },
+  {
+   "name": "invalid_input, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_input",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "invalid_input"
+  },
+  {
+   "name": "encrypted_input, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "encrypted_input",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "encrypted_input"
+  },
+  {
+   "name": "encrypted_input, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "encrypted_input",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "encrypted_input"
+  },
+  {
+   "name": "encrypted_input, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "encrypted_input",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "encrypted_input"
+  },
+  {
+   "name": "missing_key, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "missing_key",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "missing_key"
+  },
+  {
+   "name": "missing_key, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "missing_key",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "missing_key"
+  },
+  {
+   "name": "missing_key, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "missing_key",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "missing_key"
+  },
+  {
+   "name": "unsupported_format, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_format",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "unsupported_format"
+  },
+  {
+   "name": "unsupported_format, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_format",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "unsupported_format"
+  },
+  {
+   "name": "unsupported_format, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_format",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "unsupported_format"
+  },
+  {
+   "name": "unsupported_revision, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_revision",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "unsupported_revision"
+  },
+  {
+   "name": "unsupported_revision, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_revision",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "unsupported_revision"
+  },
+  {
+   "name": "unsupported_revision, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_revision",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "unsupported_revision"
+  },
+  {
+   "name": "incompatible_target, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "incompatible_target",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "incompatible_target"
+  },
+  {
+   "name": "incompatible_target, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "incompatible_target",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "incompatible_target"
+  },
+  {
+   "name": "incompatible_target, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "incompatible_target",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "incompatible_target"
+  },
+  {
+   "name": "artifact_integrity, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "artifact_integrity",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "artifact_integrity"
+  },
+  {
+   "name": "artifact_integrity, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "artifact_integrity",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "artifact_integrity"
+  },
+  {
+   "name": "artifact_integrity, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "artifact_integrity",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "artifact_integrity"
+  },
+  {
+   "name": "invalid_settings, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_settings",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "invalid_settings"
+  },
+  {
+   "name": "invalid_settings, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_settings",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "invalid_settings"
+  },
+  {
+   "name": "invalid_settings, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_settings",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "invalid_settings"
+  },
+  {
+   "name": "storage_full, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "storage_full",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true
+    }
+   },
+   "id": "storage_full"
+  },
+  {
+   "name": "storage_full, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "storage_full",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true
+    }
+   },
+   "id": "storage_full"
+  },
+  {
+   "name": "storage_full, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "storage_full",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true
+    }
+   },
+   "id": "storage_full"
+  },
+  {
+   "name": "permission_denied, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "permission_denied",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "permission_denied"
+  },
+  {
+   "name": "permission_denied, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "permission_denied",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "permission_denied"
+  },
+  {
+   "name": "permission_denied, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "permission_denied",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "permission_denied"
+  },
+  {
+   "name": "busy, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true
+    }
+   },
+   "id": "busy"
+  },
+  {
+   "name": "busy, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true
+    }
+   },
+   "id": "busy"
+  },
+  {
+   "name": "busy, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true
+    }
+   },
+   "id": "busy"
+  },
+  {
+   "name": "recovery_required, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "recovery_required",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "recovery_required"
+  },
+  {
+   "name": "recovery_required, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "recovery_required",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "recovery_required"
+  },
+  {
+   "name": "recovery_required, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "recovery_required",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "recovery_required"
+  },
+  {
+   "name": "native_preflight, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "native_preflight",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "native_preflight"
+  },
+  {
+   "name": "native_preflight, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "native_preflight",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "native_preflight"
+  },
+  {
+   "name": "native_preflight, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "native_preflight",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "native_preflight"
+  },
+  {
+   "name": "preparation_failed, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "preparation_failed",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "preparation_failed"
+  },
+  {
+   "name": "preparation_failed, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "preparation_failed",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "preparation_failed"
+  },
+  {
+   "name": "preparation_failed, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "preparation_failed",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "preparation_failed"
+  },
+  {
+   "name": "cancelled, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "cancelled",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "cancelled"
+  },
+  {
+   "name": "cancelled, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "cancelled",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "cancelled"
+  },
+  {
+   "name": "cancelled, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "cancelled",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "cancelled"
+  },
+  {
+   "name": "internal, known stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "internal",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "internal"
+  },
+  {
+   "name": "internal, null stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "internal",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "internal"
+  },
+  {
+   "name": "internal, unknown stage",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "internal",
+     "stage": "a_future_stage",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "internal"
+  },
+  {
+   "name": "refinement settings_save.after_activation",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "permission_denied",
+     "stage": "activate",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": 5,
+     "retryable": false,
+     "operation": "settings_save",
+     "reason": "after_activation_committed"
+    }
+   },
+   "id": "settings_save.after_activation"
+  },
+  {
+   "name": "refinement request.invalid",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_input",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "request_validation"
+    }
+   },
+   "id": "request.invalid"
+  },
+  {
+   "name": "refinement lock.legacy",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_input",
+     "stage": "activate",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "lock_inspection",
+     "reason": "legacy_lock"
+    }
+   },
+   "id": "lock.legacy"
+  },
+  {
+   "name": "refinement path.too_long",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_settings",
+     "stage": "preflight",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "preflight",
+     "reason": "path_too_long"
+    }
+   },
+   "id": "path.too_long"
+  },
+  {
+   "name": "refinement settings_load.malformed",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_settings",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "settings_load",
+     "reason": "malformed_settings"
+    }
+   },
+   "id": "settings_load.malformed"
+  },
+  {
+   "name": "refinement settings_load.newer",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_input",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "settings_load",
+     "reason": "newer_schema"
+    }
+   },
+   "id": "settings_load.newer"
+  },
+  {
+   "name": "refinement package.component_missing",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_revision",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "package_verify",
+     "reason": "missing_module"
+    }
+   },
+   "id": "package.component_missing"
+  },
+  {
+   "name": "refinement source.needed",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "invalid_input",
+     "stage": null,
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "repair",
+     "reason": "missing_retained_source"
+    }
+   },
+   "id": "source.needed"
+  },
+  {
+   "name": "refinement revision.identity_mismatch",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "unsupported_revision",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "verify",
+     "reason": "identity_mismatch"
+    }
+   },
+   "id": "revision.identity_mismatch"
+  },
+  {
+   "name": "refinement provider.grant_lost",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "permission_denied",
+     "stage": "spool",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": 13,
+     "retryable": false,
+     "operation": "spool",
+     "reason": "provider_grant_lost"
+    }
+   },
+   "id": "provider.grant_lost"
+  },
+  {
+   "name": "refinement package_replace.file_holder",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": "preflight",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true,
+     "operation": "package_replace",
+     "reason": "verified_file_holder"
+    }
+   },
+   "id": "package_replace.file_holder"
+  },
+  {
+   "name": "refinement destination.read_only",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "preparation_failed",
+     "stage": "extract",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": 30,
+     "retryable": false,
+     "reason": "read_only_destination"
+    }
+   },
+   "id": "destination.read_only"
+  },
+  {
+   "name": "refinement runtime.missing_dependency",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "native_preflight",
+     "stage": "preflight",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "runtime_query",
+     "reason": "missing_loader_dependency"
+    }
+   },
+   "id": "runtime.missing_dependency"
+  },
+  {
+   "name": "refinement device.unsupported",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "native_preflight",
+     "stage": "preflight",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "device_query",
+     "reason": "no_compatible_device"
+    }
+   },
+   "id": "device.unsupported"
+  },
+  {
+   "name": "refinement preparation.required_step",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "preparation_failed",
+     "stage": "shaders",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "interior_sun",
+     "reason": "step_failed"
+    }
+   },
+   "id": "preparation.required_step"
+  },
+  {
+   "name": "refinement enhancement.not_ready",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "preparation_failed",
+     "stage": "preflight",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "optional_download",
+     "subject": "optional_enhancement"
+    }
+   },
+   "id": "enhancement.not_ready"
+  },
+  {
+   "name": "refinement recovery.rollback_failure",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "recovery_required",
+     "stage": "activate",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "activate",
+     "reason": "rollback_failure"
+    }
+   },
+   "id": "recovery.rollback_failure"
+  },
+  {
+   "name": "a refinement reason under another kind falls back to the kind",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": "extract",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": true,
+     "reason": "path_too_long"
+    }
+   },
+   "id": "busy"
+  },
+  {
+   "name": "an operation outside the refinement's operations falls back",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "native_preflight",
+     "stage": "preflight",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false,
+     "operation": "launch",
+     "reason": "missing_loader_dependency"
+    }
+   },
+   "id": "native_preflight"
+  },
+  {
+   "name": "unknown structured codes are ignored",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "storage_full",
+     "stage": "extract",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": 112,
+     "retryable": true,
+     "operation": "teleport",
+     "reason": "gremlins",
+     "subject": "moon"
+    }
+   },
+   "id": "storage_full"
+  },
+  {
+   "name": "an unknown error code is internal",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "frobnicated",
+     "stage": "verify",
+     "message": "Cannot read C:\\Users\\Someone\\Games\\TriAevum\\data\\sources\\code.bin: synthetic failure",
+     "os_code": null,
+     "retryable": false
+    }
+   },
+   "id": "internal"
+  },
+  {
+   "name": "a cancelled event",
+   "input": {
+    "event": "cancelled"
+   },
+   "id": "cancelled"
+  },
+  {
+   "name": "an error object without its event",
+   "input": {
+    "code": "storage_full",
+    "stage": "extract",
+    "message": "disk full",
+    "os_code": 112,
+    "retryable": true
+   },
+   "id": "storage_full"
+  },
+  {
+   "name": "notice: graphics preparation incomplete",
+   "input": {
+    "outcome": "graphics_preparation_incomplete",
+    "details": "GPU pipeline preparation: failed"
+   },
+   "id": "outcome.graphics_preparation_incomplete"
+  },
+  {
+   "name": "notice: languages unreadable",
+   "input": {
+    "outcome": "languages_unreadable",
+    "details": "the runtime did not start"
+   },
+   "id": "outcome.languages_unreadable"
+  },
+  {
+   "name": "notice: display settings reset",
+   "input": {
+    "outcome": "display_settings_reset",
+    "details": "Output.Mode"
+   },
+   "id": "outcome.display_settings_reset"
+  },
+  {
+   "name": "notice: game exited with an error",
+   "input": {
+    "outcome": "game_exited_with_error",
+    "details": "exit code 0xC0000005"
+   },
+   "id": "outcome.game_exited_with_error"
+  },
+  {
+   "name": "a progress event has no explanation",
+   "input": {
+    "event": "progress",
+    "stage": "extract",
+    "done": 1,
+    "total": 2
+   },
+   "id": null
+  }
+ ]
+}

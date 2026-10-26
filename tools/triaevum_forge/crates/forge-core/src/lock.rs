@@ -12,7 +12,7 @@ use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-use forge_base::{ErrorKind, ForgeError, Result};
+use forge_base::{ErrorKind, ForgeError, Operation, Reason, Result};
 
 /// Held until dropped. The file is never unlinked: another process may
 /// already have opened the same inode.
@@ -42,7 +42,9 @@ pub fn acquire(path: &Path) -> Result<KernelLock> {
         return Err(ForgeError::invalid(format!(
             "Legacy build lock exists; close the old Forge before removing it: {}",
             path.display()
-        )));
+        ))
+        .during(Operation::LockInspection)
+        .because(Reason::LegacyLock));
     }
     let empty = file.metadata().map_err(|error| ForgeError::io("Cannot inspect the lock", error))?.len() == 0;
     if empty {
@@ -55,6 +57,13 @@ pub fn acquire(path: &Path) -> Result<KernelLock> {
         Err(TryLockError::WouldBlock) => Err(busy(path)),
         Err(TryLockError::Error(error)) => Err(ForgeError::io(format!("Cannot lock {}", path.display()), error)),
     }
+}
+
+/// Whether another holder has the lock at `path`, without creating or
+/// writing it: installation inspection must not change the installation.
+pub fn is_held(path: &Path) -> bool {
+    let Ok(file) = File::open(path) else { return false };
+    matches!(file.try_lock(), Err(TryLockError::WouldBlock))
 }
 
 fn busy(path: &Path) -> ForgeError {
@@ -77,6 +86,11 @@ mod tests {
         drop(first);
         assert!(acquire(&path).is_ok());
         assert_eq!(std::fs::read(&path).unwrap(), b"\0");
+        let held = acquire(&path).unwrap();
+        assert!(is_held(&path));
+        drop(held);
+        assert!(!is_held(&path));
+        assert!(!is_held(&directory.path().join("absent.lock")));
     }
 
     #[test]
@@ -84,6 +98,8 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("lock");
         std::fs::write(&path, b"pid=123").unwrap();
-        assert!(acquire(&path).unwrap_err().message.starts_with("Legacy build lock exists"));
+        let error = acquire(&path).unwrap_err();
+        assert!(error.message.starts_with("Legacy build lock exists"));
+        assert_eq!(error.reason, Some(Reason::LegacyLock));
     }
 }

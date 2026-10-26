@@ -13,10 +13,11 @@ use forge_native::DesktopServices;
 
 use crate::abi::{EventSink, Job};
 use crate::cancel::CancelToken;
-use crate::error::{ForgeError, Result};
+use crate::error::{ForgeError, Operation, Result};
 use crate::fsutil;
 use crate::hashing::{copy_hashing, hex};
 use crate::install::{self, install_private_title, AndroidTarget, InstallRequest, InstallSource, InstallTarget};
+use crate::log::ForgeLog;
 use crate::recognize::{recognize_rom, RecognizeRequest};
 
 pub const REQUEST_FORMAT: &str = "triaevum_forge_request_v1";
@@ -30,6 +31,7 @@ pub fn capabilities() -> Value {
         "input_formats": ["3ds", "cci", "extracted_directory"],
         "encrypted_input": false,
         "jobs": ["spool_copy", "rom_identify", "rom_recognize", "install", "game_language"],
+        "queries": ["inspect", "explain"],
     })
 }
 
@@ -49,7 +51,19 @@ pub fn target_triple() -> &'static str {
     }
 }
 
+/// Starts a job. A request Forge cannot read fails as `request_validation`,
+/// so the explanation does not blame the user's ROM.
 pub fn start(request: &[u8]) -> Result<Job> {
+    start_job(request).map_err(|error| {
+        if error.kind == crate::ErrorKind::InvalidInput && error.os_code.is_none() {
+            error.during(Operation::RequestValidation)
+        } else {
+            error
+        }
+    })
+}
+
+fn start_job(request: &[u8]) -> Result<Job> {
     let request = crate::legacy_json::load_object(request)
         .map_err(|error| ForgeError::invalid(format!("Invalid Forge request: {error}")))?;
     if request.get("format").and_then(Value::as_str) != Some(REQUEST_FORMAT) {
@@ -66,19 +80,34 @@ pub fn start(request: &[u8]) -> Result<Job> {
         }
         Some("rom_recognize") => {
             let job = RecognizeJob::parse(&request)?;
-            Ok(Job::spawn(move |sink, cancel| job.run(sink, cancel)))
+            let log = job_log("rom_recognize", job.data_root.as_deref(), &job.package_root, job.android.as_ref());
+            Ok(Job::spawn_logged(log, move |sink, cancel| job.run(sink, cancel)))
         }
         Some("install") => {
             let job = InstallJob::parse(&request)?;
-            Ok(Job::spawn(move |sink, cancel| job.run(sink, cancel)))
+            let log = job_log("install", job.data_root.as_deref(), &job.package_root, job.android.as_ref());
+            Ok(Job::spawn_logged(log, move |sink, cancel| job.run(sink, cancel)))
         }
         Some("game_language") => {
             let job = GameLanguageJob::parse(&request)?;
-            Ok(Job::spawn(move |_, _| job.run()))
+            let log = Some(ForgeLog::new(&job.data_root, "game_language"));
+            Ok(Job::spawn_logged(log, move |_, _| job.run()))
         }
         Some(other) => Err(ForgeError::invalid(format!("Unknown Forge job: {other}"))),
         None => Err(ForgeError::invalid("Forge request has no job")),
     }
+}
+
+/// The Forge log of a job's data folder (`D/logs/forge.log`): the requested
+/// folder, else the Android profile's or the package's. None when the folder
+/// cannot be resolved; the job then runs unlogged.
+fn job_log(job: &str, data_root: Option<&Path>, package_root: &Path, android: Option<&AndroidJob>) -> Option<ForgeLog> {
+    let data_root = match (data_root, android) {
+        (Some(requested), _) => install::data_root(Some(requested), package_root).ok()?,
+        (None, Some(android)) => android.target.data_root(),
+        (None, None) => install::data_root(None, package_root).ok()?,
+    };
+    Some(ForgeLog::new(&data_root, job))
 }
 
 /// Where a job reads its input: a local path, or (Android) a descriptor the
@@ -667,7 +696,24 @@ mod tests {
 
     #[test]
     fn unknown_requests_fail_without_a_job() {
-        assert!(start(b"{\"format\":\"triaevum_forge_request_v1\",\"job\":\"x\"}").is_err());
+        let error = start(b"{\"format\":\"triaevum_forge_request_v1\",\"job\":\"x\"}").err().unwrap();
+        assert_eq!(error.operation, Some(Operation::RequestValidation));
+        assert_eq!(crate::explain::explain(&error).id, "request.invalid");
         assert!(start(b"[]").is_err());
+    }
+
+    #[test]
+    fn jobs_with_a_data_folder_write_the_forge_log() {
+        let directory = tempfile::tempdir().unwrap();
+        let data_root = directory.path().to_string_lossy().into_owned();
+        let events = run_request(
+            json!({"format": REQUEST_FORMAT, "job": "game_language", "data_root": data_root, "select": "fr"}),
+        );
+        assert_eq!(events.last().unwrap()["event"], "failed");
+        let log = std::fs::read_to_string(directory.path().join("logs").join("forge.log")).unwrap();
+        let lines: Vec<&str> = log.lines().collect();
+        assert_eq!(lines.len(), 2, "{log}");
+        assert!(lines[0].ends_with("[game_language] started"));
+        assert!(lines[1].contains("[game_language] failed code=invalid_input"), "{}", lines[1]);
     }
 }

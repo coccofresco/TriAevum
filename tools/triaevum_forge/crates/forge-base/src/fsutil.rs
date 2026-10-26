@@ -133,6 +133,7 @@ pub fn file_error(action: &str, path: &Path, error: io::Error) -> ForgeError {
                  files briefly), then try again.",
             )
         } else {
+            forge_error.reason = Some(crate::error::Reason::VerifiedFileHolder);
             (format!("the file is in use by {}", holders.join(", ")), "Close it, then try again.")
         };
         let code = forge_error.os_code.map(|code| format!(" (os error {code})")).unwrap_or_default();

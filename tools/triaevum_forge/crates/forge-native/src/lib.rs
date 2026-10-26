@@ -36,7 +36,7 @@ pub use device::{
     adopt_existing_cache, installation_cache_directory, prepare_device_pipelines, renderer_cache_directory,
 };
 pub use installed_runtime::validate_installed_runtime;
-pub use product::{ensure_runtime_config, query_product, validate_product_info, ProductQuery};
+pub use product::{ensure_runtime_config, query_product, query_product_at, validate_product_info, ProductQuery};
 pub use services::{
     DeviceJob, InteriorSunRequest, LanguageQuery, NativeOutput, NativeServices, PortableCompile, RendererPassRequest,
     Report, TransferableImport,

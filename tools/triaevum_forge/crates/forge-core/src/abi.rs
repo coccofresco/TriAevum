@@ -1,8 +1,10 @@
 // Copyright TriAevum contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Forge ABI v1: the stable C interface the Android installer and the game's
-//! host use. Declarations live in `include/triaevum_forge.h`.
+//! Forge ABI v2: the stable C interface the Android installer and the game's
+//! host use. Declarations live in `include/triaevum_forge.h`. Version 2 adds
+//! `TriAevumForgeInspect` and `TriAevumForgeExplain` to version 1, whose
+//! declarations are unchanged (a v1 host works with this library).
 //!
 //! Requests, events and results are versioned UTF-8 JSON in byte spans.
 //! Buffers Rust returns are released only by `TriAevumForgeFreeBuffer`.
@@ -25,8 +27,9 @@ use serde_json::{json, Value};
 use crate::cancel::CancelToken;
 use crate::error::{ErrorKind, ForgeError};
 use crate::jobs;
+use crate::log::ForgeLog;
 
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 #[repr(C)]
 pub struct TriAevumForgeBuffer {
@@ -76,10 +79,14 @@ pub struct Job {
 #[derive(Clone)]
 pub struct EventSink {
     queue: Arc<(Mutex<EventQueue>, Condvar)>,
+    log: Option<Arc<ForgeLog>>,
 }
 
 impl EventSink {
     pub fn emit(&self, event: Value) {
+        if let Some(log) = &self.log {
+            log.event(&event);
+        }
         let (lock, signal) = &*self.queue;
         let mut queue = lock.lock().unwrap_or_else(|poison| poison.into_inner());
         queue.events.push_back(event);
@@ -95,6 +102,9 @@ impl EventSink {
     }
 
     fn finish(&self, event: Value) {
+        if let Some(log) = &self.log {
+            log.event(&event);
+        }
         let (lock, signal) = &*self.queue;
         let mut queue = lock.lock().unwrap_or_else(|poison| poison.into_inner());
         if !queue.terminal {
@@ -105,11 +115,13 @@ impl EventSink {
     }
 }
 
+/// The terminal event of a failure. `operation`, `subject` and `reason`
+/// appear only when known; consumers fall back to `code` and `stage`.
 pub fn error_event(error: &ForgeError) -> Value {
     if error.kind == ErrorKind::Cancelled {
         return json!({"event": "cancelled"});
     }
-    json!({
+    let mut event = json!({
         "event": "failed",
         "error": {
             "code": error.kind.code(),
@@ -118,20 +130,53 @@ pub fn error_event(error: &ForgeError) -> Value {
             "os_code": error.os_code,
             "retryable": matches!(error.kind, ErrorKind::Busy | ErrorKind::StorageFull),
         },
-    })
+    });
+    let facts = [
+        ("operation", error.operation.map(|value| value.code())),
+        ("subject", error.subject.map(|value| value.code())),
+        ("reason", error.reason.map(|value| value.code())),
+    ];
+    for (key, value) in facts {
+        if let Some(value) = value {
+            event["error"][key] = json!(value);
+        }
+    }
+    event
+}
+
+/// The terminal event of a success: the job's result, and its non-error
+/// outcomes (`notices`, see [`crate::explain::result_notices`]) when any.
+pub fn succeeded_event(result: Value) -> Value {
+    let notices = crate::explain::result_notices(&result);
+    let mut event = json!({"event": "succeeded", "result": result});
+    if !notices.is_empty() {
+        event["notices"] = Value::Array(notices);
+    }
+    event
 }
 
 impl Job {
     /// Runs `work` on a worker thread. Its result becomes the terminal event.
     pub fn spawn(work: impl FnOnce(&EventSink, &CancelToken) -> crate::Result<Value> + Send + 'static) -> Self {
+        Self::spawn_logged(None, work)
+    }
+
+    /// [`Job::spawn`] whose events (except progress) also go to `log`.
+    pub fn spawn_logged(
+        log: Option<ForgeLog>,
+        work: impl FnOnce(&EventSink, &CancelToken) -> crate::Result<Value> + Send + 'static,
+    ) -> Self {
         let queue = Arc::new((Mutex::new(EventQueue::default()), Condvar::new()));
         let cancel = CancelToken::new();
-        let sink = EventSink { queue: Arc::clone(&queue) };
+        let sink = EventSink { queue: Arc::clone(&queue), log: log.map(Arc::new) };
+        if let Some(log) = &sink.log {
+            log.line("started");
+        }
         let token = cancel.clone();
         let thread = std::thread::spawn(move || {
             let outcome = catch_unwind(AssertUnwindSafe(|| work(&sink, &token)));
             let event = match outcome {
-                Ok(Ok(result)) => json!({"event": "succeeded", "result": result}),
+                Ok(Ok(result)) => succeeded_event(result),
                 Ok(Err(error)) => error_event(&error),
                 Err(_) => error_event(&ForgeError::internal("Forge stopped on an internal error")),
             };
@@ -194,6 +239,27 @@ pub extern "C" fn TriAevumForgeGetAbiVersion() -> u32 {
 pub extern "C" fn TriAevumForgeGetCapabilities() -> TriAevumForgeBuffer {
     guarded(TriAevumForgeBuffer::empty(), || {
         TriAevumForgeBuffer::from_vec(crate::legacy_json::compact_line_bytes(&jobs::capabilities()))
+    })
+}
+
+/// The installation state (`crate::state`) for a JSON inspection request.
+/// Read-only; it may hash installed files, so hosts call it off their UI
+/// thread. Never fails: an unusable request is a `failed` state.
+#[no_mangle]
+pub unsafe extern "C" fn TriAevumForgeInspect(request: *const u8, request_len: usize) -> TriAevumForgeBuffer {
+    guarded(TriAevumForgeBuffer::empty(), || {
+        let bytes = span(request, request_len).unwrap_or_default();
+        TriAevumForgeBuffer::from_vec(crate::state::inspect_bytes(bytes))
+    })
+}
+
+/// The explanation (`crate::explain`) of a failed or cancelled event, an
+/// event's `error` object or a notice; JSON `null` for anything else.
+#[no_mangle]
+pub unsafe extern "C" fn TriAevumForgeExplain(input: *const u8, input_len: usize) -> TriAevumForgeBuffer {
+    guarded(TriAevumForgeBuffer::empty(), || {
+        let bytes = span(input, input_len).unwrap_or_default();
+        TriAevumForgeBuffer::from_vec(crate::explain::explain_bytes(bytes))
     })
 }
 

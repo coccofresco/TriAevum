@@ -15,7 +15,7 @@ pub mod legacy_json;
 pub mod pyvalue;
 
 pub use cancel::CancelToken;
-pub use error::{ErrorKind, ForgeError, Result};
+pub use error::{ErrorKind, ForgeError, Operation, Reason, Result, Subject};
 
 /// The legacy tool version written into forge-state.json and TAM metadata.
 /// It identifies the on-disk format generation, not this program's version.
