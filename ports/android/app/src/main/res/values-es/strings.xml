@@ -4,7 +4,7 @@
 
     <!-- Instalador (InstallerActivity, InstallService) -->
     <string name="forge_title">TriAevum Forge</string>
-    <string name="forge_intro">Selecciona la imagen descifrada de tu propio cartucho de Nintendo 3DS (.3ds o .cci). Forge prepara el juego en este dispositivo, sin claves de cifrado ni acceso a la red. La primera instalación tarda varios minutos. Continúa en segundo plano, también con el teléfono bloqueado, y muestra su progreso en una notificación.</string>
+    <string name="forge_intro">Selecciona la imagen descifrada de tu propio cartucho de Nintendo 3DS (.3ds o .cci). Forge prepara el juego en este dispositivo, sin claves de cifrado. Solo usa la red si eliges descargar el paquete de interfaz HD opcional. La primera instalación tarda varios minutos. Continúa en segundo plano, también con el teléfono bloqueado, y muestra su progreso en una notificación.</string>
     <string name="forge_no_package">Esta compilación no tiene paquete de Forge: solo puede jugar a un título preparado de antemano.</string>
     <string name="forge_cannot_open">No se puede abrir el archivo seleccionado.</string>
     <string name="forge_package_error">No se puede preparar el paquete de Forge de la aplicación: %1$s</string>
@@ -80,6 +80,35 @@
     <string name="forge_check_again">Volver a comprobar</string>
     <string name="forge_banner_notifications">Las notificaciones están desactivadas, así que el progreso solo se muestra en esta pantalla. La instalación continúa aunque el teléfono esté bloqueado o cierres esta pantalla.</string>
     <string name="forge_banner_turn_on">Activar notificaciones</string>
+    <string name="forge_state_hd_working">Obteniendo el paquete de interfaz HD</string>
+    <string name="forge_state_hd_working_body">El juego instalado no cambia. Continúa también con el teléfono bloqueado o con esta pantalla cerrada.</string>
+
+    <!-- Idioma del instalador (decisión 8: uno de los idiomas de juego de la ROM) -->
+    <string name="forge_language_button">Idioma: %1$s</string>
+    <string name="forge_language_title">Idioma del instalador</string>
+    <string name="forge_language_not_kept">No se pudo guardar el idioma para el próximo inicio.</string>
+
+    <!-- Paquete de interfaz HD (decisión 5: siempre a elección del usuario) -->
+    <string name="hd_title">Paquete de interfaz HD (opcional)</string>
+    <string name="hd_credit">%1$s %2$s de %3$s, %4$s: texturas del HUD y de los menús en mayor resolución. No se descarga nada si no lo eliges.</string>
+    <string name="hd_missing">No está en este dispositivo. Descárgalo (%1$s) o importa el .zip que descargaste desde su página.</string>
+    <string name="hd_archive_installed">Descargado. Se aplicará la próxima vez que instales el juego desde tu ROM.</string>
+    <string name="hd_archive_not_installed">Descargado. Se aplicará al instalar el juego.</string>
+    <string name="hd_ready">Preparado en este dispositivo; el juego instalado desde tu ROM lo usa.</string>
+    <string name="hd_download">Descargar (%1$s)</string>
+    <string name="hd_import">Importar .zip…</string>
+    <string name="hd_page">Página del mod</string>
+    <string name="hd_offline_title">Sin conexión a Internet</string>
+    <string name="hd_offline_body">Conéctate a Internet y vuelve a intentarlo, o descarga el paquete desde su página en otro dispositivo e importa el .zip aquí.</string>
+    <string name="hd_metered_title">¿Descargar con la red móvil?</string>
+    <string name="hd_metered_body">Esta conexión es móvil o de uso medido. El paquete de interfaz HD ocupa %1$s: descargarlo puede consumir tus datos o tener coste.</string>
+    <string name="hd_metered_confirm">Descargar igualmente</string>
+    <string name="hd_downloading">Descargando el paquete de interfaz HD…</string>
+    <string name="hd_importing">Comprobando y copiando el paquete de interfaz HD…</string>
+    <string name="hd_done">El paquete de interfaz HD está en este dispositivo. Se aplicará la próxima vez que instales el juego desde tu ROM.</string>
+    <string name="hd_cancelled">Cancelado; el paquete de interfaz HD no se guardó.</string>
+    <string name="hd_notification_title">Paquete de interfaz HD</string>
+    <string name="hd_progress">%1$s de %2$s</string>
 
     <!-- Actualizar y Reparar (InstallService, plan de UX WP-04A) -->
     <string name="forge_updating">Instalando la actualización…</string>

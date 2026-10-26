@@ -31,6 +31,10 @@ class DiagnosticsActivity : Activity() {
     @Volatile private var closing = false
     private var text: String? = null
 
+    /** The installer's language before Android 13 (owner decision 8). */
+    override fun attachBaseContext(base: android.content.Context) =
+        super.attachBaseContext(org.triaevum.android.forge.ForgeLocale.wrap(base))
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         setContentView(buildLayout())

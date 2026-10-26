@@ -7,7 +7,13 @@ enum class ForgeJob(val code: String) {
     INSTALL("install"),
     REFRESH("refresh"),
     REPAIR("repair"),
+    /** The HD interface pack: the user's download, or the import of an archive they picked. */
+    HD_DOWNLOAD("ui_pack_download"),
+    HD_IMPORT("ui_pack_import"),
     ;
+
+    /** A job that changes only the stored HD pack, never the installed game. */
+    val hdPack: Boolean get() = this == HD_DOWNLOAD || this == HD_IMPORT
 
     companion object {
         fun of(code: String?): ForgeJob? = values().firstOrNull { it.code == code }
@@ -87,7 +93,8 @@ object InstallerPlanner {
             ForgeJob.REFRESH, ForgeJob.REPAIR -> if (status.state == State.UPDATE_AVAILABLE) {
                 return InstallerPlan(StateCard.INTERRUPTED_UPDATE, StateAction.UPDATE, select = true)
             }
-            null -> {}
+            // An interrupted HD pack job left the installation as it was; a partial file never counts as the pack.
+            ForgeJob.HD_DOWNLOAD, ForgeJob.HD_IMPORT, null -> {}
         }
         return when (status.state) {
             State.NOT_INSTALLED -> InstallerPlan(StateCard.NOT_INSTALLED, select = true)

@@ -8,8 +8,13 @@ import org.junit.Test
 import org.triaevum.android.forge.InstallationStatus.State
 
 class InstallerPlannerTest {
-    private fun status(state: State, reason: String = "", details: String = "") =
-        InstallationStatus(state, recipe = "oot3d-eur", reason = reason, details = details)
+    /** [canPlay] defaults to forge-core's answer for a state with the repair data merely gone. */
+    private fun status(
+        state: State,
+        reason: String = "",
+        details: String = "",
+        canPlay: Boolean = state == State.READY || state == State.NEEDS_GAME_INPUT,
+    ) = InstallationStatus(state, recipe = "oot3d-eur", reason = reason, details = details, canPlay = canPlay)
 
     private fun plan(
         status: InstallationStatus?,
@@ -25,8 +30,21 @@ class InstallerPlannerTest {
             val plan = plan(status(state))
             assertEquals("Play for $state", state == State.READY || state == State.NEEDS_GAME_INPUT, plan.play)
         }
-        // "Remove prepared game" deleted the title: the ROM is needed and Play is not offered.
-        assertFalse(plan(status(State.NEEDS_GAME_INPUT, details = InstallationStatus.PREPARED_GAME_REMOVED)).play)
+        // "Remove prepared game" deleted the title: forge-core says it cannot play, whatever the
+        // details text says, and Play is not offered.
+        assertFalse(plan(status(State.NEEDS_GAME_INPUT, details = "any text", canPlay = false)).play)
+        assertFalse(plan(status(State.NOT_INSTALLED), interrupted = ForgeJob.INSTALL).play)
+        assertTrue(plan(status(State.NEEDS_GAME_INPUT, canPlay = true), interrupted = ForgeJob.INSTALL).play)
+    }
+
+    @Test
+    fun hdPackJobsShowTheirWorkAndNeverAnInterruption() {
+        assertEquals(StateCard.WORKING, plan(status(State.READY), running = ForgeJob.HD_DOWNLOAD).card)
+        assertFalse(plan(status(State.READY), running = ForgeJob.HD_IMPORT).play)
+        // A download whose process died leaves the installation as it was.
+        val after = plan(status(State.READY), interrupted = ForgeJob.HD_DOWNLOAD)
+        assertEquals(StateCard.READY, after.card)
+        assertTrue(after.play)
     }
 
     @Test

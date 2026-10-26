@@ -30,6 +30,22 @@ release audit forbids the archive's and every texture's SHA-256.
 4. **Prepare and install** extracts exactly the 76 catalogued textures and
    verifies each one's size and SHA-256 (`tools/triaevum_release/ui_texture_pack.py`).
 
+### Android
+
+The installer's **HD interface pack (optional)** card never downloads on its
+own (owner decision 5): **Download** starts the Forge job `ui_pack_download`
+only when tapped. On a mobile or metered connection it first asks, showing the
+size; offline it says so; there is no Wi-Fi-only rule. **Import .zip...** hands
+a document picked with the system picker to `ui_pack_import`, which keeps it
+only when it is the original archive. Both run in the installer's foreground
+service with progress and Cancel and store the archive in the profile's
+`data/downloads/`; the next installation from the ROM applies it, as on the
+desktop. The HTTPS client is the desktop's (ureq + rustls with ring); on
+Android it trusts the system CA store (`/apex/com.android.conscrypt/cacerts`,
+else `/system/etc/security/cacerts`). `ui_pack_status` reports the state, size,
+author and license the card shows. The app holds `INTERNET` and
+`ACCESS_NETWORK_STATE` for this download alone.
+
 ## Languages
 
 The pack keeps language-specific art in folders below `UI/`: the native menu

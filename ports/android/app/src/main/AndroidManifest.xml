@@ -8,11 +8,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Only the optional HD interface pack download uses the network, and only when the user
+         taps Download (owner decision 5); the network state tells a mobile or metered
+         connection apart, so the installer can warn with the size first. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application android:label="@string/app_name" android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         android:allowBackup="false">
-        <!-- Forge runs the runtime library's native helpers in process: never in the game's process. -->
+        <!-- Forge runs the runtime library's native helpers in process: never in the game's process.
+             It handles its own language changes (decision 8), so a picked ROM is not lost. -->
         <activity android:name=".forge.InstallerActivity" android:exported="true" android:process=":forge"
-            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale">
+            android:configChanges="orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density|fontScale|locale|layoutDirection">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -31,9 +37,10 @@
         <provider android:name=".diagnostics.DiagnosticsBundleProvider"
             android:authorities="${applicationId}.diagnostics" android:exported="false"
             android:grantUriPermissions="true" android:process=":forge" />
-        <!-- Exported for developer launches (adb am start) of an already prepared title. -->
+        <!-- Exported for developer launches (adb am start) of an already prepared title. A change
+             of the installer's language (a per-app locale) must not recreate a running game. -->
         <activity android:name=".TriAevumActivity" android:exported="true"
             android:screenOrientation="sensorLandscape"
-            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|navigation|density" />
+            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|navigation|density|locale|layoutDirection" />
     </application>
 </manifest>

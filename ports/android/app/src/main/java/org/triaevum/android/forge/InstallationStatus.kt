@@ -67,6 +67,12 @@ data class InstallationStatus(
     val installedVersion: String? = null,
     val presentVersion: String? = null,
     val explanation: Explanation? = null,
+    /**
+     * Whether the installed title can start as it is: the inspection's `can_play`, computed by
+     * forge-core (`InstallationState::can_play`: ready, or needing the ROM only because the data
+     * kept for repairs is gone; not after "Remove prepared game", which deleted the title).
+     */
+    val canPlay: Boolean = false,
 ) {
     enum class State(val code: String) {
         NOT_INSTALLED("not_installed"),
@@ -84,18 +90,8 @@ data class InstallationStatus(
         }
     }
 
-    /**
-     * Whether the installed title can start as it is (forge-core `InstallationState::can_play`):
-     * ready, or needing the ROM only because the data kept for repairs is gone; not after
-     * "Remove prepared game", which deleted the title.
-     */
-    val canPlay: Boolean
-        get() = state == State.READY || (state == State.NEEDS_GAME_INPUT && details != PREPARED_GAME_REMOVED)
-
     companion object {
         const val FORMAT = "triaevum_installation_state_v1"
-        /** forge-core `state::PREPARED_GAME_REMOVED`. */
-        const val PREPARED_GAME_REMOVED = "The game data prepared from your ROM was removed"
 
         /** Parses [ForgeNative.inspect]'s answer; anything unreadable is [State.FAILED]. */
         fun parse(text: String): InstallationStatus = try {
@@ -117,6 +113,7 @@ data class InstallationStatus(
                     if (it.isNull("version")) null else it.optString("version")
                 },
                 explanation = Explanation.from(value.optJSONObject("explanation")),
+                canPlay = value.optBoolean("can_play", false),
             )
         } catch (_: Exception) {
             InstallationStatus(State.FAILED, details = text.take(300))

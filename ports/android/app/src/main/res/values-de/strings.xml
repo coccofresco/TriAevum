@@ -4,7 +4,7 @@
 
     <!-- Installationsprogramm (InstallerActivity, InstallService) -->
     <string name="forge_title">TriAevum Forge</string>
-    <string name="forge_intro">Wähle das Abbild deiner eigenen entschlüsselten Nintendo 3DS-Spielkarte (.3ds oder .cci). Forge bereitet das Spiel auf diesem Gerät vor, ohne Verschlüsselungsschlüssel und ohne Netzwerkzugriff. Die erste Installation dauert mehrere Minuten. Sie läuft im Hintergrund weiter, auch bei gesperrtem Handy, und zeigt ihren Fortschritt in einer Benachrichtigung.</string>
+    <string name="forge_intro">Wähle das Abbild deiner eigenen entschlüsselten Nintendo 3DS-Spielkarte (.3ds oder .cci). Forge bereitet das Spiel auf diesem Gerät vor, ohne Verschlüsselungsschlüssel. Das Netzwerk nutzt es nur, wenn du das optionale HD-Oberflächenpaket herunterladen willst. Die erste Installation dauert mehrere Minuten. Sie läuft im Hintergrund weiter, auch bei gesperrtem Handy, und zeigt ihren Fortschritt in einer Benachrichtigung.</string>
     <string name="forge_no_package">Dieser Build enthält kein Forge-Paket: Er kann nur ein zuvor vorbereitetes Spiel starten.</string>
     <string name="forge_cannot_open">Die ausgewählte Datei kann nicht geöffnet werden.</string>
     <string name="forge_package_error">Das Forge-Paket der App kann nicht vorbereitet werden: %1$s</string>
@@ -80,6 +80,35 @@
     <string name="forge_check_again">Erneut prüfen</string>
     <string name="forge_banner_notifications">Benachrichtigungen sind aus, daher wird der Fortschritt nur auf diesem Bildschirm angezeigt. Die Installation läuft weiter, während das Handy gesperrt oder dieser Bildschirm geschlossen ist.</string>
     <string name="forge_banner_turn_on">Benachrichtigungen einschalten</string>
+    <string name="forge_state_hd_working">HD-Oberflächenpaket wird geholt</string>
+    <string name="forge_state_hd_working_body">Das installierte Spiel bleibt unverändert. Das läuft weiter, auch bei gesperrtem Handy oder geschlossenem Bildschirm.</string>
+
+    <!-- Sprache des Installers (Entscheidung 8: eine der Spielsprachen des ROMs) -->
+    <string name="forge_language_button">Sprache: %1$s</string>
+    <string name="forge_language_title">Sprache des Installers</string>
+    <string name="forge_language_not_kept">Die Sprache konnte für den nächsten Start nicht gespeichert werden.</string>
+
+    <!-- HD-Oberflächenpaket (Entscheidung 5: immer die Wahl des Nutzers) -->
+    <string name="hd_title">HD-Oberflächenpaket (optional)</string>
+    <string name="hd_credit">%1$s %2$s von %3$s, %4$s: HUD- und Menütexturen in höherer Auflösung. Ohne deine Wahl wird nichts heruntergeladen.</string>
+    <string name="hd_missing">Nicht auf diesem Gerät. Lade es herunter (%1$s) oder importiere die .zip, die du von seiner Seite geladen hast.</string>
+    <string name="hd_archive_installed">Heruntergeladen. Es wird angewendet, wenn du das Spiel das nächste Mal aus deinem ROM installierst.</string>
+    <string name="hd_archive_not_installed">Heruntergeladen. Es wird bei der Installation des Spiels angewendet.</string>
+    <string name="hd_ready">Auf diesem Gerät vorbereitet; das aus deinem ROM installierte Spiel nutzt es.</string>
+    <string name="hd_download">Herunterladen (%1$s)</string>
+    <string name="hd_import">.zip importieren…</string>
+    <string name="hd_page">Mod-Seite</string>
+    <string name="hd_offline_title">Keine Internetverbindung</string>
+    <string name="hd_offline_body">Verbinde dich mit dem Internet und versuche es erneut, oder lade das Paket auf einem anderen Gerät von seiner Seite herunter und importiere die .zip hier.</string>
+    <string name="hd_metered_title">Über das Mobilfunknetz herunterladen?</string>
+    <string name="hd_metered_body">Diese Verbindung ist mobil oder getaktet. Das HD-Oberflächenpaket ist %1$s groß: Der Download kann dein Datenvolumen verbrauchen oder Kosten verursachen.</string>
+    <string name="hd_metered_confirm">Trotzdem herunterladen</string>
+    <string name="hd_downloading">HD-Oberflächenpaket wird heruntergeladen…</string>
+    <string name="hd_importing">HD-Oberflächenpaket wird geprüft und kopiert…</string>
+    <string name="hd_done">Das HD-Oberflächenpaket ist auf diesem Gerät. Es wird angewendet, wenn du das Spiel das nächste Mal aus deinem ROM installierst.</string>
+    <string name="hd_cancelled">Abgebrochen; das HD-Oberflächenpaket wurde nicht gespeichert.</string>
+    <string name="hd_notification_title">HD-Oberflächenpaket</string>
+    <string name="hd_progress">%1$s von %2$s</string>
 
     <!-- Aktualisieren und Reparieren (InstallService, UX-Plan WP-04A) -->
     <string name="forge_updating">Die Aktualisierung wird installiert…</string>

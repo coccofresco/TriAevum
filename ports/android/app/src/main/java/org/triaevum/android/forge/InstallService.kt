@@ -96,6 +96,9 @@ class InstallService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
+    /** The installer's language before Android 13 (decision 8; [ForgeLocale]). */
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(ForgeLocale.wrap(base))
+
     override fun onBind(intent: Intent): IBinder = Local()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -157,6 +160,28 @@ class InstallService : Service() {
         require(kind != ForgeJob.INSTALL)
         val status = getString(if (kind == ForgeJob.REFRESH) R.string.forge_updating else R.string.forge_repairing)
         return begin(kind, status, null) { maintenanceRequest(kind, hudLayout, allowDowngrade) }
+    }
+
+    /**
+     * Main thread: downloads the HD interface pack into the app's data folder. Only ever started
+     * by the user's tap (owner decision 5); the next installation applies it. False when a job is
+     * already running.
+     */
+    fun downloadHdPack(): Boolean =
+        begin(ForgeJob.HD_DOWNLOAD, getString(R.string.hd_downloading), null) { hdPackRequest(ForgeJob.HD_DOWNLOAD, null) }
+
+    /**
+     * Main thread: imports the HD pack archive the user picked ([descriptor], owned by the service
+     * from now on); Forge keeps it only when it is the original. False when a job is already running.
+     */
+    fun importHdPack(descriptor: ParcelFileDescriptor): Boolean {
+        if (snapshot.running) {
+            descriptor.close()
+            return false
+        }
+        return begin(ForgeJob.HD_IMPORT, getString(R.string.hd_importing), null) {
+            hdPackRequest(ForgeJob.HD_IMPORT, descriptor)
+        }.also { if (!it) descriptor.close() }
     }
 
     private fun begin(kind: ForgeJob, status: String, rom: RomDocument?, request: () -> JSONObject?): Boolean {
@@ -258,6 +283,26 @@ class InstallService : Service() {
             .apply { if (language != null) put("game_language", language) }
     }
 
+    /** The "ui_pack_download" or "ui_pack_import" request, or null after closing [descriptor]. */
+    private fun hdPackRequest(kind: ForgeJob, descriptor: ParcelFileDescriptor?): JSONObject? {
+        val (packageRoot, profileRoot) = try {
+            roots()
+        } catch (error: Exception) {
+            descriptor?.close()
+            throw error
+        }
+        if (synchronized(jobLock) { cancelRequested }) {
+            descriptor?.close()
+            return null
+        }
+        return JSONObject()
+            .put("format", "triaevum_forge_request_v1")
+            .put("job", kind.code)
+            .put("package_root", packageRoot.absolutePath)
+            .put("android", androidTarget(this, profileRoot))
+            .apply { if (descriptor != null) put("source", JSONObject().put("fd", descriptor.detachFd())) }
+    }
+
     private fun maintenanceRequest(kind: ForgeJob, hudLayout: String, allowDowngrade: Boolean): JSONObject? {
         val (packageRoot, profileRoot) = roots()
         if (synchronized(jobLock) { cancelRequested }) return null
@@ -293,7 +338,11 @@ class InstallService : Service() {
         if (!snapshot.running) return
         val current = snapshot
         val next = when (event.optString("event")) {
-            "stage" -> current.copy(status = event.optString("message"), detail = "", done = 0, total = -1)
+            // The HD pack jobs keep this app's translated status; installations show Forge's stages.
+            "stage" -> current.copy(
+                status = if (current.job?.hdPack == true) current.status else event.optString("message"),
+                detail = "", done = 0, total = -1,
+            )
             "report" -> current.copy(detail = event.optString("message"))
             "progress" -> current.copy(
                 done = event.optLong("done"),
@@ -325,7 +374,13 @@ class InstallService : Service() {
             "succeeded" -> succeeded(kind, result ?: JSONObject(), notices)
             "cancelled" -> snapshot.copy(
                 outcome = Outcome.CANCELLED,
-                status = getString(if (kind == ForgeJob.INSTALL) R.string.forge_cancelled else R.string.forge_job_cancelled),
+                status = getString(
+                    when {
+                        kind == ForgeJob.INSTALL -> R.string.forge_cancelled
+                        kind?.hdPack == true -> R.string.hd_cancelled
+                        else -> R.string.forge_job_cancelled
+                    },
+                ),
                 detail = "",
             )
             else -> {
@@ -364,6 +419,9 @@ class InstallService : Service() {
     private fun succeeded(kind: ForgeJob?, result: JSONObject, notices: List<String>): Snapshot {
         if (result.optString("status") == "confirmation_required") {
             return snapshot.copy(outcome = Outcome.CONFIRMATION_REQUIRED, status = "", detail = "")
+        }
+        if (kind?.hdPack == true) {
+            return snapshot.copy(outcome = Outcome.SUCCEEDED, status = getString(R.string.hd_done), detail = "")
         }
         val changes = result.optJSONArray("config_changes")
         val changed = (0 until (changes?.length() ?: 0)).mapNotNull { changes?.optJSONObject(it) }
@@ -428,7 +486,13 @@ class InstallService : Service() {
         )
         val determinate = state.total > 0
         val percent = if (determinate) ((state.done.coerceIn(0, state.total) * 100) / state.total).toInt() else 0
-        val title = getString(if (state.job == ForgeJob.INSTALL || state.job == null) R.string.forge_notification_title else R.string.forge_notification_update)
+        val title = getString(
+            when {
+                state.job == ForgeJob.INSTALL || state.job == null -> R.string.forge_notification_title
+                state.job.hdPack -> R.string.hd_notification_title
+                else -> R.string.forge_notification_update
+            },
+        )
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle(title)

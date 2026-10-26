@@ -9,14 +9,18 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.provider.Settings
+import android.text.format.Formatter
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -65,6 +69,13 @@ import java.io.File
  * language choices change its saved setting (the "game_language" job). The screen also leads to
  * Saves and backups and to the diagnostics report, offers that report after the previous session
  * ended abnormally, and opens either page when the game's menu asked for it on its way out.
+ *
+ * The optional HD interface pack (UX plan WP-09/WP-07, owner decision 5) has a card of its own:
+ * nothing is downloaded unless the user taps Download; on a mobile or metered network a warning
+ * with the download size comes first (never a Wi-Fi-only rule), offline the screen says so, and an
+ * archive downloaded elsewhere can be imported with the document picker. Both run in
+ * [InstallService] with progress and Cancel; the next installation from the ROM applies the pack.
+ * The installer's language follows decision 8 ([ForgeLocale]): the ROM's game languages.
  */
 class InstallerActivity : Activity() {
     private lateinit var stateBox: LinearLayout
@@ -84,6 +95,21 @@ class InstallerActivity : Activity() {
     private lateinit var installButton: Button
     private lateinit var cancel: Button
     private lateinit var play: Button
+    private lateinit var hdBox: LinearLayout
+    private lateinit var hdText: TextView
+    private lateinit var hdDownload: Button
+    private lateinit var hdImport: Button
+    private lateinit var hdPage: Button
+    private lateinit var languageButton: Button
+    /** The last `ui_pack_status` result; null while unknown. */
+    private var hdStatus: JSONObject? = null
+    private var hdChecking = false
+    /** Re-renders the card under the state in the current language (after a language change). */
+    private var cardRenderer: (() -> Unit)? = null
+    /** The game languages of the ROM in use (recognized or installed); empty before one is known. */
+    private var romLanguages: List<String> = emptyList()
+    /** The language the views were built in. */
+    private var builtLanguage = ""
     /** The running short job of this screen (recognition, language, preview), not the service's. */
     @Volatile private var job = 0L
     @Volatile private var closing = false
@@ -145,10 +171,16 @@ class InstallerActivity : Activity() {
     /** Whether this APK carries a Forge package (developer APKs may not); fixed per APK. */
     private val hasPackage by lazy { ForgePackage.available(this) }
 
+    /** The installer's language before Android 13 (decision 8; [ForgeLocale]). */
+    override fun attachBaseContext(base: Context) = super.attachBaseContext(ForgeLocale.wrap(base))
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         StartupDiagnostics.installCrashHandler(this, "forge")
         refreshTried = state?.getBoolean(KEY_REFRESH_TRIED) ?: false
+        // The languages of the ROM last seen, until this start knows its own.
+        applyLanguage(ForgeLocale.lastRomLanguages(this))
+        builtLanguage = ForgeLocale.current(this)
         setContentView(buildLayout())
         renderState()
         refreshInstall(false)
@@ -169,6 +201,188 @@ class InstallerActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         openRequestedPage(intent)
+    }
+
+    /** Android 13+ delivers the per-app language here (the manifest handles "locale" itself). */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (newConfig.locales[0].language != builtLanguage) rebuildForLanguage()
+    }
+
+    /**
+     * Decision 8: the installer's language for the ROM's game languages [rom] (empty before one is
+     * known): the kept choice, else the system language, else English, as the desktop Forge does.
+     */
+    private fun applyLanguage(rom: List<String>) {
+        romLanguages = rom
+        if (rom.isNotEmpty()) ForgeLocale.rememberRomLanguages(this, rom)
+        val code = ForgeLocale.choose(rom, listOf(ForgeLocale.savedChoice(getExternalFilesDir(null)), ForgeLocale.systemLanguage()))
+        // Android 13+ answers with onConfigurationChanged; older versions changed the resources in place.
+        if (ForgeLocale.apply(this, code) && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && ::stateBox.isInitialized) {
+            rebuildForLanguage()
+        }
+    }
+
+    /** Builds the views again in the new language, keeping what the screen shows. */
+    private fun rebuildForLanguage() {
+        if (closing || !::stateBox.isInitialized) return
+        builtLanguage = ForgeLocale.current(this)
+        val chosen = codes.getOrNull(languageIndex())
+        val cardShown = card.visibility == View.VISIBLE
+        val statusText = status.text
+        val detailText = detail.text
+        setContentView(buildLayout())
+        status.text = statusText
+        detail.text = detailText
+        if (cardShown) cardRenderer?.invoke()
+        chosen?.let { chooseCode(it) }
+        renderState()
+        renderHdPack()
+        service?.let { render(it.snapshot) }
+        // The explanations come in the installer's language: ask again.
+        inspect()
+    }
+
+    /** The installer language switch: the languages decision 8 allows for the ROM in use. */
+    private fun chooseInstallerLanguage() {
+        val offered = ForgeLocale.offered(romLanguages)
+        val current = ForgeLocale.current(this)
+        val names = offered.map { ForgeLocale.NATIVE_NAMES[it] ?: it }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.forge_language_title)
+            .setSingleChoiceItems(names, offered.indexOf(current)) { dialog, index ->
+                dialog.dismiss()
+                val profileRoot = getExternalFilesDir(null)
+                if (profileRoot == null || !ForgeLocale.saveChoice(profileRoot, offered[index])) {
+                    status.text = getString(R.string.forge_language_not_kept)
+                }
+                applyLanguage(romLanguages)
+            }
+            .setNegativeButton(R.string.forge_cancel, null)
+            .show()
+    }
+
+    /** Reads the HD pack's state off the UI thread ("ui_pack_status"). */
+    private fun refreshHdPack() {
+        if (!hasPackage || hdChecking) return
+        hdChecking = true
+        Thread({
+            val result = try {
+                val packageRoot = ForgePackage.prepare(this)
+                val profileRoot = getExternalFilesDir(null) ?: throw IllegalStateException(getString(R.string.forge_storage_unavailable))
+                val request = request("ui_pack_status")
+                    .put("package_root", packageRoot.absolutePath)
+                    .put("android", InstallService.androidTarget(this, profileRoot))
+                val handle = ForgeNative.startJob(request.toString().toByteArray())
+                try {
+                    var answer: JSONObject? = null
+                    while (true) {
+                        val bytes = ForgeNative.pollEvent(handle, 250) ?: continue
+                        val event = JSONObject(String(bytes))
+                        when (event.optString("event")) {
+                            "succeeded" -> answer = event.optJSONObject("result")
+                            "failed", "cancelled" -> Log.w(TAG, "HD pack status: $event")
+                            else -> continue
+                        }
+                        break
+                    }
+                    answer
+                } finally {
+                    ForgeNative.destroyJob(handle)
+                }
+            } catch (error: Exception) {
+                Log.w(TAG, "Cannot read the HD pack state", error)
+                null
+            }
+            runOnUiThread {
+                hdChecking = false
+                if (closing) return@runOnUiThread
+                hdStatus = result
+                renderHdPack()
+            }
+        }, "forge-hd-status").start()
+    }
+
+    private fun sizeText(bytes: Long): String = Formatter.formatShortFileSize(this, bytes)
+
+    /** The HD pack card: author and license, where the pack is, and what the user can do. */
+    private fun renderHdPack() {
+        if (closing || !::hdBox.isInitialized) return
+        val pack = hdStatus
+        val state = pack?.optString("status").orEmpty()
+        if (!hasPackage || pack == null || state == "unavailable" || state.isEmpty()) {
+            hdBox.visibility = View.GONE
+            return
+        }
+        hdBox.visibility = View.VISIBLE
+        val size = sizeText(pack.optLong("bytes"))
+        val credit = getString(
+            R.string.hd_credit, pack.optString("title"), pack.optString("version"),
+            pack.optString("author"), pack.optString("license_name"),
+        )
+        val where = when (state) {
+            "ready" -> getString(R.string.hd_ready)
+            "archive" -> getString(if (installation?.canPlay == true) R.string.hd_archive_installed else R.string.hd_archive_not_installed)
+            else -> getString(R.string.hd_missing, size)
+        }
+        hdText.text = "$credit\n\n$where"
+        val missing = state == "missing"
+        hdDownload.text = getString(R.string.hd_download, size)
+        hdDownload.visibility = if (missing && pack.optBoolean("can_download")) View.VISIBLE else View.GONE
+        hdImport.visibility = if (missing) View.VISIBLE else View.GONE
+        hdPage.tag = pack.optString("page")
+        hdPage.visibility = if (pack.optString("page").isEmpty()) View.GONE else View.VISIBLE
+        refreshBusy()
+    }
+
+    /**
+     * Download, the user's choice (owner decision 5): offline says so; a mobile or metered network
+     * asks first, with the size; any other network starts at once. Never limited to Wi-Fi.
+     */
+    private fun requestHdDownload() {
+        val pack = hdStatus ?: return
+        val size = sizeText(pack.optLong("bytes"))
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val capabilities = connectivity.getNetworkCapabilities(connectivity.activeNetwork)
+        when {
+            capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ->
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.hd_offline_title)
+                    .setMessage(R.string.hd_offline_body)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            connectivity.isActiveNetworkMetered ->
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.hd_metered_title)
+                    .setMessage(getString(R.string.hd_metered_body, size))
+                    .setPositiveButton(R.string.hd_metered_confirm) { _, _ -> startHdDownload() }
+                    .setNegativeButton(R.string.forge_cancel, null)
+                    .show()
+            else -> startHdDownload()
+        }
+    }
+
+    private fun startHdDownload() {
+        interrupted = null
+        withService { it.downloadHdPack() }
+    }
+
+    private fun pickHdPack() {
+        // Providers label .zip files in different ways: accept any and let Forge verify it.
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        @Suppress("DEPRECATION")
+        startActivityForResult(pick, PICK_HD_PACK)
+    }
+
+    private fun openHdPage() {
+        val page = hdPage.tag as? String ?: return
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(page)))
+        } catch (error: Exception) {
+            Log.w(TAG, "Cannot open the pack's page", error)
+            status.text = page
+        }
     }
 
     override fun onSaveInstanceState(state: Bundle) {
@@ -221,6 +435,21 @@ class InstallerActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         val uri = data?.data
+        if (requestCode == PICK_HD_PACK && resultCode == RESULT_OK && uri != null) {
+            val pack = try {
+                contentResolver.openFileDescriptor(uri, "r")
+            } catch (error: Exception) {
+                Log.w(TAG, "Cannot open the selected pack", error)
+                null
+            }
+            if (pack == null) {
+                status.text = getString(R.string.forge_cannot_open)
+            } else {
+                interrupted = null
+                withService { it.importHdPack(pack) }
+            }
+            return
+        }
         if (requestCode != PICK_ROM || resultCode != RESULT_OK || uri == null) return
         val document = keepGrant(uri, data?.flags ?: 0)
         val descriptor = try {
@@ -365,6 +594,7 @@ class InstallerActivity : Activity() {
         }
         if (state.canPlay && rom == null && !screenJob) showInstalledLanguages(null)
         if (!state.canPlay && rom == null && installedChoices) card.visibility = View.GONE
+        refreshHdPack()
     }
 
     private fun currentPlan(): InstallerPlan = InstallerPlanner.plan(
@@ -399,10 +629,13 @@ class InstallerActivity : Activity() {
                     when (running) {
                         ForgeJob.REFRESH -> R.string.forge_state_updating
                         ForgeJob.REPAIR -> R.string.forge_state_repairing
+                        ForgeJob.HD_DOWNLOAD, ForgeJob.HD_IMPORT -> R.string.forge_state_hd_working
                         else -> R.string.forge_state_installing
                     },
                 )
-                body = getString(R.string.forge_state_working_body)
+                body = getString(
+                    if (running?.hdPack == true) R.string.forge_state_hd_working_body else R.string.forge_state_working_body,
+                )
             }
             StateCard.PREPARING_ELSEWHERE -> {
                 title = getString(R.string.forge_state_preparing_elsewhere)
@@ -639,7 +872,7 @@ class InstallerActivity : Activity() {
         romName = name
         romDocument = document
         recognizedLabel = null
-        showCard(getString(R.string.forge_recognizing), name, emptyList(), null, installed = false, error = false)
+        presentCard { showCard(getString(R.string.forge_recognizing), name, emptyList(), null, installed = false, error = false) }
         runJob(getString(R.string.forge_recognizing_named, name), "forge-recognize", start = {
             val packageRoot = packageRoot()
             val profileRoot = profileRoot()
@@ -663,17 +896,26 @@ class InstallerActivity : Activity() {
             "stage" -> cardText.text = event.optString("message")
             "succeeded" -> {
                 val result = event.getJSONObject("result")
-                val label = getString(R.string.forge_recognized, result.optString("label"))
+                val revision = result.optString("label")
                 val document = result.optJSONObject("languages")
-                val note = if (document == null) {
-                    getString(R.string.forge_languages_later, result.optString("language_error"))
-                } else {
-                    getString(R.string.forge_languages_note)
+                val entries = choices(document)
+                val selected = document?.optString("selected")
+                val languageError = result.optString("language_error")
+                recognizedLabel = getString(R.string.forge_recognized, revision)
+                presentCard {
+                    val label = getString(R.string.forge_recognized, revision)
+                    recognizedLabel = label
+                    val note = if (document == null) {
+                        getString(R.string.forge_languages_later, languageError)
+                    } else {
+                        getString(R.string.forge_languages_note)
+                    }
+                    showCard(label, note, entries, selected, installed = false, error = false)
                 }
-                recognizedLabel = label
-                showCard(label, note, choices(document), document?.optString("selected"), installed = false, error = false)
                 status.text = getString(if (document == null) R.string.forge_ready_to_install else R.string.forge_choose_language)
                 detail.text = ""
+                // Decision 8: the installer speaks one of this ROM's game languages.
+                if (entries.isNotEmpty()) applyLanguage(entries.map { it.first })
             }
             "failed" -> {
                 rom?.close()
@@ -681,7 +923,9 @@ class InstallerActivity : Activity() {
                 val explanation = Explanation.of(event)
                 val message = explanation?.let { listOf(it.cause, it.nextAction).filter(String::isNotEmpty).joinToString("\n\n") }
                     ?: event.getJSONObject("error").optString("message")
-                showCard(explanation?.title ?: getString(R.string.forge_not_recognized), message, emptyList(), null, installed = false, error = true)
+                presentCard {
+                    showCard(explanation?.title ?: getString(R.string.forge_not_recognized), message, emptyList(), null, installed = false, error = true)
+                }
                 status.text = getString(R.string.forge_select_supported)
             }
             "cancelled" -> {
@@ -732,7 +976,11 @@ class InstallerActivity : Activity() {
         if (snapshot.running || snapshot.outcome != InstallService.Outcome.NONE) {
             status.text = snapshot.status
             detail.text = if (snapshot.running && snapshot.total > 0 && snapshot.detail.isEmpty()) {
-                getString(R.string.forge_progress, snapshot.done, snapshot.total)
+                if (snapshot.job?.hdPack == true) {
+                    getString(R.string.hd_progress, sizeText(snapshot.done), sizeText(snapshot.total))
+                } else {
+                    getString(R.string.forge_progress, snapshot.done, snapshot.total)
+                }
             } else {
                 snapshot.detail
             }
@@ -783,10 +1031,15 @@ class InstallerActivity : Activity() {
         }, onEvent = { event ->
             when (event.optString("event")) {
                 "succeeded" -> event.getJSONObject("result").optJSONObject("languages")?.let { document ->
-                    val title = recognizedLabel ?: getString(R.string.forge_game_language)
-                    showCard(title, getString(R.string.forge_language_applies), choices(document),
-                        document.optString("selected"), installed = true, error = false)
+                    val entries = choices(document)
+                    presentCard {
+                        val title = recognizedLabel ?: getString(R.string.forge_game_language)
+                        showCard(title, getString(R.string.forge_language_applies), entries,
+                            document.optString("selected"), installed = true, error = false)
+                    }
                     if (select != null) status.text = getString(R.string.forge_language_saved)
+                    // Decision 8: the installed game's languages, unless a picked ROM is shown.
+                    if (rom == null && entries.isNotEmpty()) applyLanguage(entries.map { it.first })
                 }
                 "failed" -> {
                     failed = true
@@ -822,8 +1075,14 @@ class InstallerActivity : Activity() {
         return (0 until available.length()).map { index ->
             val entry = available.getJSONObject(index)
             val code = entry.optString("code")
-            code to (NATIVE_LANGUAGE_NAMES[code] ?: entry.optString("label"))
+            code to (ForgeLocale.NATIVE_NAMES[code] ?: entry.optString("label"))
         }
+    }
+
+    /** Shows a card through [render] and keeps it, so a language change can show it again. */
+    private fun presentCard(render: () -> Unit) {
+        cardRenderer = render
+        render()
     }
 
     /** The card under the state: a heading, a note and the languages as large choices. */
@@ -896,6 +1155,8 @@ class InstallerActivity : Activity() {
         // Play only for a state that can play, never while Forge may be committing the title.
         play.visibility = if (plan.play && !busy) Button.VISIBLE else Button.GONE
         for (index in 0 until languages.childCount) languages.getChildAt(index).isEnabled = !busy
+        hdDownload.isEnabled = !busy
+        hdImport.isEnabled = !busy
         refreshInstall(busy)
         // A recognition runs only while this screen is in front; the service's jobs do not need it.
         if (screenJob) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -1024,6 +1285,47 @@ class InstallerActivity : Activity() {
             addView(languages)
         }
         body.addView(card, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(12) })
+        // The optional HD interface pack: shown once its state is known (renderHdPack).
+        hdText = TextView(this).apply { setPadding(0, dp(6), 0, dp(6)) }
+        hdDownload = Button(this).apply {
+            minHeight = dp(48)
+            visibility = View.GONE
+            setOnClickListener { requestHdDownload() }
+        }
+        hdImport = Button(this).apply {
+            text = getString(R.string.hd_import)
+            minHeight = dp(48)
+            visibility = View.GONE
+            setOnClickListener { pickHdPack() }
+        }
+        hdPage = Button(this).apply {
+            text = getString(R.string.hd_page)
+            minHeight = dp(48)
+            visibility = View.GONE
+            setOnClickListener { openHdPage() }
+        }
+        hdBox = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(14), dp(16), dp(14))
+            visibility = View.GONE
+            background = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setStroke(dp(1), 0x66888888)
+            }
+            addView(TextView(context).apply {
+                text = getString(R.string.hd_title)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            addView(hdText)
+            addView(hdDownload, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            addView(LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(hdImport, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+                addView(hdPage, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+            })
+        }
+        body.addView(hdBox, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { bottomMargin = dp(12) })
         status = TextView(this).apply { setPadding(0, dp(8), 0, dp(4)) }
         detail = TextView(this).apply { setPadding(0, 0, 0, dp(8)); alpha = 0.7f }
         progress = ProgressBar(this).apply { isIndeterminate = true; visibility = ProgressBar.GONE }
@@ -1046,6 +1348,14 @@ class InstallerActivity : Activity() {
             }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         }
         body.addView(more, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+        // The installer's language (decision 8): one of the ROM's game languages.
+        languageButton = Button(this).apply {
+            val current = ForgeLocale.current(context)
+            text = getString(R.string.forge_language_button, ForgeLocale.NATIVE_NAMES[current] ?: current)
+            minHeight = dp(48)
+            setOnClickListener { chooseInstallerLanguage() }
+        }
+        body.addView(languageButton, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { gravity = Gravity.START })
         select = Button(this).apply {
             text = getString(R.string.forge_select_rom)
             minHeight = dp(48)
@@ -1091,6 +1401,7 @@ class InstallerActivity : Activity() {
         private const val TAG = "TriAevumForge"
         private const val PICK_ROM = 1
         private const val REQUEST_NOTIFICATIONS = 2
+        private const val PICK_HD_PACK = 3
         private const val PREFERENCES = "installer"
         private const val KEY_NOTIFICATIONS_ASKED = "notifications_asked"
         private const val KEY_REFRESH_TRIED = "refresh_tried"
@@ -1107,15 +1418,5 @@ class InstallerActivity : Activity() {
         private val DETAILED = setOf(StateCard.REPAIR, StateCard.NEEDS_ROM, StateCard.INCOMPATIBLE, StateCard.FAILED)
         private const val ACCENT_COLOR = 0xFF2E7DD7.toInt()
         private const val ERROR_COLOR = 0xFFD32F2F.toInt()
-
-        /** The game languages by their own names, with accents (the runtime reports ASCII labels). */
-        private val NATIVE_LANGUAGE_NAMES = mapOf(
-            "en" to "English",
-            "fr" to "Français",
-            "de" to "Deutsch",
-            "es" to "Español",
-            "it" to "Italiano",
-            "nl" to "Nederlands",
-        )
     }
 }

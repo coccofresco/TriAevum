@@ -4,7 +4,7 @@
 
     <!-- Programma di installazione (InstallerActivity, InstallService) -->
     <string name="forge_title">TriAevum Forge</string>
-    <string name="forge_intro">Seleziona l\'immagine decriptata della tua cartuccia Nintendo 3DS (.3ds o .cci). Forge prepara il gioco su questo dispositivo, senza chiavi di crittografia né accesso alla rete. La prima installazione richiede diversi minuti. Prosegue in background, anche a telefono bloccato, e mostra l\'avanzamento in una notifica.</string>
+    <string name="forge_intro">Seleziona l\'immagine decriptata della tua cartuccia Nintendo 3DS (.3ds o .cci). Forge prepara il gioco su questo dispositivo, senza chiavi di crittografia. Usa la rete solo se scegli di scaricare il pacchetto interfaccia HD facoltativo. La prima installazione richiede diversi minuti. Prosegue in background, anche a telefono bloccato, e mostra l\'avanzamento in una notifica.</string>
     <string name="forge_no_package">Questa versione non contiene un pacchetto di Forge: può solo avviare un gioco preparato in precedenza.</string>
     <string name="forge_cannot_open">Impossibile aprire il file selezionato.</string>
     <string name="forge_package_error">Impossibile preparare il pacchetto di Forge dell\'applicazione: %1$s</string>
@@ -80,6 +80,35 @@
     <string name="forge_check_again">Controlla di nuovo</string>
     <string name="forge_banner_notifications">Le notifiche sono disattivate, quindi l\'avanzamento è visibile solo in questa schermata. L\'installazione prosegue anche a telefono bloccato o con questa schermata chiusa.</string>
     <string name="forge_banner_turn_on">Attiva le notifiche</string>
+    <string name="forge_state_hd_working">Recupero del pacchetto interfaccia HD</string>
+    <string name="forge_state_hd_working_body">Il gioco installato non cambia. Prosegue anche a telefono bloccato o con questa schermata chiusa.</string>
+
+    <!-- Lingua dell'installer (decisione 8: una delle lingue di gioco della ROM) -->
+    <string name="forge_language_button">Lingua: %1$s</string>
+    <string name="forge_language_title">Lingua dell\'installer</string>
+    <string name="forge_language_not_kept">Non è stato possibile conservare la lingua per il prossimo avvio.</string>
+
+    <!-- Pacchetto interfaccia HD (decisione 5: sempre una scelta dell'utente) -->
+    <string name="hd_title">Pacchetto interfaccia HD (facoltativo)</string>
+    <string name="hd_credit">%1$s %2$s di %3$s, %4$s: texture di HUD e menu a risoluzione più alta. Non viene scaricato nulla se non lo scegli tu.</string>
+    <string name="hd_missing">Non è su questo dispositivo. Scaricalo (%1$s) o importa lo .zip scaricato dalla sua pagina.</string>
+    <string name="hd_archive_installed">Scaricato. Viene applicato la prossima volta che installi il gioco dalla tua ROM.</string>
+    <string name="hd_archive_not_installed">Scaricato. Viene applicato quando installi il gioco.</string>
+    <string name="hd_ready">Preparato su questo dispositivo; il gioco installato dalla tua ROM lo usa.</string>
+    <string name="hd_download">Scarica (%1$s)</string>
+    <string name="hd_import">Importa .zip…</string>
+    <string name="hd_page">Pagina della mod</string>
+    <string name="hd_offline_title">Nessuna connessione a Internet</string>
+    <string name="hd_offline_body">Connettiti a Internet e riprova, oppure scarica il pacchetto dalla sua pagina su un altro dispositivo e importa qui lo .zip.</string>
+    <string name="hd_metered_title">Scaricare con la rete mobile?</string>
+    <string name="hd_metered_body">Questa connessione è mobile o a consumo. Il pacchetto interfaccia HD pesa %1$s: scaricarlo può consumare i tuoi dati o avere un costo.</string>
+    <string name="hd_metered_confirm">Scarica comunque</string>
+    <string name="hd_downloading">Download del pacchetto interfaccia HD…</string>
+    <string name="hd_importing">Verifica e copia del pacchetto interfaccia HD…</string>
+    <string name="hd_done">Il pacchetto interfaccia HD è su questo dispositivo. Viene applicato la prossima volta che installi il gioco dalla tua ROM.</string>
+    <string name="hd_cancelled">Annullato; il pacchetto interfaccia HD non è stato salvato.</string>
+    <string name="hd_notification_title">Pacchetto interfaccia HD</string>
+    <string name="hd_progress">%1$s di %2$s</string>
 
     <!-- Aggiornamento e riparazione (InstallService, piano UX WP-04A) -->
     <string name="forge_updating">Installazione dell\'aggiornamento…</string>

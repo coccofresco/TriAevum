@@ -4,7 +4,7 @@
 
     <!-- Installer (InstallerActivity, InstallService) -->
     <string name="forge_title">TriAevum Forge</string>
-    <string name="forge_intro">Select your own decrypted Nintendo 3DS cartridge image (.3ds or .cci). Forge prepares the game on this device, without encryption keys or network access. The first installation takes several minutes. It continues in the background, also while the phone is locked, and shows its progress in a notification.</string>
+    <string name="forge_intro">Select your own decrypted Nintendo 3DS cartridge image (.3ds or .cci). Forge prepares the game on this device, without encryption keys. It uses the network only when you choose to download the optional HD interface pack. The first installation takes several minutes. It continues in the background, also while the phone is locked, and shows its progress in a notification.</string>
     <string name="forge_no_package">This build has no Forge package: it can only play a title prepared beforehand.</string>
     <string name="forge_cannot_open">The selected file cannot be opened.</string>
     <string name="forge_package_error">The application\'s Forge package cannot be prepared: %1$s</string>
@@ -80,6 +80,35 @@
     <string name="forge_check_again">Check again</string>
     <string name="forge_banner_notifications">Notifications are off, so the progress is shown only on this screen. The installation continues while the phone is locked or this screen is closed.</string>
     <string name="forge_banner_turn_on">Turn on notifications</string>
+    <string name="forge_state_hd_working">Getting the HD interface pack</string>
+    <string name="forge_state_hd_working_body">Your installed game is not changed. This continues while the phone is locked or this screen is closed.</string>
+
+    <!-- Installer language (owner decision 8: one of the ROM's game languages) -->
+    <string name="forge_language_button">Language: %1$s</string>
+    <string name="forge_language_title">Installer language</string>
+    <string name="forge_language_not_kept">The language could not be kept for the next start.</string>
+
+    <!-- HD interface pack (UX plan WP-09, owner decision 5: always the user's choice) -->
+    <string name="hd_title">HD interface pack (optional)</string>
+    <string name="hd_credit">%1$s %2$s by %3$s, %4$s: higher-resolution HUD and menu textures. Nothing is downloaded unless you choose it.</string>
+    <string name="hd_missing">Not on this device. Download it (%1$s) or import the .zip you downloaded from its page.</string>
+    <string name="hd_archive_installed">Downloaded. It is applied the next time you install the game from your ROM.</string>
+    <string name="hd_archive_not_installed">Downloaded. It is applied when you install the game.</string>
+    <string name="hd_ready">Prepared on this device; the game installed from your ROM uses it.</string>
+    <string name="hd_download">Download (%1$s)</string>
+    <string name="hd_import">Import .zip…</string>
+    <string name="hd_page">Mod page</string>
+    <string name="hd_offline_title">No internet connection</string>
+    <string name="hd_offline_body">Connect to the internet and try again, or download the pack from its page on another device and import the .zip here.</string>
+    <string name="hd_metered_title">Download on a mobile network?</string>
+    <string name="hd_metered_body">This connection is mobile or metered. The HD interface pack is %1$s: downloading it may use up your data allowance or cost money.</string>
+    <string name="hd_metered_confirm">Download anyway</string>
+    <string name="hd_downloading">Downloading the HD interface pack…</string>
+    <string name="hd_importing">Checking and copying the HD interface pack…</string>
+    <string name="hd_done">The HD interface pack is on this device. It is applied the next time you install the game from your ROM.</string>
+    <string name="hd_cancelled">Cancelled; the HD interface pack was not stored.</string>
+    <string name="hd_notification_title">HD interface pack</string>
+    <string name="hd_progress">%1$s of %2$s</string>
 
     <!-- Update and Repair (InstallService, UX plan WP-04A) -->
     <string name="forge_updating">Installing the update…</string>

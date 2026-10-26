@@ -44,6 +44,10 @@ class SavesActivity : Activity() {
     /** A Forge backup copied from the picker, awaiting confirmation. */
     private var pendingBackup: File? = null
 
+    /** The installer's language before Android 13 (owner decision 8). */
+    override fun attachBaseContext(base: android.content.Context) =
+        super.attachBaseContext(org.triaevum.android.forge.ForgeLocale.wrap(base))
+
     override fun onCreate(state: Bundle?) {
         super.onCreate(state)
         setContentView(buildLayout())

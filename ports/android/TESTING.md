@@ -89,6 +89,31 @@ shared installation state (`ForgeNative.inspect`) and its explanation; Play is v
    mouse click on A: `oot3d_controls.json` has mouse input off on Android); taps during a scene
    transition are not lost or doubled; the Back key does what the in-game menu documentation
    says and never ends a session without the Quit confirmation (record what it does).
+10. **HD interface pack, Wi-Fi.** On an unmetered Wi-Fi network, the "HD interface pack
+    (optional)" card says it is not on the device and shows its size, author and license.
+    Nothing downloads until Download is tapped (owner decision 5). Tap it: "Getting the HD
+    interface pack", progress in sizes ("120 MB of 452 MB") on the screen and in the
+    notification, no Play while it runs. Expect "The HD interface pack is on this device...",
+    the card then says "Downloaded. It is applied the next time you install the game from your
+    ROM"; Select ROM and Install, then in game the HUD uses the HD textures. Cancel during the
+    download: "Cancelled; the HD interface pack was not stored", the card offers Download again,
+    and `data/downloads` holds no pack (a leftover hidden `.part` file from a killed process is
+    never taken for the pack).
+11. **HD pack, mobile or metered network.** Turn Wi-Fi off (mobile data on), or mark the Wi-Fi
+    network as metered in the system's network settings. Download asks "Download on a mobile
+    network?" with the size; Cancel downloads nothing, "Download anyway" downloads. There is no
+    Wi-Fi-only rule.
+12. **HD pack offline.** Airplane mode, Download: "No internet connection" and nothing starts.
+13. **HD pack import.** Download the pack's zip from its page on any device, copy it to the
+    phone, "Import .zip...", pick it. Expect the same "is on this device" result; a different
+    zip ends with an explanation that it is not the original archive and nothing is kept.
+14. **Installer language (decision 8).** System language Italian, no ROM yet: the installer is
+    in Italian. Select a USA ROM (English, French, Spanish): the installer switches to English
+    (Italian is not one of its languages) without losing the recognized ROM or the chosen game
+    language. "Language: ..." offers only the ROM's languages; pick Español: the installer is
+    in Spanish now and after a restart (kept as `ui_language` in `data/config/forge.json`). A
+    European ROM afterwards: Spanish stays. Android 13+ applies it as the app's own language;
+    a running game is not restarted by the change.
 
 ## Evidence
 

@@ -4,7 +4,7 @@
 
     <!-- Programme d'installation (InstallerActivity, InstallService) -->
     <string name="forge_title">TriAevum Forge</string>
-    <string name="forge_intro">Sélectionnez votre propre image de cartouche Nintendo 3DS déchiffrée (.3ds ou .cci). Forge prépare le jeu sur cet appareil, sans clés de chiffrement ni accès réseau. La première installation prend plusieurs minutes. Elle se poursuit en arrière-plan, même lorsque le téléphone est verrouillé, et affiche sa progression dans une notification.</string>
+    <string name="forge_intro">Sélectionnez votre propre image de cartouche Nintendo 3DS déchiffrée (.3ds ou .cci). Forge prépare le jeu sur cet appareil, sans clés de chiffrement. Il n\'utilise le réseau que si vous choisissez de télécharger le pack d\'interface HD facultatif. La première installation prend plusieurs minutes. Elle se poursuit en arrière-plan, même lorsque le téléphone est verrouillé, et affiche sa progression dans une notification.</string>
     <string name="forge_no_package">Cette version ne contient pas de paquet Forge : elle ne peut lancer qu\'un jeu préparé à l\'avance.</string>
     <string name="forge_cannot_open">Le fichier sélectionné ne peut pas être ouvert.</string>
     <string name="forge_package_error">Le paquet Forge de l\'application ne peut pas être préparé : %1$s</string>
@@ -80,6 +80,35 @@
     <string name="forge_check_again">Vérifier à nouveau</string>
     <string name="forge_banner_notifications">Les notifications sont désactivées : la progression ne s\'affiche que sur cet écran. L\'installation se poursuit lorsque le téléphone est verrouillé ou que cet écran est fermé.</string>
     <string name="forge_banner_turn_on">Activer les notifications</string>
+    <string name="forge_state_hd_working">Récupération du pack d\'interface HD</string>
+    <string name="forge_state_hd_working_body">Le jeu installé n\'est pas modifié. Cela se poursuit même lorsque le téléphone est verrouillé ou que cet écran est fermé.</string>
+
+    <!-- Langue de l'installateur (décision 8 : une des langues de jeu de la ROM) -->
+    <string name="forge_language_button">Langue : %1$s</string>
+    <string name="forge_language_title">Langue de l\'installateur</string>
+    <string name="forge_language_not_kept">La langue n\'a pas pu être conservée pour le prochain démarrage.</string>
+
+    <!-- Pack d'interface HD (décision 5 : toujours au choix de l'utilisateur) -->
+    <string name="hd_title">Pack d\'interface HD (facultatif)</string>
+    <string name="hd_credit">%1$s %2$s par %3$s, %4$s : textures du HUD et des menus en plus haute résolution. Rien n\'est téléchargé sans votre choix.</string>
+    <string name="hd_missing">Absent de cet appareil. Téléchargez-le (%1$s) ou importez le .zip téléchargé depuis sa page.</string>
+    <string name="hd_archive_installed">Téléchargé. Il sera appliqué la prochaine fois que vous installerez le jeu depuis votre ROM.</string>
+    <string name="hd_archive_not_installed">Téléchargé. Il sera appliqué lors de l\'installation du jeu.</string>
+    <string name="hd_ready">Préparé sur cet appareil ; le jeu installé depuis votre ROM l\'utilise.</string>
+    <string name="hd_download">Télécharger (%1$s)</string>
+    <string name="hd_import">Importer un .zip…</string>
+    <string name="hd_page">Page du mod</string>
+    <string name="hd_offline_title">Pas de connexion Internet</string>
+    <string name="hd_offline_body">Connectez-vous à Internet et réessayez, ou téléchargez le pack depuis sa page sur un autre appareil et importez le .zip ici.</string>
+    <string name="hd_metered_title">Télécharger sur le réseau mobile ?</string>
+    <string name="hd_metered_body">Cette connexion est mobile ou limitée. Le pack d\'interface HD fait %1$s : le télécharger peut consommer votre forfait de données ou être facturé.</string>
+    <string name="hd_metered_confirm">Télécharger quand même</string>
+    <string name="hd_downloading">Téléchargement du pack d\'interface HD…</string>
+    <string name="hd_importing">Vérification et copie du pack d\'interface HD…</string>
+    <string name="hd_done">Le pack d\'interface HD est sur cet appareil. Il sera appliqué la prochaine fois que vous installerez le jeu depuis votre ROM.</string>
+    <string name="hd_cancelled">Annulé ; le pack d\'interface HD n\'a pas été enregistré.</string>
+    <string name="hd_notification_title">Pack d\'interface HD</string>
+    <string name="hd_progress">%1$s sur %2$s</string>
 
     <!-- Mise à jour et réparation (InstallService, UX plan WP-04A) -->
     <string name="forge_updating">Installation de la mise à jour…</string>
