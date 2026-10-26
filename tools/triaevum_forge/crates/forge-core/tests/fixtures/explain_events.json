@@ -738,6 +738,23 @@
    "id": "path.too_long"
   },
   {
+   "name": "refinement storage.insufficient_space",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "storage_full",
+     "stage": "preflight",
+     "message": "Not enough free space for C:\\Users\\Someone\\Games\\TriAevum\\data: preparing the game needs about 3.8 GB (game data 3.0 GB, graphics data 300 MB, margin 512 MB), and 1.0 GB are free. Free at least 2.8 GB on that drive, or choose a data folder on another drive.",
+     "os_code": null,
+     "retryable": false,
+     "operation": "preflight",
+     "subject": "destination",
+     "reason": "insufficient_space"
+    }
+   },
+   "id": "storage.insufficient_space"
+  },
+  {
    "name": "refinement settings_load.malformed",
    "input": {
     "event": "failed",

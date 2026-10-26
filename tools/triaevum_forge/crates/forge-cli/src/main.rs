@@ -7,9 +7,10 @@
 //! does. `run-job` streams one compact JSON event per line on stdout
 //! (diagnostics go to stderr). `--install-worker` speaks the Python GUI's
 //! worker line protocol, so the Python GUI can drive this engine. `status`
-//! prints the installation state, `explain` the explanation of an event and
-//! `inventory` where the installation keeps its files, the same JSON the C
-//! ABI and the Android installer receive.
+//! prints the installation state, `explain` the explanation of an event,
+//! `inventory` where the installation keeps its files and `diagnostics` the
+//! redacted report (optionally saving the support bundle), the same JSON the
+//! C ABI and the Android installer receive.
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -51,6 +52,21 @@ enum Command {
     Explain { input: String },
     /// Print where the installation keeps its files, and whether the game or another Forge runs (read-only).
     Inventory(InventoryArgs),
+    /// Print the redacted diagnostics report and the support bundle's planned contents; --bundle saves it.
+    Diagnostics(DiagnosticsArgs),
+}
+
+#[derive(Args)]
+struct DiagnosticsArgs {
+    /// The package (default: this executable's package).
+    #[arg(long)]
+    package_root: Option<PathBuf>,
+    /// The private data folder (default: the package's data folder).
+    #[arg(long)]
+    data_root: Option<PathBuf>,
+    /// Save the support bundle (a zip) at this path.
+    #[arg(long)]
+    bundle: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -127,6 +143,32 @@ fn main() -> ExitCode {
         Command::Status(args) => status(args),
         Command::Explain { input } => explain(&input),
         Command::Inventory(args) => inventory(args),
+        Command::Diagnostics(args) => diagnostics(args),
+    }
+}
+
+fn diagnostics(args: DiagnosticsArgs) -> ExitCode {
+    let package_root = match package_root(args.package_root) {
+        Ok(root) => root,
+        Err(message) => return print_error(&message),
+    };
+    let mut request = json!({
+        "format": forge_core::diagnostics::REQUEST_FORMAT,
+        "package_root": package_root.to_string_lossy(),
+    });
+    if let Some(data_root) = args.data_root {
+        request["data_root"] = json!(data_root.to_string_lossy());
+    }
+    if let Some(bundle) = args.bundle {
+        request["bundle"] = json!(bundle.to_string_lossy());
+    }
+    let bytes = forge_core::diagnostics::diagnostics_bytes(&serde_json::to_vec(&request).unwrap_or_default());
+    let value: Value = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+    println!("{}", legacy_json::dumps(&value, PYTHON_RESULT));
+    if value["status"] == "ok" {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
 

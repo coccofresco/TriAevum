@@ -1259,6 +1259,7 @@ dependencies = [
  "forge-rom",
  "serde_json",
  "tempfile",
+ "zip",
 ]
 
 [[package]]

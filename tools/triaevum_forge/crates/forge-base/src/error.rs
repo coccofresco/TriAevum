@@ -178,6 +178,8 @@ coded! {
         AccessDenied = "access_denied",
         ReadOnlyDestination = "read_only_destination",
         StorageFull = "storage_full",
+        /// Forge's estimate of the space an operation needs exceeds what is free.
+        InsufficientSpace = "insufficient_space",
         PathTooLong = "path_too_long",
         /// The file is in use or read-only; the holder is not known.
         FileLocked = "file_locked",

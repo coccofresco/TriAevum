@@ -324,6 +324,21 @@ pub fn install_private_title(
         let root = package_root.clone();
         let catalog = load_catalog(&root)?;
         let target = request.target.platform()?;
+        let activation = match android {
+            None => package_layout(&package_root)?.activation,
+            Some(android) => android.profile_root.clone(),
+        };
+        crate::preflight::check_writable(&activation, "installation folder")?;
+        crate::preflight::check_writable(&data_root, "data folder")?;
+        let estimate = crate::preflight::StorageEstimate {
+            game_data: crate::preflight::input_bytes(&request.source).unwrap_or(0),
+            shader_corpus: crate::preflight::shader_corpus_bytes(&catalog, &root),
+            margin: crate::preflight::MARGIN,
+        };
+        crate::preflight::check_storage(&data_root, &estimate, forge_native::system::available_space(&data_root))?;
+        if let Some(warning) = crate::preflight::vulkan_loader_warning() {
+            report(stage, &warning);
+        }
 
         stage = "extract";
         report(stage, "Extracting native title data from the decrypted ROM...");

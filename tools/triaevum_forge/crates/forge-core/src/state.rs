@@ -276,6 +276,14 @@ impl InstallationState {
     }
 }
 
+/// `release.version` of the package's release manifest, when it has one.
+pub fn package_version(package: &Path) -> Option<String> {
+    ["release-manifest.json", "docs/release-manifest.json"].iter().find_map(|relative| {
+        let manifest = load_json_object(&join_posix(package, relative)).ok()?;
+        manifest.get("release")?.get("version")?.as_str().map(str::to_string)
+    })
+}
+
 /// The state of the installation `request` names. Never fails: a failure
 /// of the inspection itself is [`InstallationState::Failed`].
 pub fn inspect(request: &InspectRequest) -> InstallationState {
@@ -580,12 +588,8 @@ impl<'a> Context<'a> {
         None
     }
 
-    /// `release.version` of the package's release manifest, when it has one.
     fn package_version(&self) -> Option<String> {
-        ["release-manifest.json", "docs/release-manifest.json"].iter().find_map(|relative| {
-            let manifest = load_json_object(&join_posix(&self.package, relative)).ok()?;
-            manifest.get("release")?.get("version")?.as_str().map(str::to_string)
-        })
+        package_version(&self.package)
     }
 
     fn language(&self) -> Option<String> {

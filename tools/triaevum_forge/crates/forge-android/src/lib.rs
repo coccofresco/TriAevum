@@ -167,6 +167,26 @@ pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_invent
     }
 }
 
+/// The bytes `diagnostics` returns for a request (`forge_core::diagnostics`).
+pub fn diagnostics_json(request: &[u8]) -> Vec<u8> {
+    forge_core::diagnostics::diagnostics_bytes(request)
+}
+
+/// `static native byte[] diagnostics(byte[] request)`: the redacted report,
+/// and the support bundle written where the request names it.
+#[no_mangle]
+pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_diagnostics(
+    env: *mut JNIEnv,
+    _class: jclass,
+    request: jbyteArray,
+) -> jbyteArray {
+    let request = read_byte_array(env, request).unwrap_or_default();
+    match catch_unwind(AssertUnwindSafe(|| diagnostics_json(&request))) {
+        Ok(bytes) => byte_array(env, &bytes),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
 /// `static native byte[] explain(byte[] input)`: an explanation, or JSON null.
 #[no_mangle]
 pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_explain(

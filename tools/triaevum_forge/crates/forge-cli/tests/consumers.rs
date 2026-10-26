@@ -106,3 +106,19 @@ fn inventory_prints_the_engine_inventory_and_a_running_game() {
     assert_eq!(printed["activity"]["game_running"], true);
     assert_eq!(printed["activity"]["explanation"]["id"], "session.game_running");
 }
+
+#[test]
+fn diagnostics_prints_the_report_and_saves_the_bundle() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    package(root);
+    let bundle = root.join("out").join("bundle.zip");
+    let (success, printed) =
+        forge(&["diagnostics", "--package-root", &root.to_string_lossy(), "--bundle", &bundle.to_string_lossy()]);
+    assert!(success, "{printed}");
+    assert_eq!(printed["format"], "triaevum_diagnostics_v1");
+    assert!(printed["text"].as_str().unwrap().starts_with("TriAevum diagnostics, "));
+    assert!(printed["text"].as_str().unwrap().contains("Installation: not_installed"));
+    assert!(bundle.is_file());
+    assert_eq!(printed["bundle"]["members"][0], "diagnostics.txt");
+}

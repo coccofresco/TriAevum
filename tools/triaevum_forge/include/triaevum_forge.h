@@ -1,7 +1,7 @@
 /* Copyright TriAevum contributors
  * SPDX-License-Identifier: GPL-3.0-or-later
  *
- * TriAevum Forge ABI v2. Requests, events and results are UTF-8 JSON byte
+ * TriAevum Forge ABI v4. Requests, events and results are UTF-8 JSON byte
  * spans; buffers Forge returns are released with TriAevumForgeFreeBuffer.
  * Events are polled, never delivered from Forge's worker threads. No C++
  * exception or Rust panic crosses this interface.
@@ -18,9 +18,9 @@
  * each notice {"outcome","details"} a non-error outcome to explain.
  *
  * Version history: v2 adds TriAevumForgeInspect, TriAevumForgeExplain and
- * the optional event fields above; v3 adds TriAevumForgeInventory. Every
- * earlier declaration is unchanged, so a host written for v1 or v2 works with
- * a v3 library.
+ * the optional event fields above; v3 adds TriAevumForgeInventory; v4 adds
+ * TriAevumForgeDiagnostics. Every earlier declaration is unchanged, so a host
+ * written for an earlier version works with a v4 library.
  */
 #ifndef TRIAEVUM_FORGE_H
 #define TRIAEVUM_FORGE_H
@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-#define TRIAEVUM_FORGE_ABI_VERSION 3u
+#define TRIAEVUM_FORGE_ABI_VERSION 4u
 
 typedef struct TriAevumForgeBuffer {
     uint8_t *data;
@@ -126,6 +126,18 @@ TriAevumForgeBuffer TriAevumForgeExplain(const uint8_t *input, size_t input_len)
  * legacy, backup include, optional or exclude. Never fails: an unusable
  * request is {"format",...,"status":"failed","explanation":{...}}. */
 TriAevumForgeBuffer TriAevumForgeInventory(const uint8_t *request, size_t request_len);
+
+/* v4. Diagnostics of an installation (reads logs; call it off a UI thread).
+ * Request: {"format":"triaevum_forge_diagnostics_v1","package_root"?,
+ *  "data_root"?,"android"?:{as for the inventory},"bundle"?:"<zip path>"}
+ * Result: {"format":"triaevum_diagnostics_v1","status":"ok","text",
+ * "bundle_plan":{"members":[{"name","size"}],"omitted":[{"name","reason"}]},
+ * "last_game_run","game_exit","recovery","logs":{"game","forge"},
+ * "bundle"?:{"path","bytes","members"}}: "text" is the redacted report
+ * (at most 16 KB), "game_exit" and "recovery" explanations or null. With
+ * "bundle" the redacted support bundle is written there atomically. Never
+ * fails: an unusable request is "status":"failed" with its "explanation". */
+TriAevumForgeBuffer TriAevumForgeDiagnostics(const uint8_t *request, size_t request_len);
 
 #ifdef __cplusplus
 }

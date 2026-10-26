@@ -1,11 +1,11 @@
 // Copyright TriAevum contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Forge ABI v3: the stable C interface the Android installer and the game's
+//! Forge ABI v4: the stable C interface the Android installer and the game's
 //! host use. Declarations live in `include/triaevum_forge.h`. Version 2 adds
 //! `TriAevumForgeInspect` and `TriAevumForgeExplain` to version 1, version 3
-//! adds `TriAevumForgeInventory`; earlier declarations are unchanged (a v1 or
-//! v2 host works with this library).
+//! adds `TriAevumForgeInventory`, version 4 `TriAevumForgeDiagnostics`;
+//! earlier declarations are unchanged (an older host works with this library).
 //!
 //! Requests, events and results are versioned UTF-8 JSON in byte spans.
 //! Buffers Rust returns are released only by `TriAevumForgeFreeBuffer`.
@@ -30,7 +30,7 @@ use crate::error::{ErrorKind, ForgeError};
 use crate::jobs;
 use crate::log::ForgeLog;
 
-pub const ABI_VERSION: u32 = 3;
+pub const ABI_VERSION: u32 = 4;
 
 #[repr(C)]
 pub struct TriAevumForgeBuffer {
@@ -273,6 +273,18 @@ pub unsafe extern "C" fn TriAevumForgeInventory(request: *const u8, request_len:
     guarded(TriAevumForgeBuffer::empty(), || {
         let bytes = span(request, request_len).unwrap_or_default();
         TriAevumForgeBuffer::from_vec(crate::inventory::inventory_bytes(bytes))
+    })
+}
+
+/// v4. Diagnostics (`crate::diagnostics`) for a JSON diagnostics request:
+/// the copyable report, the support bundle's planned members, the last game
+/// run and display recovery; with `bundle`, the bundle is written there.
+/// Reads logs and writes only the requested bundle; call it off a UI thread.
+#[no_mangle]
+pub unsafe extern "C" fn TriAevumForgeDiagnostics(request: *const u8, request_len: usize) -> TriAevumForgeBuffer {
+    guarded(TriAevumForgeBuffer::empty(), || {
+        let bytes = span(request, request_len).unwrap_or_default();
+        TriAevumForgeBuffer::from_vec(crate::diagnostics::diagnostics_bytes(bytes))
     })
 }
 

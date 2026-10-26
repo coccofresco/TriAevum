@@ -25,6 +25,8 @@ forge-prepare = { path = "../forge-prepare" }
 forge-rom = { path = "../forge-rom" }
 serde_json.workspace = true
 tempfile.workspace = true
+# The support bundle (same version and features as forge-mods and forge-native).
+zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [dev-dependencies]
 tempfile.workspace = true
