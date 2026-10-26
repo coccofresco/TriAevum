@@ -425,6 +425,11 @@ tags
 !/docs/images/beta12-*.jpg
 # Licensed Azahar controller artwork, not ROM-derived textures or captures.
 !/ports/android/controls/src/main/res/drawable*/*.png
+# The owner's branding artwork and the icons derived from it
+# (tools/triaevum_release/branding/README.md).
+!/tools/triaevum_release/branding/**/*.png
+!/tools/triaevum_release/branding/**/*.jpg
+!/ports/android/app/src/main/res/mipmap*/*.png
 *.sav
 shipofharkinian.ini
 shipofharkinian.json

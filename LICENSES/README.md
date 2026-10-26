@@ -28,6 +28,7 @@ their imported source.
 | PyInstaller 6.16.0 bootloader (PyInstaller Forge) | GPL-2.0-or-later with bootloader exception | `LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt` |
 | LLVM 22 Forge tools (`llc`, `lld-link`) | Apache-2.0 WITH LLVM-exception | `LICENSES/shaderc-Apache-2.0.txt` plus `LICENSES/LLVM-exception.txt` |
 | Fira Sans Condensed (in-game menu font atlases, compiled into the runtime) | SIL OFL 1.1 | `LICENSES/FiraSans-OFL.txt` and `tools/oot3d/ui_menu/font/OFL.txt` |
+| TriAevum artwork (game and Forge icons, Forge background; compiled into the executables, installed as launcher icons) | Supplied by the project owner; no rights in Nintendo trademarks | `LICENSES/TriAevum-artwork.md` and `tools/triaevum_release/branding/README.md` |
 
 The public packager must include the root `LICENSE` and copy applicable donor
 texts into its own `LICENSES` directory. This index does not replace any
