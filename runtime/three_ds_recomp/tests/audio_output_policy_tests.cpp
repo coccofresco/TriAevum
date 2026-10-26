@@ -364,6 +364,31 @@ void TestPreviewTone() {
     Expect(Ship::GenerateAudioPreviewTone(0).empty(), "preview tone without a rate");
 }
 
+void TestPreviewToneQueueGuard() {
+    const std::int32_t shortQueue = kSampleRate / 20;
+    const std::int32_t toneFrames = kSampleRate * 120 / 1000;
+    // Real time: only a short queue takes a tone, whatever came before.
+    Expect(Ship::AudioPreviewToneMayQueue(0, kSampleRate, -1, false), "empty queue refused a tone");
+    Expect(Ship::AudioPreviewToneMayQueue(shortQueue - 1, kSampleRate, -1, false), "short queue refused a tone");
+    Expect(!Ship::AudioPreviewToneMayQueue(shortQueue, kSampleRate, -1, false), "long queue took a tone");
+    Expect(!Ship::AudioPreviewToneMayQueue(shortQueue * 4, kSampleRate, shortQueue * 8, false),
+           "real-time guard used the previous tone");
+    // Fixed delta: a long backlog of game audio does not block the first tone
+    // of a hold; later tones wait until the previous one has nearly played.
+    const std::int32_t backlog = kSampleRate * 6;
+    Expect(Ship::AudioPreviewToneMayQueue(backlog, kSampleRate, -1, true), "scripted first tone blocked");
+    const std::int32_t mark = backlog + toneFrames;
+    Expect(!Ship::AudioPreviewToneMayQueue(mark, kSampleRate, mark, true), "scripted tones piled up");
+    Expect(!Ship::AudioPreviewToneMayQueue(mark - toneFrames + shortQueue, kSampleRate, mark, true),
+           "scripted tone queued with 50 ms of the previous one left");
+    Expect(Ship::AudioPreviewToneMayQueue(mark - toneFrames + shortQueue - 1, kSampleRate, mark, true),
+           "scripted tone blocked after the previous one drained");
+    Expect(Ship::AudioPreviewToneMayQueue(shortQueue - 1, kSampleRate, mark, true), "scripted short queue refused");
+    // Invalid inputs never queue.
+    Expect(!Ship::AudioPreviewToneMayQueue(0, 0, -1, true), "tone without a rate");
+    Expect(!Ship::AudioPreviewToneMayQueue(-1, kSampleRate, -1, true), "tone with a failed queue query");
+}
+
 } // namespace
 
 int main() try {
@@ -372,6 +397,7 @@ int main() try {
     TestOutputDigest();
     TestOwner();
     TestPreviewTone();
+    TestPreviewToneQueueGuard();
     std::cout << "audio_output_policy_tests passed: " << gChecks << " checks\n";
     return 0;
 } catch (const std::exception& error) {

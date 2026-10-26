@@ -295,14 +295,23 @@ bool NativeA32WindowSession::RunFrame() {
   // made while the menu holds the game (no game sound runs then). The tone is
   // the host's own, played through the same output gain; it is queued only
   // while the player's queue is short, so a held arrow never piles tones up.
+  // A fixed-delta run queues game audio faster than real time, so there the
+  // tone waits only for the previous tone of the hold to drain
+  // (Ship::AudioPreviewToneMayQueue); game audio is untouched either way.
+  if (!guestHeld) {
+    previewToneQueueMark = -1;
+  }
   if (const auto audioPolicy = audio != nullptr ? audio->GetOutputPolicy() : nullptr) {
 #if !defined(__ANDROID__)
     audioPolicy->SetWindowFocused(SDL_GetKeyboardFocus() != nullptr);
 #endif
     if (audioPolicy->TakePreviewRequest() && guestHeld && !launch.DisableAudio && audioPlayer != nullptr &&
-        audioPlayer->IsInitialized() && audioPlayer->Buffered() < audioPlayer->GetSampleRate() / 20) {
+        audioPlayer->IsInitialized() &&
+        Ship::AudioPreviewToneMayQueue(audioPlayer->Buffered(), audioPlayer->GetSampleRate(),
+                                       previewToneQueueMark, hostArgs.FixedDeltaSeconds > 0.0)) {
       const auto tone = Ship::GenerateAudioPreviewTone(static_cast<uint32_t>(audioPlayer->GetSampleRate()));
       audioPlayer->Play(reinterpret_cast<const uint8_t *>(tone.data()), tone.size() * sizeof(int16_t));
+      previewToneQueueMark = audioPlayer->Buffered();
     }
   }
   // Effects that keep their own time (the grass wind and bending) hold with

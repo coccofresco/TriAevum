@@ -133,6 +133,14 @@ only while the game is held and the player's queue is short (a held arrow key
 does not pile tones up), and is never played when muted. F1 does not hold the
 game, so the game's own sound is the feedback there.
 
+Scripted fixed-delta runs (`--fixed-delta-seconds`) queue game audio faster than real
+time, so the output queue can stay seconds long behind the menu. There the
+first tone of a hold is queued after that backlog at once, and a later tone
+waits only until the previous tone has drained to under 50 ms
+(`Ship::AudioPreviewToneMayQueue`, covered by `audio_output_policy_tests`).
+The rule decides only about the tone; the game's audio and its bytes are
+unchanged.
+
 ## Mute when unfocused
 
 The window frame tells the owner each frame whether the game window has the

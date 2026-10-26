@@ -39,6 +39,20 @@ struct AudioOutputSettings {
  */
 [[nodiscard]] std::vector<std::int16_t> GenerateAudioPreviewTone(std::uint32_t sampleRate);
 
+/**
+ * @brief Whether a preview tone may be queued now, so a held arrow never piles
+ * tones up. `buffered` is the output player's queue in frames;
+ * `previousToneMark` is the queue right after the previous tone of this hold
+ * was queued (negative when there is none). Normally the queue must be short
+ * (under 50 ms). A scripted fixed-delta run queues the game's audio faster than
+ * real time, so its queue can stay long behind the menu; with `scriptedClock`
+ * the tone then waits only until the previous tone of the hold has drained to
+ * the same 50 ms, and the first tone of a hold is queued at once. Decides only
+ * about the tone: the game's audio is never touched.
+ */
+[[nodiscard]] bool AudioPreviewToneMayQueue(std::int32_t buffered, std::int32_t sampleRate,
+                                            std::int32_t previousToneMark, bool scriptedClock) noexcept;
+
 /** @brief Where the owner reads and writes the "Audio" block. */
 class AudioOutputPersistencePort {
   public:

@@ -84,6 +84,28 @@ std::vector<std::int16_t> GenerateAudioPreviewTone(std::uint32_t sampleRate) {
     return samples;
 }
 
+bool AudioPreviewToneMayQueue(std::int32_t buffered, std::int32_t sampleRate, std::int32_t previousToneMark,
+                              bool scriptedClock) noexcept {
+    if (sampleRate <= 0 || buffered < 0) {
+        return false;
+    }
+    const std::int64_t shortQueue = sampleRate / 20; // 50 ms
+    if (buffered < shortQueue) {
+        return true;
+    }
+    if (!scriptedClock) {
+        return false;
+    }
+    if (previousToneMark < 0) {
+        return true;
+    }
+    // While the game is held only tones are queued, so the queue only drains:
+    // the previous tone has at most `remaining` frames left to play.
+    const std::int64_t toneFrames = static_cast<std::int64_t>(sampleRate) * 120 / 1000;
+    const std::int64_t remaining = static_cast<std::int64_t>(buffered) - (previousToneMark - toneFrames);
+    return remaining < shortQueue;
+}
+
 AudioOutputPolicy::AudioOutputPolicy(std::shared_ptr<AudioOutputPersistencePort> persistence)
     : mPersistence(std::move(persistence)) {
     if (mPersistence == nullptr) {

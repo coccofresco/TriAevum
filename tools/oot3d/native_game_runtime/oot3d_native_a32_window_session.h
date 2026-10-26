@@ -483,6 +483,9 @@ private:
   // no guest refresh is due, the presentation clock does not run and the
   // last scene frame is presented again at the last interpolation sample.
   float heldVisualInterpolationAlpha = 1.0F;
+  // The output queue (frames) right after the last preview tone of this hold
+  // was queued; -1 outside a hold or before its first tone.
+  int32_t previewToneQueueMark = -1;
   // The menu's Quit game: the next frame flushes pending host settings and
   // closes the window through the normal exit path.
   bool menuQuitRequested = false;
