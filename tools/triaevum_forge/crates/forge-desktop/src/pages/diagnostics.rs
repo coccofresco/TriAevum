@@ -152,6 +152,13 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
         }
         Some(Ok(_)) => {}
     }
+    if cfg!(target_os = "linux") {
+        // Steam Deck and controller-only use (UX plan WP-11).
+        ui.add_space(8.0);
+        let heading = RichText::new(app.t(Msg::SteamDeckHeading)).strong();
+        record.add(ui, "steam_deck_heading", "label", Label::new(heading).wrap());
+        record.add(ui, "steam_deck_body", "label", Label::new(app.t(Msg::SteamDeckBody)).wrap());
+    }
     if let Some(view) = &view {
         ui.add_space(8.0);
         let folders =

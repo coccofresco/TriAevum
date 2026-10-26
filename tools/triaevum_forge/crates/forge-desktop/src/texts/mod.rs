@@ -219,6 +219,7 @@ messages! {
     HdReadyReinstall,
     ModReadyReinstall { title: &'a str },
     HdArchiveApplied,
+    DownloadsFolderNote,
     ModSettingSaveFailed { error: &'a str },
     RevisionsUnreadable { error: &'a str },
     // File pickers.
@@ -325,6 +326,8 @@ messages! {
     FilterZip,
     BundleSaved { path: &'a str },
     BundleFailed { error: &'a str },
+    SteamDeckHeading,
+    SteamDeckBody,
     // About.
     Version { version: &'a str },
     AboutBody,
@@ -497,6 +500,7 @@ pub const SAMPLES: &[Msg<'static>] = &{
         HdReadyReinstall,
         ModReadyReinstall { title: "<T>" },
         HdArchiveApplied,
+        DownloadsFolderNote,
         ModSettingSaveFailed { error: "<E>" },
         RevisionsUnreadable { error: "<E>" },
         PickRomTitle,
@@ -600,6 +604,8 @@ pub const SAMPLES: &[Msg<'static>] = &{
         FilterZip,
         BundleSaved { path: "<P>" },
         BundleFailed { error: "<E>" },
+        SteamDeckHeading,
+        SteamDeckBody,
         Version { version: "<V>" },
         AboutBody,
         SupportedRevisions,

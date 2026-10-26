@@ -260,6 +260,11 @@ pub fn text(msg: &Msg) -> Option<String> {
             return Some(format!("{title} è pronta. Prepara e installa di nuovo il gioco per applicarla."))
         }
         HdArchiveApplied => "Archivio delle texture HD pronto. Viene applicato da questa installazione.",
+        DownloadsFolderNote => {
+            "Forge conserva in questa cartella gli archivi che scarica e una copia verificata di ogni archivio che \
+             selezioni. Senza rete, scarica l'archivio dalla pagina della mod da qualsiasi dispositivo e selezionalo \
+             con i pulsanti qui sopra."
+        }
         ModSettingSaveFailed { error } => {
             return Some(format!("Impossibile salvare l'impostazione della mod: {error}"))
         }
@@ -540,6 +545,15 @@ pub fn text(msg: &Msg) -> Option<String> {
         FilterZip => "Archivio zip",
         BundleSaved { path } => return Some(format!("Pacchetto per l'assistenza salvato: {path}")),
         BundleFailed { error } => return Some(format!("Impossibile salvare il pacchetto per l'assistenza: {error}")),
+        SteamDeckHeading => "Steam Deck e controller",
+        SteamDeckBody => {
+            "Forge funziona senza mouse: Tab e Maiusc+Tab passano da un controllo all'altro, Invio attiva quello \
+             evidenziato ed Esc chiude una finestra di dialogo. Su Steam Deck prepara il gioco in modalità Desktop, \
+             poi aggiungi l'AppImage a Steam come gioco non di Steam (senza Proton). Nelle impostazioni del \
+             controller scegli il modello di Steam Input «Gamepad with Mouse Trackpad» (gamepad con trackpad come \
+             mouse): levette e pulsanti restano un gamepad per il gioco, e il trackpad destro muove il puntatore e \
+             fa clic, così Forge si usa anche in modalità Gioco."
+        }
         Version { version } => return Some(format!("Versione {version}")),
         AboutBody => {
             "TriAevum Forge prepara TriAevum \u{2014} Echoes of Time dalla tua ROM decriptata. È software libero \

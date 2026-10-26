@@ -240,6 +240,11 @@ pub fn text(msg: &Msg) -> String {
             return format!("{title} is ready. Prepare and install the title again to apply it.")
         }
         HdArchiveApplied => "HD texture archive ready. It is applied by this installation.",
+        DownloadsFolderNote => {
+            "Forge keeps the archives it downloads in this folder, and a checked copy of each archive you select. \
+             Without a network, download the archive from the mod page on any device and select it with the \
+             buttons above."
+        }
         ModSettingSaveFailed { error } => return format!("Cannot save the mod setting: {error}"),
         RevisionsUnreadable { error } => return format!("Cannot read the supported game revisions: {error}"),
         PickRomTitle => "Select a decrypted .3ds or .cci ROM",
@@ -494,6 +499,14 @@ pub fn text(msg: &Msg) -> String {
         FilterZip => "Zip archive",
         BundleSaved { path } => return format!("Support bundle saved: {path}"),
         BundleFailed { error } => return format!("The support bundle could not be saved: {error}"),
+        SteamDeckHeading => "Steam Deck and controllers",
+        SteamDeckBody => {
+            "Forge works without a mouse: Tab and Shift+Tab move between controls, Enter activates the highlighted \
+             one and Esc closes a dialog. On Steam Deck, prepare the game in Desktop Mode, then add the AppImage to \
+             Steam as a non-Steam game (without Proton). In its controller settings choose the Steam Input template \
+             \"Gamepad with Mouse Trackpad\": the sticks and buttons stay a gamepad for the game, and the right \
+             trackpad moves the pointer and clicks, so Forge can also be used in Gaming Mode."
+        }
         Version { version } => return format!("Version {version}"),
         AboutBody => {
             "TriAevum Forge prepares TriAevum \u{2014} Echoes of Time from your own decrypted ROM. It is free \

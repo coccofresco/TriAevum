@@ -828,7 +828,9 @@ pub fn open_folder(path: &std::path::Path) -> std::io::Result<()> {
 /// `data_restore` (a preview of another platform's backup) and
 /// `data_remove`, from a synthetic inventory with long paths.
 pub fn probe(app: &mut ForgeApp, screen: &str) {
-    let root = if cfg!(windows) { PathBuf::from(r"C:\Games\TriAevum") } else { PathBuf::from("/home/player/TriAevum") };
+    // User names with spaces: the release audit rejects a binary naming a
+    // plausible build-machine home folder (`/home/<name>/`).
+    let root = PathBuf::from(if cfg!(windows) { r"C:\Games\TriAevum" } else { "/home/Player Name/TriAevum" });
     let inventory = probe_inventory(&root);
     let mut plan = forge_core::data_actions::data_actions(&inventory, &[]).unwrap_or_else(|_| json!({}));
     // Sizes of a real installation (the synthetic folders do not exist).
@@ -897,7 +899,7 @@ fn probe_inventory(root: &Path) -> Inventory {
     let pack = PathBuf::from(if cfg!(windows) {
         r"D:\Users\Player Name With A Long Name\AppData\Roaming\Azahar\load\textures\0004000000033600"
     } else {
-        "/home/player-with-a-long-name/.local/share/azahar/load/textures/0004000000033600"
+        "/home/Player Name With A Long Name/.local/share/azahar/load/textures/0004000000033600"
     });
     let mut entries = vec![
         entry(C::Saves, "save_data", data.join("savedata"), Directory, Origin::Default, Include, 1_200_000),

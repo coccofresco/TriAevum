@@ -108,6 +108,22 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
     hd_section(app, ui, record, actions);
     ui.add_space(12.0);
     mod_section(app, ui, record, actions);
+    ui.add_space(12.0);
+    downloads_folder(app, ui, record, actions);
+}
+
+/// Where the archives are kept (UX plan WP-11). Without a network the
+/// recovery is an archive downloaded elsewhere and selected with the buttons
+/// above; an AppImage or Flatpak package folder is read-only, so no text asks
+/// to place an archive beside Forge.
+fn downloads_folder(app: &ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
+    let folder = forge_mods::downloads_directory(&app.installation.data_root);
+    record.add(ui, "downloads_note", "label", Label::new(app.t(Msg::DownloadsFolderNote)).wrap());
+    let path = RichText::new(folder.display().to_string()).monospace();
+    record.add(ui, "downloads_path", "label", Label::new(path).wrap());
+    if record.button(ui, true, "downloads_open", Button::new(app.t(Msg::ButtonOpenFolder))) {
+        actions.push(Action::OpenFolder(folder));
+    }
 }
 
 fn hd_section(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {

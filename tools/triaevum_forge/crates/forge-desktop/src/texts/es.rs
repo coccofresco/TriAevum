@@ -261,6 +261,11 @@ pub fn text(msg: &Msg) -> Option<String> {
             return Some(format!("{title} está listo. Vuelve a preparar e instalar el título para aplicarlo."))
         }
         HdArchiveApplied => "Archivo de texturas HD listo. Lo aplica esta instalación.",
+        DownloadsFolderNote => {
+            "Forge guarda en esta carpeta los archivos que descarga y una copia comprobada de cada archivo que \
+             selecciones. Sin conexión, descarga el archivo desde la página del mod en cualquier dispositivo y \
+             selecciónalo con los botones de arriba."
+        }
         ModSettingSaveFailed { error } => return Some(format!("No se puede guardar el ajuste del mod: {error}")),
         RevisionsUnreadable { error } => {
             return Some(format!("No se pueden leer las revisiones del juego compatibles: {error}"))
@@ -552,6 +557,15 @@ pub fn text(msg: &Msg) -> Option<String> {
         FilterZip => "Archivo zip",
         BundleSaved { path } => return Some(format!("Paquete de soporte guardado: {path}")),
         BundleFailed { error } => return Some(format!("No se pudo guardar el paquete de soporte: {error}")),
+        SteamDeckHeading => "Steam Deck y mandos",
+        SteamDeckBody => {
+            "Forge funciona sin ratón: Tab y Mayús+Tab pasan de un control a otro, Intro activa el resaltado y Esc \
+             cierra un diálogo. En Steam Deck, prepara el juego en el modo Escritorio y después añade el AppImage a \
+             Steam como juego que no es de Steam (sin Proton). En su configuración del mando elige la plantilla de \
+             Steam Input «Gamepad with Mouse Trackpad» (mando con trackpad como ratón): los joysticks y los botones \
+             siguen siendo un mando para el juego, y el trackpad derecho mueve el puntero y hace clic, así que Forge \
+             también se puede usar en el modo Juego."
+        }
         Version { version } => return Some(format!("Versión {version}")),
         AboutBody => {
             "TriAevum Forge prepara TriAevum \u{2014} Echoes of Time a partir de tu propia ROM descifrada. Es \

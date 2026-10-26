@@ -264,6 +264,11 @@ pub fn text(msg: &Msg) -> Option<String> {
             return Some(format!("{title} est prêt. Préparez et installez à nouveau le jeu pour l'appliquer."))
         }
         HdArchiveApplied => "Archive de textures HD prête. Elle est appliquée par cette installation.",
+        DownloadsFolderNote => {
+            "Forge conserve dans ce dossier les archives qu'il télécharge, ainsi qu'une copie vérifiée de chaque \
+             archive que vous sélectionnez. Sans réseau, téléchargez l'archive depuis la page du mod sur n'importe \
+             quel appareil et sélectionnez-la avec les boutons ci-dessus."
+        }
         ModSettingSaveFailed { error } => {
             return Some(format!("Impossible d'enregistrer le paramètre du mod : {error}"))
         }
@@ -562,6 +567,15 @@ pub fn text(msg: &Msg) -> Option<String> {
         FilterZip => "Archive zip",
         BundleSaved { path } => return Some(format!("Archive d'assistance enregistrée : {path}")),
         BundleFailed { error } => return Some(format!("L'archive d'assistance n'a pas pu être enregistrée : {error}")),
+        SteamDeckHeading => "Steam Deck et manettes",
+        SteamDeckBody => {
+            "Forge fonctionne sans souris : Tab et Maj+Tab passent d'une commande à l'autre, Entrée active celle qui \
+             est en surbrillance et Échap ferme une boîte de dialogue. Sur Steam Deck, préparez le jeu en mode \
+             Bureau, puis ajoutez l'AppImage à Steam comme jeu non-Steam (sans Proton). Dans ses paramètres de \
+             manette, choisissez le modèle Steam Input « Gamepad with Mouse Trackpad » (manette avec pavé tactile \
+             en souris) : les sticks et les boutons restent une manette pour le jeu, et le pavé tactile droit \
+             déplace le pointeur et clique, si bien que Forge s'utilise aussi en mode Jeu."
+        }
         Version { version } => return Some(format!("Version {version}")),
         AboutBody => {
             "TriAevum Forge prépare TriAevum \u{2014} Echoes of Time à partir de votre propre ROM déchiffrée. C'est \

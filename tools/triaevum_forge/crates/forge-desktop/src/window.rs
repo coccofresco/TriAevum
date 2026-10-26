@@ -83,7 +83,10 @@ impl Geometry {
                 return;
             }
         }
-        let Some(inner) = info.inner_rect else { return };
+        // Wayland reports no window position, so egui has no inner rectangle
+        // there; the window's size is still known (UX plan WP-11).
+        let content = context.content_rect().size();
+        let inner = info.inner_rect.unwrap_or_else(|| Rect::from_min_size(egui::Pos2::ZERO, content));
         let platform = platform_work_area(frame, context.pixels_per_point());
         let area = match (self.simulated.work_area, platform) {
             (Some(size), platform) => Some((Some(platform.map_or(egui::Pos2::ZERO, |area| area.min)), size)),
