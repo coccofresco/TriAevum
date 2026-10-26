@@ -25,6 +25,9 @@ void DeferDisplayConfirmation(bool deferred);
 // A short host notice (for example the result of a hotkey action) shown for a
 // few seconds outside F1. A later notice replaces the current one.
 void PostHostNotice(std::string text, bool failure = false);
+// A notice found during startup (before the first frame): its time starts
+// when it is first drawn, so a long load does not hide it.
+void PostStartupHostNotice(std::string text, bool failure = false);
 [[nodiscard]] bool HostNoticeActive();
 void DrawHostNotice();
 

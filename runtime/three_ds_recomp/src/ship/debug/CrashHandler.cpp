@@ -4,6 +4,8 @@
 #include "ship/utils/ShutdownRequest.h"
 #include "ship/Context.h"
 
+#include <atomic>
+
 #ifdef _WIN32
 #include <windows.h>
 #include <DbgHelp.h>
@@ -15,6 +17,11 @@
 #endif
 
 namespace Ship {
+
+namespace {
+// Set just before a crash dialog appears (lock-free, signal-safe).
+std::atomic<bool> gCrashDialogShown{ false };
+} // namespace
 
 #define WRITE_VAR_LINE(handler, varName, varValue) \
     handler->AppendStr(varName);                   \
@@ -190,6 +197,7 @@ static void ErrorHandler(int sig, siginfo_t* sigInfo, void* data) {
         snprintf(intToCharBuffer, sizeof(intToCharBuffer), "%i ", (int)i);
         WRITE_VAR_LINE(crashHandler, intToCharBuffer, functionName.c_str());
     }
+    gCrashDialogShown.store(true);
     SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, (Context::GetRawInstance()->GetName() + " has crashed").c_str(),
                              (Context::GetRawInstance()->GetName() +
                               " has crashed. Diagnostic details were written to the local logs directory.")
@@ -412,6 +420,7 @@ extern "C" LONG WINAPI seh_filter(PEXCEPTION_POINTERS ex) {
 
     WRITE_VAR_LINE(crashHandler, "Exception: ", exceptionString);
     crashHandler->PrintStack(ex->ContextRecord);
+    gCrashDialogShown.store(true);
     MessageBoxA(nullptr,
                 (Context::GetRawInstance()->GetName() +
                  " has crashed. Diagnostic details were written to the local logs directory.")
@@ -422,6 +431,10 @@ extern "C" LONG WINAPI seh_filter(PEXCEPTION_POINTERS ex) {
 }
 
 #endif
+
+bool CrashHandler::DialogShown() noexcept {
+    return gCrashDialogShown.load();
+}
 
 CrashHandler::CrashHandler() : mOutBuffer(std::make_unique<char[]>(gMaxBufferSize)) {
     ShutdownRequest::Reset();

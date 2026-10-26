@@ -76,7 +76,14 @@ struct HostNotice {
     std::string Text;
     bool Failure = false;
     std::chrono::steady_clock::time_point Until{};
+    // A startup notice waits for its first frame.
+    bool Pending = false;
 };
+
+std::chrono::seconds HostNoticeDuration(bool failure) {
+    // Failures stay longer: they point the player at F1.
+    return std::chrono::seconds(failure ? 8 : 3);
+}
 std::mutex& HostNoticeMutex() {
     static std::mutex mutex;
     return mutex;
@@ -92,21 +99,34 @@ void PostHostNotice(std::string text, bool failure) {
     auto& notice = CurrentHostNotice();
     notice.Text = std::move(text);
     notice.Failure = failure;
-    // Failures stay longer: they point the player at F1.
-    notice.Until = std::chrono::steady_clock::now() +
-                   std::chrono::seconds(failure ? 8 : 3);
+    notice.Pending = false;
+    notice.Until = std::chrono::steady_clock::now() + HostNoticeDuration(failure);
+}
+
+void PostStartupHostNotice(std::string text, bool failure) {
+    std::scoped_lock lock(HostNoticeMutex());
+    auto& notice = CurrentHostNotice();
+    notice.Text = std::move(text);
+    notice.Failure = failure;
+    notice.Pending = true;
 }
 
 bool HostNoticeActive() {
     std::scoped_lock lock(HostNoticeMutex());
-    return std::chrono::steady_clock::now() < CurrentHostNotice().Until;
+    const auto& notice = CurrentHostNotice();
+    return notice.Pending || std::chrono::steady_clock::now() < notice.Until;
 }
 
 void DrawHostNotice() {
     HostNotice notice;
     {
         std::scoped_lock lock(HostNoticeMutex());
-        notice = CurrentHostNotice();
+        auto& current = CurrentHostNotice();
+        if (current.Pending) {
+            current.Pending = false;
+            current.Until = std::chrono::steady_clock::now() + HostNoticeDuration(current.Failure);
+        }
+        notice = current;
     }
     if (std::chrono::steady_clock::now() >= notice.Until) return;
     const auto* viewport = ImGui::GetMainViewport();

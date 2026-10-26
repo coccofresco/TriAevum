@@ -87,10 +87,21 @@ target_sources(oot3d_native_game PRIVATE
     tools/oot3d/native_game_runtime/oot3d_native_game_bootstrap.cpp
     tools/oot3d/native_game_runtime/oot3d_native_game_launch_profile.cpp
     tools/oot3d/native_game_runtime/triaevum_game_session_lock.cpp
+    tools/oot3d/native_game_runtime/triaevum_fatal_report.cpp
+    tools/oot3d/native_game_runtime/triaevum_console.cpp
 )
 if(WIN32)
     target_sources(oot3d_native_game PRIVATE
         tools/oot3d/native_game_runtime/triaevum_windows.manifest)
+    # Owner decision 12 (UX plan WP-03): players get no console window; an
+    # error that ends the game shows a dialog (triaevum_fatal_report.h) and
+    # developers ask for a console with --console (triaevum_console.h).
+    # Redirected output (scripts, Forge, release probes) is inherited as
+    # before. main() stays the entry point.
+    set_target_properties(oot3d_native_game PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MSVC)
+        target_link_options(oot3d_native_game PRIVATE /ENTRY:mainCRTStartup)
+    endif()
 endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # Relocated packages must resolve the bootstrap library beside the runtime,
@@ -191,6 +202,17 @@ add_executable(triaevum_game_session_lock_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/triaevum_game_session_lock_tests.cpp
 )
 oot3d_target_defaults(triaevum_game_session_lock_tests FOLDER Tests)
+
+# The error reports and display-recovery record (UX plan WP-03); no window.
+add_executable(triaevum_fatal_report_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_fatal_report.cpp
+    tools/oot3d/native_game_runtime/triaevum_console.cpp
+    runtime/three_ds_recomp/src/fast/extension/display_recovery.cpp
+    tools/oot3d/native_game_runtime/triaevum_fatal_report_tests.cpp
+)
+target_include_directories(triaevum_fatal_report_tests PRIVATE runtime/three_ds_recomp/include)
+target_link_libraries(triaevum_fatal_report_tests PRIVATE nlohmann_json::nlohmann_json)
+oot3d_target_defaults(triaevum_fatal_report_tests FOLDER Tests)
 set_property(TARGET oot3d_native_game_launch_profile_tests PROPERTY
     FOLDER Tests)
 

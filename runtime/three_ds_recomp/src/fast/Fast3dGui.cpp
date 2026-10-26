@@ -18,7 +18,10 @@
 #include "ship/window/gui/resource/GuiTextureFactory.h"
 #include "ship/resource/File.h"
 
+#include <chrono>
 #include <cstdlib>
+
+#include <spdlog/spdlog.h>
 
 #ifdef __APPLE__
 #include <SDL_hints.h>
@@ -81,6 +84,16 @@ class Oot3dGraphicsSettingsPersistence final
         auto* context = Ship::Context::GetRawInstance();
         return context != nullptr && context->GetConfig() != nullptr &&
             context->GetConfig()->SetBlock("GraphicsPresets", presets);
+    }
+
+    // Beside the runtime's log, where Forge's diagnostics read it.
+    void ReportDisplayRecovery(const Extension::DisplayRecovery& recovery) override {
+        const auto path = Ship::Context::GetPathRelativeToAppDirectory("logs/last-recovery.json");
+        std::string error;
+        if (!Extension::WriteDisplayRecoveryRecord(
+                path, Extension::DisplayRecoveryRecord(recovery, std::chrono::system_clock::now()), &error))
+            SPDLOG_WARN("OOT3D graphics: the display recovery record was not written: {}", error);
+        Extension::PostStartupHostNotice(Extension::DisplayRecoveryNotice(recovery), true);
     }
 };
 

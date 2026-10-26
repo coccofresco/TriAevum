@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fast/extension/display_recovery.h"
 #include "fast/extension/graphics_preset_library.h"
 #include "fast/extension/graphics_settings.h"
 #include "fast/extension/native_presentation_policy.h"
@@ -23,6 +24,11 @@ class GraphicsSettingsPersistencePort {
     // The user's graphics presets: the top-level "GraphicsPresets" block.
     [[nodiscard]] virtual bool StoreGraphicsPresets(
         const nlohmann::json& presets) = 0;
+    // The display settings were reset after an early exit: the host records
+    // it for diagnostics and tells the player. Optional.
+    virtual void ReportDisplayRecovery(const DisplayRecovery& recovery) {
+        (void)recovery;
+    }
 };
 
 // The outcome of a user preset action, with the reason when it failed.

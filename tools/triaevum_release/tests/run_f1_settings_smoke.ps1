@@ -45,6 +45,7 @@ foreach ($unit in @('imgui', 'imgui_draw', 'imgui_tables', 'imgui_widgets')) {
 $args = @('-std=c++20', '-O1', '-fms-runtime-lib=static', '-DIMGUI_ENABLE_TEST_ENGINE',
     "-I$imgui", "-I$repo/runtime/three_ds_recomp/include", "-I$Vcpkg/include",
     "-I$repo/tools/oot3d/native_game_runtime", "-I$repo/tools/oot3d/ui_topscreen",
+    "-I$repo/titles/oot3d/topscreen", "-I$repo/titles/oot3d/gameplay", "-I$repo/titles/oot3d/environment",
     "-I$repo/runtime/three_ds_recomp/src/fast/renderer",
     "-I$repo/tools/three_ds/input",
     "$PSScriptRoot/f1_settings_panel_smoke.cpp",

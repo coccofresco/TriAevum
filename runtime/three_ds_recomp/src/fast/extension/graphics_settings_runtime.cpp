@@ -419,8 +419,12 @@ GraphicsSettingsRuntime::GraphicsSettingsRuntime() {
     // instead of failing at every launch. Everything else is kept.
     if (const char* safe = std::getenv("TRIAEVUM_SAFE_PRESENTATION");
         selectedInitial && safe != nullptr && *safe != '\0') {
+        const auto before = SerializeGraphicsSettings(initial);
         ResetDisplaySettings(initial);
         rewriteLoadedSettings = true;
+        if (mPersistence != nullptr)
+            mPersistence->ReportDisplayRecovery(
+                {safe, ChangedDisplayFields(before, SerializeGraphicsSettings(initial))});
         SPDLOG_WARN("OOT3D graphics: {}; display, resolution, anti-aliasing and upscaler settings were reset "
                     "to their defaults", safe);
         std::fprintf(stderr, "TRIAEVUM_SAFE_PRESENTATION reason=\"%s\"\n", safe);

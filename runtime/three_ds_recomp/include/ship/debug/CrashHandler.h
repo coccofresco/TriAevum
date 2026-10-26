@@ -57,6 +57,12 @@ class CrashHandler {
     void RegisterCallback(CrashHandlerCallback callback);
 
     /**
+     * @brief Whether a crash handler already showed its crash dialog in this
+     * process, so a later error report does not show a second one.
+     */
+    static bool DialogShown() noexcept;
+
+    /**
      * @brief Appends @p str followed by a newline to the crash report buffer.
      * @param str Null-terminated string to append.
      */

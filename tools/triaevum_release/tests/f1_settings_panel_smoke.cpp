@@ -1450,6 +1450,27 @@ void CheckHostWithoutWindowOutput() {
     Check(!Find("Window mode").Disabled, "window mode disabled with a host window");
 }
 
+// A display recovery found while the game starts is announced from the first
+// frame that draws notices, however long loading took (UX plan WP-03).
+void CheckStartupHostNotice() {
+    const DisplayRecovery recovery{"the previous launch ended within its first minute", {"Window mode", "Upscaler"}};
+    PostStartupHostNotice(DisplayRecoveryNotice(recovery), true);
+    Check(HostNoticeActive(), "a startup notice waits for its first frame");
+    auto& io = ImGui::GetIO();
+    io.DisplaySize = ImVec2(1280.0F, 720.0F);
+    io.DeltaTime = 1.0F / 60.0F;
+    ImGui::NewFrame();
+    ImGui::LogToBuffer(0);
+    DrawHostNotice();
+    const std::string drawn = GImGui->LogBuffer.c_str();
+    ImGui::LogFinish();
+    ImGui::Render();
+    Check(drawn.find("display settings were reset (Window mode, Upscaler)") != std::string::npos,
+          "the startup notice was not drawn: " + drawn);
+    Check(drawn.find("F1 > Display") != std::string::npos, "the startup notice names where to change the settings");
+    Check(HostNoticeActive(), "the startup notice ended at its first frame");
+}
+
 void CheckGameSurfaceMouseResume() {
     Fast::MouseCapturePolicy policy;
     Check(policy.Request(true), "initial mouse capture denied");
@@ -2656,6 +2677,7 @@ int main(int argc, char** argv) try {
     InstallGraphicsSettingsPanelTabs({});
     CheckTitleWithoutSceneHooks();
     CheckHostWithoutWindowOutput();
+    CheckStartupHostNotice();
     ImGui::DestroyContext();
     std::cout << "F1 UI smoke passed: " << assertions << " assertions, real renderer/Controls/TopScreen widgets\n";
     return 0;

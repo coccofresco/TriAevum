@@ -23,9 +23,29 @@
 #include "ship/config/Config.h"
 #include "ship/config/ConsoleVariable.h"
 #include "ship/controller/physicaldevice/ConnectedPhysicalDeviceManager.h"
+#include "ship/debug/CrashHandler.h"
 #include "ship/resource/ResourceLoader.h"
 
+#include <SDL2/SDL_messagebox.h>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <Windows.h>
+#endif
+
 namespace {
+
+// TRIAEVUM_TEST_FATAL (docs/TRIAEVUM_DIAGNOSTICS.md): a simulated failure at
+// the point a real one happens, for testing the error reports end to end.
+bool TestFatal(const char* kind) {
+    const char* requested = std::getenv("TRIAEVUM_TEST_FATAL");
+    return requested != nullptr && std::string(requested) == kind;
+}
 
 std::string ResolveHostResourcePath(const std::filesystem::path& path) {
     const std::string encoded = path.generic_string();
@@ -179,8 +199,17 @@ void InitContextForDemo(const Args& args) {
         window->EnableOot3dVulkanBackend();
     }
     window->ConfigureDefaultWindowExtent(!args.Scripted(), initialRequestIsDefault);
+    if (TestFatal("vulkan-device")) {
+        throw std::runtime_error(
+            "the Vulkan device could not be created (simulated by TRIAEVUM_TEST_FATAL=vulkan-device)");
+    }
     if (!context->InitWindow(window)) {
         throw std::runtime_error("failed to initialize Fast3dWindow");
+    }
+    if (TestFatal("crash")) {
+        // Reaches the installed crash handlers exactly like a real fault.
+        volatile int* const fault = nullptr;
+        *fault = 1;
     }
     RecordSwitchHostInitStage("host_window");
     // Video initialization does not initialize SDL's joystick/controller API.
@@ -214,14 +243,53 @@ void DestroyContextForDemo() noexcept {
     Ship::Context::DestroyInstance();
 }
 
-void LogFatalErrorForDemo(const char* message) noexcept {
+bool LogFatalErrorForDemo(const char* message) noexcept {
     try {
         if (auto* context = Ship::Context::GetRawInstance(); context != nullptr && context->GetLogger() != nullptr) {
             context->GetLogger()->critical("oot3d_native_game: {}", message != nullptr ? message : "unknown error");
             context->GetLogger()->flush();
+            return true;
         }
     } catch (...) {
     }
+    return false;
+}
+
+std::string FatalLogDirectoryForDemo() {
+    try {
+        std::error_code error;
+        const auto logs = std::filesystem::path(Ship::Context::GetPathRelativeToAppDirectory("logs"));
+        const auto absolute = std::filesystem::absolute(logs, error);
+        const auto utf8 = (error ? logs : absolute).lexically_normal().u8string();
+        return std::string(utf8.begin(), utf8.end());
+    } catch (...) {
+        return "logs";
+    }
+}
+
+void ShowFatalErrorForDemo(const std::string& title, const std::string& text) noexcept {
+#if defined(__ANDROID__) || defined(__SWITCH__)
+    (void)title;
+    (void)text;
+#else
+    if (Ship::CrashHandler::DialogShown()) return;
+    // SDL shows a message box with or without SDL_Init.
+    if (SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.c_str(), text.c_str(), nullptr) == 0) return;
+#ifdef _WIN32
+    const auto wide = [](const std::string& utf8) {
+        std::wstring result(static_cast<size_t>(MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0)), L'\0');
+        if (!result.empty()) {
+            MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, result.data(), static_cast<int>(result.size()));
+            result.pop_back();
+        }
+        return result;
+    };
+    try {
+        MessageBoxW(nullptr, wide(text).c_str(), wide(title).c_str(), MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+    } catch (...) {
+    }
+#endif
+#endif
 }
 
 Fast::Fast3dWindow& GetActiveFast3dWindowForDemo() {

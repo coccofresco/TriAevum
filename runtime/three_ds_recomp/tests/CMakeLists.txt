@@ -782,6 +782,7 @@ add_executable(oot3d_graphics_foundation_tests
     ../src/fast/extension/graphics_settings_persistence.cpp
     ../src/fast/extension/graphics_preset_library.cpp
     ../src/fast/extension/graphics_settings_runtime.cpp
+    ../src/fast/extension/display_recovery.cpp
     ../src/fast/extension/texture_assignment_model.cpp
     ../src/fast/extension/texture_catalog_selection.cpp
     ../src/fast/extension/texture_preview_artifact.cpp

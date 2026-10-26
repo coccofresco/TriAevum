@@ -128,7 +128,9 @@ if(-not $DisablePicaAotShaders.IsPresent -and
 
 Push-Location $root
 try {
-    & $executable @arguments
+    # TriAevum.exe is a GUI program: PowerShell waits for it and reports its
+    # exit code only when its output goes through the pipeline.
+    & $executable @arguments | Out-Host
     $exitCode = $LASTEXITCODE
 } finally {
     Pop-Location

@@ -26,6 +26,8 @@
 #endif
 #include "oot3d_native_game_bootstrap.h"
 #include "oot3d_native_game_launch_profile.h"
+#include "triaevum_console.h"
+#include "triaevum_fatal_report.h"
 #include "triaevum_game_session_lock.h"
 #include "triaevum_product_info.h"
 #include "oot3d_native_a32_window.h"
@@ -279,8 +281,11 @@ std::optional<int> RunTriAevumToolMode(int argc, char** argv) {
 
 int main(int argc, char** argv) {
 #ifdef _WIN32
+    TriAevum::AttachDeveloperConsole(argc, argv);
     UseRuntimeLibraryDirectory();
 #endif
+    // Re-evaluated once the launch profile has supplied the arguments.
+    bool fatalDialog = TriAevum::FatalDialogWanted(argc, argv);
     // Held for the game's life, past the context teardown below.
     Oot3dNativeGame::GameSessionLock sessionLock;
     try {
@@ -354,6 +359,7 @@ int main(int argc, char** argv) {
         argc = static_cast<int>(runtimeArguments.size());
         argv = runtimeArguments.data();
 #endif
+        fatalDialog = TriAevum::FatalDialogWanted(argc, argv);
         if (!ParseOot3dNativeGameArgs(argc, argv, launch)) {
             PrintOot3dNativeGameUsage();
             return 2;
@@ -400,12 +406,17 @@ int main(int argc, char** argv) {
             "native A32 window runtime is unavailable in this build");
 #endif
     } catch (const std::exception& ex) {
-        std::cerr << "oot3d_native_game: " << ex.what() << '\n';
+        std::cerr << "oot3d_native_game: " << ex.what() << '\n'
+                  << TriAevum::FatalLine(ex.what()) << std::endl;
 #if defined(__SWITCH__)
         WriteSwitchBootStatus("failed", ex.what());
 #endif
-        LogFatalErrorForDemo(ex.what());
+        const bool logged = LogFatalErrorForDemo(ex.what());
+        const auto logDirectory = logged ? FatalLogDirectoryForDemo() : std::string();
         DestroyContextForDemo();
+        // After the window is gone, so the dialog is not hidden behind it.
+        if (fatalDialog)
+            ShowFatalErrorForDemo(TriAevum::kFatalDialogTitle, TriAevum::FatalDialogText(ex.what(), logDirectory));
         return 1;
     }
 }
