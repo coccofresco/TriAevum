@@ -821,7 +821,8 @@ class InstallerActivity : Activity() {
         val available = document?.optJSONArray("available") ?: return emptyList()
         return (0 until available.length()).map { index ->
             val entry = available.getJSONObject(index)
-            entry.optString("code") to entry.optString("label")
+            val code = entry.optString("code")
+            code to (NATIVE_LANGUAGE_NAMES[code] ?: entry.optString("label"))
         }
     }
 
@@ -1106,5 +1107,15 @@ class InstallerActivity : Activity() {
         private val DETAILED = setOf(StateCard.REPAIR, StateCard.NEEDS_ROM, StateCard.INCOMPATIBLE, StateCard.FAILED)
         private const val ACCENT_COLOR = 0xFF2E7DD7.toInt()
         private const val ERROR_COLOR = 0xFFD32F2F.toInt()
+
+        /** The game languages by their own names, with accents (the runtime reports ASCII labels). */
+        private val NATIVE_LANGUAGE_NAMES = mapOf(
+            "en" to "English",
+            "fr" to "Français",
+            "de" to "Deutsch",
+            "es" to "Español",
+            "it" to "Italiano",
+            "nl" to "Nederlands",
+        )
     }
 }

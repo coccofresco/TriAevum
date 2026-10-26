@@ -6,6 +6,7 @@ import java.io.IOException
 import java.util.zip.ZipFile
 import org.json.JSONArray
 import org.json.JSONObject
+import org.triaevum.android.forge.Explanation
 import org.triaevum.android.forge.ForgeNative
 import org.triaevum.android.forge.ForgePackage
 
@@ -64,7 +65,7 @@ object ForgeBackups {
 
     private fun failure(event: JSONObject): ForgeJobException {
         val explanation = try {
-            JSONObject(String(ForgeNative.explain(event.toString().toByteArray())))
+            JSONObject(String(ForgeNative.explain(Explanation.request(event))))
         } catch (_: Exception) {
             JSONObject()
         }

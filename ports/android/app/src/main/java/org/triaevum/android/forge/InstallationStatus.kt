@@ -1,5 +1,6 @@
 package org.triaevum.android.forge
 
+import java.util.Locale
 import org.json.JSONObject
 
 /**
@@ -28,14 +29,25 @@ data class Explanation(
             )
         }
 
-        /** [ForgeNative.explain] of a failed or cancelled event, an error object or a notice. */
+        /**
+         * [ForgeNative.explain] of a failed or cancelled event, an error object or a notice, in
+         * the app's language ([request]).
+         */
         fun of(input: JSONObject): Explanation? = try {
-            val bytes = ForgeNative.explain(input.toString().toByteArray()) ?: return null
+            val bytes = ForgeNative.explain(request(input)) ?: return null
             val text = String(bytes).trim()
             if (text == "null" || text.isEmpty()) null else from(JSONObject(text))
         } catch (_: Exception) {
             null
         }
+
+        /**
+         * The explain request: [input] with the app's language, which Forge uses when its
+         * catalogue has that language (French, German, Spanish, Italian) and English otherwise,
+         * like the app's own string resources.
+         */
+        fun request(input: JSONObject): ByteArray =
+            JSONObject(input.toString()).put("language", Locale.getDefault().language).toString().toByteArray()
     }
 }
 
