@@ -35,6 +35,8 @@ pub enum Command {
     DataPage,
     Retry,
     Continue,
+    /// Update from a downloaded ZIP (UX plan WP-04B, Windows).
+    UpdateFromZip,
 }
 
 impl Command {
@@ -53,6 +55,7 @@ impl Command {
             Self::DataPage => Msg::ButtonDataPage,
             Self::Retry => Msg::ButtonRetry,
             Self::Continue => Msg::ButtonContinue,
+            Self::UpdateFromZip => Msg::ButtonUpdateFromZip,
         }
     }
 
@@ -426,8 +429,21 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
             }
         }
     }
+    if offers_zip_update(card.kind) {
+        ui.add_space(6.0);
+        let link = Button::new(RichText::new(app.t(Msg::ButtonUpdateFromZip)).small().underline()).frame(false);
+        if record.button(ui, app.idle(), "update_from_zip", link) {
+            actions.push(Action::Command(Command::UpdateFromZip));
+        }
+    }
     ui.add_space(10.0);
     needs(app, ui, record, actions);
+}
+
+/// Update from a downloaded ZIP (UX plan WP-04B): the Windows portable
+/// package, once something is installed from it.
+fn offers_zip_update(kind: Kind) -> bool {
+    cfg!(windows) && matches!(kind, Kind::Ready | Kind::UpdateAvailable | Kind::NeedsGameInput | Kind::Incompatible)
 }
 
 /// The ROM row, the recognized-ROM card and the HD line.

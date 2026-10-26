@@ -959,6 +959,7 @@ impl ForgeApp {
                     // Update and Repair in place (UX plan WP-04A); Retry repeats the failed one.
                     Command::Update => return crate::maintenance::begin(self, Kind::Update),
                     Command::Repair => return crate::maintenance::begin(self, Kind::Repair),
+                    Command::UpdateFromZip => return crate::maintenance::begin_zip(self),
                     Command::Retry if self.maintenance.last.is_some() => {
                         let last = self.maintenance.last.expect("checked");
                         return crate::maintenance::begin(self, last);
