@@ -20,6 +20,12 @@ public:
     return Fast::Extension::kLightingSettingsGroup;
   }
   void EndPreview() override { mRuntime->EndPreview(); }
+  // Edited scene lights show at once but are written only by Save: F1 marks
+  // Lights & Shadows "Preview, not saved" until then (#68).
+  [[nodiscard]] bool HasUnsavedPreview() const override {
+    const auto state = mRuntime->Snapshot();
+    return state.Dirty || state.DirtyTabs[0] || state.DirtyTabs[1];
+  }
   void Draw() override {
     ImGui::SeparatorText("Scene lights");
     auto state = mRuntime->Snapshot();

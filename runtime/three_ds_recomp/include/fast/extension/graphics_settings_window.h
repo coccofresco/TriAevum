@@ -45,7 +45,14 @@ class GraphicsSettingsPanelTab {
     virtual void Draw() = 0;
     // Session-only previews end when F1 closes or F2 is pressed.
     virtual void EndPreview() {}
+    // Edits shown as a preview but not saved yet (the scene lights before
+    // their Save): F1 marks the tab and its group "Preview, not saved" until
+    // they are saved or reverted, wherever the user is in F1 (#68).
+    [[nodiscard]] virtual bool HasUnsavedPreview() const { return false; }
 };
+
+// The marker F1 shows while a tab has an unsaved preview.
+inline constexpr const char* kUnsavedPreviewMarker = "Preview, not saved";
 
 // Game frontends may contribute application-owned settings tabs without
 // making the renderer depend on frontend code.

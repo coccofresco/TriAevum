@@ -240,7 +240,7 @@ void CheckControlPersistence() {
     Frame();
     bool freeCameraVisible = false;
     for (const auto& [id, item] : items) freeCameraVisible |= item.Label == "Enabled##freecam";
-    if (!freeCameraVisible) Click("Free camera");
+    if (!freeCameraVisible) Click("Gameplay camera");
     Click("Enabled##freecam");
     Click("Save controls");
     NativeControlConfig saved;
@@ -376,18 +376,18 @@ void CheckPhotoModePanel() {
     Click("Photo mode");
     Frame();
     Check(Find("Back to the game's view").Disabled, "camera reset offered while the free camera is off");
-    const auto cameraRect = Find("Free camera (F6)").Rect;
+    const auto cameraRect = Find("Photo camera (F6)").Rect;
     const auto hudRect = Find("Hide HUD").Rect;
     Check(hudRect.Min.x > cameraRect.Max.x && std::abs(hudRect.GetCenter().y - cameraRect.GetCenter().y) < 2.0F,
-          "Hide HUD is not beside the free camera switch");
+          "Hide HUD is not beside the photo camera switch");
     Check(!state->HideHud.load(), "Hide HUD does not start off");
-    Click("Free camera (F6)");
-    Check(camera->Active(), "Free camera checkbox did not activate the free camera");
+    Click("Photo camera (F6)");
+    Check(camera->Active(), "Photo camera checkbox did not activate the free camera");
     Check(!Find("Back to the game's view").Disabled, "camera reset unavailable while the free camera is on");
-    EditScalar("Free camera speed", "800");
-    Check(std::abs(camera->Speed() - 800.0F) < 0.5F, "free camera speed was not applied");
-    Click("Free camera (F6)");
-    Check(!camera->Active(), "Free camera checkbox did not deactivate the free camera");
+    EditScalar("Photo camera speed", "800");
+    Check(std::abs(camera->Speed() - 800.0F) < 0.5F, "photo camera speed was not applied");
+    Click("Photo camera (F6)");
+    Check(!camera->Active(), "Photo camera checkbox did not deactivate the free camera");
     Click("Hide HUD");
     Check(state->HideHud.load(), "Hide HUD did not hide the HUD");
     Click("Hide HUD");
@@ -759,9 +759,22 @@ void CheckSceneEnvironment() {
     Check(graphics.SnapshotForRendering().Environment.PreserveSceneBrightness &&
               Find("Native ambient contribution").Disabled,
           "scene brightness reference did not apply independently of native source gains");
+    // #68: the unsaved scene lights stay marked "Preview, not saved" after the
+    // user leaves their tab, and the marker clears once they are saved.
+    Click("Ambient Occlusion");
+    Frame(true);
+    Check(environment->Snapshot().Dirty && loggedPanelText.find(kUnsavedPreviewMarker) != std::string::npos,
+          "unsaved scene lights are not marked outside their tab");
+    Click("Lights & Shadows");
+    Frame(true);
+    Check(loggedPanelText.find(kUnsavedPreviewMarker) != std::string::npos,
+          "unsaved scene lights are not marked in Lights & Shadows");
     Click(environment->Snapshot().EditingNight ? "Save night" : "Save day");
     const auto saved = environment->Snapshot();
     Check(saved.FileExists && !saved.Dirty && saved.Error.empty(), "scene environment was not saved");
+    Frame(true);
+    Check(loggedPanelText.find(kUnsavedPreviewMarker) == std::string::npos,
+          "the preview marker stayed after the scene lights were saved");
     Check(saved.Profile.Rim.Enabled && saved.Profile.Rim.Intensity == 0.45F && saved.Profile.Rim.Sharpness == 6.0F &&
               saved.Profile.Rim.Azimuth == 90 && saved.Profile.Rim.Coverage == 0.6F &&
               saved.Profile.Rim.Color == (std::array<float, 3>{0.8F, 0.7F, 0.6F}) &&
@@ -2355,7 +2368,7 @@ int main(int argc, char** argv) try {
     for (const char* section : {"Bindings", "Shortcuts", "Camera"}) Click(section);
     Click("Enabled##freecam");
     Check(topScreen->Snapshot().Config.FreeCameraEnabled, "central camera control not connected");
-    Click("##Free-camera source");
+    Click("##Gameplay camera source");
     Frame(true);
     Check(std::none_of(items.begin(), items.end(), [](const auto& pair) {
               return pair.second.Popup && (pair.second.Label == "Controller Gyroscope" ||
@@ -2373,7 +2386,7 @@ int main(int argc, char** argv) try {
     Click("Enabled##freecam");
     Check(!topScreen->Snapshot().Config.FreeCameraEnabled && topScreen->Snapshot().Config.HudMarginX == 7,
           "central camera control overwrote external HUD state");
-    Click("Free camera");
+    Click("Gameplay camera");
     Click("Aiming");
     Select("##Aim source", "Mouse");
     EditScalar("##Mouse aim sensitivity", "0.61");

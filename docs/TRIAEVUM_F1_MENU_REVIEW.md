@@ -1,5 +1,27 @@
 # F1 settings rationalization
 
+## Unsaved preview marker, camera names (2026-10-26)
+
+UX plan WP-06B (`TRIAEVUM_IN_GAME_MENU.md` has the menu side):
+
+- **"Preview, not saved"** (#68): scene light edits show at once but are
+  written only by their Save. While any is unsaved, the Lighting tab and its
+  Lights & Shadows section carry ImGui's unsaved-document dot, Lights &
+  Shadows opens with the "Preview, not saved" line, and a line above the tabs
+  names it from every other tab ("Lighting > Lights & Shadows: Preview, not
+  saved. Save the scene lights there to keep the edits."). A tab reports its
+  state through `GraphicsSettingsPanelTab::HasUnsavedPreview()` (the scene
+  lights' panel: its runtime's dirty drafts); saving or reverting clears the
+  marker.
+- Controls > Camera's "Free camera" section is now **Gameplay camera**
+  ("Gameplay camera source", "Gameplay camera mouse sensitivity"), and Photo
+  mode's switch is **Photo camera (F6)** with "Photo camera speed", the same
+  names as the in-game menu. Owners and configuration keys are unchanged.
+
+Verification: the actual-widget smoke covers the marker (edit the scene
+lights, leave for Ambient Occlusion: marked; back in Lights & Shadows:
+marked; Save: cleared) and the renamed widgets.
+
 ## Aspect ratio (2026-10-20)
 
 Display > Screen gains **Aspect ratio** (Original 3DS 5:3, 16:9 default,

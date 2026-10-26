@@ -224,7 +224,9 @@ class NativeControlsSettingsPanel final
       };
       section("Bindings", [&] { DrawBindings(); });
       section("Camera", [&] {
-        if (ImGui::CollapsingHeader("Free camera", ImGuiTreeNodeFlags_DefaultOpen)) DrawFreeCamera();
+        // The camera orbiting Link in gameplay (TopScreen's free camera; its
+        // configuration keys keep their names). Photo mode has its own.
+        if (ImGui::CollapsingHeader("Gameplay camera", ImGuiTreeNodeFlags_DefaultOpen)) DrawFreeCamera();
         if (ImGui::CollapsingHeader("Aiming")) DrawNativeAim();
         if (mTopScreen && ImGui::CollapsingHeader("C-stick aiming")) DrawTopScreenStickAiming(mTopDraft);
       });
@@ -665,13 +667,13 @@ class NativeControlsSettingsPanel final
     DrawTopScreenCameraBehavior(mTopDraft);
     const bool enabled = mTopDraft.FreeCameraEnabled;
     bool controlChanged =
-        EnumCombo("Free-camera source",
+        EnumCombo("Gameplay camera source",
                   &mControlDraft.FreeCameraSource,
                   kCameraSources, NativeMotionSourceName);
     if (SourceUses(mControlDraft.FreeCameraSource,
                    NativeMotionSource::Mouse)) {
       controlChanged |= ControlWidgets::SliderFloat(
-          "Free-camera mouse sensitivity",
+          "Gameplay camera mouse sensitivity",
           &mControlDraft.MouseFreeCameraUnitsPerPixel,
           0.25F, 16.0F, "%.2f",
           ImGuiSliderFlags_Logarithmic);
@@ -680,7 +682,7 @@ class NativeControlsSettingsPanel final
       MarkCustom(mControlDraft, mControlDirty);
     }
     if (!enabled) {
-      ImGui::TextDisabled("Free camera disabled");
+      ImGui::TextDisabled("Gameplay camera off");
     }
   }
 

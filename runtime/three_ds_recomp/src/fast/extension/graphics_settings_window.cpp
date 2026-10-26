@@ -252,6 +252,16 @@ void GraphicsSettingsPanel::Draw() {
         tab->Draw();
         ImGui::PopID();
     };
+    // An unsaved preview (the scene lights before their Save) is marked on its
+    // tab and its group, and named above the tabs, wherever F1 is (#68).
+    const bool lightingPreview = std::any_of(lightingTabs.begin(), lightingTabs.end(),
+                                             [](const auto& tab) { return tab->HasUnsavedPreview(); });
+    if (lightingPreview) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.78F, 0.25F, 1.0F));
+        ImGui::TextWrapped("Lighting > Lights & Shadows: %s. Save the scene lights there to keep the edits.",
+                           kUnsavedPreviewMarker);
+        ImGui::PopStyleColor();
+    }
     if (ImGui::BeginTabBar("##Oot3dSettingsTabs", ImGuiTabBarFlags_FittingPolicyScroll)) {
         if (ImGui::BeginTabItem("Display")) {
             // The renderer's sections, then the application's below them.
@@ -263,7 +273,8 @@ void GraphicsSettingsPanel::Draw() {
             ImGui::EndChild();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Lighting")) {
+        if (ImGui::BeginTabItem("Lighting", nullptr,
+                                lightingPreview ? ImGuiTabItemFlags_UnsavedDocument : ImGuiTabItemFlags_None)) {
             DrawLightingTab(lightingTabs);
             ImGui::EndTabItem();
         }
@@ -469,9 +480,17 @@ void GraphicsSettingsPanel::DrawLightingTab(
     // Lights & Shadows: the application's scene lights (saved per scene) above
     // the renderer's shadows (every scene). Both act only in the Modern model,
     // so the section exists only while it is chosen.
+    const bool preview = std::any_of(lightingTabs.begin(), lightingTabs.end(),
+                                     [](const auto& tab) { return tab->HasUnsavedPreview(); });
     if (UsesFullSceneLighting(GraphicsSettingsRuntime::Instance().Snapshot().Effects.SurfaceLighting) &&
-        ImGui::BeginTabItem("Lights & Shadows")) {
+        ImGui::BeginTabItem("Lights & Shadows", nullptr,
+                            preview ? ImGuiTabItemFlags_UnsavedDocument : ImGuiTabItemFlags_None)) {
         ImGui::BeginChild("##LightsAndShadows");
+        if (preview) {
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.78F, 0.25F, 1.0F));
+            ImGui::TextUnformatted(kUnsavedPreviewMarker);
+            ImGui::PopStyleColor();
+        }
         for (const auto& tab : lightingTabs) {
             ImGui::PushID(tab->Label());
             tab->Draw();

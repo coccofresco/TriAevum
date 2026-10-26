@@ -16,7 +16,7 @@ public:
 
   void Draw() override {
     bool active = mFreeCamera->Active();
-    if (ImGui::Checkbox("Free camera (F6)", &active)) mFreeCamera->SetActive(active);
+    if (ImGui::Checkbox("Photo camera (F6)", &active)) mFreeCamera->SetActive(active);
     Tooltip("A camera detached from Link: the game draws from it and Link stays still. "
             "WASD move, Q/E down/up, hold the left or right mouse button and drag to look, "
             "Shift faster, Ctrl slower; pad: left stick moves, right stick looks, "
@@ -27,7 +27,7 @@ public:
     Tooltip("Hearts, magic, rupees, buttons, the action icon and the minimap, for this session only. "
             "Dialogue and menus stay.");
     float speed = mFreeCamera->Speed();
-    if (ImGui::SliderFloat("Free camera speed", &speed, 10.0F, 10000.0F, "%.0f units/s",
+    if (ImGui::SliderFloat("Photo camera speed", &speed, 10.0F, 10000.0F, "%.0f units/s",
                            ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp))
       mFreeCamera->SetSpeed(speed);
     ImGui::BeginDisabled(!active);
