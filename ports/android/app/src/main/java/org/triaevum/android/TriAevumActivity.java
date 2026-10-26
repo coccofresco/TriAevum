@@ -146,7 +146,33 @@ public final class TriAevumActivity extends SDLActivity {
         // ends, end the process too, so the next launch starts clean instead of reusing it.
         if (isFinishing()) {
             StartupDiagnostics.stage(this, "exited");
+            openRequestedInstallerPage();
             System.exit(0);
+        }
+    }
+
+    /**
+     * The in-game menu's "Export saves" / "Share diagnostics" quit the game first; the installer
+     * (its own process) then opens the page, while this process ends. The installer below this
+     * activity is reused when it is still there.
+     */
+    private void openRequestedInstallerPage() {
+        if (mBrokenLibraries) return;
+        String page;
+        try {
+            page = NativeHostBridge.INSTANCE.takeInstallerPage();
+        } catch (UnsatisfiedLinkError error) {
+            return;
+        }
+        if (page == null) return;
+        try {
+            startActivity(new android.content.Intent(this, org.triaevum.android.forge.InstallerActivity.class)
+                .putExtra(org.triaevum.android.forge.InstallerActivity.EXTRA_PAGE, page)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+                    | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    | android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP));
+        } catch (RuntimeException error) {
+            Log.w("TriAevum", "Cannot open the installer page " + page, error);
         }
     }
 

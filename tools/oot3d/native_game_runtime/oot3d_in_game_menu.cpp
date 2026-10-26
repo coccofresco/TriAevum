@@ -269,11 +269,25 @@ void InGameMenu::BuildHelpTab(Menu::Document &document) {
     actions.OpenSavesFolder = openFolder(host.SaveDataDirectory, "saves");
   if (host.OpenFolder && !host.LogsDirectory.empty()) actions.OpenLogsFolder = openFolder(host.LogsDirectory, "logs");
   if (host.OpenInstallerPage) {
+    // The installer's pages run while the game is closed: the game quits
+    // first (as Quit game, after asking), then the installer opens the page.
     const auto installerPage = [this](std::string page) {
       return [this, page = std::move(page)]() -> WriteResult {
-        std::string error;
-        if (!mOwners.Host.OpenInstallerPage(page, &error)) return {"Could not open the installer: " + error, true};
-        return {"Opening the installer", false};
+        Menu::Modal modal;
+        modal.Title = "Close the game?";
+        modal.Lines = {std::string("The game closes and the installer opens its ") +
+                       (page == "saves" ? "Saves and backups page." : "Diagnostics page.") +
+                       " Your settings are kept. The game's own progress is not saved by closing: save in the "
+                       "game, or save a state, first."};
+        modal.ConfirmLabel = "Close and open";
+        modal.CancelLabel = "Cancel";
+        modal.OnConfirm = [this, page] {
+          std::string error;
+          if (!mOwners.Host.OpenInstallerPage(page, &error))
+            mModel.SetStatus("Could not open the installer: " + error, true);
+        };
+        mModel.SetModal(std::move(modal));
+        return {"Close the game?", false};
       };
     };
     actions.ExportSavesInInstaller = installerPage("saves");

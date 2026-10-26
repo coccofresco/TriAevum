@@ -11,6 +11,10 @@
 #include <SDL2/SDL.h>
 #include <stb_image.h>
 
+#if defined(__ANDROID__)
+#include "android_host.h"
+#endif
+
 namespace Oot3dA32Window {
 
 namespace {
@@ -1311,6 +1315,13 @@ void NativeA32WindowSession::Setup() {
 #if defined(__ANDROID__)
   menuHost.Controls = Oot3dNativeGame::Menu::HelpControls::Touch;
   menuHost.InstallerRoute = "Close the game, then the TriAevum installer: Saves, Diagnostics";
+  // "Export saves" / "Share diagnostics": the activity opens the installer's
+  // page once the game has quit through the normal exit path (as Quit game).
+  menuHost.OpenInstallerPage = [this](std::string_view page, std::string *error) {
+    if (!RequestAndroidInstallerPage(page, error)) return false;
+    menuQuitRequested = true;
+    return true;
+  };
 #elif !defined(__SWITCH__)
   menuHost.OpenFolder = OpenFolderInFileBrowser;
 #endif

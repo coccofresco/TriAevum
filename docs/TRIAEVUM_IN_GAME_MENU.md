@@ -88,12 +88,14 @@ unsaved, as when F1 is closed.
 **Help & folders**: "Open saves folder" and "Open logs folder" hand a
 `file://` URL of the resolved folder to the desktop's file browser
 (`SDL_OpenURL`); the saves row's help names the folder. Android has no file
-browser to open: the tab names the route instead (close the game, then the
-installer's Saves and Diagnostics pages, which run in the installer's
-process and refuse a save import while the game's process lives). The hook
-`InGameMenuHost::OpenInstallerPage` turns those into "Export saves" and
-"Share diagnostics" rows once a JNI bridge with a quit-then-open flow
-exists; it is not wired yet.
+browser to open: its tab has "Export saves" and "Share diagnostics" rows
+(`InGameMenuHost::OpenInstallerPage`). The installer's Saves and
+Diagnostics pages run in the installer's process and refuse a save import
+while the game's process lives, so a row asks "Close the game?" first, then
+records the page (`ports/android/runtime/android_host.cpp`) and quits
+through the same path as Quit game; as the game's activity ends, it opens
+the installer with that page (`TriAevumActivity.openRequestedInstallerPage`).
+A host without the hook names the route instead.
 
 ## First-play help card
 

@@ -72,11 +72,12 @@ struct InGameMenuHost {
   // installer's Saves and Diagnostics pages, which run while the game is
   // closed).
   std::string InstallerRoute;
-  // Android hook, not wired yet: starts the installer's page ("saves" for
-  // SavesActivity, "diagnostics" for DiagnosticsActivity). Those pages run
-  // in the installer's process and refuse a save import while the game's
-  // process lives, so starting them from the game needs the JNI bridge and
-  // a quit-then-open flow first. While null, the Help tab names the route.
+  // Android: asks for the installer's page ("saves" for SavesActivity,
+  // "diagnostics" for DiagnosticsActivity) and quits the game. Those pages
+  // run in the installer's process and refuse a save import while the game's
+  // process lives, so the activity opens the page once the game has ended
+  // (ports/android/runtime/android_host.cpp). The menu asks before calling
+  // it. While null, the Help tab names the route.
   std::function<bool(std::string_view page, std::string *error)> OpenInstallerPage;
   // The help card's record in the runtime configuration (Help.Shown).
   std::function<bool()> HelpCardShown;

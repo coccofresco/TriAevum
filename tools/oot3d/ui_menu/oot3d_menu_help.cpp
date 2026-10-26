@@ -127,12 +127,15 @@ Tab BuildHelpTab(const HelpTabActions& actions) {
                                   actions.OpenLogsFolder));
     }
     if (actions.ExportSavesInInstaller) {
-        tab.Rows.push_back(Action("Export saves", "Opens the installer's Saves page to export or import your saves.",
+        tab.Rows.push_back(Action("Export saves",
+                                  "Closes the game (after asking) and opens the installer's Saves and backups page "
+                                  "to back up, export or import your saves.",
                                   actions.ExportSavesInInstaller));
     }
     if (actions.ShareDiagnosticsInInstaller) {
         tab.Rows.push_back(Action("Share diagnostics",
-                                  "Opens the installer's Diagnostics page to share a report of this device.",
+                                  "Closes the game (after asking) and opens the installer's Diagnostics page to share "
+                                  "a report of this device.",
                                   actions.ShareDiagnosticsInInstaller));
     }
     if (!actions.InstallerRoute.empty()) tab.Rows.push_back(Info("Saves and diagnostics", actions.InstallerRoute));
