@@ -27,7 +27,9 @@ class ProductGraphicsDefaultsTests(unittest.TestCase):
                           "7e5075b79d5c5dcd", "86f3d2415641fc84", "14dd64ec10e5bbd6",
                           "8bbe4b35b0af27a9", "aef1174a679fc132", "fa446d8abcaa5ce1"])
         source = (SOURCE / "triaevum_product_info.cpp").read_text()
-        self.assertIn("Preset(GraphicsPreset::Enhanced)", source)
+        self.assertIn("ProductDefaultGraphicsSettings()", source)
+        graphics = (SOURCE.parents[2] / "runtime/three_ds_recomp/include/fast/extension/graphics_settings.h").read_text()
+        self.assertIn("kProductDefaultGraphicsPreset = GraphicsPreset::Enhanced", graphics)
         self.assertIn('document["GrassSavedPreset"] = document["Grass"]', source)
 
     def test_topscreen_installer_template_is_the_standard_profile(self):
