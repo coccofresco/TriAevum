@@ -12,8 +12,10 @@ use std::path::Path;
 use forge_base::CancelToken;
 use serde_json::{json, Value};
 
+use forge_core::explain::Explanation;
+
 use crate::install::{job_update, Event, JobUpdate, Notifier};
-use crate::texts;
+use crate::texts::{Msg, Texts};
 
 /// What the card shows for one chosen ROM.
 #[derive(Clone, Debug, PartialEq)]
@@ -21,7 +23,8 @@ pub enum Card {
     /// Recognition runs; the text is its current stage.
     Recognizing(String),
     Recognized(RecognizedRom),
-    Failed(String),
+    /// Why the ROM was not recognized; Prepare stays disabled.
+    Failed(Box<Explanation>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -70,7 +73,7 @@ pub fn run_recognition(source: String, request: Value, notify: Notifier, cancel:
     let send = |card: Card| notify.send(Event::Recognition { source: source.clone(), card });
     let job = match forge_core::jobs::start(&forge_base::legacy_json::compact_line_bytes(&request)) {
         Ok(job) => job,
-        Err(error) => return send(Card::Failed(failure_text(&forge_core::explain::explain(&error)))),
+        Err(error) => return send(Card::Failed(Box::new(forge_core::explain::explain(&error)))),
     };
     let mut result = None;
     loop {
@@ -86,7 +89,7 @@ pub fn run_recognition(source: String, request: Value, notify: Notifier, cancel:
             Some(JobUpdate::Succeeded(_)) => {
                 return send(Card::Recognized(RecognizedRom::from_result(&result.unwrap_or(Value::Null))));
             }
-            Some(JobUpdate::Failed(explanation)) => return send(Card::Failed(failure_text(&explanation))),
+            Some(JobUpdate::Failed(explanation)) => return send(Card::Failed(explanation)),
             Some(JobUpdate::Cancelled) => return,
             Some(JobUpdate::Progress { .. }) | None => {}
         }
@@ -95,18 +98,18 @@ pub fn run_recognition(source: String, request: Value, notify: Notifier, cancel:
 
 /// A failed recognition on the card: what to do, then the engine's message
 /// (the first line of the details).
-fn failure_text(explanation: &forge_core::explain::Explanation) -> String {
+pub fn failure_text(explanation: &Explanation, texts: &Texts) -> String {
     let message = explanation.details.lines().next().unwrap_or_default();
-    format!("{}. {}\n{message}", explanation.title, explanation.next_action)
+    format!("{}. {}\n{message}", texts.title(explanation), texts.next_action(explanation))
 }
 
 /// The card heading.
-pub fn heading(card: &Card) -> String {
-    match card {
-        Card::Recognizing(_) => texts::RECOGNIZING.to_string(),
-        Card::Recognized(rom) => texts::rom_recognized(&rom.label),
-        Card::Failed(_) => texts::ROM_NOT_RECOGNIZED.to_string(),
-    }
+pub fn heading(card: &Card, texts: &Texts) -> String {
+    texts.get(match card {
+        Card::Recognizing(_) => Msg::Recognizing,
+        Card::Recognized(rom) => Msg::RomRecognized { label: &rom.label },
+        Card::Failed(_) => Msg::RomNotRecognized,
+    })
 }
 
 #[cfg(test)]
@@ -127,7 +130,7 @@ mod tests {
         let unreadable = RecognizedRom::from_result(&json!({"label": "G", "languages": null, "language_error": "x"}));
         assert!(unreadable.languages.is_empty());
         assert_eq!((unreadable.chosen(), unreadable.language_error.as_deref()), (None, Some("x")));
-        assert_eq!(heading(&Card::Recognized(rom)), "ROM recognized: Game (EUR)");
+        assert_eq!(heading(&Card::Recognized(rom), &Texts::default()), "ROM recognized: Game (EUR)");
     }
 
     #[test]
@@ -148,9 +151,12 @@ mod tests {
         run_recognition(source.clone(), request, Notifier::new(sender, None), CancelToken::new(), CancelToken::new());
         let events: Vec<Event> = receiver.try_iter().collect();
         assert!(
-            matches!(events.last(), Some(Event::Recognition { source: s, card: Card::Failed(message) })
-                if *s == source && message.starts_with("A required input could not be read. Check the input")
-                    && message.lines().last().unwrap().starts_with("the selected ROM does not exist")),
+            matches!(events.last(), Some(Event::Recognition { source: s, card: Card::Failed(explanation) })
+            if *s == source && {
+                let message = failure_text(explanation, &Texts::default());
+                message.starts_with("A required input could not be read. Check the input")
+                    && message.lines().last().unwrap().starts_with("the selected ROM does not exist")
+            }),
             "{events:?}"
         );
     }

@@ -27,7 +27,7 @@ rfd = { version = "0.17", default-features = false, features = ["xdg-portal", "w
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi"] }
 
 [dev-dependencies]
 tempfile.workspace = true

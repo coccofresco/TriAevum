@@ -96,7 +96,7 @@ pub fn play(arguments: &[String]) -> i32 {
     }
     let installation = match Installation::current() {
         Ok(installation) => installation,
-        Err(error) => return crate::app::run(None, Some(error.message)),
+        Err(error) => return crate::app::run(None, Some(error)),
     };
     if options == ["--forge"] || load_active_title(&installation.active_title_state()).is_none() {
         return crate::app::run(Some(installation), None);
@@ -106,7 +106,7 @@ pub fn play(arguments: &[String]) -> i32 {
     match waited {
         Ok(status) => return_code(status) as i32,
         // Show the failure and keep import/repair accessible after an update.
-        Err(error) => crate::app::run(Some(installation), Some(error.message)),
+        Err(error) => crate::app::run(Some(installation), Some(error.during(forge_base::Operation::Launch))),
     }
 }
 

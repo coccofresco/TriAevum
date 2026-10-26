@@ -1,10 +1,12 @@
 // Copyright TriAevum contributors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! The Forge window (`forge_gui.ForgeWindow`). Options scroll; the status,
-//! progress and primary actions sit in a footer that always stays visible.
-//! Anything slow (stored-file checks, imports, downloads, the install job)
-//! runs on a task thread and reports through [`Event`]s.
+//! The Forge window (`forge_gui.ForgeWindow`): tabs on top, the current page
+//! in a scroll area, and a footer with one status line, the progress bar and
+//! the primary and secondary actions, always visible. Home shows the
+//! installation state (`pages::home`). Anything slow (inspection, stored-file
+//! checks, imports, downloads, the install job) runs on a task thread and
+//! reports through [`Event`]s.
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -13,10 +15,10 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use eframe::egui::{
-    self, Align, Button, Checkbox, Label, Layout, ProgressBar, Rect, RichText, Spinner, Stroke, TextEdit, Vec2,
-};
-use forge_base::CancelToken;
+use eframe::egui::{self, Align, Button, Label, Layout, Margin, ProgressBar, Rect, RichText, Vec2};
+use forge_base::{CancelToken, ForgeError, Operation};
+use forge_core::explain::Explanation;
+use forge_core::state::InstallationState;
 use forge_mods::Status;
 use serde_json::Value;
 
@@ -24,10 +26,16 @@ use crate::active_title::{load_active_title, ActiveTitle};
 use crate::install::{run_install, Event, InstallPlan, Notifier};
 use crate::installation::Installation;
 use crate::mods::Optional;
+use crate::pages::enhancements::{self, Checked};
+use crate::pages::home::{self, CardButton, Command, HomeCard, HomeInput, Preparing};
+use crate::pages::{self, Page};
 use crate::recognition::{recognize_request, run_recognition, Card, RecognizedRom};
 use crate::smoke::Probe;
-use crate::texts::{self, Checked};
+use crate::texts::{self, native_name, Msg, Texts};
 use crate::window::{Geometry, SimulatedDisplay, INITIAL_SIZE, MIN_SIZE};
+
+/// Below this width (logical points) the footer stacks its buttons.
+pub const STACK_WIDTH: f32 = 420.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PickTarget {
@@ -39,15 +47,40 @@ pub enum PickTarget {
     ModFolder,
 }
 
-enum Action {
+#[derive(Clone, Debug, PartialEq)]
+pub enum Action {
     Pick(PickTarget),
     Install,
     Launch,
+    /// Asks before cancelling the preparation.
+    Cancel,
     DownloadHd,
     DownloadMod,
     ToggleMod,
     SelectLanguage(usize),
     Recognize,
+    Navigate(Page),
+    CheckInstallation,
+    CopyDiagnostics,
+    OpenFolder(PathBuf),
+    Dismiss,
+    ToggleDetails,
+    ToggleNeeds,
+    TogglePrepareAgain,
+    SetUiLanguage(String),
+    Command(Command),
+}
+
+impl Action {
+    /// The name the layout probe logs instead of running the action.
+    pub fn name(&self) -> String {
+        match self {
+            Self::Command(command) => format!("{command:?}"),
+            Self::Navigate(page) => format!("Navigate({})", page.code()),
+            Self::OpenFolder(_) => "OpenFolder".to_string(),
+            other => format!("{other:?}"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,11 +88,12 @@ pub enum DialogKind {
     Info,
     Error,
     ConfirmClose,
+    ConfirmCancel,
 }
 
-struct Dialog {
-    kind: DialogKind,
-    title: &'static str,
+pub struct Dialog {
+    pub kind: DialogKind,
+    title: String,
     message: String,
     focus_pending: bool,
 }
@@ -71,40 +105,62 @@ pub struct WidgetRecord {
     pub class: &'static str,
     pub rect: Rect,
     pub enabled: bool,
+    /// Inside the page's scroll area.
     pub scrolled: bool,
+    pub id: egui::Id,
+    pub hovered: bool,
+    pub focused: bool,
+}
+
+impl WidgetRecord {
+    /// Takes input: a button, link, check box, combo box or text field.
+    pub fn interactive(&self) -> bool {
+        matches!(self.class, "button" | "link" | "checkbox" | "entry" | "combo")
+    }
 }
 
 #[derive(Default)]
-struct Recorder {
-    widgets: Vec<WidgetRecord>,
+pub struct Recorder {
+    pub widgets: Vec<WidgetRecord>,
     scrolled: bool,
+    /// The probe's scroll check: the index of the widget to scroll into view.
+    scroll_to: Option<usize>,
+    viewport_height: f32,
 }
 
 impl Recorder {
-    fn push(&mut self, name: &'static str, class: &'static str, response: &egui::Response) {
+    pub fn push(&mut self, name: &'static str, class: &'static str, response: &egui::Response) {
+        if self.scrolled && self.scroll_to == Some(self.widgets.len()) {
+            let align = if response.rect.height() > self.viewport_height { Align::Min } else { Align::Center };
+            response.scroll_to_me_animation(Some(align), egui::style::ScrollAnimation::none());
+        }
         self.widgets.push(WidgetRecord {
             name,
             class,
             rect: response.rect,
             enabled: response.enabled(),
             scrolled: self.scrolled,
+            id: response.id,
+            hovered: response.contains_pointer(),
+            // Keyboard focus, also while the desktop focuses another window.
+            focused: response.ctx.memory(|memory| memory.has_focus(response.id)),
         });
     }
 
-    fn add(&mut self, ui: &mut egui::Ui, name: &'static str, class: &'static str, widget: impl egui::Widget) {
+    pub fn add(&mut self, ui: &mut egui::Ui, name: &'static str, class: &'static str, widget: impl egui::Widget) {
         let response = ui.add(widget);
         self.push(name, class, &response);
     }
 
-    fn button(&mut self, ui: &mut egui::Ui, enabled: bool, name: &'static str, widget: impl egui::Widget) -> bool {
+    pub fn button(&mut self, ui: &mut egui::Ui, enabled: bool, name: &'static str, widget: impl egui::Widget) -> bool {
         let response = ui.add_enabled(enabled, widget);
         self.push(name, "button", &response);
         response.clicked()
     }
 
-    /// The "Mod page" and "License" links, kept whole: when the row has no
-    /// room for both, they start the next row.
-    fn links(&mut self, ui: &mut egui::Ui, links: [(&'static str, &str, &str); 2]) {
+    /// Two links kept whole: when the row has no room for both, they start
+    /// the next row.
+    pub fn links(&mut self, ui: &mut egui::Ui, links: [(&'static str, &str, &str); 2]) {
         let font = egui::TextStyle::Body.resolve(ui.style());
         let spacing = ui.spacing().item_spacing.x;
         let needed: f32 = links
@@ -153,35 +209,75 @@ pub fn read_languages(data_root: &Path) -> Result<Languages, String> {
 
 pub struct ForgeApp {
     pub(crate) installation: Installation,
-    optional: Arc<Optional>,
+    pub(crate) optional: Arc<Optional>,
+    pub(crate) texts: Texts,
+    /// The Forge language the user picked (About); the system's otherwise.
+    ui_language_choice: Option<String>,
+    system_language: Option<String>,
+    title_language: String,
+    pub(crate) page: Page,
+    /// The inspected installation; None while it is being checked.
+    pub(crate) state: Option<InstallationState>,
+    /// The probe shows fixed states: inspection results are ignored.
+    pub(crate) freeze_state: bool,
+    /// The last operation's failure, shown on Home until dismissed.
+    pub(crate) failure: Option<Explanation>,
+    /// Non-error outcomes of the last preparation.
+    pub(crate) notices: Vec<Explanation>,
     pub(crate) rom: String,
-    languages: Vec<(String, String)>,
-    language: Option<usize>,
+    pub(crate) languages: Vec<(String, String)>,
+    pub(crate) language: Option<usize>,
+    pub(crate) language_error: Option<String>,
     /// The recognized-ROM card and the ROM path it belongs to.
     pub(crate) card: Option<(String, Card)>,
     /// The card's ROM is the installed title: its buttons edit the setting.
     card_installed: bool,
     card_cancel: CancelToken,
-    pub(crate) status: String,
-    hd_status: String,
+    /// A note for the status line (a saved setting, a cancelled preparation).
+    pub(crate) status_note: Option<String>,
+    /// The current stage of a task, for the Preparing card.
+    pub(crate) stage: String,
+    pub(crate) hd_status: String,
     hd_state: Checked,
-    hd_auto_download: bool,
-    mod_status: String,
+    pub(crate) hd_auto_download: bool,
+    hd_failed: bool,
+    pub(crate) mod_status: String,
     mod_state: Checked,
-    mod_enabled: bool,
-    mod_settings_error: Option<String>,
+    pub(crate) mod_enabled: bool,
+    mod_failed: bool,
+    pub(crate) mod_settings_error: Option<String>,
+    pub(crate) contracts_error: Option<String>,
+    /// The supported revisions (id, label).
+    pub(crate) revisions: Vec<(String, String)>,
+    pub(crate) package_version: String,
     pub(crate) active_title: Option<ActiveTitle>,
     pub(crate) busy: bool,
+    /// When this window's preparation started.
+    pub(crate) preparing: Option<Instant>,
     picking: bool,
-    progress: Option<(u64, Option<u64>)>,
+    pub(crate) progress: Option<(u64, Option<u64>)>,
     events: Receiver<Event>,
     notifier: Notifier,
     cancel: CancelToken,
+    install_cancel: CancelToken,
     workers: Vec<JoinHandle<()>>,
-    dialogs: VecDeque<Dialog>,
+    pub(crate) dialogs: VecDeque<Dialog>,
     closing: bool,
+    pub(crate) show_details: bool,
+    pub(crate) show_needs: bool,
+    pub(crate) show_prepare_again: bool,
+    pub(crate) copied: bool,
     pub(crate) geometry: Geometry,
     pub(crate) widgets: Vec<WidgetRecord>,
+    /// The page scroll area's visible rectangle in the last frame.
+    pub(crate) scroll_viewport: Rect,
+    footer_height: f32,
+    /// The probe's scroll check: the widget to scroll into view next frame.
+    pub(crate) scroll_to: Option<usize>,
+    /// The page starts at its top in the next frame.
+    pub(crate) scroll_top: bool,
+    /// The probe's keyboard check: actions are logged instead of run.
+    pub(crate) action_log: Option<Vec<String>>,
     probe: Option<Box<Probe>>,
 }
 
@@ -189,12 +285,12 @@ impl ForgeApp {
     fn new(
         context: &egui::Context,
         installation: Installation,
-        startup_error: Option<String>,
+        startup_error: Option<ForgeError>,
         probe: Option<Box<Probe>>,
         simulated: SimulatedDisplay,
     ) -> Result<Self, String> {
         context.set_fonts(crate::fonts::system_fonts()?);
-        // Scroll bars that stay visible: on a small screen the options go on
+        // Scroll bars that stay visible: on a small screen the page goes on
         // below the window's edge, and egui's default hidden bar would not
         // say so (issue #111).
         context.all_styles_mut(|style| style.spacing.scroll = egui::style::ScrollStyle::thin());
@@ -204,61 +300,97 @@ impl ForgeApp {
             Ok(enabled) => (enabled, None),
             Err(error) => (false, Some(error.message)),
         };
+        let revisions = forge_catalog::recipes::load_recipe_options(&installation.recipes())
+            .map(|options| options.into_iter().map(|option| (option.id, option.label)).collect())
+            .unwrap_or_default();
+        let package_version = pages::about::package_version(&installation.root);
+        let language_override = probe.as_ref().and_then(|probe| probe.language());
+        let system_language = language_override.or_else(texts::system_language);
         let mut app = Self {
             installation,
             optional: Arc::new(optional),
+            texts: Texts::default(),
+            ui_language_choice: None,
+            system_language,
+            title_language: texts::ENGLISH.to_string(),
+            page: Page::Home,
+            state: None,
+            freeze_state: false,
+            failure: startup_error.map(|error| forge_core::explain::explain(&error)),
+            notices: Vec::new(),
             rom: String::new(),
             languages: Vec::new(),
             language: None,
+            language_error: None,
             card: None,
             card_installed: false,
             card_cancel: CancelToken::new(),
-            status: texts::CHECKING_INSTALLATION.to_string(),
+            status_note: None,
+            stage: String::new(),
             hd_status: String::new(),
             hd_state: None,
-            // On by default each start: "Prepare and install" downloads the
-            // HD pack first when it is not stored yet.
+            // On by default each start: "Prepare" downloads the HD pack first
+            // when it is not stored yet (owner decision 5).
             hd_auto_download: true,
+            hd_failed: false,
             mod_status: String::new(),
             mod_state: None,
             mod_enabled,
+            mod_failed: false,
             mod_settings_error,
+            contracts_error,
+            package_version,
+            revisions,
             active_title: None,
             busy: false,
+            preparing: None,
             picking: false,
             progress: None,
             events,
             notifier: Notifier::new(sender, Some(context.clone())),
             cancel: CancelToken::new(),
+            install_cancel: CancelToken::new(),
             workers: Vec::new(),
             dialogs: VecDeque::new(),
             closing: false,
+            show_details: false,
+            show_needs: false,
+            show_prepare_again: false,
+            copied: false,
             geometry: Geometry::new(simulated),
             widgets: Vec::new(),
+            scroll_viewport: Rect::NOTHING,
+            footer_height: 120.0,
+            scroll_to: None,
+            scroll_top: false,
+            action_log: None,
             probe,
         };
-        app.refresh_active_title();
-        if let Some(error) = contracts_error {
-            app.status = format!("Cannot read the supported game revisions: {error}");
-        }
+        app.refresh_installation();
         app.refresh_hd();
         app.refresh_mod();
         app.spawn(|optional, notify, cancel| {
             notify.send(Event::HdChecked(optional.hd_state(&cancel)));
             notify.send(Event::ModChecked(optional.mod_state(&cancel)));
         });
-        if let Some(error) = startup_error {
-            app.dialog(DialogKind::Error, "TriAevum", error);
-        }
         Ok(app)
     }
 
-    fn idle(&self) -> bool {
+    pub(crate) fn t(&self, msg: Msg) -> String {
+        self.texts.get(msg)
+    }
+
+    pub(crate) fn install_cancelled(&self) -> bool {
+        self.install_cancel.is_cancelled()
+    }
+
+    pub(crate) fn idle(&self) -> bool {
         !self.busy && !self.picking
     }
 
+    /// Prepare needs a recognized ROM for the path in the field.
     pub(crate) fn can_install(&self) -> bool {
-        !self.rom.trim().is_empty() && self.idle() && !self.recognizing()
+        self.pending_rom().is_some() && self.idle()
     }
 
     pub(crate) fn recognizing(&self) -> bool {
@@ -271,7 +403,7 @@ impl ForgeApp {
     }
 
     /// The recognized ROM whose language choice is still to be installed.
-    fn pending_rom(&self) -> Option<&RecognizedRom> {
+    pub(crate) fn pending_rom(&self) -> Option<&RecognizedRom> {
         match self.current_card() {
             Some(Card::Recognized(rom)) if !self.card_installed => Some(rom),
             _ => None,
@@ -287,10 +419,60 @@ impl ForgeApp {
         }
     }
 
+    /// The Forge languages (decision 8): the game languages of the ROM in
+    /// use, else those a supported ROM provides.
+    pub(crate) fn ui_languages(&self) -> Vec<(String, String)> {
+        let rom = match self.pending_rom() {
+            Some(rom) if !rom.languages.is_empty() => &rom.languages,
+            _ => &self.languages,
+        };
+        let mut choices: Vec<(String, String)> = if rom.is_empty() {
+            texts::SUPPORTED_ROM_LANGUAGES
+                .iter()
+                .map(|code| (code.to_string(), native_name(code).to_string()))
+                .collect()
+        } else {
+            rom.iter()
+                .map(|(code, label)| {
+                    let name = native_name(code);
+                    (code.clone(), if name == code { label.clone() } else { name.to_string() })
+                })
+                .collect()
+        };
+        if self.texts.language() == texts::PSEUDO {
+            choices.push((texts::PSEUDO.to_string(), native_name(texts::PSEUDO).to_string()));
+        }
+        choices
+    }
+
+    /// Follows the ROM in use with the window's language.
+    fn refresh_texts(&mut self) {
+        let rom: Vec<String> = match self.pending_rom() {
+            Some(rom) if !rom.languages.is_empty() => rom.languages.iter().map(|(code, _)| code.clone()).collect(),
+            _ => self.languages.iter().map(|(code, _)| code.clone()).collect(),
+        };
+        let preferred: Vec<&str> =
+            [self.ui_language_choice.as_deref(), self.system_language.as_deref()].into_iter().flatten().collect();
+        let code = texts::choose_language(&rom, &preferred);
+        if code != self.texts.language() {
+            self.texts = Texts::new(&code);
+            if !self.busy {
+                self.refresh_hd();
+                self.refresh_mod();
+            }
+        }
+    }
+
     /// The layout probe's fixed card for `source`, without recognition.
     pub(crate) fn probe_card(&mut self, source: &str, card: Card) {
         self.rom = source.to_string();
         self.card = Some((source.to_string(), card));
+        self.card_installed = false;
+    }
+
+    /// The layout probe's installed languages.
+    pub(crate) fn probe_installed_languages(&mut self, languages: Vec<(String, String)>, selected: Option<usize>) {
+        (self.languages, self.language) = (languages, selected);
     }
 
     /// Recognizes the ROM in the field unless its card is already shown (a
@@ -308,7 +490,7 @@ impl ForgeApp {
             return;
         }
         self.card_cancel = CancelToken::new();
-        self.card = Some((source.clone(), Card::Recognizing(texts::RECOGNIZING.to_string())));
+        self.card = Some((source.clone(), Card::Recognizing(self.t(Msg::Recognizing))));
         let request = recognize_request(Path::new(&source), &self.installation.data_root, &self.installation.root);
         let own = self.card_cancel.clone();
         self.spawn(move |_, notify, cancel| run_recognition(source, request, notify, cancel, own));
@@ -320,49 +502,95 @@ impl ForgeApp {
         self.workers.push(std::thread::spawn(move || work(optional, notify, cancel)));
     }
 
-    fn dialog(&mut self, kind: DialogKind, title: &'static str, message: String) {
+    fn dialog(&mut self, kind: DialogKind, message: String) {
         if let Some(probe) = &mut self.probe {
             // Unattended: record the notification instead of waiting for a click.
             probe.record(kind, &message);
             return;
         }
+        self.push_dialog(kind, message);
+    }
+
+    pub(crate) fn push_dialog(&mut self, kind: DialogKind, message: String) {
+        if self.dialogs.iter().any(|dialog| dialog.kind == kind && dialog.message == message) {
+            return;
+        }
+        let title = self.t(Msg::DialogTitle);
         self.dialogs.push_back(Dialog { kind, title, message, focus_pending: true });
     }
 
-    fn refresh_active_title(&mut self) {
+    /// Reads the installed title and inspects the installation (off the
+    /// window thread: inspection hashes the runtime).
+    pub(crate) fn refresh_installation(&mut self) {
         self.active_title = load_active_title(&self.installation.active_title_state());
-        self.status = match &self.active_title {
-            // Not playable: say why when the installation needs the user.
-            None => match self.installation.state().explanation() {
-                Some(explanation) => format!("{} {}", explanation.title, explanation.next_action),
-                None => texts::NO_ACTIVE_TITLE.to_string(),
-            },
-            Some(active) => texts::ready_to_play(&active.recipe_id, &active.directory),
-        };
         self.refresh_languages();
+        if self.freeze_state {
+            return;
+        }
+        self.state = None;
+        let installation = self.installation.clone();
+        self.spawn(move |_, notify, _| notify.send(Event::State(Box::new(installation.state()))));
     }
 
     fn refresh_languages(&mut self) {
         match read_languages(&self.installation.data_root) {
-            Ok((languages, selected)) => (self.languages, self.language) = (languages, selected),
+            Ok((languages, selected)) => {
+                (self.languages, self.language) = (languages, selected);
+                self.language_error = None;
+            }
             Err(error) => {
                 (self.languages, self.language) = (Vec::new(), None);
-                self.status = format!("Cannot read game language settings: {error}");
+                self.language_error = Some(error);
             }
         }
+        self.refresh_texts();
     }
 
-    fn refresh_hd(&mut self) {
-        self.hd_status = texts::hd_status(self.optional.hd_contract.as_ref(), &self.hd_state, self.hd_auto_download);
+    pub(crate) fn refresh_hd(&mut self) {
+        let contract = self.optional.hd_contract.as_ref();
+        self.hd_status = enhancements::hd_status(&self.texts, contract, &self.hd_state, self.hd_auto_download);
     }
 
     fn refresh_mod(&mut self) {
-        self.mod_status = texts::mod_status(
+        self.mod_status = enhancements::mod_status(
+            &self.texts,
             self.mod_settings_error.as_deref(),
             self.optional.mod_contract.as_ref(),
             &self.mod_state,
             self.mod_enabled,
         );
+    }
+
+    pub(crate) fn home_hd_note(&self) -> Option<String> {
+        let contract = self.optional.hd_contract.as_ref();
+        enhancements::home_hd_note(&self.texts, contract, &self.hd_state, self.hd_auto_download)
+    }
+
+    /// The Home card for the current state.
+    pub(crate) fn home_card(&self) -> HomeCard {
+        let preparing = self.preparing.map(|started| Preparing {
+            stage: &self.stage,
+            elapsed: started.elapsed(),
+            progress: self.progress,
+        });
+        let recipe = match &self.state {
+            Some(InstallationState::Ready { recipe, .. }) => Some(recipe.as_str()),
+            _ => None,
+        };
+        let revision = recipe.map(|recipe| {
+            self.revisions.iter().find(|(id, _)| id == recipe).map_or(recipe, |(_, label)| label.as_str())
+        });
+        let language = self.language.and_then(|index| self.languages.get(index)).map(|(_, label)| label.as_str());
+        home::card(&HomeInput {
+            texts: &self.texts,
+            state: self.state.as_ref(),
+            failure: self.failure.as_ref(),
+            preparing,
+            recognized: self.pending_rom().is_some(),
+            idle: self.idle(),
+            revision,
+            language,
+        })
     }
 
     fn drain_events(&mut self) {
@@ -380,12 +608,20 @@ impl ForgeApp {
                 }
             }
             Event::Stage(message) => {
-                self.status = message;
+                self.stage = message;
                 self.progress = None;
             }
             Event::Progress { done, total } => self.progress = Some((done, total)),
             Event::HdStage(text) => self.hd_status = text,
             Event::ModStage(text) => self.mod_status = text,
+            Event::HdFailed(text) => {
+                self.hd_failed = true;
+                self.hd_status = text;
+            }
+            Event::ModFailed(text) => {
+                self.mod_failed = true;
+                self.mod_status = text;
+            }
             Event::HdChecked(state) => {
                 if self.hd_state.is_none() {
                     self.hd_state = Some(state);
@@ -407,10 +643,11 @@ impl ForgeApp {
                 self.hd_state = Some(state);
                 self.refresh_hd();
                 if let (Some(error), Some(contract)) = (error, self.optional.hd_contract.as_ref()) {
-                    let message = texts::manual_hd_failure(&error, contract, &self.optional.pack);
-                    self.dialog(DialogKind::Error, texts::DIALOG_TITLE, message);
+                    let page = &self.optional.pack.page;
+                    let message = self.t(Msg::ManualHdFailure { error: &error, archive: &contract.name, page });
+                    self.dialog(DialogKind::Error, message);
                 } else if self.active_title.is_some() {
-                    self.hd_status = "HD textures ready. Prepare and install the title again to apply them.".into();
+                    self.hd_status = self.t(Msg::HdReadyReinstall);
                 }
             }
             Event::ModDone { error, state } => {
@@ -418,49 +655,64 @@ impl ForgeApp {
                 self.mod_state = Some(state);
                 self.refresh_mod();
                 if let (Some(error), Some(contract)) = (error, self.optional.mod_contract.as_ref()) {
-                    let message = texts::manual_mod_failure(&error, contract, &self.optional.mod_);
-                    self.dialog(DialogKind::Error, texts::DIALOG_TITLE, message);
+                    let page = &self.optional.mod_.page;
+                    let message = self.t(Msg::ManualModFailure { error: &error, archive: &contract.name, page });
+                    self.dialog(DialogKind::Error, message);
                 } else if self.active_title.is_some() && self.mod_enabled {
-                    self.mod_status = format!(
-                        "{} is ready. Prepare and install the title again to apply it.",
-                        self.optional.mod_.title
-                    );
+                    self.mod_status = self.t(Msg::ModReadyReinstall { title: &self.optional.mod_.title });
                 }
             }
             Event::InstallFailed(explanation) => {
-                self.busy = false;
-                self.progress = None;
-                self.status = explanation.title.to_string();
-                self.dialog(DialogKind::Error, explanation.title, explanation.body());
+                self.finish_preparation();
+                if let Some(probe) = &mut self.probe {
+                    probe.record(DialogKind::Error, &self.texts.body(&explanation));
+                }
+                self.failure = Some(*explanation);
+                self.show_details = false;
             }
             Event::InstallComplete { hd, mod_, notices } => {
-                self.busy = false;
-                self.progress = None;
+                self.finish_preparation();
                 self.card_installed = true;
-                self.refresh_active_title();
                 (self.hd_state, self.mod_state) = (Some(hd), Some(mod_));
-                if !self.hd_status.starts_with(texts::HD_DOWNLOAD_FAILED_PREFIX) {
+                if !self.hd_failed {
                     self.refresh_hd();
                 }
-                if !self.mod_status.starts_with(texts::MOD_DOWNLOAD_FAILED_PREFIX) {
+                if !self.mod_failed {
                     self.refresh_mod();
                 }
-                let mut message = texts::READY_DIALOG.to_string();
+                let mut message = self.t(Msg::ReadyDialog);
                 for notice in &notices {
-                    message.push_str(&format!("\n\n{}\n{}\n{}", notice.title, notice.next_action, notice.details));
+                    let (title, next) = (self.texts.title(notice), self.texts.next_action(notice));
+                    message.push_str(&format!("\n\n{title}\n{next}\n{}", notice.details));
                 }
-                self.dialog(DialogKind::Info, texts::DIALOG_TITLE, message);
+                self.notices = notices;
+                self.dialog(DialogKind::Info, message);
             }
             Event::InstallCancelled => {
-                self.busy = false;
-                self.progress = None;
+                self.finish_preparation();
+                self.status_note = Some(self.t(Msg::StatusCancelled));
             }
             Event::Recognition { source, card } => {
                 if self.card.as_ref().is_some_and(|(shown, _)| *shown == source) {
                     self.card = Some((source, card));
+                    self.refresh_texts();
+                }
+            }
+            Event::State(state) => {
+                if !self.freeze_state {
+                    self.state = Some(*state);
                 }
             }
         }
+    }
+
+    /// The end of this window's preparation, whatever its outcome.
+    fn finish_preparation(&mut self) {
+        self.busy = false;
+        self.preparing = None;
+        self.progress = None;
+        self.dialogs.retain(|dialog| dialog.kind != DialogKind::ConfirmCancel);
+        self.refresh_installation();
     }
 
     fn selected(&mut self, target: PickTarget, path: PathBuf) {
@@ -469,20 +721,25 @@ impl ForgeApp {
                 // A picked file is recognized again, also when it is the same path.
                 self.rom = path.to_string_lossy().into_owned();
                 self.card = None;
+                self.failure = None;
                 self.recognize();
             }
-            PickTarget::HdArchive => self.run_hd("Verifying the selected archive...", move |optional, _, cancel| {
-                optional.import_hd_archive(&path, cancel)
-            }),
-            PickTarget::HdFolder => self.run_hd("Verifying the extracted textures...", move |optional, _, cancel| {
-                optional.import_hd_folder(&path, cancel)
-            }),
-            PickTarget::ModArchive => self.run_mod("Verifying the selected archive...", move |optional, _, cancel| {
-                optional.import_mod_archive(&path, cancel)
-            }),
-            PickTarget::ModFolder => self.run_mod("Verifying the extracted files...", move |optional, _, cancel| {
-                optional.import_mod_folder(&path, cancel)
-            }),
+            PickTarget::HdArchive => {
+                let message = self.t(Msg::VerifyingArchive);
+                self.run_hd(&message, move |optional, _, cancel| optional.import_hd_archive(&path, cancel))
+            }
+            PickTarget::HdFolder => {
+                let message = self.t(Msg::VerifyingTextures);
+                self.run_hd(&message, move |optional, _, cancel| optional.import_hd_folder(&path, cancel))
+            }
+            PickTarget::ModArchive => {
+                let message = self.t(Msg::VerifyingArchive);
+                self.run_mod(&message, move |optional, _, cancel| optional.import_mod_archive(&path, cancel))
+            }
+            PickTarget::ModFolder => {
+                let message = self.t(Msg::VerifyingFiles);
+                self.run_mod(&message, move |optional, _, cancel| optional.import_mod_folder(&path, cancel))
+            }
         }
     }
 
@@ -524,71 +781,140 @@ impl ForgeApp {
         });
     }
 
-    fn apply(&mut self, action: Action, frame: &eframe::Frame) {
+    pub(crate) fn apply(&mut self, action: Action, context: &egui::Context, frame: Option<&eframe::Frame>) {
+        if let Some(log) = &mut self.action_log {
+            log.push(action.name());
+            return;
+        }
+        self.copied &= matches!(action, Action::Navigate(Page::Diagnostics));
         match action {
             Action::Pick(target) => self.pick(target, frame),
             Action::Install => self.start_install(),
-            Action::Launch => {
-                if let Err(error) = crate::launch::launch_runtime(&self.installation) {
-                    let error = error.during(forge_base::Operation::Launch);
-                    forge_core::log::ForgeLog::new(&self.installation.data_root, "launch").error(&error);
-                    let explanation = forge_core::explain::explain(&error);
-                    self.dialog(DialogKind::Error, explanation.title, explanation.body());
+            Action::Launch => self.launch(),
+            Action::Cancel => {
+                if self.preparing.is_some() {
+                    self.push_dialog(DialogKind::ConfirmCancel, self.t(Msg::ConfirmCancel));
                 }
             }
             Action::DownloadHd => {
-                let message = "Downloading the HD textures...";
-                self.run_hd(message, |optional, report, cancel| optional.download_hd(report, cancel));
+                let message = self.t(Msg::DownloadingHd);
+                self.run_hd(&message, |optional, report, cancel| optional.download_hd(report, cancel));
             }
             Action::DownloadMod => {
-                let message = format!("Downloading {}...", self.optional.mod_.title);
+                let message = self.t(Msg::DownloadingMod { title: &self.optional.mod_.title });
                 self.run_mod(&message, |optional, report, cancel| optional.download_mod(report, cancel));
             }
             Action::ToggleMod => self.toggle_mod(),
             Action::SelectLanguage(index) => self.choose_language(index),
             Action::Recognize => self.recognize(),
+            Action::Navigate(page) => self.page = page,
+            Action::CheckInstallation => {
+                if self.idle() {
+                    self.failure = None;
+                    self.status_note = None;
+                    self.refresh_installation();
+                }
+            }
+            Action::CopyDiagnostics => {
+                let report = pages::diagnostics::report(self.state.as_ref(), self.failure.as_ref(), &self.notices);
+                context.copy_text(report);
+                self.copied = true;
+                self.status_note = Some(self.t(Msg::Copied));
+            }
+            Action::OpenFolder(path) => {
+                // The folder exists once Forge wrote anything; create it so
+                // the file manager does not open somewhere else.
+                let _ = std::fs::create_dir_all(&path);
+                if let Err(error) = pages::data::open_folder(&path) {
+                    self.dialog(DialogKind::Error, format!("{}\n{error}", path.display()));
+                }
+            }
+            Action::Dismiss => {
+                self.failure = None;
+                self.notices.clear();
+            }
+            Action::ToggleDetails => self.show_details = !self.show_details,
+            Action::ToggleNeeds => self.show_needs = !self.show_needs,
+            Action::TogglePrepareAgain => self.show_prepare_again = !self.show_prepare_again,
+            Action::SetUiLanguage(code) => {
+                self.ui_language_choice = Some(code);
+                self.refresh_texts();
+            }
+            Action::Command(command) => {
+                let action = match command {
+                    Command::Prepare | Command::Update | Command::Repair | Command::Retry => Action::Install,
+                    Command::Play => Action::Launch,
+                    Command::Cancel => Action::Cancel,
+                    Command::CheckInstallation => Action::CheckInstallation,
+                    Command::ChooseRom => Action::Pick(PickTarget::Rom),
+                    Command::CopyDiagnostics => Action::CopyDiagnostics,
+                    Command::ViewDiagnostics => Action::Navigate(Page::Diagnostics),
+                    Command::SupportedRevisions => Action::Navigate(Page::About),
+                    Command::DataPage => Action::Navigate(Page::Data),
+                    Command::Continue => Action::Dismiss,
+                };
+                self.apply(action, context, frame);
+            }
         }
     }
 
-    fn pick(&mut self, target: PickTarget, frame: &eframe::Frame) {
+    fn launch(&mut self) {
+        if !self.idle() {
+            return;
+        }
+        if let Err(error) = crate::launch::launch_runtime(&self.installation) {
+            let error = error.during(Operation::Launch);
+            forge_core::log::ForgeLog::new(&self.installation.data_root, "launch").error(&error);
+            self.failure = Some(forge_core::explain::explain(&error));
+            self.show_details = false;
+            self.page = Page::Home;
+        }
+    }
+
+    fn pick(&mut self, target: PickTarget, frame: Option<&eframe::Frame>) {
         if !self.idle() {
             return;
         }
         let optional = &self.optional;
-        let contract_name = |contract: Option<&forge_mods::ArchiveContract>, fallback: &str| {
-            format!("Select {}", contract.map_or(fallback, |contract| contract.name.as_str()))
+        let texts = &self.texts;
+        let archive = |contract: Option<&forge_mods::ArchiveContract>, fallback: Msg| match contract {
+            Some(contract) => texts.get(Msg::PickArchive { name: &contract.name }),
+            None => texts.get(fallback),
         };
         let dialog = rfd::FileDialog::new();
         let (dialog, folder) = match target {
             PickTarget::Rom => (
                 dialog
-                    .set_title("Select a decrypted .3ds or .cci ROM")
-                    .add_filter("Nintendo 3DS ROM", &["3ds", "cci"])
-                    .add_filter("3DS image", &["3ds"])
-                    .add_filter("CCI image", &["cci"]),
+                    .set_title(texts.get(Msg::PickRomTitle))
+                    .add_filter(texts.get(Msg::FilterRom), &["3ds", "cci"])
+                    .add_filter(texts.get(Msg::Filter3ds), &["3ds"])
+                    .add_filter(texts.get(Msg::FilterCci), &["cci"]),
                 false,
             ),
-            PickTarget::Extracted => (dialog.set_title("Select extracted title data"), true),
+            PickTarget::Extracted => (dialog.set_title(texts.get(Msg::PickExtractedTitle)), true),
             PickTarget::HdArchive => (
                 dialog
-                    .set_title(contract_name(optional.hd_contract.as_ref(), "the texture pack zip"))
-                    .add_filter("Texture pack archive", &["zip"]),
+                    .set_title(archive(optional.hd_contract.as_ref(), Msg::PickArchiveFallbackHd))
+                    .add_filter(texts.get(Msg::FilterTexturePack), &["zip"]),
                 false,
             ),
             PickTarget::HdFolder => {
-                (dialog.set_title(format!("Select the extracted {} folder", optional.pack.title)), true)
+                (dialog.set_title(texts.get(Msg::PickFolder { title: &optional.pack.title })), true)
             }
             PickTarget::ModArchive => (
                 dialog
-                    .set_title(contract_name(optional.mod_contract.as_ref(), "the archive"))
-                    .add_filter("Mod archive", &["rar"]),
+                    .set_title(archive(optional.mod_contract.as_ref(), Msg::PickArchiveFallbackMod))
+                    .add_filter(texts.get(Msg::FilterModArchive), &["rar"]),
                 false,
             ),
             PickTarget::ModFolder => {
-                (dialog.set_title(format!("Select the extracted {} folder", optional.mod_.title)), true)
+                (dialog.set_title(texts.get(Msg::PickFolder { title: &optional.mod_.title })), true)
             }
         };
-        let dialog = dialog.set_parent(frame);
+        let dialog = match frame {
+            Some(frame) => dialog.set_parent(frame),
+            None => dialog,
+        };
         self.picking = true;
         let notify = self.notifier.clone();
         // The dialog runs on its own thread so the window keeps repainting.
@@ -598,7 +924,7 @@ impl ForgeApp {
         });
     }
 
-    fn install_plan(&self) -> InstallPlan {
+    pub(crate) fn install_plan(&self) -> InstallPlan {
         InstallPlan {
             source: PathBuf::from(self.rom.trim()),
             data_root: self.installation.data_root.clone(),
@@ -606,41 +932,54 @@ impl ForgeApp {
             hd_auto_download: self.hd_auto_download,
             mod_enabled: self.mod_enabled,
             game_language: self.pending_rom().and_then(RecognizedRom::chosen).map(str::to_string),
+            texts: self.texts.clone(),
         }
     }
 
+    /// Prepare (also Update, Repair and Retry until UX plan WP-04): the
+    /// recognized ROM in the field is prepared and installed.
     pub(crate) fn start_install(&mut self) {
-        if !self.idle() {
+        if !self.can_install() {
             return;
         }
         let plan = self.install_plan();
         let missing = |contract: Option<&forge_mods::ArchiveContract>, state: &Checked| {
             contract.is_some() && *state == Some(Ok(Status::Missing))
         };
-        self.status = if self.hd_auto_download && missing(self.optional.hd_contract.as_ref(), &self.hd_state) {
-            texts::DOWNLOADING_HD_FIRST
+        self.stage = self.t(if self.hd_auto_download && missing(self.optional.hd_contract.as_ref(), &self.hd_state) {
+            Msg::DownloadingHdFirst
         } else if self.mod_enabled && missing(self.optional.mod_contract.as_ref(), &self.mod_state) {
-            texts::DOWNLOADING_MOD_FIRST
+            Msg::DownloadingModFirst
         } else {
-            texts::STARTING
-        }
-        .to_string();
+            Msg::Starting
+        });
         self.busy = true;
+        self.preparing = Some(Instant::now());
         self.progress = None;
-        self.spawn(move |optional, notify, cancel| run_install(optional, plan, notify, cancel));
+        self.failure = None;
+        self.notices.clear();
+        self.status_note = None;
+        (self.hd_failed, self.mod_failed) = (false, false);
+        self.page = Page::Home;
+        self.install_cancel = CancelToken::new();
+        let (optional, notify, cancel) =
+            (Arc::clone(&self.optional), self.notifier.clone(), self.install_cancel.clone());
+        self.workers.retain(|worker| !worker.is_finished());
+        self.workers.push(std::thread::spawn(move || run_install(optional, plan, notify, cancel)));
     }
 
     fn toggle_mod(&mut self) {
         match self.optional.set_enabled(self.mod_enabled) {
             Ok(()) => self.mod_settings_error = None,
             Err(error) => {
-                self.dialog(DialogKind::Error, texts::DIALOG_TITLE, format!("Cannot save the mod setting: {error}"));
+                let message = self.t(Msg::ModSettingSaveFailed { error: &error.message });
+                self.dialog(DialogKind::Error, message);
                 self.mod_settings_error = Some(error.message);
             }
         }
         self.refresh_mod();
         if self.active_title.is_some() && self.mod_settings_error.is_none() {
-            self.mod_status.push_str(texts::APPLY_MOD_CHANGE);
+            self.mod_status.push_str(&self.t(Msg::ApplyModChange));
         }
     }
 
@@ -655,7 +994,7 @@ impl ForgeApp {
         if let Some((source, Card::Recognized(pending))) = &mut self.card {
             if !card_installed && *source == rom {
                 if let Some((_, label)) = pending.languages.get(index) {
-                    self.status = texts::language_chosen(label);
+                    self.status_note = Some(self.texts.get(Msg::LanguageChosen { label }));
                     pending.selected = Some(index);
                 }
                 return;
@@ -669,10 +1008,10 @@ impl ForgeApp {
         match forge_native::language::select(&self.installation.data_root, &code) {
             Ok(()) => {
                 self.language = Some(index);
-                self.status = texts::LANGUAGE_SAVED.to_string();
+                self.status_note = Some(self.t(Msg::LanguageSaved));
             }
             Err(error) => {
-                self.dialog(DialogKind::Error, texts::DIALOG_TITLE, error.message);
+                self.dialog(DialogKind::Error, error.message);
                 self.refresh_languages();
             }
         }
@@ -680,9 +1019,10 @@ impl ForgeApp {
 
     /// Cancels the tasks and waits for them a bounded time; an import or
     /// download stops at its next cancellation check.
-    fn shut_down(&mut self) {
+    pub(crate) fn shut_down(&mut self) {
         self.cancel.cancel();
         self.card_cancel.cancel();
+        self.install_cancel.cancel();
         let deadline = Instant::now() + Duration::from_secs(15);
         while self.workers.iter().any(|worker| !worker.is_finished()) && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
@@ -701,14 +1041,7 @@ impl ForgeApp {
         }
         if self.busy {
             context.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            if !self.dialogs.iter().any(|dialog| dialog.kind == DialogKind::ConfirmClose) {
-                self.dialogs.push_back(Dialog {
-                    kind: DialogKind::ConfirmClose,
-                    title: texts::DIALOG_TITLE,
-                    message: texts::CLOSE_WHILE_BUSY.to_string(),
-                    focus_pending: true,
-                });
-            }
+            self.push_dialog(DialogKind::ConfirmClose, self.t(Msg::CloseWhileBusy));
         } else {
             self.shut_down();
             self.closing = true;
@@ -716,27 +1049,29 @@ impl ForgeApp {
     }
 
     fn show_dialog(&mut self, context: &egui::Context) {
+        let (yes, no, ok) = (self.t(Msg::ButtonYes), self.t(Msg::ButtonNo), self.t(Msg::ButtonOk));
         let Some(dialog) = self.dialogs.front_mut() else { return };
         let mut answer = None;
         let width = (context.content_rect().width() - 48.0).clamp(200.0, 460.0);
+        let question = matches!(dialog.kind, DialogKind::ConfirmClose | DialogKind::ConfirmCancel);
         let modal = egui::Modal::new(egui::Id::new("forge-dialog")).show(context, |ui| {
             ui.set_width(width);
-            ui.heading(dialog.title);
+            ui.heading(&dialog.title);
             ui.add_space(6.0);
             let height = (context.content_rect().height() * 0.6).max(80.0);
             egui::ScrollArea::vertical().max_height(height).show(ui, |ui| {
                 ui.add(Label::new(&dialog.message).wrap());
             });
             ui.add_space(10.0);
-            ui.horizontal(|ui| {
-                let primary = if dialog.kind == DialogKind::ConfirmClose {
-                    let yes = ui.button("Yes");
-                    if ui.button("No").clicked() {
+            ui.horizontal_wrapped(|ui| {
+                let primary = if question {
+                    let yes = ui.button(&yes);
+                    if ui.button(&no).clicked() {
                         answer = Some(false);
                     }
                     yes
                 } else {
-                    ui.button("OK")
+                    ui.button(&ok)
                 };
                 if dialog.focus_pending {
                     primary.request_focus();
@@ -747,244 +1082,155 @@ impl ForgeApp {
                 }
             });
         });
-        // Esc or a click outside dismisses; for the close question that is "No".
+        // Esc or a click outside dismisses; for a question that is "No".
         if answer.is_none() && modal.should_close() {
             answer = Some(false);
         }
         if let Some(confirmed) = answer {
             let kind = self.dialogs.pop_front().map(|dialog| dialog.kind);
-            if kind == Some(DialogKind::ConfirmClose) && confirmed {
-                self.close(context);
+            match (kind, confirmed) {
+                (Some(DialogKind::ConfirmClose), true) => self.close(context),
+                (Some(DialogKind::ConfirmCancel), true) => self.install_cancel.cancel(),
+                _ => {}
             }
         }
     }
 
-    fn body(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
-        let idle = self.idle();
-        record.add(ui, "title", "label", Label::new(RichText::new("TriAevum Forge").size(24.0).strong()));
-        record.add(ui, "subtitle", "label", Label::new(texts::SUBTITLE).wrap());
-        ui.add_space(12.0);
-        ui.horizontal_wrapped(|ui| {
-            record.add(ui, "rom_label", "label", Label::new("Decrypted ROM"));
-            let browse_width = 96.0;
-            let width = (ui.available_width() - browse_width).max(160.0);
-            let entry = ui.add(TextEdit::singleline(&mut self.rom).desired_width(width));
-            record.push("rom", "entry", &entry);
-            // A typed path is recognized once committed (Enter or leaving the field).
-            if entry.lost_focus() {
-                actions.push(Action::Recognize);
-            }
-            if record.button(ui, idle, "rom_browse", Button::new("Browse...")) {
-                actions.push(Action::Pick(PickTarget::Rom));
-            }
-        });
-        ui.add_space(6.0);
-        self.rom_card(ui, record, actions);
-        ui.add_space(6.0);
-        record.add(ui, "private_data", "label", Label::new(texts::private_data(&self.installation.data_root)).wrap());
-        if record.button(ui, idle, "use_extracted", Button::new("Use extracted data...")) {
-            actions.push(Action::Pick(PickTarget::Extracted));
+    fn page_body(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>, card: &HomeCard) {
+        match self.page {
+            Page::Home => home::show(self, ui, record, actions, card),
+            Page::Enhancements => enhancements::show(self, ui, record, actions),
+            Page::Data => pages::data::show(self, ui, record, actions),
+            Page::Diagnostics => pages::diagnostics::show(self, ui, record, actions),
+            Page::About => pages::about::show(self, ui, record, actions),
         }
-        ui.add_space(16.0);
-        self.hd_section(ui, record, actions);
-        ui.add_space(12.0);
-        self.mod_section(ui, record, actions);
-        ui.add_space(8.0);
     }
 
-    /// The recognized-ROM card right under the ROM row: the revision and the
-    /// game languages as large buttons; the installed title's languages when
-    /// no ROM is being prepared.
-    fn rom_card(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
-        let visuals = ui.visuals().clone();
-        let card = self.current_card().cloned();
-        let (choices, selected) = self.language_options();
-        let choices = choices.to_vec();
-        // Highlighted once there is a ROM or a language to show.
-        let accent = match &card {
-            Some(Card::Failed(_)) => visuals.error_fg_color,
-            None if choices.is_empty() => visuals.weak_text_color(),
-            _ => visuals.selection.stroke.color,
+    /// The footer: one status line, the progress bar, the primary and
+    /// secondary actions (stacked on a narrow window).
+    fn footer(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>, card: &HomeCard) {
+        let status = match (&self.status_note, self.preparing) {
+            (Some(note), None) => note.clone(),
+            _ => card.status.clone(),
         };
-        let pending = self.pending_rom().is_some();
-        let enabled = self.idle();
-        let frame = egui::Frame::group(ui.style())
-            .inner_margin(14.0)
-            .fill(accent.gamma_multiply(0.08))
-            .stroke(Stroke::new(1.5, accent));
-        let response = frame.show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            let heading = card.as_ref().map_or(texts::GAME_LANGUAGE.to_string(), crate::recognition::heading);
-            ui.horizontal_wrapped(|ui| {
-                if matches!(card, Some(Card::Recognizing(_))) {
-                    ui.add(Spinner::new());
-                }
-                let text = RichText::new(heading).size(18.0).strong().color(accent);
-                record.add(ui, "rom_card_title", "label", Label::new(text).wrap());
-            });
-            match &card {
-                Some(Card::Recognizing(stage)) => record.add(ui, "rom_card_status", "label", Label::new(stage).wrap()),
-                Some(Card::Failed(message)) => {
-                    let text = RichText::new(message).color(visuals.error_fg_color);
-                    record.add(ui, "rom_card_status", "label", Label::new(text).wrap());
-                }
-                Some(Card::Recognized(rom)) if pending && rom.languages.is_empty() => {
-                    let message = texts::languages_unreadable(rom.language_error.as_deref().unwrap_or_default());
-                    record.add(ui, "rom_card_status", "label", Label::new(message).wrap());
-                }
-                _ if choices.is_empty() => {
-                    record.add(ui, "rom_card_status", "label", Label::new(texts::NO_LANGUAGES).wrap());
-                }
-                _ => {
-                    ui.add_space(4.0);
-                    record.add(ui, "language_label", "label", Label::new(texts::CHOOSE_LANGUAGE));
-                    ui.add_space(2.0);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = Vec2::new(8.0, 8.0);
-                        for (index, (_, label)) in choices.iter().enumerate() {
-                            let text = RichText::new(label).size(17.0);
-                            let button =
-                                Button::new(text).selected(selected == Some(index)).min_size(Vec2::new(116.0, 36.0));
-                            if record.button(ui, enabled, "language_choice", button) {
-                                actions.push(Action::SelectLanguage(index));
-                            }
-                        }
-                    });
-                    ui.add_space(2.0);
-                    let hint = if pending { texts::LANGUAGE_FOR_INSTALL } else { texts::LANGUAGE_INSTALLED };
-                    record.add(ui, "language_hint", "label", Label::new(hint).wrap());
-                }
-            }
-        });
-        record.push("rom_card", "group", &response.response);
-    }
-
-    fn section(ui: &mut egui::Ui, heading: &str, contents: impl FnOnce(&mut egui::Ui)) {
-        egui::Frame::group(ui.style()).inner_margin(12.0).show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.label(RichText::new(heading).size(16.0).strong());
-            ui.add_space(4.0);
-            contents(ui);
-        });
-    }
-
-    fn hd_section(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
-        let enabled = self.idle() && self.optional.hd_contract.is_some();
-        let pack = self.optional.pack.clone();
-        Self::section(ui, "HD UI textures (recommended)", |ui| {
-            record.add(ui, "hd_description", "label", Label::new(texts::hd_description(&pack)).wrap());
-            ui.add_space(8.0);
-            ui.horizontal_wrapped(|ui| {
-                let download = Button::new(RichText::new("Download HD textures").strong());
-                if record.button(ui, enabled, "hd_download", download) {
-                    actions.push(Action::DownloadHd);
-                }
-                if record.button(ui, enabled, "hd_select_zip", Button::new("Select .zip...")) {
-                    actions.push(Action::Pick(PickTarget::HdArchive));
-                }
-                if record.button(ui, enabled, "hd_select_folder", Button::new("Select extracted folder...")) {
-                    actions.push(Action::Pick(PickTarget::HdFolder));
-                }
-                record.links(ui, [("hd_page", "Mod page", &pack.page), ("hd_license", "License", &pack.license_url)]);
-            });
-            let check = ui.add_enabled(enabled, Checkbox::new(&mut self.hd_auto_download, texts::HD_AUTO_DOWNLOAD));
-            record.push("hd_auto_download", "checkbox", &check);
-            if check.changed() {
-                self.hd_status =
-                    texts::hd_status(self.optional.hd_contract.as_ref(), &self.hd_state, self.hd_auto_download);
-            }
-            record.add(ui, "hd_status", "label", Label::new(&self.hd_status).wrap());
-        });
-    }
-
-    fn mod_section(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
-        let available = self.optional.mod_contract.is_some() && self.mod_settings_error.is_none();
-        let enabled = self.idle() && available;
-        let mod_ = self.optional.mod_.clone();
-        Self::section(ui, "Optional mods", |ui| {
-            record.add(ui, "mod_description", "label", Label::new(texts::mod_description(&mod_)).wrap());
-            let check = ui.add_enabled(enabled, Checkbox::new(&mut self.mod_enabled, texts::mod_checkbox(&mod_)));
-            record.push("mod_enabled", "checkbox", &check);
-            if check.changed() {
-                actions.push(Action::ToggleMod);
-            }
-            ui.horizontal_wrapped(|ui| {
-                if record.button(ui, enabled, "mod_download", Button::new("Download mod")) {
-                    actions.push(Action::DownloadMod);
-                }
-                if record.button(ui, enabled, "mod_select_rar", Button::new("Select .rar...")) {
-                    actions.push(Action::Pick(PickTarget::ModArchive));
-                }
-                if record.button(ui, enabled, "mod_select_folder", Button::new("Select extracted folder...")) {
-                    actions.push(Action::Pick(PickTarget::ModFolder));
-                }
-                record.links(ui, [("mod_page", "Mod page", &mod_.page), ("mod_license", "License", &mod_.license_url)]);
-            });
-            record.add(ui, "mod_status", "label", Label::new(&self.mod_status).wrap());
-        });
-    }
-
-    fn footer(&mut self, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
-        ui.add_space(4.0);
-        // A long error scrolls inside a few lines instead of pushing the
-        // actions out of the window.
-        let lines = ui.text_style_height(&egui::TextStyle::Body) * 4.0;
-        egui::ScrollArea::vertical().id_salt("status").max_height(lines).show(ui, |ui| {
-            record.add(ui, "status", "label", Label::new(&self.status).wrap());
-        });
-        ui.add_space(8.0);
+        record.add(ui, "status", "label", Label::new(status).truncate());
+        ui.add_space(6.0);
         let fraction = match (self.busy, self.progress) {
             (true, Some((done, Some(total)))) if total > 0 => done as f32 / total as f32,
             // Indeterminate: a sweeping bar.
             (true, _) => (ui.input(|input| input.time) * 0.6).fract() as f32,
             (false, _) => 0.0,
         };
-        let mut bar = ProgressBar::new(fraction).desired_height(10.0);
+        let mut bar = ProgressBar::new(fraction).desired_height(8.0);
         if !self.busy {
             bar = bar.fill(egui::Color32::TRANSPARENT);
         }
         record.add(ui, "progress", "progress", bar);
-        ui.add_space(10.0);
-        ui.horizontal(|ui| {
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let launch = self.active_title.is_some() && self.idle();
-                if record.button(ui, launch, "launch", Button::new("Launch game")) {
-                    actions.push(Action::Launch);
+        ui.add_space(8.0);
+        let buttons: Vec<(CardButton, bool)> =
+            std::iter::once((card.primary, true)).chain(card.secondary.map(|button| (button, false))).collect();
+        let stacked = ui.available_width() < STACK_WIDTH;
+        let mut draw = |ui: &mut egui::Ui, record: &mut Recorder, width: f32| {
+            for (button, primary) in &buttons {
+                let name = match (button.command, primary) {
+                    (Command::Cancel, _) => "cancel",
+                    (_, true) => "primary",
+                    (_, false) => "secondary",
+                };
+                let mut text = RichText::new(self.t(button.command.label()));
+                if *primary {
+                    text = text.strong().size(16.0);
                 }
-                if record.button(ui, self.can_install(), "install", Button::new("Prepare and install")) {
-                    actions.push(Action::Install);
+                let mut widget = Button::new(text).min_size(Vec2::new(width, if *primary { 34.0 } else { 30.0 }));
+                if *primary && button.enabled && button.command != Command::Cancel {
+                    widget = widget.fill(ui.visuals().selection.bg_fill);
                 }
+                if record.button(ui, button.enabled, name, widget) {
+                    actions.push(Action::Command(button.command));
+                }
+            }
+        };
+        if stacked {
+            ui.vertical(|ui| {
+                let width = ui.available_width();
+                draw(ui, record, width)
             });
-        });
-        ui.add_space(4.0);
+        } else {
+            ui.horizontal(|ui| {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| draw(ui, record, 120.0));
+            });
+        }
     }
 }
 
 impl eframe::App for ForgeApp {
+    fn raw_input_hook(&mut self, _context: &egui::Context, raw_input: &mut egui::RawInput) {
+        if let Some(probe) = &mut self.probe {
+            probe.inject(raw_input);
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
         self.drain_events();
         self.handle_close_request(&context);
         self.geometry.update(&context, frame);
+        if self.title_language != self.texts.language() {
+            self.title_language = self.texts.language().to_string();
+            context.send_viewport_cmd(egui::ViewportCommand::Title(self.t(Msg::WindowTitle)));
+        }
+        let card = self.home_card();
         let mut actions = Vec::new();
-        let mut record = Recorder::default();
-        let margin = egui::Margin::symmetric(16, 8);
-        egui::Panel::bottom("footer")
-            .frame(egui::Frame::side_top_panel(ui.style()).inner_margin(margin))
-            .show(ui, |ui| self.footer(ui, &mut record, &mut actions));
-        egui::CentralPanel::default_margins().show(ui, |ui| {
-            egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-                record.scrolled = true;
-                self.body(ui, &mut record, &mut actions);
-                record.scrolled = false;
+        let mut record = Recorder {
+            scroll_to: self.scroll_to.take(),
+            viewport_height: self.scroll_viewport.height(),
+            ..Default::default()
+        };
+        let panel = egui::Frame::central_panel(ui.style()).inner_margin(0);
+        egui::CentralPanel::default().frame(panel).show(ui, |ui| {
+            let navigation = egui::Frame::new().inner_margin(Margin { left: 16, right: 16, top: 8, bottom: 2 });
+            navigation.show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                pages::navigation(ui, &self.texts, self.page, &mut record, &mut actions);
             });
+            // The page scrolls; the footer below it always stays in view.
+            let height = (ui.available_height() - self.footer_height).max(40.0);
+            let mut area = egui::ScrollArea::vertical()
+                .id_salt(("page", self.page.code()))
+                .auto_shrink(false)
+                .max_height(height)
+                .min_scrolled_height(height);
+            if std::mem::take(&mut self.scroll_top) {
+                area = area.vertical_scroll_offset(0.0);
+            }
+            let output = area.show(ui, |ui| {
+                egui::Frame::new().inner_margin(Margin::symmetric(16, 8)).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    record.scrolled = true;
+                    self.page_body(ui, &mut record, &mut actions, &card);
+                    record.scrolled = false;
+                });
+            });
+            self.scroll_viewport = output.inner_rect;
+            let footer = egui::Frame::side_top_panel(ui.style()).inner_margin(Margin::symmetric(16, 8));
+            let line = ui.visuals().widgets.noninteractive.bg_stroke;
+            ui.painter().hline(ui.max_rect().x_range(), ui.cursor().top() + ui.spacing().item_spacing.y / 2.0, line);
+            let response = footer.show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                self.footer(ui, &mut record, &mut actions, &card);
+            });
+            let measured = response.response.rect.height() + ui.spacing().item_spacing.y;
+            if (measured - self.footer_height).abs() > 0.5 {
+                self.footer_height = measured;
+                context.request_discard("the footer changed height");
+            }
         });
         self.show_dialog(&context);
         self.widgets = record.widgets;
         for action in actions {
-            self.apply(action, frame);
+            self.apply(action, &context, Some(frame));
         }
-        if self.busy || self.recognizing() {
+        if self.busy || self.recognizing() || self.state.is_none() {
             context.request_repaint_after(Duration::from_millis(50));
         }
         if let Some(mut probe) = self.probe.take() {
@@ -997,7 +1243,7 @@ impl eframe::App for ForgeApp {
 fn native_options() -> eframe::NativeOptions {
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title(texts::WINDOW_TITLE)
+            .with_title(Texts::default().get(Msg::WindowTitle))
             .with_app_id(forge_core::layout::FLATPAK_ID)
             .with_inner_size(INITIAL_SIZE)
             .with_min_inner_size(MIN_SIZE)
@@ -1012,7 +1258,7 @@ fn native_options() -> eframe::NativeOptions {
 /// Opens the window and runs it until closed.
 pub fn run_window(
     installation: Option<Installation>,
-    startup_error: Option<String>,
+    startup_error: Option<ForgeError>,
     probe: Option<Box<Probe>>,
     simulated: SimulatedDisplay,
 ) -> Result<(), String> {
@@ -1020,8 +1266,9 @@ pub fn run_window(
         Some(installation) => installation,
         None => Installation::current().map_err(|error| error.message)?,
     };
+    let title = Texts::default().get(Msg::WindowTitle);
     eframe::run_native(
-        texts::WINDOW_TITLE,
+        &title,
         native_options(),
         Box::new(move |creation| {
             let app = ForgeApp::new(&creation.egui_ctx, installation, startup_error, probe, simulated)?;
@@ -1033,17 +1280,16 @@ pub fn run_window(
 
 /// `forge_gui.main`. A window that cannot open (no OpenGL, no display) is
 /// reported with the command line alternative.
-pub fn run(installation: Option<Installation>, startup_error: Option<String>) -> i32 {
+pub fn run(installation: Option<Installation>, startup_error: Option<ForgeError>) -> i32 {
     match run_window(installation, startup_error, None, SimulatedDisplay::default()) {
         Ok(()) => 0,
         Err(error) => {
-            let message = format!(
-                "TriAevum Forge GUI failed: {error}\n\nThe command line tool triaevum-forge can still prepare titles."
-            );
+            let texts = Texts::new(&texts::system_language().unwrap_or_default());
+            let message = texts.get(Msg::GuiFailed { error: &error });
             eprintln!("{message}");
             let _ = rfd::MessageDialog::new()
                 .set_level(rfd::MessageLevel::Error)
-                .set_title(texts::DIALOG_TITLE)
+                .set_title(texts.get(Msg::DialogTitle))
                 .set_description(message)
                 .show();
             1
@@ -1084,16 +1330,19 @@ mod tests {
         })
     }
 
+    fn app(directory: &Path) -> ForgeApp {
+        let installation = Installation::at(directory).unwrap();
+        ForgeApp::new(&egui::Context::default(), installation, None, None, SimulatedDisplay::default()).unwrap()
+    }
+
     #[test]
     fn the_recognized_rom_card_drives_the_installation_language() {
         let directory = tempfile::tempdir().unwrap();
-        let installation = Installation::at(directory.path()).unwrap();
-        let data_root = installation.data_root.clone();
-        let mut app =
-            ForgeApp::new(&egui::Context::default(), installation, None, None, SimulatedDisplay::default()).unwrap();
+        let mut app = app(directory.path());
+        let data_root = app.installation.data_root.clone();
         assert_eq!(app.language_options(), (&[][..], None));
 
-        app.probe_card("game.cci", Card::Recognizing(texts::RECOGNIZING.into()));
+        app.probe_card("game.cci", Card::Recognizing(app.t(Msg::Recognizing)));
         assert!(app.recognizing() && !app.can_install());
         app.probe_card("game.cci", recognized(&["en", "it"]));
         assert!(app.can_install());
@@ -1102,15 +1351,16 @@ mod tests {
         assert_eq!(app.install_plan().game_language.as_deref(), Some("it"));
         assert!(!forge_native::language::config_path(&data_root).exists(), "chosen, not saved");
 
-        // A path being typed hides the card and its choice.
+        // A path being typed hides the card and its choice, and disables Prepare.
         app.rom = "other.cci".into();
         assert_eq!(app.current_card(), None);
         assert_eq!(app.install_plan().game_language, None);
+        assert!(!app.can_install());
         app.rom = "game.cci".into();
 
         // A late event for another ROM changes nothing.
-        let stale = Event::Recognition { source: "old.cci".into(), card: Card::Failed("x".into()) };
-        app.handle(stale);
+        let failure = Box::new(forge_core::explain::explain(&ForgeError::invalid("x")));
+        app.handle(Event::Recognition { source: "old.cci".into(), card: Card::Failed(failure) });
         assert!(matches!(app.current_card(), Some(Card::Recognized(_))));
 
         // Installed: the buttons show and save the installed setting.
@@ -1122,7 +1372,60 @@ mod tests {
         assert_eq!(app.install_plan().game_language, None);
         app.choose_language(0);
         assert_eq!(read_languages(&data_root).unwrap().1, Some(0));
-        assert_eq!(app.status, texts::LANGUAGE_SAVED);
+        assert_eq!(app.status_note.as_deref(), Some(app.t(Msg::LanguageSaved).as_str()));
+        app.shut_down();
+    }
+
+    #[test]
+    fn the_window_language_follows_the_rom_in_use() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = app(directory.path());
+        app.system_language = Some("it".into());
+        app.refresh_texts();
+        assert_eq!(app.texts.language(), "it", "a supported ROM language before recognition");
+        app.probe_card("game.cci", recognized(&["en", "fr"]));
+        app.refresh_texts();
+        assert_eq!(app.texts.language(), "en", "Italian is not in this ROM");
+        assert_eq!(app.ui_languages().iter().map(|(code, _)| code.as_str()).collect::<Vec<_>>(), ["en", "fr"]);
+        app.apply(Action::SetUiLanguage("fr".into()), &egui::Context::default(), None);
+        assert_eq!(app.texts.language(), "fr");
+        app.shut_down();
+    }
+
+    #[test]
+    fn a_failed_preparation_is_a_card_not_a_status_line() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = app(directory.path());
+        app.probe_card("game.cci", recognized(&["en"]));
+        app.busy = true;
+        app.preparing = Some(Instant::now());
+        let explanation = forge_core::explain::explain(&ForgeError::invalid("bad ROM"));
+        app.handle(Event::InstallFailed(Box::new(explanation.clone())));
+        assert!(!app.busy && app.preparing.is_none());
+        assert_eq!(app.failure, Some(explanation));
+        let card = app.home_card();
+        assert_eq!(card.kind, home::Kind::Failed);
+        assert_eq!(card.status, app.t(Msg::StatusActionNeeded));
+        app.apply(Action::Dismiss, &egui::Context::default(), None);
+        assert_eq!(app.failure, None);
+        app.shut_down();
+    }
+
+    #[test]
+    fn cancelling_asks_first() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut app = app(directory.path());
+        let context = egui::Context::default();
+        app.apply(Action::Cancel, &context, None);
+        assert!(app.dialogs.is_empty(), "nothing to cancel");
+        app.busy = true;
+        app.preparing = Some(Instant::now());
+        app.apply(Action::Command(Command::Cancel), &context, None);
+        assert_eq!(app.dialogs.front().map(|dialog| dialog.kind), Some(DialogKind::ConfirmCancel));
+        assert!(!app.install_cancel.is_cancelled());
+        app.handle(Event::InstallCancelled);
+        assert!(app.dialogs.is_empty() && !app.busy);
+        assert_eq!(app.status_note.as_deref(), Some(app.t(Msg::StatusCancelled).as_str()));
         app.shut_down();
     }
 }

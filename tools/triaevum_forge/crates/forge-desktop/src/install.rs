@@ -15,7 +15,7 @@ use forge_mods::Status;
 use serde_json::{json, Value};
 
 use crate::mods::Optional;
-use crate::texts;
+use crate::texts::{Msg, Texts};
 
 pub type Checked = std::result::Result<Status, String>;
 
@@ -30,6 +30,9 @@ pub enum Event {
     },
     HdStage(String),
     ModStage(String),
+    /// The automatic download before a preparation failed; the native files are used.
+    HdFailed(String),
+    ModFailed(String),
     HdChecked(Checked),
     ModChecked(Checked),
     HdDone {
@@ -53,6 +56,8 @@ pub enum Event {
         source: String,
         card: crate::recognition::Card,
     },
+    /// The inspected installation state.
+    State(Box<forge_core::state::InstallationState>),
 }
 
 /// Sends events to the window and wakes it.
@@ -84,6 +89,8 @@ pub struct InstallPlan {
     pub mod_enabled: bool,
     /// The language chosen on the recognized-ROM card.
     pub game_language: Option<String>,
+    /// The window's language, for the texts the task reports.
+    pub texts: Texts,
 }
 
 /// The `install` job request. The window downloads the HD textures itself
@@ -120,6 +127,16 @@ pub enum JobUpdate {
     Cancelled,
 }
 
+/// The counts of a stage text that ends with `done/total`: the device
+/// pipeline helper reports "Preparing GPU pipelines: 120/400" as text
+/// (`forge-native/src/desktop.rs`); the window shows it as progress.
+pub fn counts(message: &str) -> Option<(u64, u64)> {
+    let tail = message.rsplit([' ', ':']).next()?;
+    let (done, total) = tail.split_once('/')?;
+    let (done, total) = (done.parse().ok()?, total.parse().ok()?);
+    (total > 0 && done <= total).then_some((done, total))
+}
+
 pub fn job_update(event: &Value) -> Option<JobUpdate> {
     let message = || event.get("message").and_then(Value::as_str).unwrap_or_default().to_string();
     match event.get("event")?.as_str()? {
@@ -144,28 +161,28 @@ pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier,
         plan.hd_auto_download && optional.hd_contract.is_some() && optional.hd_state(&cancel) == Ok(Status::Missing);
     let download_mod =
         plan.mod_enabled && optional.mod_contract.is_some() && optional.mod_state(&cancel) == Ok(Status::Missing);
+    let texts = &plan.texts;
     if download_hd {
-        notify.send(Event::Stage(texts::DOWNLOADING_HD_FIRST.into()));
+        notify.send(Event::Stage(texts.get(Msg::DownloadingHdFirst)));
     } else if download_mod {
-        notify.send(Event::Stage(texts::DOWNLOADING_MOD_FIRST.into()));
+        notify.send(Event::Stage(texts.get(Msg::DownloadingModFirst)));
     }
     // A failed download keeps the native files and never stops the installation.
     if download_hd && !cancel.is_cancelled() {
-        notify.send(Event::HdStage("Downloading the HD textures...".into()));
+        notify.send(Event::HdStage(texts.get(Msg::DownloadingHd)));
         let mut report = |text: String| notify.send(Event::HdStage(text));
-        let text = match optional.download_hd(&mut report, &cancel) {
-            Ok(()) => "HD texture archive ready. It is applied by this installation.".to_string(),
-            Err(error) => texts::hd_download_failed(&error.message),
-        };
-        notify.send(Event::HdStage(text));
-        notify.send(Event::Stage(texts::STARTING.into()));
+        match optional.download_hd(&mut report, &cancel) {
+            Ok(()) => notify.send(Event::HdStage(texts.get(Msg::HdArchiveApplied))),
+            Err(error) => notify.send(Event::HdFailed(texts.get(Msg::HdDownloadFailed { error: &error.message }))),
+        }
+        notify.send(Event::Stage(texts.get(Msg::Starting)));
     }
     if download_mod && !cancel.is_cancelled() {
         let mut report = |text: String| notify.send(Event::ModStage(text));
         if let Err(error) = optional.download_mod(&mut report, &cancel) {
-            notify.send(Event::ModStage(texts::mod_download_failed(&error.message)));
+            notify.send(Event::ModFailed(texts.get(Msg::ModDownloadFailed { error: &error.message })));
         }
-        notify.send(Event::Stage(texts::STARTING.into()));
+        notify.send(Event::Stage(texts.get(Msg::Starting)));
     }
     if cancel.is_cancelled() {
         notify.send(Event::InstallCancelled);
@@ -185,7 +202,13 @@ pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier,
         }
         let Some(update) = job.poll(100).as_ref().and_then(job_update) else { continue };
         match update {
-            JobUpdate::Stage(message) => notify.send(Event::Stage(message)),
+            JobUpdate::Stage(message) => {
+                let counted = counts(&message);
+                notify.send(Event::Stage(message));
+                if let Some((done, total)) = counted {
+                    notify.send(Event::Progress { done, total: Some(total) });
+                }
+            }
             JobUpdate::Progress { done, total } => notify.send(Event::Progress { done, total }),
             JobUpdate::Succeeded(notices) => {
                 let check = CancelToken::new();
@@ -225,6 +248,14 @@ mod tests {
         let folder = install_request(directory.path(), Path::new("d"), Path::new("p"), Some("it"));
         assert_eq!(folder["source_kind"], "extracted_directory");
         assert_eq!(folder["game_language"], "it");
+    }
+
+    #[test]
+    fn pipeline_counts_in_stage_texts_become_progress() {
+        assert_eq!(counts("Preparing GPU pipelines: 120/400"), Some((120, 400)));
+        assert_eq!(counts("Preparing GPU pipelines: 0/0"), None);
+        assert_eq!(counts("Extracting the ROM"), None);
+        assert_eq!(counts("Copied 3/x"), None);
     }
 
     #[test]
@@ -310,6 +341,7 @@ mod tests {
             hd_auto_download: true,
             mod_enabled: false,
             game_language: None,
+            texts: Texts::default(),
         };
         run_install(Arc::new(optional), plan, Notifier::new(sender, None), CancelToken::new());
         let events: Vec<Event> = receiver.try_iter().collect();

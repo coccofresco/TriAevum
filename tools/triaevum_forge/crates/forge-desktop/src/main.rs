@@ -16,6 +16,7 @@ mod install;
 mod installation;
 mod launch;
 mod mods;
+mod pages;
 mod recognition;
 mod smoke;
 mod texts;
