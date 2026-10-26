@@ -36,6 +36,8 @@ pub const REQUEST_FORMAT: &str = "triaevum_forge_inspect_v1";
 const ACTIVE_TITLE_FORMAT: &str = "triaevum_active_title_v1";
 const ACTIVE_TITLE: &str = "active-title.json";
 const SOURCE_KINDS: [&str; 3] = ["code", "exheader", "romfs"];
+/// The details of `NeedsGameInput` after "Remove prepared game".
+pub const PREPARED_GAME_REMOVED: &str = "The game data prepared from your ROM was removed";
 
 pub struct InspectRequest {
     pub package_root: PathBuf,
@@ -119,12 +121,15 @@ pub enum RepairReason {
     ConfigUnreadable {
         file: String,
     },
+    /// A restore journal is pending (`restore::pending_restore`).
+    InterruptedRestore,
 }
 
 impl RepairReason {
     fn to_value(&self) -> Value {
         match self {
             Self::InterruptedActivation => json!({"kind": "interrupted_activation"}),
+            Self::InterruptedRestore => json!({"kind": "interrupted_restore"}),
             Self::RuntimeMissing => json!({"kind": "runtime_missing"}),
             Self::ReceiptMismatch => json!({"kind": "receipt_mismatch"}),
             Self::ConfigUnreadable { file } => json!({"kind": "config_unreadable", "file": file}),
@@ -208,6 +213,17 @@ impl InstallationState {
         }
     }
 
+    /// Whether the installed title can start as it is: ready, or needing the
+    /// ROM only because the data kept for repairs is gone (not after "Remove
+    /// prepared game", which deleted the title).
+    pub fn can_play(&self) -> bool {
+        match self {
+            Self::Ready { .. } => true,
+            Self::NeedsGameInput { details, .. } => details != PREPARED_GAME_REMOVED,
+            _ => false,
+        }
+    }
+
     /// The explanation of a state that needs the user (repair, game input,
     /// incompatible, failed); None for the others.
     pub fn explanation(&self) -> Option<Explanation> {
@@ -216,6 +232,11 @@ impl InstallationState {
                 ForgeError::new(ErrorKind::InvalidSettings, details.clone())
                     .during(Operation::SettingsLoad)
                     .because(Reason::MalformedSettings)
+            }
+            Self::RepairNeeded { reason: RepairReason::InterruptedRestore, details } => {
+                ForgeError::new(ErrorKind::RecoveryRequired, details.clone())
+                    .during(Operation::Inspect)
+                    .because(Reason::InterruptedRestore)
             }
             Self::RepairNeeded { details, .. } => {
                 ForgeError::new(ErrorKind::RecoveryRequired, details.clone()).during(Operation::Inspect)
@@ -400,11 +421,17 @@ impl<'a> Context<'a> {
         if journal_path(&self.installation, HostOs::current()).exists() {
             return Ok(repair(RepairReason::InterruptedActivation, "An activation was interrupted"));
         }
+        if crate::restore::pending_restore(&self.data_root).is_some() {
+            return Ok(repair(RepairReason::InterruptedRestore, "A restore of a backup was interrupted"));
+        }
         let runtime = self.runtime();
         let active_path = self.data_root.join(ACTIVE_TITLE);
         if !active_path.exists() {
             if !runtime.is_file() {
                 return Ok(incompatible(IncompatibleReason::MissingRuntime, "The package has no game runtime"));
+            }
+            if let Some(recipe) = crate::data_actions::removed_recipe(&self.data_root) {
+                return Ok(InstallationState::NeedsGameInput { recipe, details: PREPARED_GAME_REMOVED.into() });
             }
             return Ok(InstallationState::NotInstalled);
         }

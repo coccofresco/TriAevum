@@ -30,7 +30,9 @@ pub fn capabilities() -> Value {
         "target": target_triple(),
         "input_formats": ["3ds", "cci", "extracted_directory"],
         "encrypted_input": false,
-        "jobs": ["spool_copy", "rom_identify", "rom_recognize", "install", "game_language"],
+        "jobs": ["spool_copy", "rom_identify", "rom_recognize", "install", "game_language",
+                 "data_plan", "backup", "restore_preview", "restore", "restore_recover",
+                 "clear_renderer_cache", "remove_prepared_game", "rebuild_prepared_assets"],
         "queries": ["inspect", "explain"],
     })
 }
@@ -93,7 +95,14 @@ fn start_job(request: &[u8]) -> Result<Job> {
             let log = Some(ForgeLog::new(&job.data_root, "game_language"));
             Ok(Job::spawn_logged(log, move |_, _| job.run()))
         }
-        Some(other) => Err(ForgeError::invalid(format!("Unknown Forge job: {other}"))),
+        Some("rebuild_prepared_assets") => {
+            let job = RebuildJob::parse(&request)?;
+            let log = job_log("rebuild", job.data_root.as_deref(), &job.package_root, job.android.as_ref());
+            Ok(Job::spawn_logged(log, move |sink, cancel| job.run(sink, cancel)))
+        }
+        // Data & backups (UX plan WP-05B).
+        Some(other) => crate::data_actions::start(other, &request)?
+            .ok_or_else(|| ForgeError::invalid(format!("Unknown Forge job: {other}"))),
         None => Err(ForgeError::invalid("Forge request has no job")),
     }
 }
@@ -436,6 +445,44 @@ impl GameLanguageJob {
         }
         let document = forge_native::language::validate(&Value::Object(crate::fsutil::load_json_object(&path)?))?;
         Ok(json!({"languages": document}))
+    }
+}
+
+/// The `rebuild_prepared_assets` job (`data_actions::rebuild_prepared_assets`):
+/// `package_root?`, `data_root?`, `android?` as for `install`; the result is
+/// the install result.
+struct RebuildJob {
+    data_root: Option<PathBuf>,
+    package_root: PathBuf,
+    android: Option<AndroidJob>,
+}
+
+impl RebuildJob {
+    fn parse(request: &Map<String, Value>) -> Result<Self> {
+        Ok(Self {
+            data_root: optional_path(request, "data_root"),
+            package_root: package_root(request)?,
+            android: android_job(request)?,
+        })
+    }
+
+    fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
+        use crate::data_actions::rebuild_prepared_assets as rebuild;
+        let mut events = StageEvents { sink, current: String::new() };
+        let mut report = |stage: &str, message: &str| events.report(stage, message);
+        let data_root = self.data_root.as_deref();
+        let Some(android) = self.android else {
+            return rebuild(
+                &self.package_root,
+                data_root,
+                InstallTarget::Package,
+                &DesktopServices,
+                &mut report,
+                cancel,
+            );
+        };
+        let services = android_services(&android)?;
+        rebuild(&self.package_root, data_root, InstallTarget::Android(android.target), &services, &mut report, cancel)
     }
 }
 

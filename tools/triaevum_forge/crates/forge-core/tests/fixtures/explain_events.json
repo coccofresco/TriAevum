@@ -994,6 +994,56 @@
    "id": "recovery.rollback_failure"
   },
   {
+   "name": "refinement backup.other_game",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "incompatible_target",
+     "stage": null,
+     "message": "This backup belongs to another game (mm3d)",
+     "os_code": null,
+     "retryable": false,
+     "operation": "restore",
+     "subject": "selected_input",
+     "reason": "other_game"
+    }
+   },
+   "id": "backup.other_game"
+  },
+  {
+   "name": "refinement backup.refused",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "artifact_integrity",
+     "stage": null,
+     "message": "The backup names an unsafe path: save_data/../evil.bin",
+     "os_code": null,
+     "retryable": false,
+     "operation": "restore",
+     "subject": "selected_input",
+     "reason": "invalid_backup"
+    }
+   },
+   "id": "backup.refused"
+  },
+  {
+   "name": "refinement restore.interrupted",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "recovery_required",
+     "stage": null,
+     "message": "An interrupted restore must be recovered first (C:\\Users\\Someone\\Games\\TriAevum\\data\\backups\\restore-20261026-120000\\journal.json)",
+     "os_code": null,
+     "retryable": false,
+     "operation": "restore",
+     "reason": "interrupted_restore"
+    }
+   },
+   "id": "restore.interrupted"
+  },
+  {
    "name": "a refinement reason under another kind falls back to the kind",
    "input": {
     "event": "failed",

@@ -205,6 +205,12 @@ coded! {
         GameRunning = "game_running",
         /// Another Forge holds this installation's lock.
         ForgeRunning = "forge_running",
+        /// A backup belongs to another game or to a revision the package does not support.
+        OtherGame = "other_game",
+        /// A file is not a backup, or does not match its own manifest.
+        InvalidBackup = "invalid_backup",
+        /// A restore stopped before it finished; its journal is pending.
+        InterruptedRestore = "interrupted_restore",
     }
 }
 
