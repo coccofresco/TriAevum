@@ -167,6 +167,32 @@ pub fn import_archive(
     keep_archive(copied, data_root, contract)
 }
 
+/// [`import_archive`] for a stream with no usable path (an Android document
+/// descriptor): the bytes are copied into data/downloads while hashed, and
+/// only a copy of the pinned size and hash is kept.
+pub fn import_archive_reader(
+    source: &mut dyn std::io::Read,
+    data_root: &Path,
+    archive: &dyn CataloguedArchive,
+    contract: &ArchiveContract,
+    cancel: &CancelToken,
+) -> Result<PathBuf> {
+    let mut part = part_file(data_root)?;
+    // One byte past the pinned size tells a larger file apart.
+    let mut reader = source;
+    let (bytes, digest) = copy_hashing(&mut reader, part.as_file_mut(), contract.bytes + 1, cancel)?;
+    if bytes != contract.bytes || hex(&digest) != contract.sha256 {
+        return Err(ForgeError::integrity(format!(
+            "This is not the original {} {} archive ({})",
+            archive.title(),
+            archive.version(),
+            contract.name
+        )));
+    }
+    part.as_file().sync_all().map_err(|error| io_error("Cannot write the copied archive", error))?;
+    keep_archive(part.into_temp_path(), data_root, contract)
+}
+
 /// Test helper: writes a file, creating its folder.
 #[cfg(test)]
 pub(crate) fn write_file(path: &Path, bytes: &[u8]) {
@@ -230,6 +256,26 @@ mod tests {
         assert_eq!(fs::read_dir(data.join("downloads")).unwrap().count(), 1);
         // Importing the stored copy again is a no-op.
         assert_eq!(import_archive(&stored, &data, &archive, &contract, &cancel).unwrap(), stored);
+        assert_eq!(fs::read_dir(data.join("downloads")).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn streamed_archive_must_be_the_original() {
+        let archive = RomFsMod::vanilla_plus_link();
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("data");
+        let payload = b"original archive bytes";
+        let contract = contract_for(payload, "fixture.rar");
+        let cancel = CancelToken::new();
+        for wrong in [&b"original archive byteX"[..], b"original archive bytes and more", b"original"] {
+            let error = import_archive_reader(&mut &wrong[..], &data, &archive, &contract, &cancel).unwrap_err();
+            assert!(error.message.contains("not the original"), "{}", error.message);
+        }
+        // Rejected copies leave nothing behind.
+        assert_eq!(fs::read_dir(data.join("downloads")).unwrap().count(), 0);
+        let stored = import_archive_reader(&mut &payload[..], &data, &archive, &contract, &cancel).unwrap();
+        assert_eq!(stored, data.join("downloads/fixture.rar"));
+        assert_eq!(fs::read(&stored).unwrap(), payload);
         assert_eq!(fs::read_dir(data.join("downloads")).unwrap().count(), 1);
     }
 

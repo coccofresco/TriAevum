@@ -12,7 +12,9 @@ name = "triaevum_forge"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-forge-core = { path = "../forge-core", default-features = false }
+# "https": the HD interface pack download the user starts in the installer
+# (ui_pack_download; owner decision 5). Trusts Android's system CA store.
+forge-core = { path = "../forge-core", default-features = false, features = ["https"] }
 jni-sys = "0.3"
 
 [dev-dependencies]

@@ -20,6 +20,9 @@ use crate::install::{self, AndroidTarget, InstallRequest, InstallSource, Install
 use crate::log::ForgeLog;
 use crate::recognize::{recognize_rom, RecognizeRequest};
 
+// The HD interface pack outside an installation (UX plan WP-09).
+mod ui_pack;
+
 pub const REQUEST_FORMAT: &str = "triaevum_forge_request_v1";
 
 pub fn capabilities() -> Value {
@@ -41,6 +44,9 @@ pub fn capabilities() -> Value {
         if let Some(jobs) = capabilities["jobs"].as_array_mut() {
             jobs.extend(["update_plan", "update", "update_recover"].map(Value::from));
         }
+    }
+    if let Some(jobs) = capabilities["jobs"].as_array_mut() {
+        jobs.extend(ui_pack::JOBS.map(Value::from));
     }
     capabilities
 }
@@ -128,6 +134,7 @@ fn start_job(request: &[u8]) -> Result<Job> {
         // Update from ZIP (UX plan WP-04B).
         #[cfg(not(target_os = "android"))]
         Some(name @ ("update_plan" | "update" | "update_recover")) => crate::update::start_job(name, &request),
+        Some(name) if ui_pack::JOBS.contains(&name) => ui_pack::start(name, &request),
         // Data & backups (UX plan WP-05B).
         Some(other) => crate::data_actions::start(other, &request)?
             .ok_or_else(|| ForgeError::invalid(format!("Unknown Forge job: {other}"))),
@@ -377,12 +384,14 @@ impl InstallJob {
     /// The install result, plus `config_changes` (WP-04A): what the
     /// installation changed in the user's settings.
     fn run(self, sink: &EventSink, cancel: &CancelToken) -> Result<Value> {
+        let target_data = job_data_root(self.data_root.as_deref(), &self.package_root, self.android.as_ref());
         if self.download_hd_textures {
-            download_hd_textures(&self.package_root, self.data_root.as_deref(), sink, cancel)?;
+            // Into the data folder the installation reads (Android: the profile's).
+            let download_data = self.data_root.as_deref().or(self.android.as_ref().and(target_data.as_deref()));
+            download_hd_textures(&self.package_root, download_data, sink, cancel)?;
         }
         let mut events = StageEvents { sink, current: String::new() };
         let mut report = |stage: &str, message: &str| events.report(stage, message);
-        let target_data = job_data_root(self.data_root.as_deref(), &self.package_root, self.android.as_ref());
         let before = target_data.as_deref().map(crate::config_report::ConfigSnapshot::take);
         let options = install::InstallOptions { hud_layout: self.hud_layout };
         let mut result = match self.android {

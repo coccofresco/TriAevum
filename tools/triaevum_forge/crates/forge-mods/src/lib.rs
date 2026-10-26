@@ -40,7 +40,7 @@ mod vanilla_ui_hud_members;
 
 pub use archive::{
     archive_contract, archive_contract_from_file, archive_verified, downloads_directory, import_archive,
-    stored_archive, ArchiveContract,
+    import_archive_reader, stored_archive, ArchiveContract,
 };
 pub use catalog::{Catalog, CataloguedArchive, Credit, Member, RomFsMod, UiTexturePack};
 pub use download::{

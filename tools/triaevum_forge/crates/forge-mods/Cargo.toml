@@ -22,8 +22,16 @@ serde_json.workspace = true
 sha2.workspace = true
 tempfile.workspace = true
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
-ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier"], optional = true }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }
+
+# Desktop trusts the operating system's verifier. Android reads the system
+# certificate folders itself (http.rs), so the platform verifier and its
+# Java component stay out of libtriaevum_forge.so.
+[target.'cfg(not(target_os = "android"))'.dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider", "platform-verifier"], optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+ureq = { version = "3", default-features = false, features = ["rustls-no-provider"], optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true

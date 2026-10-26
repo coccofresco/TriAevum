@@ -251,8 +251,12 @@ cmake -S "$SRC/ports/android/native" -B "$BUILD/title" -G Ninja \
   -DTRIAEVUM_ANDROID_TITLE_DEBUG_INFO=OFF
 cmake --build "$BUILD/title" --target triaevum_android_title --parallel 1
 
-# The Rust Forge engine (installer); the linker comes from the NDK.
+# The Rust Forge engine (installer); the linker and the C compiler of its HTTPS
+# client's ring crate (the HD interface pack download) come from the NDK. On a
+# Windows host the clang drivers end in .cmd.
 CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK/toolchains/llvm/prebuilt/<host>/bin/aarch64-linux-android29-clang" \
+CC_aarch64_linux_android="$NDK/toolchains/llvm/prebuilt/<host>/bin/aarch64-linux-android29-clang" \
+AR_aarch64_linux_android="$NDK/toolchains/llvm/prebuilt/<host>/bin/llvm-ar" \
 CARGO_TARGET_DIR="$BUILD/forge" \
 cargo build --release --manifest-path "$SRC/tools/triaevum_forge/Cargo.toml" \
   -p forge-android --target aarch64-linux-android
