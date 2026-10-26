@@ -24,10 +24,8 @@
     <string name="forge_preparing">Preparing %1$s…</string>
     <string name="forge_progress">%1$d of %2$d</string>
     <string name="forge_ready">The title is ready to play.</string>
-    <string name="forge_failed_stage">Stage: %1$s (%2$s)</string>
     <string name="forge_cancelled">Installation cancelled.</string>
     <string name="forge_cancelling">Cancelling after the current step…</string>
-    <string name="forge_interrupted">The previous installation stopped before it finished: the app was closed or stopped by the system. Select the ROM and install again; an installed title stays as it was.</string>
     <string name="forge_game_language">Game language</string>
     <string name="forge_language_applies">Changes apply on the next full game start.</string>
     <string name="forge_language_saved">Game language saved. Applies on the next full game start.</string>
@@ -40,6 +38,74 @@
     <string name="forge_channel_name">Installation</string>
     <string name="forge_channel_description">Progress of the game installation</string>
     <string name="forge_notification_title">Preparing the game</string>
+    <string name="forge_notification_update">Updating the game</string>
+    <string name="forge_open_installer">Open the installer to continue.</string>
+
+    <!-- Installation state card (UX plan WP-09): the shared state and its explanations -->
+    <string name="forge_state_checking">Checking the installation…</string>
+    <string name="forge_state_not_installed">The game is not installed yet</string>
+    <string name="forge_state_not_installed_body">Select your decrypted ROM (.3ds or .cci) to prepare the game on this device.</string>
+    <string name="forge_state_installing">Installing the game</string>
+    <string name="forge_state_updating">Installing the update</string>
+    <string name="forge_state_repairing">Repairing the installation</string>
+    <string name="forge_state_working_body">This continues while the phone is locked or this screen is closed. The progress is shown below and in a notification.</string>
+    <string name="forge_state_preparing_elsewhere">Another installation is in progress</string>
+    <string name="forge_state_preparing_elsewhere_body">Wait until it finishes, then check again.</string>
+    <string name="forge_state_ready">Ready to play</string>
+    <string name="forge_state_version">Version %1$s.</string>
+    <string name="forge_state_ready_body">Your saves and settings stay in this app\'s storage; Saves and backups copies them to a place of your choice.</string>
+    <string name="forge_state_update">A new TriAevum version is installed</string>
+    <string name="forge_state_update_version">TriAevum %1$s is installed</string>
+    <string name="forge_state_update_versions">TriAevum was updated (%1$s → %2$s)</string>
+    <string name="forge_state_update_body">Update sets up the new version for your prepared game. Your ROM is not needed; your saves and settings are kept. Play is available again after the update.</string>
+    <string name="forge_state_restore_body">A restore of a backup was interrupted. Your previous files are put back before you can play.</string>
+    <string name="forge_state_repair">The installation needs a repair</string>
+    <string name="forge_state_repair_body">Repair rebuilds what is missing from the game data kept from your ROM. Your ROM is not needed; your saves and settings are kept.</string>
+    <string name="forge_state_needs_rom">Your ROM is needed again</string>
+    <string name="forge_state_needs_rom_play">You can still play. To make repairs possible again, select your ROM and install; your saves and settings are kept.</string>
+    <string name="forge_state_needs_rom_body">Select your ROM to prepare the game again; your saves and settings are kept.</string>
+    <string name="forge_state_incompatible">This version cannot run the installed game</string>
+    <string name="forge_state_failed">The installation could not be checked</string>
+    <string name="forge_state_interrupted">The last installation did not finish</string>
+    <string name="forge_state_interrupted_kept">The app was closed or stopped by the system before it ended. Your installed game is unchanged.</string>
+    <string name="forge_state_interrupted_nothing">The app was closed or stopped by the system before it ended. Nothing was installed.</string>
+    <string name="forge_state_interrupted_retry">Retry installs again from the same ROM, or select another one.</string>
+    <string name="forge_state_interrupted_reselect">Select the ROM again to install.</string>
+    <string name="forge_state_interrupted_update">The update did not finish</string>
+    <string name="forge_state_interrupted_update_body">The app was closed or stopped by the system before it ended. Nothing changed: tap Update to run it again.</string>
+    <string name="forge_retry_reselect">The ROM cannot be opened again from here: select it.</string>
+    <string name="forge_update">Update</string>
+    <string name="forge_repair">Repair</string>
+    <string name="forge_retry">Retry</string>
+    <string name="forge_check_again">Check again</string>
+    <string name="forge_banner_notifications">Notifications are off, so the progress is shown only on this screen. The installation continues while the phone is locked or this screen is closed.</string>
+    <string name="forge_banner_turn_on">Turn on notifications</string>
+
+    <!-- Update and Repair (InstallService, UX plan WP-04A) -->
+    <string name="forge_updating">Installing the update…</string>
+    <string name="forge_repairing">Repairing the installation…</string>
+    <string name="forge_job_cancelled">Cancelled; nothing changed.</string>
+    <string name="forge_kept_all">Your saves and settings were kept.</string>
+    <string name="forge_kept_saves">Your saves were kept.</string>
+    <string name="forge_updated">Updated. %1$s</string>
+    <string name="forge_updated_to">Updated to %1$s. %2$s</string>
+    <string name="forge_repaired">Repaired. %1$s</string>
+    <string name="forge_already_current">This installation already uses this version.</string>
+    <string name="forge_update_changed">Update changed: %1$s</string>
+    <string name="forge_repair_changed">Repair changed: %1$s</string>
+    <string name="forge_change_created">%1$s was created with its defaults</string>
+    <string name="forge_change_layout">the HUD layout was reset to the standard profile</string>
+    <string name="forge_change_language">the game language you chose was selected</string>
+    <string name="forge_change_removed">%1$s was removed</string>
+    <string name="forge_change_other">%1$s was changed</string>
+    <string name="forge_layout_question">Reset the HUD layout to the standard profile?</string>
+    <string name="forge_layout_body">Your HUD layout differs from the standard profile. Keep mine leaves it as it is; Use standard changes these settings:</string>
+    <string name="forge_layout_field">%1$s: yours %2$s, standard %3$s</string>
+    <string name="forge_layout_keep">Keep mine</string>
+    <string name="forge_layout_standard">Use standard</string>
+    <string name="forge_downgrade_title">Install an older version?</string>
+    <string name="forge_downgrade_body">This version (%1$s) is older than the one installed (%2$s). Install the older version anyway?</string>
+    <string name="forge_downgrade_confirm">Install older version</string>
 
     <!-- Save import and export (SavesActivity) -->
     <string name="saves_title">Saves and backups</string>

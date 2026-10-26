@@ -19,7 +19,11 @@ object ForgePackage {
     fun available(context: Context): Boolean =
         context.assets.list(ASSET_ROOT)?.contains("recipes") == true
 
-    /** The package folder for this APK, copied first when the APK changed. */
+    /**
+     * The package folder for this APK, copied first when the APK changed. Serialized: the
+     * installer's inspection and the service's jobs may ask at once right after an APK update.
+     */
+    @Synchronized
     @Throws(IOException::class)
     fun prepare(context: Context): File {
         val target = File(context.filesDir, ASSET_ROOT)
