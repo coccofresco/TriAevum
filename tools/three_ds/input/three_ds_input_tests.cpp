@@ -748,6 +748,24 @@ int main() try {
                 !ResolveGameplayPointerOwnership(false, true, true, true),
             "pointer ownership ignored native touch or host GUI ownership");
 
+    {
+      // A click on a native page is its touch only; the press stays the
+      // pointer's until released, whatever opens or closes meanwhile.
+      PointerButtonOwnership ownership;
+      Require(!ownership.Update(false, false) && !ownership.Update(false, true),
+              "a gameplay click lost its button binding");
+      Require(ownership.Update(true, true), "a page opened under a held button left it bound");
+      Require(ownership.Update(false, true), "a page closed under a held click released it as a binding");
+      Require(!ownership.Update(false, false), "a released click stayed the pointer's in gameplay");
+      Require(ownership.Update(true, false) && ownership.Update(true, true),
+              "a click on a native page was not the pointer's");
+      Require(PointerButtonOwnership::OwnsBinding(MouseButton::Left, true) &&
+                  !PointerButtonOwnership::OwnsBinding(MouseButton::Right, true) &&
+                  !PointerButtonOwnership::OwnsBinding(MouseButton::Back, true) &&
+                  !PointerButtonOwnership::OwnsBinding(MouseButton::Left, false),
+              "pointer ownership took a button other than the left one");
+    }
+
     const auto touch = MapPresentationPointToTouch(
         200.0F, 120.0F, 400.0F, 240.0F, true, true);
     const auto outsideTouch = MapPresentationPointToTouch(

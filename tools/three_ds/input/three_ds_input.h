@@ -536,4 +536,25 @@ bool ResolveGameplayPointerOwnership(bool nativeTouchOwned,
                                      bool mouseEnabled,
                                      bool mappingUsesMouse) noexcept;
 
+// While the pointer is on a native touch page that owns it, the left mouse
+// button is that page's touch press and not also a button binding: a click on
+// a page entry must not press the bound button (A by default) on the
+// highlighted entry in the same sample. The button stays the pointer's from
+// such a press until its release, so a click that closes the page does not
+// become a press in the next scene. A click beside the page, and the other
+// mouse buttons, keep their bindings.
+class PointerButtonOwnership {
+  public:
+    [[nodiscard]] bool Update(bool pointerOnPage, bool leftHeld) noexcept {
+        if (!leftHeld || pointerOnPage) mOwned = pointerOnPage;
+        return mOwned;
+    }
+    [[nodiscard]] static bool OwnsBinding(MouseButton button, bool pointerOwned) noexcept {
+        return pointerOwned && button == MouseButton::Left;
+    }
+
+  private:
+    bool mOwned = false;
+};
+
 } // namespace ThreeDsRecomp::Input

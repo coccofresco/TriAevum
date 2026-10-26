@@ -736,6 +736,9 @@ struct NativeControlPollingState {
   int64_t PendingMouseDeltaY = 0;
   double PendingInputSeconds = 0.0;
   bool GameplayMouseOwned = false;
+  // The left mouse button is a native page's touch, not a button binding,
+  // while that page owns the pointer (from the press to its release).
+  ThreeDsRecomp::Input::PointerButtonOwnership PointerButton;
   // A finger dragging on the game surface owns the camera like a mouse look.
   bool GameplayTouchLookOwned = false;
   ThreeDsRecomp::Input::TouchCameraTracker TouchCamera;

@@ -65,10 +65,11 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
                         bool keyboardCaptured,
                         bool mouseCaptured,
                         SDL_GameController *controller,
-                        int16_t triggerThreshold)
+                        int16_t triggerThreshold,
+                        bool pointerOwnsLeft = false)
         : mWindow(window), mKeyboardCaptured(keyboardCaptured),
           mMouseCaptured(mouseCaptured), mController(controller),
-          mTriggerThreshold(triggerThreshold) {}
+          mTriggerThreshold(triggerThreshold), mPointerOwnsLeft(pointerOwnsLeft) {}
 
     bool IsKeyboardKeyHeld(
         NativeKeyboardKey key) const noexcept override {
@@ -79,6 +80,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     bool IsMouseButtonHeld(
         NativeMouseButton button) const noexcept override {
       return !mMouseCaptured && button != NativeMouseButton::None &&
+             !ThreeDsRecomp::Input::PointerButtonOwnership::OwnsBinding(button, mPointerOwnsLeft) &&
              mWindow.GetMouseState(static_cast<Ship::MouseBtn>(button));
     }
 
@@ -93,6 +95,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     bool mMouseCaptured = false;
     SDL_GameController *mController = nullptr;
     int16_t mTriggerThreshold = 0;
+    bool mPointerOwnsLeft = false;
   };
   // Remapping observes the same physical source, before gameplay's device and
   // UI filters. It works even for a currently disabled device.
@@ -107,10 +110,26 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
         phase != ThreeDsRecomp::Input::BindingCapturePhase::Cancelled)
       controls.CancelBindingCapture();
   }
+  // The touch screen is fitted into the presentation picture like every UI
+  // canvas, so the pointer is mapped through the picture.
+  const auto mapPointerToTouch = [&](bool pressed) {
+    const auto pointer = window.GetMousePos();
+    return Oot3dNativeGame::MapHostPointerToNativeA32Touch(
+        pointer.x - static_cast<int32_t>(picture.X), pointer.y - static_cast<int32_t>(picture.Y),
+        picture.Width, picture.Height, pressed,
+        topScreenUiProfile ? Oot3dNativeGame::NativeA32TouchPresentation::TopScreen400x240
+                           : Oot3dNativeGame::NativeA32TouchPresentation::NativeLowerScreen320x240,
+        topScreenTouchSurface);
+  };
+  // A click on a native page that owns the pointer is that page's touch
+  // (below), so the left button is not also the button bound to it there.
+  const bool pointerOnPage = nativeFrontendTouchEnabled && !hostGuiVisible && mapPointerToTouch(true).Inside;
+  const bool pointerOwnsLeft =
+      pollingState.PointerButton.Update(pointerOnPage, window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT));
   LusHostButtonSource buttonSource(
       window, keyboardCaptured, mouseCaptured,
       !hostGuiVisible ? selectedController.Controller : nullptr,
-      triggerThreshold);
+      triggerThreshold, pointerOwnsLeft);
   const ThreeDsRecomp::Input::HostDeviceEnablement enabledDevices{
       config.KeyboardEnabled,
       config.MouseEnabled,
@@ -341,19 +360,8 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       window.SetMouseCapture(false);
     }
     window.SetCursorVisibility(true);
-    // The touch screen is fitted into the presentation picture like every
-    // UI canvas, so the pointer is mapped through the picture.
-    const auto pointer = window.GetMousePos();
-    const auto touch = Oot3dNativeGame::MapHostPointerToNativeA32Touch(
-        pointer.x - static_cast<int32_t>(picture.X),
-        pointer.y - static_cast<int32_t>(picture.Y), picture.Width,
-        picture.Height,
-        hostPresses.NativeTouch.Resolve(window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT), guestRefreshWillConsume),
-        topScreenUiProfile
-            ? Oot3dNativeGame::NativeA32TouchPresentation::TopScreen400x240
-            : Oot3dNativeGame::NativeA32TouchPresentation::
-                  NativeLowerScreen320x240,
-        topScreenTouchSurface);
+    const auto touch = mapPointerToTouch(
+        hostPresses.NativeTouch.Resolve(window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT), guestRefreshWillConsume));
     frame.Hid.TouchX = touch.X;
     frame.Hid.TouchY = touch.Y;
     frame.Hid.TouchPressed = touch.Pressed;
