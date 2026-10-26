@@ -4,6 +4,8 @@
 #include "oot3d_native_a32_romfs_layers.h"
 #include "oot3d_native_direct_aot.h"
 #include "oot3d_title_grass_rules.h"
+#include "triaevum_audio_settings_panel.h"
+#include "triaevum_host_audio.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
@@ -1160,6 +1162,13 @@ void NativeA32WindowSession::Setup() {
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreateSavestatePanel(savestateLibrary));
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
+#if defined(__ANDROID__)
+  constexpr bool kOfferAudioFocusMute = false;
+#else
+  constexpr bool kOfferAudioFocusMute = true;
+#endif
+  applicationSettingsTabs.push_back(
+      Oot3dNativeGame::CreateAudioSettingsPanel(Oot3dNativeGame::HostAudioOutputPolicy, kOfferAudioFocusMute));
   applicationSettingsTabs.push_back(
       Oot3dNativeGame::CreatePhotoModePanel(nativeCandidateDispatch.DevFreeCamera, photoMode));
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
@@ -1349,7 +1358,8 @@ void NativeA32WindowSession::Setup() {
   inGameMenuStorage.emplace(Oot3dNativeGame::InGameMenuOwners{
       controlConfigRuntime,
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen ? topScreenConfigRuntime : nullptr,
-      languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode, std::move(menuHost)});
+      languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode, std::move(menuHost),
+      Oot3dNativeGame::HostAudioOutputPolicy()});
   // The first-play help card belongs to sessions a person plays: scripted
   // runs (captures, fixed steps, replays, the developer lab) never see it.
   // TRIAEVUM_HELP_CARD=1 or 0 overrides that, for qualification.

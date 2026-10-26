@@ -14,6 +14,7 @@ add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL
     ../../oot3d/native_game_runtime/oot3d_photo_mode_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_game_language.cpp
     ../../oot3d/native_game_runtime/oot3d_game_language_panel.cpp
+    ../../oot3d/native_game_runtime/triaevum_audio_settings_panel.cpp
     ../../../titles/oot3d/environment/oot3d_scene_environment.cpp
     ../../../titles/oot3d/environment/oot3d_scene_environment_blend.cpp
     ../../../titles/oot3d/environment/oot3d_light_gizmo.cpp

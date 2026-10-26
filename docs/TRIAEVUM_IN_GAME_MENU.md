@@ -55,7 +55,7 @@ presets by name, the dev tools and the rest).
 | Graphics | Lighting model, Global illumination, Ambient occlusion, Shadows (modern lighting only), Reflections, Toon, Grass quality |
 | Controls | Keyboard / Mouse / Controller / Capture mouse, Button prompts, Control preset, Aim source, Invert aim X / Y; with the TopScreen profile, Camera (Gameplay camera, speed, smoothing, invert X / Y, Camera zoom, Camera FOV) and C-Stick aiming (speed, invert X / Y) |
 | Photo mode | Photo camera (F6), Hide HUD, Photo camera speed, Back to the game's view, then the camera's controls as read-only rows (F6, WASD / left stick, Q / E / shoulders, mouse drag / right stick, Shift / Ctrl) |
-| Game | With the TopScreen profile, Gameplay (Quick put away, Landing roll, Roll dash, Aiming reticle, 3D rain, Rain density, SELECT button); Game language; Save states (F5 / F8, with or without settings; loading resumes the game); Session: **Advanced settings (F1)**, **Quit game** |
+| Game | With the TopScreen profile, Gameplay (Quick put away, Landing roll, Roll dash, Aiming reticle, 3D rain, Rain density, SELECT button); Game language; Audio (Master volume in 5 % steps, Mute, and on desktop Mute when unfocused; see below); Save states (F5 / F8, with or without settings; loading resumes the game); Session: **Advanced settings (F1)**, **Quit game** |
 | Help & folders | The controls summary of the device in use, with its button prompts (keyboard: Esc, F1, F5 / F8, F6, F11; a pad: its menu stick, L3 + R3, select / back, tabs; touch: tap / hold HOME), Show the help card; desktop: Open saves folder, Open logs folder; Android: where saves and diagnostics are handled (the installer) |
 
 The camera rows were renamed so the two cameras cannot be confused:
@@ -64,6 +64,15 @@ camera orbiting Link) and Photo mode's "Free camera" is **Photo camera**, in
 the menu and in F1 alike. The owners and the configuration keys are
 unchanged (`FreeCameraEnabled`, `FreeCameraSpeedLevel`, ... and the
 developer free camera).
+
+**Audio** (Game) binds to the host audio service's output policy, the one
+owner of `Audio.MasterVolume` / `Audio.Muted` / `Audio.MuteWhenUnfocused`
+in the runtime configuration, exactly as F1 > Game > Audio does
+([audio settings](TRIAEVUM_AUDIO_SETTINGS.md)). The rows are built game-neutrally
+(`tools/oot3d/ui_menu/oot3d_menu_audio.cpp`). The volume row is unavailable
+while muted. Since the game is paused behind the menu, a volume change (or
+unmuting) plays the host's short preview tone through the same output gain,
+so the new level is heard without running any game audio.
 
 **Reset display settings** (Video) is the host-owned recovery for a user
 whose F1 is out of sight (#93, #109, #51): `GraphicsSettingsRuntime::

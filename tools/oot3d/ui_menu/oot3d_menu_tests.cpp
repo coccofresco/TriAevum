@@ -1,6 +1,7 @@
 // The in-game menu apart from the game: model navigation and edits, the baked
 // fonts, the button prompts and their glyphs, and the presentation's
 // primitives.
+#include "oot3d_menu_audio.h"
 #include "oot3d_menu_font.h"
 #include "oot3d_menu_font_atlas_data.h"
 #include "oot3d_menu_glyphs.h"
@@ -913,8 +914,94 @@ void TestPromptsMidMenu() {
 
 } // namespace
 
+// Game tab > Audio (oot3d_menu_audio.h): the rows a host binds to its audio
+// output policy. Volume in 5 % steps, clamped; Mute keeps the volume and makes
+// the volume row unavailable; the focus mute row only when bound; a failed
+// write reaches the status line.
+void TestAudioRows() {
+    struct AudioStore {
+        int Volume = 100;
+        bool Muted = false;
+        bool Unfocused = false;
+        bool Fail = false;
+        int Writes = 0;
+    } store;
+    AudioRowBindings bindings;
+    bindings.Volume = [&store] { return store.Volume; };
+    bindings.SetVolume = [&store](int value) {
+        ++store.Writes;
+        if (store.Fail) return WriteResult{"Could not save: Retry", true};
+        store.Volume = value;
+        return WriteResult{"Saved", false};
+    };
+    bindings.Muted = [&store] { return store.Muted; };
+    bindings.SetMuted = [&store](bool value) {
+        ++store.Writes;
+        store.Muted = value;
+        return WriteResult{"Saved", false};
+    };
+    Tab without;
+    AppendAudioRows(without, bindings);
+    Expect(without.Rows.size() == 3U && without.Rows[0].Kind == RowKind::Heading && without.Rows[0].Key == "Audio",
+           "audio heading and two rows without the focus mute binding");
+    Expect(without.Rows[1].Key == "Master volume" && without.Rows[1].Kind == RowKind::Number &&
+               without.Rows[2].Key == "Mute" && without.Rows[2].Kind == RowKind::Toggle,
+           "audio rows");
+    Tab none;
+    AppendAudioRows(none, AudioRowBindings{});
+    Expect(none.Rows.empty(), "no rows without an owner");
+
+    bindings.MuteWhenUnfocused = [&store] { return store.Unfocused; };
+    bindings.SetMuteWhenUnfocused = [&store](bool value) {
+        store.Unfocused = value;
+        return WriteResult{"Saved", false};
+    };
+    Document document;
+    Tab game;
+    game.Title = "Game";
+    AppendAudioRows(game, bindings);
+    Expect(game.Rows.size() == 4U && game.Rows[3].Key == "Mute when unfocused", "focus mute row when bound");
+    document.Tabs.push_back(game);
+    Model model(document);
+    model.Open();
+    model.Update(Input{}, 0.016);
+    Expect(model.FocusedRow()->Key == "Master volume" && model.FocusedRow()->ValueText() == "100%",
+           "volume row focused first, as a percentage");
+    Expect(!model.FocusedRow()->IsModified, "100 % is the default");
+    Tap(model, &Input::Right);
+    Expect(store.Volume == 100, "volume clamps at 100 %");
+    Tap(model, &Input::Left);
+    Tap(model, &Input::Left);
+    Expect(store.Volume == 90 && model.FocusedRow()->ValueText() == "90%" && model.FocusedRow()->IsModified,
+           "volume steps by 5 %");
+    for (int step = 0; step < 25; ++step) Tap(model, &Input::Left);
+    Expect(store.Volume == 0, "volume clamps at 0 %");
+    for (int step = 0; step < 10; ++step) Tap(model, &Input::Right);
+    Expect(store.Volume == 50, "volume back to 50 %");
+    Tap(model, &Input::Down);
+    Tap(model, &Input::Confirm);
+    Expect(store.Muted && model.FocusedRow()->Value == 1 && model.FocusedRow()->IsModified, "mute toggles");
+    Tap(model, &Input::Up);
+    Expect(!model.FocusedRow()->Enabled, "volume row unavailable while muted");
+    const int writes = store.Writes;
+    Tap(model, &Input::Right);
+    Expect(store.Volume == 50 && store.Writes == writes, "muted volume row ignores edits");
+    Tap(model, &Input::Down);
+    Tap(model, &Input::Confirm);
+    Expect(!store.Muted, "unmute");
+    Tap(model, &Input::Down);
+    Tap(model, &Input::Confirm);
+    Expect(store.Unfocused, "focus mute toggles");
+    Tap(model, &Input::Down);
+    store.Fail = true;
+    Tap(model, &Input::Right);
+    Expect(model.StatusIsError() && model.Status() == "Could not save: Retry" && store.Volume == 50,
+           "a failed volume write reaches the status line");
+}
+
 int main() {
     try {
+        TestAudioRows();
         TestModelNavigation();
         TestModal();
         TestPointer();

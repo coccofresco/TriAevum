@@ -12,6 +12,7 @@ add_library(oot3d_ui_menu STATIC EXCLUDE_FROM_ALL
     tools/oot3d/ui_menu/oot3d_menu_prompts.cpp
     tools/oot3d/ui_menu/oot3d_menu_presentation.cpp
     tools/oot3d/ui_menu/oot3d_menu_help.cpp
+    tools/oot3d/ui_menu/oot3d_menu_audio.cpp
 )
 target_include_directories(oot3d_ui_menu PUBLIC tools/oot3d/ui_menu)
 target_link_libraries(oot3d_ui_menu PUBLIC

@@ -3,7 +3,9 @@
 #include "stddef.h"
 #include <string>
 #include <memory>
+#include <vector>
 #include "ship/audio/AudioChannelsSetting.h"
+#include "ship/audio/AudioOutputGain.h"
 #include "ship/audio/SoundMatrixDecoder.h"
 
 namespace Ship {
@@ -126,6 +128,21 @@ class AudioPlayer {
      */
     int32_t GetNumOutputChannels() const;
 
+    /**
+     * @brief The host output gain (Q16, 65536 = unity) Play() applies before the
+     * backend; set by the audio output policy (AudioOutputPolicy). Inert at unity.
+     */
+    void SetOutputGainTarget(uint32_t gainQ16);
+    /** @brief Ends any gain ramp at the target. */
+    void SnapOutputGain();
+    /** @brief The gain target and the gain in effect after the last Play(). */
+    uint32_t GetOutputGainTarget() const;
+    uint32_t GetOutputGainCurrent() const;
+    /** @brief FNV-1a 64 of every byte Play() passed on, after the gain (stereo input order). */
+    uint64_t GetOutputPcmFnv1a64() const;
+    /** @brief Frames the gain stage scaled (0 while inert). */
+    uint64_t GetOutputFramesScaled() const;
+
   protected:
     /**
      * @brief Opens and configures the platform audio device.
@@ -161,6 +178,11 @@ class AudioPlayer {
 
     AudioSettings mAudioSettings;
     bool mInitialized = false;
+
+    AudioOutputGain mOutputGain;
+    std::vector<int16_t> mGainScratch;
+    uint64_t mOutputPcmFnv1a64 = 14695981039346656037ULL;
+    uint64_t mOutputFramesScaled = 0;
 };
 } // namespace Ship
 

@@ -21,6 +21,7 @@
 #include "oot3d_ui/ui_primitives.h"
 
 #include "fast/extension/graphics_settings_runtime.h"
+#include "ship/audio/AudioOutputPolicy.h"
 
 #include <chrono>
 #include <cstdint>
@@ -98,6 +99,9 @@ struct InGameMenuOwners {
   std::shared_ptr<DevFreeCamera> FreeCamera;
   std::shared_ptr<PhotoModeState> PhotoMode;
   InGameMenuHost Host;
+  // The host audio service's output policy (master volume, mute); null
+  // leaves the Audio rows out.
+  std::shared_ptr<Ship::AudioOutputPolicy> Audio;
 };
 
 class InGameMenu {
@@ -142,6 +146,9 @@ private:
   Menu::WriteResult ApplyGraphics(Fast::Extension::GraphicsSettings settings, bool keepPreset);
   Menu::WriteResult ApplyControls(const NativeControlConfig &config);
   Menu::WriteResult ApplyTopScreen(const TopScreenUiConfig &config);
+  // A change through the audio policy; `preview`: a volume change, heard as
+  // the host's preview tone while the game is held.
+  Menu::WriteResult ApplyAudio(const Ship::AudioOutputSettings &settings, bool preview);
   void UpdateDisplayConfirmation();
   void UpdateSavestateOutcome();
   // The device in use, from the controls owner (Input): the footer, the help

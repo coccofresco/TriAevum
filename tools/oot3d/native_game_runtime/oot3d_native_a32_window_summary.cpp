@@ -1157,6 +1157,16 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                audioPlayer != nullptr ? audioPlayer->GetSampleLength() : 0},
               {"output_underruns",
                audioPlayer != nullptr ? audioPlayer->OutputUnderruns() : uint64_t{0}},
+              // The host output gain (docs/TRIAEVUM_AUDIO_SETTINGS.md): at
+              // 100 % the bytes passed to the backend are the guest's, so
+              // output_pcm_fnv1a64 equals pcm_fnv1a64 when every mixed
+              // sample was played.
+              {"output_gain_q16",
+               audioPlayer != nullptr ? audioPlayer->GetOutputGainTarget() : uint32_t{0}},
+              {"output_frames_scaled",
+               audioPlayer != nullptr ? audioPlayer->GetOutputFramesScaled() : uint64_t{0}},
+              {"output_pcm_fnv1a64",
+               audioPlayer != nullptr ? audioPlayer->GetOutputPcmFnv1a64() : uint64_t{0}},
               {"output_queue",
                {{"observed", audioOutputDiagnostics.HasBufferObservation},
                 {"primed", audioOutputDiagnostics.Primed},

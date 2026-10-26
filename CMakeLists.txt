@@ -245,6 +245,7 @@ add_subdirectory(tools/triaevum_release/tests)
 include(CMake/oot3d/host_services.cmake)
 
 include(CMake/oot3d/game.cmake)
+include(CMake/oot3d/audio_settings.cmake)
 
 include(CMake/oot3d/tests.cmake)
 

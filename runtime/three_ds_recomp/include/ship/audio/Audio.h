@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 #include "ship/audio/AudioPlayer.h"
+#include "ship/audio/AudioOutputPolicy.h"
 
 namespace Ship {
 class Config;
@@ -68,6 +69,13 @@ class Audio {
      */
     AudioChannelsSetting GetAudioChannels() const;
 
+    /**
+     * @brief The owner of the user's output settings (master volume, mute),
+     * persisted in the runtime configuration's "Audio" block and bound to the
+     * active AudioPlayer (docs/TRIAEVUM_AUDIO_SETTINGS.md). Null before Init().
+     */
+    std::shared_ptr<AudioOutputPolicy> GetOutputPolicy();
+
   protected:
     /** @brief (Re)initialises the AudioPlayer for the current backend and channel settings. */
     void InitAudioPlayer();
@@ -95,5 +103,6 @@ class Audio {
     AudioSettings mAudioSettings;
     std::shared_ptr<std::vector<AudioBackend>> mAvailableAudioBackends;
     std::shared_ptr<Config> mConfig;
+    std::shared_ptr<AudioOutputPolicy> mOutputPolicy;
 };
 } // namespace Ship

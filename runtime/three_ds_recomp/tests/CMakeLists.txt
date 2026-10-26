@@ -66,6 +66,14 @@ target_include_directories(ambient_occlusion_guide_tests PRIVATE ../include)
 target_link_libraries(ambient_occlusion_guide_tests PRIVATE three_ds_recomp_runtime)
 add_test(NAME ambient_occlusion_guide_tests COMMAND ambient_occlusion_guide_tests)
 
+# The host audio output policy and gain (docs/TRIAEVUM_AUDIO_SETTINGS.md),
+# with the output digest test: 100 % byte-identical, 50 % scaled.
+add_executable(audio_output_policy_tests audio_output_policy_tests.cpp)
+target_compile_features(audio_output_policy_tests PRIVATE cxx_std_20)
+target_include_directories(audio_output_policy_tests PRIVATE ../include)
+target_link_libraries(audio_output_policy_tests PRIVATE three_ds_recomp_runtime)
+add_test(NAME audio_output_policy_tests COMMAND audio_output_policy_tests)
+
 add_executable(vulkan_present_dispatch_tests
     vulkan_present_dispatch_tests.cpp
     ../src/fast/extension/vulkan_adapter_policy.cpp)

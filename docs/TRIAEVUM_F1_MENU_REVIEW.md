@@ -1,5 +1,24 @@
 # F1 settings rationalization
 
+## Audio (2026-10-26)
+
+UX plan WP-06C ([audio settings](TRIAEVUM_AUDIO_SETTINGS.md)): **Game >
+Audio**, a section beside Save states and Language, is the one F1 surface
+of the host's audio output settings: "Master volume" (0..100 %, heard while
+dragged, saved once on release), "Mute" (keeps the volume, disables the
+slider) and, on desktop, "Mute when the window loses focus". The owner is
+`Ship::AudioOutputPolicy` in the host audio service; the section keeps no
+draft and resolves the owner when drawn (F1's tabs exist before the host
+context). Status: "Audio: saved", "Audio: session only", or the save error
+with "Retry saving audio". There are no separate music / effects volumes: the
+game's DSP mixer has no verified categories.
+
+Verification: the actual-widget smoke (`CheckAudioPanel`) types and drags
+the volume (no write during the drag, one on release), mutes and unmutes,
+turns the focus mute on and off, shows a failed save and retries it, and
+checks session only, a missing owner and the Android variant without the
+focus mute. Actual-widget smoke: **11,192 assertions** on this tree.
+
 ## Button prompts (2026-10-26)
 
 UX plan WP-08 (menu part; `TRIAEVUM_IN_GAME_MENU.md` "Button prompts" has

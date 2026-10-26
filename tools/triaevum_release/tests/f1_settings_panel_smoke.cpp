@@ -6,6 +6,8 @@
 #include "oot3d_photo_mode_panel.h"
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
+#include "triaevum_audio_settings_panel.h"
+#include "ship/audio/AudioOutputPolicy.h"
 #include "three_ds_touch_overlay_settings.h"
 #include "oot3d_scene_environment.h"
 #include "oot3d_scene_environment_codec.h"
@@ -398,6 +400,110 @@ void CheckPhotoModePanel() {
     Check(state->HideHud.load(), "Hide HUD did not hide the HUD");
     Click("Hide HUD");
     Check(!state->HideHud.load(), "Hide HUD did not show the HUD again");
+    InstallGraphicsSettingsPanelTabs({});
+}
+
+// Game > Audio (docs/TRIAEVUM_AUDIO_SETTINGS.md): the master volume slider
+// applies while dragged and saves once on release, Mute keeps the volume and
+// disables the slider, the desktop focus mute, a visible failed save with
+// Retry, session only, no owner yet, and no focus mute on Android.
+void CheckAudioPanel() {
+    using namespace Oot3dNativeGame;
+    struct AudioStore final : Ship::AudioOutputPersistencePort {
+        nlohmann::json Block;
+        int Stores = 0;
+        bool Fail = false;
+        bool LoadAudio(nlohmann::json& block) override { block = Block; return true; }
+        bool StoreAudio(const nlohmann::json& block, std::string* error) override {
+            ++Stores;
+            if (Fail) { *error = "disk full"; return false; }
+            Block = block;
+            return true;
+        }
+    };
+    auto store = std::make_shared<AudioStore>();
+    store->Block = {{"MasterVolume", 80}};
+    auto policy = std::make_shared<Ship::AudioOutputPolicy>(store);
+    InstallGraphicsSettingsPanelTabs({CreateAudioSettingsPanel([policy] { return policy; }, true)});
+    size = ImVec2(760, 680);
+    Frame(); Frame();
+    Click("Game"); Click("Audio"); Frame(true);
+    Check(loggedPanelText.find("Audio output") != std::string::npos, "audio section missing");
+    Check(loggedPanelText.find("Audio: saved") == std::string::npos, "saved status before any change");
+    Check(loggedPanelText.find("No audio output device") != std::string::npos, "unbound output not reported");
+    Check(!Find("Master volume").Disabled, "volume slider disabled while unmuted");
+
+    EditScalar("Master volume", "40");
+    Check(policy->Settings().MasterVolume == 40 && store->Block.value("MasterVolume", -1) == 40,
+          "typed master volume not applied and saved");
+    Frame(true);
+    Check(loggedPanelText.find("Audio: saved") != std::string::npos, "saved status missing");
+
+    // A drag is heard at once and written once, on release.
+    Frame();
+    const auto slider = Find("Master volume");
+    const int beforeDrag = store->Stores;
+    auto& io = ImGui::GetIO();
+    const float y = (slider.Rect.Min.y + slider.Rect.Max.y) * 0.5F;
+    io.AddMousePosEvent(slider.Rect.Min.x + 20.0F, y);
+    Frame();
+    io.AddMouseButtonEvent(0, true);
+    Frame();
+    for (int step = 0; step < 10; ++step) {
+        io.AddMousePosEvent(slider.Rect.Min.x + 30.0F + step * 8.0F, y);
+        Frame();
+    }
+    Check(store->Stores == beforeDrag, "volume drag wrote to disk");
+    Check(policy->Settings().MasterVolume != 40, "volume drag not applied while dragged");
+    io.AddMouseButtonEvent(0, false);
+    Frame(); Frame();
+    Check(store->Stores == beforeDrag + 1, "volume slider release did not save once");
+    Check(store->Block.value("MasterVolume", -1) == policy->Settings().MasterVolume, "released volume not saved");
+
+    const int volume = policy->Settings().MasterVolume;
+    Click("Mute");
+    Check(policy->Settings().Muted && policy->Settings().MasterVolume == volume && store->Block.value("Muted", false),
+          "Mute not applied and saved, or it changed the volume");
+    Check(policy->TargetGainQ16() == 0U, "Mute did not silence the output");
+    Check(Find("Master volume").Disabled, "volume slider enabled while muted");
+    Click("Mute");
+    Check(!policy->Settings().Muted, "Mute not cleared");
+    Click("Mute when the window loses focus");
+    Check(policy->Settings().MuteWhenUnfocused && store->Block.value("MuteWhenUnfocused", false),
+          "focus mute not applied and saved");
+    policy->SetWindowFocused(false);
+    Check(policy->TargetGainQ16() == 0U, "focus mute did not silence an unfocused window");
+    policy->SetWindowFocused(true);
+    Click("Mute when the window loses focus");
+    Check(!policy->Settings().MuteWhenUnfocused, "focus mute not cleared");
+
+    // A failed save is visible, keeps the value and can be retried.
+    store->Fail = true;
+    Click("Mute");
+    Frame(true);
+    Check(policy->Settings().Muted && loggedPanelText.find("could not be saved: disk full") != std::string::npos,
+          "failed audio save not visible");
+    store->Fail = false;
+    Click("Retry saving audio");
+    Check(policy->SaveState() == Ship::AudioOutputSaveState::Saved && store->Block.value("Muted", false),
+          "audio retry did not save");
+    Click("Mute");
+
+    // Session only, the audio service not started yet, and Android.
+    auto session = std::make_shared<Ship::AudioOutputPolicy>(nullptr);
+    InstallGraphicsSettingsPanelTabs({CreateAudioSettingsPanel([session] { return session; }, false)});
+    Frame(); Frame();
+    Click("Game"); Click("Audio"); Frame(true);
+    Check(loggedPanelText.find("Audio: session only") != std::string::npos, "session only not shown");
+    bool focusMuteOffered = true;
+    try { (void)Find("Mute when the window loses focus"); } catch (const std::exception&) { focusMuteOffered = false; }
+    Check(!focusMuteOffered, "focus mute offered without a window focus (Android)");
+    Click("Mute");
+    Check(session->Settings().Muted, "session-only Mute not applied");
+    InstallGraphicsSettingsPanelTabs({CreateAudioSettingsPanel([] { return std::shared_ptr<Ship::AudioOutputPolicy>(); }, true)});
+    Frame(); Frame();
+    Click("Game"); Click("Audio"); Frame(true);
+    Check(loggedPanelText.find("Audio settings are unavailable") != std::string::npos, "missing owner not explained");
     InstallGraphicsSettingsPanelTabs({});
 }
 
@@ -2687,6 +2793,7 @@ int main(int argc, char** argv) try {
     Check(differentRom.SystemId() == 1, "unsupported old language leaked into another ROM");
     std::filesystem::remove(languagePath);
     CheckSavestatePanel();
+    CheckAudioPanel();
     CheckPhotoModePanel();
     CheckSceneEnvironmentCodec();
     CheckSceneEnvironment();

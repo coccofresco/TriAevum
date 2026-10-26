@@ -290,6 +290,21 @@ bool NativeA32WindowSession::RunFrame() {
       guestHeld ? heldVisualInterpolationAlpha
                 : static_cast<float>(std::clamp(presentationStep.InterpolationAlpha, 0.0, 1.0));
   heldVisualInterpolationAlpha = visualInterpolationAlpha;
+  // The host audio policy (docs/TRIAEVUM_AUDIO_SETTINGS.md): the window's
+  // focus for "Mute when unfocused", and the preview tone of a volume change
+  // made while the menu holds the game (no game sound runs then). The tone is
+  // the host's own, played through the same output gain; it is queued only
+  // while the player's queue is short, so a held arrow never piles tones up.
+  if (const auto audioPolicy = audio != nullptr ? audio->GetOutputPolicy() : nullptr) {
+#if !defined(__ANDROID__)
+    audioPolicy->SetWindowFocused(SDL_GetKeyboardFocus() != nullptr);
+#endif
+    if (audioPolicy->TakePreviewRequest() && guestHeld && !launch.DisableAudio && audioPlayer != nullptr &&
+        audioPlayer->IsInitialized() && audioPlayer->Buffered() < audioPlayer->GetSampleRate() / 20) {
+      const auto tone = Ship::GenerateAudioPreviewTone(static_cast<uint32_t>(audioPlayer->GetSampleRate()));
+      audioPlayer->Play(reinterpret_cast<const uint8_t *>(tone.data()), tone.size() * sizeof(int16_t));
+    }
+  }
   // Effects that keep their own time (the grass wind and bending) hold with
   // the game, in the render order of this frame; false with the menu closed.
   renderStream.Submit([guestHeld] { Fast::Extension::VisualClock::Instance().SetHostHold(guestHeld); });

@@ -1,5 +1,6 @@
 #include "oot3d_in_game_menu.h"
 
+#include "oot3d_menu_audio.h"
 #include "oot3d_menu_presentation.h"
 #include "oot3d_top_screen_controls.h"
 #include "three_ds_touch_overlay_settings.h"
@@ -199,6 +200,20 @@ Menu::WriteResult InGameMenu::ApplyTopScreen(const TopScreenUiConfig &config) {
     return SaveFailed(error, [this, config](std::string *retryError) {
       return mOwners.TopScreen->Apply(config, retryError);
     });
+  }
+  return {Menu::kStatusSaved, false};
+}
+
+Menu::WriteResult InGameMenu::ApplyAudio(const Ship::AudioOutputSettings &settings, bool preview) {
+  if (!mOwners.Audio) return {"Audio is not available", true};
+  std::string error;
+  const bool saved = mOwners.Audio->Apply(settings, &error);
+  // The game is held behind the menu, so no game sound shows the new level:
+  // the host plays its preview tone through the same output gain.
+  if (preview && HoldsGame()) mOwners.Audio->RequestPreview();
+  if (!mOwners.Audio->Persistent()) return {std::string(Menu::kStatusSessionOnly) + ": no configuration file", false};
+  if (!saved) {
+    return SaveFailed(error, [this](std::string *retryError) { return mOwners.Audio->Save(retryError); });
   }
   return {Menu::kStatusSaved, false};
 }
@@ -1089,6 +1104,33 @@ void InGameMenu::BuildGameTab(Menu::Document &document) {
     };
     row.Modified = [this] { return mOwners.Language->Selected() != mOwners.Language->BootLanguage(); };
     tab.Rows.push_back(std::move(row));
+  }
+
+  if (mOwners.Audio) {
+    // F1 > Game > Audio's settings, through the host audio policy.
+    Menu::AudioRowBindings audio;
+    audio.Volume = [this] { return mOwners.Audio->Settings().MasterVolume; };
+    audio.SetVolume = [this](int value) {
+      auto settings = mOwners.Audio->Settings();
+      settings.MasterVolume = value;
+      return ApplyAudio(settings, true);
+    };
+    audio.Muted = [this] { return mOwners.Audio->Settings().Muted; };
+    audio.SetMuted = [this](bool value) {
+      auto settings = mOwners.Audio->Settings();
+      settings.Muted = value;
+      return ApplyAudio(settings, !value);
+    };
+#if !defined(__ANDROID__)
+    // An Android activity pauses in the background instead.
+    audio.MuteWhenUnfocused = [this] { return mOwners.Audio->Settings().MuteWhenUnfocused; };
+    audio.SetMuteWhenUnfocused = [this](bool value) {
+      auto settings = mOwners.Audio->Settings();
+      settings.MuteWhenUnfocused = value;
+      return ApplyAudio(settings, false);
+    };
+#endif
+    Menu::AppendAudioRows(tab, audio);
   }
 
   if (mOwners.Savestates) {

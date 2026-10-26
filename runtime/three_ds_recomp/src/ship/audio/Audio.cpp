@@ -8,7 +8,43 @@
 #include "ship/config/Config.h"
 #include "ship/controller/controldeck/ControlDeck.h"
 
+#include <nlohmann/json.hpp>
+
 namespace Ship {
+namespace {
+
+// The runtime configuration's "Audio" block (TriAevum.json on desktop,
+// TriAevum.android.json on Android): the audio output policy's store.
+class ConfigAudioOutputPersistence final : public AudioOutputPersistencePort {
+  public:
+    explicit ConfigAudioOutputPersistence(std::shared_ptr<Config> config) : mConfig(std::move(config)) {
+    }
+
+    bool LoadAudio(nlohmann::json& block) override {
+        if (mConfig == nullptr) {
+            return false;
+        }
+        const auto root = mConfig->GetNestedJson();
+        const auto audio = root.is_object() ? root.find("Audio") : root.end();
+        block = audio != root.end() ? *audio : nlohmann::json();
+        return true;
+    }
+
+    bool StoreAudio(const nlohmann::json& block, std::string* error) override {
+        if (mConfig != nullptr && mConfig->SetBlock("Audio", block)) {
+            return true;
+        }
+        if (error != nullptr) {
+            *error = "the runtime configuration could not be written";
+        }
+        return false;
+    }
+
+  private:
+    std::shared_ptr<Config> mConfig;
+};
+
+} // namespace
 
 Audio::~Audio() {
     SPDLOG_TRACE("destruct audio");
@@ -38,11 +74,18 @@ void Audio::InitAudioPlayer() {
         // Failed to initialize system audio player.
         // Fallback to Null if the native system player does not work.
         SetCurrentAudioBackend(AudioBackend::NUL);
+        return;
+    }
+    // Every player the host creates carries the user's output gain.
+    if (mOutputPolicy) {
+        mOutputPolicy->BindOutput(mAudioPlayer);
     }
 }
 
 void Audio::Init() {
     mConfig = Context::GetRawInstance()->GetConfig();
+    mOutputPolicy = std::make_shared<AudioOutputPolicy>(
+        mConfig ? std::make_shared<ConfigAudioOutputPersistence>(mConfig) : nullptr);
 
     mAvailableAudioBackends = std::make_shared<std::vector<AudioBackend>>();
 #ifdef _WIN32
@@ -60,6 +103,10 @@ void Audio::Init() {
 
 std::shared_ptr<AudioPlayer> Audio::GetAudioPlayer() {
     return mAudioPlayer;
+}
+
+std::shared_ptr<AudioOutputPolicy> Audio::GetOutputPolicy() {
+    return mOutputPolicy;
 }
 
 AudioBackend Audio::GetCurrentAudioBackend() {
