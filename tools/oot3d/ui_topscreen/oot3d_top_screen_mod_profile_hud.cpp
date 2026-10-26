@@ -325,6 +325,10 @@ bool ReadTopScreenTouchSituation(NativeA32Memory &memory, bool menu, TopScreenTo
     *situation = TopScreenTouchSituation::Choice;
     return true;
   }
+  if (textbox == 6U) {
+    *situation = TopScreenTouchSituation::Ocarina;
+    return true;
+  }
   if (textbox != 0U || playState == 0U) return true;
   std::uint32_t player = 0U;
   if (!memory.Read32(playState + offsetof(oot3d::gameplay::PlayerPlayStateWire, Player), &player)) {

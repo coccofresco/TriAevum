@@ -606,17 +606,19 @@ TopScreenTouchControlShape ResolveTopScreenTouchControlShape(ThreeDsRecomp::Inpu
 // buttons without an item (X, Y, ZL, ZR, B) stepping back; in a dialogue only
 // A shows, drawn as a right-pointing triangle (the text's "next"), in a
 // choice that triangle with the pad and the D-pad; a cutscene without text
-// shows none; the title demo shows A and START; in native menus and the HOME
+// shows none; while the ocarina is played (the game hides its HUD) the note
+// buttons A, X, Y, L and R, the song browser's D-pad, B (put it away) and
+// the circle pad show; the title demo shows A and START; in native menus and the HOME
 // menu, where the page takes touches, the item controls show at 60% and the
 // rest fully. A restricting situation applies once it has held 0.3 s, so a
 // door or a short transition does not flash the controls. After 8 s without
 // input every control dims to half until the next input.
-enum class TopScreenTouchSituation : std::uint8_t { Gameplay, Menu, TitleDemo, Dialogue, Choice, Cutscene };
+enum class TopScreenTouchSituation : std::uint8_t { Gameplay, Menu, TitleDemo, Dialogue, Choice, Cutscene, Ocarina };
 
 // The situation from the game: SaveContext.game_mode (0x00588E3C: 0 play, 1
 // the title demo, from 2 the frontend), the message context's textbox state
-// (0x005C1878 +0xF38: 2 and 5 a text waiting for A, 4 and 7 a choice; other
-// states, such as the ocarina's, do not restrict the controls) and
+// (0x005C1878 +0xF38: 2 and 5 a text waiting for A, 4 and 7 a choice, 6 the
+// ocarina played; other states do not restrict the controls) and
 // Gameplay_InCsMode. `menu`: a native page or the HOME menu takes touches.
 bool ReadTopScreenTouchSituation(NativeA32Memory &memory, bool menu, TopScreenTouchSituation *situation,
                                  std::string *error = nullptr);

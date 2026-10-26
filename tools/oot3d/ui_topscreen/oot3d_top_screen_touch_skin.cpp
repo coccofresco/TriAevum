@@ -240,6 +240,15 @@ float TargetVisibility(TouchAnchor control, TopScreenTouchSituation situation, c
   case TopScreenTouchSituation::Cutscene:
     target = 0.0F;
     break;
+  case TopScreenTouchSituation::Ocarina:
+    // The notes, the song browser, putting the ocarina away and the pitch
+    // bend. The game hides its HUD meanwhile: the controls do not follow it.
+    target = control == TouchAnchor::A || control == TouchAnchor::X || control == TouchAnchor::Y ||
+                     control == TouchAnchor::L || control == TouchAnchor::R || control == TouchAnchor::B ||
+                     control == TouchAnchor::Dpad || control == TouchAnchor::CirclePad
+                 ? 1.0F
+                 : 0.0F;
+    break;
   case TopScreenTouchSituation::Gameplay:
     // As much as the game shows its HUD buttons.
     target = context.HudExpected ? std::clamp(context.HudAlpha, 0.0F, 1.0F) : 1.0F;
@@ -252,7 +261,8 @@ float TargetVisibility(TouchAnchor control, TopScreenTouchSituation situation, c
 
 bool Restricts(TopScreenTouchSituation situation) noexcept {
   return situation == TopScreenTouchSituation::TitleDemo || situation == TopScreenTouchSituation::Dialogue ||
-         situation == TopScreenTouchSituation::Choice || situation == TopScreenTouchSituation::Cutscene;
+         situation == TopScreenTouchSituation::Choice || situation == TopScreenTouchSituation::Cutscene ||
+         situation == TopScreenTouchSituation::Ocarina;
 }
 
 void AppendDisc(const oot3d::ui::UiRect &square, const Colors &colors, bool held, std::uint32_t fillLayer,

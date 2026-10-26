@@ -578,6 +578,17 @@ void TestTouchSkin() {
   context.Situation = TopScreenTouchSituation::Cutscene;
   for (int frame = 0; frame < 4; ++frame) AdvanceTopScreenTouchSkin(state, context, 0.2);
   Require(visibility(TouchAnchor::A) == 0.0F, "a cutscene shows controls");
+  // The ocarina hides the HUD; its note buttons, browser D-pad and B stay.
+  context.Situation = TopScreenTouchSituation::Ocarina;
+  context.HudAlpha = 0.0F;
+  for (int frame = 0; frame < 4; ++frame) AdvanceTopScreenTouchSkin(state, context, 0.2);
+  Require(visibility(TouchAnchor::A) == 1.0F && visibility(TouchAnchor::X) == 1.0F &&
+              visibility(TouchAnchor::Y) == 1.0F && visibility(TouchAnchor::L) == 1.0F &&
+              visibility(TouchAnchor::R) == 1.0F && visibility(TouchAnchor::B) == 1.0F &&
+              visibility(TouchAnchor::Dpad) == 1.0F && visibility(TouchAnchor::CirclePad) == 1.0F &&
+              visibility(TouchAnchor::Zl) == 0.0F && visibility(TouchAnchor::Start) == 0.0F,
+          "the ocarina shows the wrong controls");
+  context.HudAlpha = 1.0F;
   context.Situation = TopScreenTouchSituation::Gameplay;
   AdvanceTopScreenTouchSkin(state, context, 0.2);
   Require(visibility(TouchAnchor::A) == 1.0F, "gameplay did not bring the controls back at once");
