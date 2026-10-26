@@ -97,23 +97,20 @@ impl DataState {
     }
 }
 
-/// `1.2 GB`, `350 MB`, `12 KB`, `0 B`.
-pub fn size_text(bytes: u64) -> String {
-    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+/// `1.2 GB`, `350 MB`, `12 KB`, `0 B` (in English; the unit and the
+/// decimal separator come from the language).
+pub fn size_text(texts: &Texts, bytes: u64) -> String {
     if bytes < 1000 {
-        return format!("{bytes} B");
+        return texts.get(Msg::Size { value: &bytes.to_string(), power: 0 });
     }
     let mut value = bytes as f64 / 1000.0;
-    let mut unit = 0;
-    while value >= 1000.0 && unit < UNITS.len() - 1 {
+    let mut power = 1;
+    while value >= 1000.0 && power < 4 {
         value /= 1000.0;
-        unit += 1;
+        power += 1;
     }
-    if value < 10.0 {
-        format!("{value:.1} {}", UNITS[unit])
-    } else {
-        format!("{value:.0} {}", UNITS[unit])
-    }
+    let value = if value < 10.0 { format!("{value:.1}") } else { format!("{value:.0}") };
+    texts.get(Msg::Size { value: &value, power })
 }
 
 fn explained(error: ForgeError) -> Box<Explanation> {
@@ -257,7 +254,7 @@ fn start_backup(app: &mut ForgeApp, destination: PathBuf) {
             let request = forge_core::backup::BackupRequest { destination, optional, touch_preferences: None };
             let mut progress = progress_to(sender);
             let result = forge_core::backup::create_backup(&inventory, &request, &mut progress, &CancelToken::new())?;
-            let size = size_text(result["bytes"].as_u64().unwrap_or(0));
+            let size = size_text(&texts, result["bytes"].as_u64().unwrap_or(0));
             Ok(texts.get(Msg::BackupDone { path: result["path"].as_str().unwrap_or_default(), size: &size }))
         }),
     );
@@ -534,7 +531,7 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
         let response = frame.show(ui, |ui| {
             ui.set_width(ui.available_width());
             let label = app.t(Msg::DataEntryLabel { name: entry.logical_name });
-            let size = if entry.present { size_text(entry.size) } else { app.t(Msg::DataNotCreated) };
+            let size = if entry.present { size_text(&app.texts, entry.size) } else { app.t(Msg::DataNotCreated) };
             line(ui, record, "data_row_name", RichText::new(format!("{label} \u{2014} {size}")).strong());
             path_line(ui, record, &entry.resolved_path.display().to_string());
             let badges = format!("{} \u{b7} {}", app.t(origin_text(entry.origin)), app.t(backup_text(entry.backup)));
@@ -618,7 +615,7 @@ fn label_of(texts: &Texts, name: &str) -> String {
 
 fn sized_item(texts: &Texts, ui: &mut egui::Ui, record: &mut Recorder, item: &Value) {
     let name = item["name"].as_str().unwrap_or_default();
-    let size = size_text(item["bytes"].as_u64().unwrap_or(0));
+    let size = size_text(texts, item["bytes"].as_u64().unwrap_or(0));
     line(ui, record, "data_panel_item", format!("\u{2022} {} \u{2014} {size}", label_of(texts, name)));
 }
 
@@ -638,7 +635,7 @@ fn panel(
         Panel::Backup => panel_frame(ui, record, |ui, record| {
             let backup = &plan["backup"];
             let files = backup["files"].as_u64().unwrap_or(0);
-            let size = size_text(backup["bytes"].as_u64().unwrap_or(0));
+            let size = size_text(&texts, backup["bytes"].as_u64().unwrap_or(0));
             line(ui, record, "data_panel_body", texts.get(Msg::BackupPanelBody { files, size: &size }));
             for unit in backup["units"].as_array().into_iter().flatten() {
                 sized_item(&texts, ui, record, unit);
@@ -649,7 +646,7 @@ fn panel(
                 for item in optional {
                     let name = item["name"].as_str().unwrap_or_default().to_string();
                     let mut chosen = app.data.chosen.contains(&name);
-                    let size = size_text(item["bytes"].as_u64().unwrap_or(0));
+                    let size = size_text(&texts, item["bytes"].as_u64().unwrap_or(0));
                     let text = format!("{} \u{2014} {size}", label_of(&texts, &name));
                     let response = ui.add_enabled(idle, Checkbox::new(&mut chosen, text));
                     record.push("data_optional", "checkbox", &response);
@@ -671,7 +668,7 @@ fn panel(
         }
         Panel::ClearCache => panel_frame(ui, record, |ui, record| match plan["renderer_cache"]["targets"].get(0) {
             Some(target) => {
-                let size = size_text(target["bytes"].as_u64().unwrap_or(0));
+                let size = size_text(&texts, target["bytes"].as_u64().unwrap_or(0));
                 line(ui, record, "data_panel_body", texts.get(Msg::ClearCacheBody { size: &size }));
                 path_line(ui, record, target["path"].as_str().unwrap_or_default());
                 let confirm = (Msg::ButtonConfirmClear, DataAction::ConfirmClearCache, idle);
@@ -684,7 +681,7 @@ fn panel(
         }),
         Panel::Remove => panel_frame(ui, record, |ui, record| {
             let removal = &plan["prepared_game"];
-            let size = size_text(removal["bytes"].as_u64().unwrap_or(0));
+            let size = size_text(&texts, removal["bytes"].as_u64().unwrap_or(0));
             let body = RichText::new(texts.get(Msg::RemoveGameBody { size: &size })).strong().color(warn);
             line(ui, record, "data_panel_body", body);
             for target in removal["targets"].as_array().into_iter().flatten() {
@@ -697,7 +694,7 @@ fn panel(
         }),
         Panel::Rebuild => panel_frame(ui, record, |ui, record| match plan["rebuild"]["source"].as_str() {
             Some(source) => {
-                let size = size_text(plan["rebuild"]["bytes"].as_u64().unwrap_or(0));
+                let size = size_text(&texts, plan["rebuild"]["bytes"].as_u64().unwrap_or(0));
                 line(ui, record, "data_panel_body", texts.get(Msg::RebuildBody { size: &size }));
                 path_line(ui, record, source);
                 let confirm = (Msg::ButtonConfirmRebuild, DataAction::ConfirmRebuild, idle);
@@ -952,11 +949,15 @@ mod tests {
 
     #[test]
     fn sizes_read_like_a_file_manager() {
-        assert_eq!(size_text(0), "0 B");
-        assert_eq!(size_text(999), "999 B");
-        assert_eq!(size_text(1_200), "1.2 KB");
-        assert_eq!(size_text(48_600_000), "49 MB");
-        assert_eq!(size_text(3_400_000_000), "3.4 GB");
+        let english = Texts::default();
+        assert_eq!(size_text(&english, 0), "0 B");
+        assert_eq!(size_text(&english, 999), "999 B");
+        assert_eq!(size_text(&english, 1_200), "1.2 KB");
+        assert_eq!(size_text(&english, 48_600_000), "49 MB");
+        assert_eq!(size_text(&english, 3_400_000_000), "3.4 GB");
+        // The language's unit and decimal separator.
+        assert_eq!(size_text(&Texts::new("fr"), 3_400_000_000), "3,4 Go");
+        assert_eq!(size_text(&Texts::new("it"), 1_200), "1,2 KB");
     }
 
     #[test]

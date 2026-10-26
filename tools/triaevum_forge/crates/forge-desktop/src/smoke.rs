@@ -818,7 +818,8 @@ impl Probe {
 }
 
 fn sample_languages() -> Vec<(String, String)> {
-    let languages = [("en", "English"), ("de", "Deutsch"), ("fr", "Francais"), ("es", "Espanol"), ("it", "Italiano")];
+    let languages =
+        [("en", "English"), ("de", "Deutsch"), ("fr", "Fran\u{e7}ais"), ("es", "Espa\u{f1}ol"), ("it", "Italiano")];
     languages.iter().map(|(code, label)| (code.to_string(), label.to_string())).collect()
 }
 

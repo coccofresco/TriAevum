@@ -19,7 +19,7 @@ use forge_core::publish::HudLayout;
 use serde_json::{json, Value};
 
 use crate::app::ForgeApp;
-use crate::install::{counts, job_update, Event, JobUpdate, Notifier};
+use crate::install::{counts, job_update_in, Event, JobUpdate, Notifier};
 use crate::texts::{Msg, Texts};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -118,7 +118,7 @@ fn run(kind: Kind, hud_layout: HudLayout, request: &Value, texts: &Texts, notify
             job.cancel();
         }
         let Some(event) = job.poll(100) else { continue };
-        match job_update(&event) {
+        match job_update_in(&event, texts) {
             Some(JobUpdate::Stage(message)) => {
                 let counted = counts(&message);
                 notify.send(Event::Stage(message));

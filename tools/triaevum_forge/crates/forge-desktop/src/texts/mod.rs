@@ -3,16 +3,24 @@
 
 //! The window's message table: every text the window shows is a [`Msg`],
 //! keyed by id with typed arguments, resolved for a language by [`Texts`].
-//! English (`en.rs`) is complete; another language returns the texts it has
-//! and English fills the rest. The explanation catalogue of forge-core
-//! (`forge_core::explain::TEXTS`) is resolved through the same language.
+//! English (`en.rs`) is complete; the other game languages of the supported
+//! ROMs (`fr.rs`, `de.rs`, `es.rs`, `it.rs`) return the texts they have and
+//! English fills the rest (the tests require every id in every language).
+//! The explanation catalogue of forge-core (`forge_core::explain::TEXTS`) is
+//! resolved through the same language (`forge_core::explain::translated_text`).
 //!
 //! The window's languages follow the owner's decision 8: the game languages
 //! of the ROM in use (the recognized ROM, else the installed title); before
 //! a ROM is known, the system language when a supported ROM provides it,
-//! else English.
+//! else English. The user's choice is kept in Forge's own settings
+//! ([`preference`]).
 
+mod de;
 mod en;
+mod es;
+mod fr;
+mod it;
+pub mod preference;
 mod pseudo;
 
 use forge_core::explain::Explanation;
@@ -309,6 +317,9 @@ messages! {
     ProjectPage,
     ForgeLanguage,
     ForgeLanguageNote,
+    ForgeLanguageNotSaved { error: &'a str },
+    // Units.
+    Size { value: &'a str, power: u64 },
     GuiFailed { error: &'a str },
 }
 
@@ -331,18 +342,18 @@ pub const SAMPLES: &[Msg<'static>] = &{
         UseExtracted,
         WhatForgeNeeds,
         Subtitle,
-        PrivateData { path: "P" },
+        PrivateData { path: "<P>" },
         PreparingHeading,
         PreparingElapsed { minutes: 1, seconds: 5 },
         ProgressCount { done: 1, total: 2 },
         PreparingElsewhere,
         PreparingElsewhereBody,
-        ReadyHeading { revision: "R", language: "L" },
-        ReadyHeadingNoLanguage { revision: "R" },
+        ReadyHeading { revision: "<R>", language: "<L>" },
+        ReadyHeadingNoLanguage { revision: "<R>" },
         ReadyBody,
         PrepareAgain,
-        UpdateHeading { installed: "1", present: "2" },
-        UpdateHeadingVersion { present: "2" },
+        UpdateHeading { installed: "<1>", present: "<2>" },
+        UpdateHeadingVersion { present: "<2>" },
         UpdateHeadingPlain,
         UpdateBody,
         RepairBody,
@@ -350,23 +361,23 @@ pub const SAMPLES: &[Msg<'static>] = &{
         NeedsGameInputBody,
         Updating,
         Repairing,
-        Updated { version: "1", kept: true },
+        Updated { version: "<1>", kept: true },
         Repaired { kept: false },
         AlreadyCurrent,
-        UpdateChanged { list: "L" },
-        RepairChanged { list: "L" },
-        ChangeCreated { file: "F" },
+        UpdateChanged { list: "<L>" },
+        RepairChanged { list: "<L>" },
+        ChangeCreated { file: "<F>" },
         ChangeStandardLayout,
         ChangeLanguage,
-        ChangeRemoved { file: "F" },
-        ChangeOther { file: "F" },
+        ChangeRemoved { file: "<F>" },
+        ChangeOther { file: "<F>" },
         HudLayoutQuestion,
         HudLayoutBody,
-        HudLayoutField { name: "N", yours: "Y", standard: "S" },
+        HudLayoutField { name: "<N>", yours: "<Y>", standard: "<S>" },
         ButtonKeepMine,
         ButtonUseStandard,
         DowngradeHeading,
-        DowngradeBody { installed: "2", present: "1" },
+        DowngradeBody { installed: "<2>", present: "<1>" },
         ButtonInstallOlder,
         ShowDetails,
         HideDetails,
@@ -405,10 +416,10 @@ pub const SAMPLES: &[Msg<'static>] = &{
         ChooseLanguage,
         LanguageForInstall,
         LanguageInstalled,
-        RomRecognized { label: "L" },
-        LanguagesUnreadable { error: "E" },
-        LanguageChosen { label: "L" },
-        LanguageSettingsUnreadable { error: "E" },
+        RomRecognized { label: "<L>" },
+        LanguagesUnreadable { error: "<E>" },
+        LanguageChosen { label: "<L>" },
+        LanguageSettingsUnreadable { error: "<E>" },
         Starting,
         DownloadingHdFirst,
         DownloadingModFirst,
@@ -417,7 +428,7 @@ pub const SAMPLES: &[Msg<'static>] = &{
         ConfirmCancel,
         EnhancementsBody,
         HdHeading,
-        HdDescription { title: "T", version: "V", author: "A", credits: "C", license: "L" },
+        HdDescription { title: "<T>", version: "<V>", author: "<A>", credits: "<C>", license: "<L>" },
         HdDownload,
         SelectZip,
         SelectFolder,
@@ -426,47 +437,47 @@ pub const SAMPLES: &[Msg<'static>] = &{
         HdAutoDownload,
         NotAvailable,
         CheckingStored,
-        HdCheckFailed { error: "E" },
+        HdCheckFailed { error: "<E>" },
         HdReady,
         HdArchive,
         HdMissingAuto { megabytes: 451 },
         HdMissing,
         ModHeading,
-        ModDescription { title: "T", version: "V", author: "A", testing: "T", tools: "O", license: "L" },
-        ModCheckbox { title: "T" },
+        ModDescription { title: "<T>", version: "<V>", author: "<A>", testing: "<T>", tools: "<O>", license: "<L>" },
+        ModCheckbox { title: "<T>" },
         ModDownload,
         SelectRar,
-        ModSettingsUnreadable { error: "E" },
-        ModCheckFailed { error: "E" },
+        ModSettingsUnreadable { error: "<E>" },
+        ModCheckFailed { error: "<E>" },
         ModMissingEnabled,
         ModOff,
         ModOn,
         ModOffKept,
         ApplyModChange,
-        HdDownloadFailed { error: "E" },
-        ModDownloadFailed { error: "E" },
-        ManualHdFailure { error: "E", archive: "A", page: "P" },
-        ManualModFailure { error: "E", archive: "A", page: "P" },
+        HdDownloadFailed { error: "<E>" },
+        ModDownloadFailed { error: "<E>" },
+        ManualHdFailure { error: "<E>", archive: "<A>", page: "<P>" },
+        ManualModFailure { error: "<E>", archive: "<A>", page: "<P>" },
         VerifyingArchive,
         VerifyingTextures,
         VerifyingFiles,
         DownloadingHd,
-        DownloadingMod { title: "T" },
+        DownloadingMod { title: "<T>" },
         HdReadyReinstall,
-        ModReadyReinstall { title: "T" },
+        ModReadyReinstall { title: "<T>" },
         HdArchiveApplied,
-        ModSettingSaveFailed { error: "E" },
-        RevisionsUnreadable { error: "E" },
+        ModSettingSaveFailed { error: "<E>" },
+        RevisionsUnreadable { error: "<E>" },
         PickRomTitle,
         FilterRom,
         Filter3ds,
         FilterCci,
         PickExtractedTitle,
-        PickArchive { name: "N" },
+        PickArchive { name: "<N>" },
         PickArchiveFallbackHd,
         PickArchiveFallbackMod,
         FilterTexturePack,
-        PickFolder { title: "T" },
+        PickFolder { title: "<T>" },
         FilterModArchive,
         DataBody,
         DataFolder,
@@ -496,37 +507,37 @@ pub const SAMPLES: &[Msg<'static>] = &{
         ButtonConfirmRebuild,
         ButtonConfirmRemove,
         ButtonRecover,
-        BackupPanelBody { files: 2, size: "S" },
+        BackupPanelBody { files: 2, size: "<S>" },
         BackupOptionalHeading,
         BackupExcludedNote,
-        BackupDone { path: "P", size: "S" },
+        BackupDone { path: "<P>", size: "<S>" },
         FilterBackup,
         SaveBackupTitle,
         OpenBackupTitle,
-        RestoreHeading { created: "C", platform: "P" },
-        RestoreOtherPlatform { platform: "P" },
+        RestoreHeading { created: "<C>", platform: "<P>" },
+        RestoreOtherPlatform { platform: "<P>" },
         RestoreDifferentRevision,
-        RestoreUnavailable { path: "P" },
-        RestoreKeptExisting { path: "P" },
-        RestoreGroupLine { label: "L", replaced: 1, added: 2, removed: 3 },
-        RestoreKeptSettings { files: "F" },
-        RestoreSkipped { labels: "L" },
-        RestoreSnapshotNote { path: "P" },
-        RestoreDone { path: "P" },
-        ClearCacheBody { size: "S" },
+        RestoreUnavailable { path: "<P>" },
+        RestoreKeptExisting { path: "<P>" },
+        RestoreGroupLine { label: "<L>", replaced: 1, added: 2, removed: 3 },
+        RestoreKeptSettings { files: "<F>" },
+        RestoreSkipped { labels: "<L>" },
+        RestoreSnapshotNote { path: "<P>" },
+        RestoreDone { path: "<P>" },
+        ClearCacheBody { size: "<S>" },
         ClearCacheEmpty,
         ClearCacheDone,
-        RemoveGameBody { size: "S" },
+        RemoveGameBody { size: "<S>" },
         RemoveGameKeep,
         RemoveGameDone,
-        RebuildBody { size: "S" },
+        RebuildBody { size: "<S>" },
         RebuildNoSource,
         RebuildDone,
-        UninstallWindows { path: "P" },
-        UninstallPortable { path: "P" },
-        UninstallAppImage { appimage: "A", path: "P" },
-        UninstallFlatpak { id: "I", path: "P" },
-        UninstallAndroid { path: "P" },
+        UninstallWindows { path: "<P>" },
+        UninstallPortable { path: "<P>" },
+        UninstallAppImage { appimage: "<A>", path: "<P>" },
+        UninstallFlatpak { id: "<I>", path: "<P>" },
+        UninstallAndroid { path: "<P>" },
         UninstallExternal,
         UninstallKeep,
         PlatformName { code: "android" },
@@ -543,29 +554,31 @@ pub const SAMPLES: &[Msg<'static>] = &{
         DataRebuilding,
         DataRecovering,
         DiagnosticsBody,
-        StateLabel { state: "S" },
+        StateLabel { state: "<S>" },
         Copied,
-        LastGameRun { started: "T", seconds: 1, meaning: "M" },
+        LastGameRun { started: "<T>", seconds: 1, meaning: "<M>" },
         GameRunning,
         NoGameRun,
         CollectingDiagnostics,
-        DiagnosticsFailed { error: "E" },
+        DiagnosticsFailed { error: "<E>" },
         GameLogFolder,
         BundleContents,
-        BundleOmitted { name: "N", reason: "R" },
+        BundleOmitted { name: "<N>", reason: "<R>" },
         ButtonSaveBundle,
         SaveBundleTitle,
         FilterZip,
-        BundleSaved { path: "P" },
-        BundleFailed { error: "E" },
-        Version { version: "V" },
+        BundleSaved { path: "<P>" },
+        BundleFailed { error: "<E>" },
+        Version { version: "<V>" },
         AboutBody,
         SupportedRevisions,
         NoSupportedRevisions,
         ProjectPage,
         ForgeLanguage,
         ForgeLanguageNote,
-        GuiFailed { error: "E" },
+        ForgeLanguageNotSaved { error: "<E>" },
+        Size { value: "<V>", power: 2 },
+        GuiFailed { error: "<E>" },
     ]
 };
 
@@ -596,14 +609,32 @@ pub fn native_name(code: &str) -> &str {
     }
 }
 
+/// The label of a game language: its native name with its accents
+/// ("Fran\u{e7}ais"), whatever ASCII label the runtime reported.
+pub fn language_label(code: &str, reported: &str) -> String {
+    let name = native_name(code);
+    if name == code {
+        reported.to_string()
+    } else {
+        name.to_string()
+    }
+}
+
 /// A language's own texts; None for a text it does not have yet.
 type Table = fn(&Msg) -> Option<String>;
 
-/// The translated tables. English is complete and is the fallback; the
-/// other game languages are added here (UX plan WP-10).
+/// The languages with a translated table (besides English).
+#[cfg(test)]
+pub const TRANSLATED: [&str; 4] = ["fr", "de", "es", "it"];
+
+/// The translated tables. English is complete and is the fallback.
 fn table(code: &str) -> Option<Table> {
     match code {
         ENGLISH => Some(|msg| Some(en::text(msg))),
+        "fr" => Some(fr::text),
+        "de" => Some(de::text),
+        "es" => Some(es::text),
+        "it" => Some(it::text),
         _ => None,
     }
 }
@@ -639,13 +670,18 @@ impl Texts {
 
     /// An explanation catalogue text (`<id>.title` and the like) in this
     /// language; `english` is the catalogue's own text.
-    pub fn catalogue(&self, _key: &str, english: &str) -> String {
-        // No translated catalogue yet: forge-core's English table is the
-        // fallback for every language.
+    pub fn catalogue(&self, key: &str, english: &str) -> String {
         if self.language == PSEUDO {
             return pseudo::localize(english);
         }
-        english.to_string()
+        forge_core::explain::translated_text(&self.language, key).unwrap_or(english).to_string()
+    }
+
+    /// The label of a stage of the preparation (`stage.<name>`), when the
+    /// catalogue knows it.
+    pub fn stage(&self, stage: &str) -> Option<String> {
+        let key = format!("stage.{stage}");
+        forge_core::explain::text(&key).map(|english| self.catalogue(&key, english))
     }
 
     pub fn title(&self, explanation: &Explanation) -> String {
@@ -663,9 +699,16 @@ impl Texts {
     /// The text a plain dialog shows under the title (`Explanation::body`).
     pub fn body(&self, explanation: &Explanation) -> String {
         let mut body = format!("{}\n\n{}", self.cause(explanation), self.next_action(explanation));
-        if !explanation.details.is_empty() {
+        // The detail labels (stage, operation) in this language; the
+        // engine's own message stays as it was written.
+        let details = if self.language == PSEUDO {
+            explanation.details.clone()
+        } else {
+            explanation.localized(&self.language).details
+        };
+        if !details.is_empty() {
             body.push_str("\n\n");
-            body.push_str(&explanation.details);
+            body.push_str(&details);
         }
         body
     }
@@ -736,9 +779,74 @@ mod tests {
         assert_eq!(ids.len(), Msg::COUNT, "SAMPLES misses a message");
     }
 
+    /// The arguments a text shows (`<P>`, the samples' string arguments) and
+    /// its numbers (digit runs: sample numbers, F1, 3DS), in order of value.
+    fn placeholders(text: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let mut rest = text;
+        while let Some(start) = rest.find('<') {
+            match rest[start..].find('>') {
+                Some(end) => {
+                    found.push(rest[start..start + end + 1].to_string());
+                    rest = &rest[start + end + 1..];
+                }
+                None => break,
+            }
+        }
+        let mut digits = String::new();
+        for c in text.chars().chain(std::iter::once(' ')) {
+            if c.is_ascii_digit() {
+                digits.push(c);
+            } else if !digits.is_empty() {
+                found.push(std::mem::take(&mut digits));
+            }
+        }
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn every_language_translates_every_message() {
+        for language in TRANSLATED {
+            let table = table(language).unwrap();
+            for msg in SAMPLES {
+                let english = en::text(msg);
+                let text = table(msg).unwrap_or_else(|| panic!("{language} has no text for {}", msg.id()));
+                assert!(!text.trim().is_empty(), "{language} {msg:?} is empty");
+                assert_eq!(placeholders(&text), placeholders(&english), "{language} {msg:?}: {text}");
+                assert_eq!(
+                    text.matches('\n').count(),
+                    english.matches('\n').count(),
+                    "{language} {msg:?} changes the line breaks"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_language_resolves_the_whole_catalogue() {
+        for language in TRANSLATED {
+            let texts = Texts::new(language);
+            for (key, english) in forge_core::explain::TEXTS {
+                assert!(
+                    forge_core::explain::translated_text(language, key).is_some(),
+                    "{language} has no catalogue text {key}"
+                );
+                assert!(!texts.catalogue(key, english).trim().is_empty(), "{language} {key}");
+            }
+        }
+    }
+
+    #[test]
+    fn language_labels_are_native_names() {
+        assert_eq!(language_label("fr", "Francais"), "Fran\u{e7}ais");
+        assert_eq!(language_label("es", "Espanol"), "Espa\u{f1}ol");
+        assert_eq!(language_label("xx", "Other"), "Other");
+    }
+
     #[test]
     fn missing_texts_fall_back_to_english() {
-        for language in ["it", "ja", "xx"] {
+        for language in ["ja", "xx"] {
             let texts = Texts::new(language);
             for msg in SAMPLES {
                 assert_eq!(texts.get(*msg), en::text(msg), "{language} {msg:?}");
@@ -763,10 +871,17 @@ mod tests {
     fn explanations_resolve_through_the_language() {
         let error = forge_base::ForgeError::invalid("bad ROM");
         let explanation = forge_core::explain::explain(&error);
+        assert_eq!(Texts::default().title(&explanation), explanation.title);
+        assert_eq!(Texts::default().body(&explanation), explanation.body());
+        assert_eq!(Texts::new("ja").title(&explanation), explanation.title);
         let texts = Texts::new("de");
-        assert_eq!(texts.title(&explanation), explanation.title);
-        assert_eq!(texts.body(&explanation), explanation.body());
+        assert_ne!(texts.title(&explanation), explanation.title);
+        assert_eq!(texts.title(&explanation), explanation.localized("de").title);
         assert_ne!(Texts::new(PSEUDO).title(&explanation), explanation.title);
+        assert_eq!(
+            Texts::new("it").stage("verify").as_deref(),
+            forge_core::explain::translated_text("it", "stage.verify")
+        );
     }
 
     #[test]

@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 
 use forge_core::explain::Explanation;
 
-use crate::install::{job_update, Event, JobUpdate, Notifier};
+use crate::install::{job_update_in, Event, JobUpdate, Notifier};
 use crate::texts::{Msg, Texts};
 
 /// What the card shows for one chosen ROM.
@@ -46,6 +46,15 @@ impl RecognizedRom {
             None => (Vec::new(), None),
         };
         let selected = languages.iter().position(|(code, _)| Some(code) == selected.as_ref());
+        // The languages by their native names ("Fran\u{e7}ais"), not the
+        // runtime's ASCII labels.
+        let languages = languages
+            .into_iter()
+            .map(|(code, label)| {
+                let label = crate::texts::language_label(&code, &label);
+                (code, label)
+            })
+            .collect();
         Self { label: text("label").unwrap_or_default(), languages, selected, language_error: text("language_error") }
     }
 
@@ -68,8 +77,16 @@ pub fn recognize_request(source: &Path, data_root: &Path, package_root: &Path) -
 }
 
 /// Runs one recognition and reports the card for `source` after each stage.
-/// `own` stops it when another ROM is chosen, `cancel` when Forge closes.
-pub fn run_recognition(source: String, request: Value, notify: Notifier, cancel: CancelToken, own: CancelToken) {
+/// `own` stops it when another ROM is chosen, `cancel` when Forge closes;
+/// the stages are shown in the language of `texts`.
+pub fn run_recognition(
+    source: String,
+    request: Value,
+    texts: Texts,
+    notify: Notifier,
+    cancel: CancelToken,
+    own: CancelToken,
+) {
     let send = |card: Card| notify.send(Event::Recognition { source: source.clone(), card });
     let job = match forge_core::jobs::start(&forge_base::legacy_json::compact_line_bytes(&request)) {
         Ok(job) => job,
@@ -84,7 +101,7 @@ pub fn run_recognition(source: String, request: Value, notify: Notifier, cancel:
         if event.get("event").and_then(Value::as_str) == Some("succeeded") {
             result = event.get("result").cloned();
         }
-        match job_update(&event) {
+        match job_update_in(&event, &texts) {
             Some(JobUpdate::Stage(message)) => send(Card::Recognizing(message)),
             Some(JobUpdate::Succeeded(_)) => {
                 return send(Card::Recognized(RecognizedRom::from_result(&result.unwrap_or(Value::Null))));
@@ -148,7 +165,8 @@ mod tests {
         let request = recognize_request(&rom, directory.path(), directory.path());
         let (sender, receiver) = std::sync::mpsc::channel();
         let source = rom.to_string_lossy().into_owned();
-        run_recognition(source.clone(), request, Notifier::new(sender, None), CancelToken::new(), CancelToken::new());
+        let notifier = Notifier::new(sender, None);
+        run_recognition(source.clone(), request, Texts::default(), notifier, CancelToken::new(), CancelToken::new());
         let events: Vec<Event> = receiver.try_iter().collect();
         assert!(
             matches!(events.last(), Some(Event::Recognition { source: s, card: Card::Failed(explanation) })

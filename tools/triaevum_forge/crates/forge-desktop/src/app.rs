@@ -205,7 +205,16 @@ pub fn read_languages(data_root: &Path) -> Result<Languages, String> {
     let field = |entry: &Value, key: &str| entry.get(key).and_then(Value::as_str).unwrap_or_default().to_string();
     let languages: Vec<(String, String)> = document["available"]
         .as_array()
-        .map(|entries| entries.iter().map(|entry| (field(entry, "code"), field(entry, "label"))).collect())
+        .map(|entries| {
+            entries
+                .iter()
+                .map(|entry| {
+                    let code = field(entry, "code");
+                    let label = texts::language_label(&code, &field(entry, "label"));
+                    (code, label)
+                })
+                .collect()
+        })
         .unwrap_or_default();
     let selected = languages.iter().position(|(code, _)| Some(code.as_str()) == document["selected"].as_str());
     Ok((languages, selected))
@@ -318,11 +327,14 @@ impl ForgeApp {
         let package_version = pages::about::package_version(&installation.root);
         let language_override = probe.as_ref().and_then(|probe| probe.language());
         let system_language = language_override.or_else(texts::system_language);
+        // The language picked on About in an earlier session (Forge's own
+        // settings); the layout probe starts from its fixed language.
+        let ui_language_choice = if probe.is_some() { None } else { texts::preference::load(&installation.data_root) };
         let mut app = Self {
             installation,
             optional: Arc::new(optional),
             texts: Texts::default(),
-            ui_language_choice: None,
+            ui_language_choice,
             system_language,
             title_language: texts::ENGLISH.to_string(),
             page: Page::Home,
@@ -509,7 +521,8 @@ impl ForgeApp {
         self.card = Some((source.clone(), Card::Recognizing(self.t(Msg::Recognizing))));
         let request = recognize_request(Path::new(&source), &self.installation.data_root, &self.installation.root);
         let own = self.card_cancel.clone();
-        self.spawn(move |_, notify, cancel| run_recognition(source, request, notify, cancel, own));
+        let texts = self.texts.clone();
+        self.spawn(move |_, notify, cancel| run_recognition(source, request, texts, notify, cancel, own));
     }
 
     fn spawn(&mut self, work: impl FnOnce(Arc<Optional>, Notifier, CancelToken) + Send + 'static) {
@@ -931,8 +944,14 @@ impl ForgeApp {
             Action::TogglePrepareAgain => self.show_prepare_again = !self.show_prepare_again,
             Action::Data(action) => pages::data::apply(self, action, frame),
             Action::SetUiLanguage(code) => {
+                // Kept for the next sessions; decision 8 still applies to
+                // each ROM (refresh_texts skips a language it lacks).
+                let saved = texts::preference::save(&self.installation.data_root, &code);
                 self.ui_language_choice = Some(code);
                 self.refresh_texts();
+                if let Err(error) = saved {
+                    self.status_note = Some(self.t(Msg::ForgeLanguageNotSaved { error: &error }));
+                }
             }
             Action::Command(command) => {
                 use crate::maintenance::Kind;
@@ -1445,7 +1464,7 @@ mod tests {
         )
         .unwrap();
         let (languages, selected) = read_languages(directory.path()).unwrap();
-        assert_eq!(languages[1], ("fr".to_string(), "Francais".to_string()));
+        assert_eq!(languages[1], ("fr".to_string(), "Fran\u{e7}ais".to_string()), "the native name, not the runtime's");
         assert_eq!(selected, Some(1));
         std::fs::write(&path, br#"{"format": "x"}"#).unwrap();
         assert_eq!(read_languages(directory.path()).unwrap_err(), "Invalid game language information");
@@ -1519,7 +1538,19 @@ mod tests {
         assert_eq!(app.ui_languages().iter().map(|(code, _)| code.as_str()).collect::<Vec<_>>(), ["en", "fr"]);
         app.apply(Action::SetUiLanguage("fr".into()), &egui::Context::default(), None);
         assert_eq!(app.texts.language(), "fr");
+        let data_root = app.installation.data_root.clone();
         app.shut_down();
+        // The choice is kept in Forge's own settings, not the game's.
+        assert_eq!(texts::preference::load(&data_root).as_deref(), Some("fr"));
+        assert!(!forge_native::language::config_path(&data_root).exists());
+        let mut next = self::app(directory.path());
+        next.system_language = Some("it".into());
+        next.refresh_texts();
+        assert_eq!(next.texts.language(), "fr", "the kept choice comes before the system language");
+        next.probe_card("game.cci", recognized(&["en", "it"]));
+        next.refresh_texts();
+        assert_eq!(next.texts.language(), "it", "this ROM has no French: the system language");
+        next.shut_down();
     }
 
     #[test]

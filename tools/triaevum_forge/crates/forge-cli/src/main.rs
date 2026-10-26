@@ -410,8 +410,24 @@ fn inventory(args: InventoryArgs) -> ExitCode {
 /// One explanation line on stderr for a failure the JSON output reports.
 fn explain_on_stderr(event: &Value) {
     if let Some(explanation) = forge_core::explain::explain_value(event) {
+        let explanation = match terminal_language() {
+            Some(language) => explanation.localized(language),
+            None => explanation,
+        };
         eprintln!("{}: {}", explanation.title, explanation.next_action);
     }
+}
+
+/// The language of the stderr explanations: `TRIAEVUM_FORGE_LANGUAGE`, else
+/// the terminal's locale, when the catalogue is translated into it (owner
+/// decision 8); English otherwise. The JSON on stdout stays English (the
+/// `explain` command takes a `"language"` member instead).
+fn terminal_language() -> Option<&'static str> {
+    ["TRIAEVUM_FORGE_LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"]
+        .iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .find(|value| !value.is_empty() && value != "C" && value != "POSIX")
+        .and_then(|locale| forge_core::explain::normalize_language(&locale))
 }
 
 fn status(args: StatusArgs) -> ExitCode {

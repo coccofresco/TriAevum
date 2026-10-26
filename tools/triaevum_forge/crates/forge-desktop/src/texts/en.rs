@@ -488,7 +488,20 @@ pub fn text(msg: &Msg) -> String {
         NoSupportedRevisions => "This package lists no supported game revisions.",
         ProjectPage => "Project page",
         ForgeLanguage => "Forge language",
-        ForgeLanguageNote => "The languages of your game. Texts not translated yet are shown in English.",
+        ForgeLanguageNote => {
+            "The languages of your game. Texts not translated yet are shown in English. Your choice is remembered."
+        }
+        ForgeLanguageNotSaved { error } => return format!("The Forge language could not be saved: {error}"),
+        Size { value, power } => {
+            let unit = match power {
+                0 => "B",
+                1 => "KB",
+                2 => "MB",
+                3 => "GB",
+                _ => "TB",
+            };
+            return format!("{value} {unit}");
+        }
         GuiFailed { error } => {
             return format!(
                 "TriAevum Forge GUI failed: {error}\n\nThe command line tool triaevum-forge can still prepare titles."

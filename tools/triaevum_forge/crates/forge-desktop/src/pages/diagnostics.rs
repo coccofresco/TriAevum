@@ -19,7 +19,7 @@ use serde_json::{json, Value};
 
 use crate::app::{Action, ForgeApp, Recorder};
 use crate::installation::Installation;
-use crate::texts::Msg;
+use crate::texts::{Msg, Texts};
 
 /// What the page shows, collected on a task thread.
 #[derive(Clone, Debug, PartialEq)]
@@ -94,11 +94,11 @@ pub fn report(
     diagnostics::truncate_text(text, diagnostics::TEXT_LIMIT)
 }
 
-fn size_text(bytes: u64) -> String {
+fn size_text(texts: &Texts, bytes: u64) -> String {
     if bytes < 1024 {
-        format!("{bytes} B")
+        texts.get(Msg::Size { value: &bytes.to_string(), power: 0 })
     } else {
-        format!("{} KB", bytes.div_ceil(1024))
+        texts.get(Msg::Size { value: &bytes.div_ceil(1024).to_string(), power: 1 })
     }
 }
 
@@ -169,7 +169,7 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
         let heading = RichText::new(app.t(Msg::BundleContents)).strong();
         record.add(ui, "diagnostics_bundle", "label", Label::new(heading).wrap());
         for (name, size) in &view.members {
-            let line = RichText::new(format!("{name}  ({})", size_text(*size))).monospace().small();
+            let line = RichText::new(format!("{name}  ({})", size_text(&app.texts, *size))).monospace().small();
             record.add(ui, "diagnostics_member", "label", Label::new(line));
         }
         for (name, reason) in &view.omitted {

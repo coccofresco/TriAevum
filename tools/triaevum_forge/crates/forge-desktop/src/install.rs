@@ -151,11 +151,35 @@ pub fn counts(message: &str) -> Option<(u64, u64)> {
     (total > 0 && done <= total).then_some((done, total))
 }
 
+/// [`job_update_in`] with the English texts.
+#[cfg(test)]
 pub fn job_update(event: &Value) -> Option<JobUpdate> {
+    job_update_in(event, &Texts::default())
+}
+
+/// A stage event's text: in English the engine's own message (the Python
+/// Forge's wording); in another language the stage's catalogue label, with
+/// the `done/total` counts the message ends with, else the message.
+fn stage_text(event: &Value, message: String, texts: &Texts) -> String {
+    if texts.language() == crate::texts::ENGLISH {
+        return message;
+    }
+    let Some(label) = event.get("stage").and_then(Value::as_str).and_then(|stage| texts.stage(stage)) else {
+        return message;
+    };
+    match counts(&message) {
+        Some((done, total)) => format!("{label}: {done}/{total}"),
+        None => label,
+    }
+}
+
+/// A job event as the window shows it, its texts in the window's language.
+pub fn job_update_in(event: &Value, texts: &Texts) -> Option<JobUpdate> {
     let message = || event.get("message").and_then(Value::as_str).unwrap_or_default().to_string();
     match event.get("event")?.as_str()? {
         // Stage texts and non-fatal notes both went to the status line.
-        "stage" | "report" => Some(JobUpdate::Stage(message())),
+        "stage" => Some(JobUpdate::Stage(stage_text(event, message(), texts))),
+        "report" => Some(JobUpdate::Stage(message())),
         "progress" => Some(JobUpdate::Progress {
             done: event.get("done").and_then(Value::as_u64).unwrap_or(0),
             total: event.get("total").and_then(Value::as_u64),
@@ -214,7 +238,7 @@ pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier,
         if cancel.is_cancelled() {
             job.cancel();
         }
-        let Some(update) = job.poll(100).as_ref().and_then(job_update) else { continue };
+        let Some(update) = job.poll(100).as_ref().and_then(|event| job_update_in(event, texts)) else { continue };
         match update {
             JobUpdate::Stage(message) => {
                 let counted = counts(&message);
@@ -270,6 +294,25 @@ mod tests {
         assert_eq!(counts("Preparing GPU pipelines: 0/0"), None);
         assert_eq!(counts("Extracting the ROM"), None);
         assert_eq!(counts("Copied 3/x"), None);
+    }
+
+    #[test]
+    fn stage_texts_follow_the_window_language() {
+        let italian = Texts::new("it");
+        let stage = |stage: &str, message: &str| json!({"event": "stage", "stage": stage, "message": message});
+        let shaders = forge_core::explain::translated_text("it", "stage.shaders").unwrap();
+        assert_eq!(
+            job_update_in(&stage("shaders", "Preparing GPU pipelines: 120/400"), &italian),
+            Some(JobUpdate::Stage(format!("{shaders}: 120/400")))
+        );
+        let verify = forge_core::explain::translated_text("it", "stage.verify").unwrap();
+        assert_eq!(job_update_in(&stage("verify", "Identifying"), &italian), Some(JobUpdate::Stage(verify.into())));
+        // An unknown stage keeps the engine's message; English keeps it always.
+        assert_eq!(job_update_in(&stage("other", "Working"), &italian), Some(JobUpdate::Stage("Working".into())));
+        assert_eq!(
+            job_update(&stage("shaders", "Preparing GPU pipelines: 1/2")),
+            Some(JobUpdate::Stage("Preparing GPU pipelines: 1/2".into()))
+        );
     }
 
     #[test]

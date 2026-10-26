@@ -193,6 +193,42 @@ fn required(key: &str) -> &'static str {
     text(key).unwrap_or_else(|| panic!("explanation text {key} is missing"))
 }
 
+// The catalogue in the other game languages of the supported ROMs (UX plan
+// WP-10, owner decision 8), keyed like [`TEXTS`].
+mod de;
+mod es;
+mod fr;
+mod it;
+
+/// The languages the catalogue is translated into, besides English.
+pub const TRANSLATED_LANGUAGES: [&str; 4] = ["fr", "de", "es", "it"];
+
+fn translations(language: &str) -> Option<&'static [(&'static str, &'static str)]> {
+    match language {
+        "fr" => Some(fr::TEXTS),
+        "de" => Some(de::TEXTS),
+        "es" => Some(es::TEXTS),
+        "it" => Some(it::TEXTS),
+        _ => None,
+    }
+}
+
+/// The text for `key` in `language`: its translation, else English; None
+/// for a key the catalogue does not have.
+pub fn translated_text(language: &str, key: &str) -> Option<&'static str> {
+    translations(language)
+        .and_then(|table| table.iter().find(|(name, _)| *name == key).map(|(_, value)| *value))
+        .or_else(|| text(key))
+}
+
+/// The catalogue language of a locale (`it` for `it`, `it-IT` or
+/// `it_IT.UTF-8`) when the catalogue is translated into it; None means
+/// English.
+pub fn normalize_language(locale: &str) -> Option<&'static str> {
+    let code: String = locale.chars().take_while(|c| c.is_ascii_alphabetic()).collect::<String>().to_lowercase();
+    TRANSLATED_LANGUAGES.iter().copied().find(|language| *language == code)
+}
+
 /// What the frontend offers as the main button.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -675,6 +711,23 @@ impl Explanation {
         value
     }
 
+    /// This explanation in `language`: the catalogue texts and the detail
+    /// labels translated (English where there is no translation); the
+    /// engine's own message in the details stays as it was written.
+    pub fn localized(&self, language: &str) -> Explanation {
+        let text = |part: &str, english: &'static str| {
+            translated_text(language, &format!("{}.{part}", self.id)).unwrap_or(english)
+        };
+        let mut localized = self.clone();
+        localized.title = text("title", self.title);
+        localized.cause = text("cause", self.cause);
+        localized.next_action = text("next_action", self.next_action);
+        if let Some(facts) = &self.facts {
+            localized.details = details_in(facts, language);
+        }
+        localized
+    }
+
     /// The text a plain dialog shows under the title.
     pub fn body(&self) -> String {
         let mut body = format!("{}\n\n{}", self.cause, self.next_action);
@@ -711,22 +764,28 @@ fn refinement(facts: &ErrorFacts) -> Option<&'static Refinement> {
 }
 
 fn details(facts: &ErrorFacts) -> String {
+    details_in(facts, "en")
+}
+
+/// The details with their labels in `language`.
+fn details_in(facts: &ErrorFacts, language: &str) -> String {
+    let label = |key: &str| translated_text(language, key).unwrap_or_else(|| required(key));
     let mut lines = Vec::new();
     if !facts.message.is_empty() {
         lines.push(crate::redact::redact(&facts.message));
     }
     if let Some(stage) = &facts.stage {
-        let label = required("details.stage");
-        lines.push(match stage_label(stage) {
-            Some(name) => format!("{label}: {name} ({stage})"),
-            None => format!("{label}: {stage}"),
+        let name = label("details.stage");
+        lines.push(match translated_text(language, &format!("stage.{stage}")) {
+            Some(stage_name) => format!("{name}: {stage_name} ({stage})"),
+            None => format!("{name}: {stage}"),
         });
     }
     if let Some(operation) = facts.operation {
-        lines.push(format!("{}: {}", required("details.operation"), operation.code()));
+        lines.push(format!("{}: {}", label("details.operation"), operation.code()));
     }
     if let Some(code) = facts.os_code {
-        lines.push(format!("{}: {code}", required("details.os_code")));
+        lines.push(format!("{}: {code}", label("details.os_code")));
     }
     lines.join("\n")
 }
@@ -786,9 +845,17 @@ pub fn explain_value(value: &Value) -> Option<Explanation> {
 }
 
 /// [`explain_value`] over JSON bytes (the ABI and JNI entry): the
-/// explanation's JSON, or `null`.
+/// explanation's JSON, or `null`. An input object may carry `"language"`
+/// (a locale such as `it` or `fr-FR`): the texts are then in that language
+/// when the catalogue has it ([`normalize_language`]), English otherwise.
 pub fn explain_bytes(input: &[u8]) -> Vec<u8> {
-    let explanation = serde_json::from_slice::<Value>(input).ok().as_ref().and_then(explain_value);
+    let input = serde_json::from_slice::<Value>(input).ok();
+    let language =
+        input.as_ref().and_then(|input| input.get("language")).and_then(Value::as_str).and_then(normalize_language);
+    let explanation = input.as_ref().and_then(explain_value).map(|explanation| match language {
+        Some(language) => explanation.localized(language),
+        None => explanation,
+    });
     let value = explanation.map_or(Value::Null, |explanation| explanation.to_value());
     crate::legacy_json::compact_line_bytes(&value)
 }
@@ -848,6 +915,59 @@ mod tests {
         }
         let mut keys = std::collections::HashSet::new();
         assert!(TEXTS.iter().all(|(key, _)| keys.insert(*key)), "duplicate keys");
+    }
+
+    /// The digit runs of a text (F1, 3DS, version 3), which a translation keeps.
+    fn digit_runs(text: &str) -> Vec<String> {
+        let mut runs: Vec<String> =
+            text.split(|c: char| !c.is_ascii_digit()).filter(|run| !run.is_empty()).map(str::to_string).collect();
+        runs.sort();
+        runs
+    }
+
+    #[test]
+    fn every_language_translates_every_text() {
+        let english: Vec<&str> = TEXTS.iter().map(|(key, _)| *key).collect();
+        for language in TRANSLATED_LANGUAGES {
+            let table = translations(language).unwrap();
+            let keys: Vec<&str> = table.iter().map(|(key, _)| *key).collect();
+            let missing: Vec<&&str> = english.iter().filter(|key| !keys.contains(key)).collect();
+            let extra: Vec<&&str> = keys.iter().filter(|key| !english.contains(key)).collect();
+            assert!(missing.is_empty() && extra.is_empty(), "{language}: missing {missing:?}, extra {extra:?}");
+            assert_eq!(keys, english, "{language}: the keys follow the English order");
+            for ((key, text), (_, english)) in table.iter().zip(TEXTS) {
+                assert!(!text.trim().is_empty(), "{language} {key}");
+                assert_eq!(digit_runs(text), digit_runs(english), "{language} {key}: {text}");
+            }
+        }
+        assert_eq!(translations("en"), None);
+    }
+
+    #[test]
+    fn explanations_are_localized_on_request() {
+        let error = ForgeError::invalid("bad ROM").at_stage("verify");
+        let english = explain(&error);
+        let italian = english.localized("it");
+        assert_eq!(italian.id, english.id);
+        assert_eq!(italian.title, translated_text("it", "invalid_input.title").unwrap());
+        assert_ne!(italian.title, english.title);
+        assert!(italian.details.starts_with("bad ROM\n"), "{}", italian.details);
+        assert!(italian.details.contains("Verifica della revisione del gioco (verify)"), "{}", italian.details);
+        assert_eq!(english.localized("ja"), english);
+        assert_eq!(normalize_language("de-DE"), Some("de"));
+        assert_eq!(normalize_language("fr_FR.UTF-8"), Some("fr"));
+        assert_eq!(normalize_language("en"), None);
+        assert_eq!(normalize_language("ja"), None);
+        // The ABI request: the language is optional, English stays byte-identical.
+        let event = json!({"event": "failed", "error": {"code": "invalid_input", "message": "bad ROM"}});
+        let plain = explain_bytes(event.to_string().as_bytes());
+        let mut request = event.clone();
+        request["language"] = json!("en-US");
+        assert_eq!(explain_bytes(request.to_string().as_bytes()), plain);
+        request["language"] = json!("es-ES");
+        let spanish: Value = serde_json::from_slice(&explain_bytes(request.to_string().as_bytes())).unwrap();
+        assert_eq!(spanish["title"], translated_text("es", "invalid_input.title").unwrap());
+        assert_eq!(spanish["id"], "invalid_input");
     }
 
     #[test]
