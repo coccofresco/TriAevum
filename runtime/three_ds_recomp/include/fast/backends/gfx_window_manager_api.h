@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "ship/window/Window.h"
+#include "fast/WindowIcon.h"
 namespace Fast {
 class GfxWindowBackend {
   public:
@@ -34,6 +35,9 @@ class GfxWindowBackend {
     // windowed request opens at the default fit of the screen, centred, and
     // the first window opens so when the stored request is the default.
     virtual void ConfigureDefaultWindowExtent(bool /*enabled*/, bool /*initialRequestIsDefault*/) {}
+    // The product's window icon (fast/WindowIcon.h), set before Init; null
+    // keeps the platform's default.
+    virtual void ConfigureWindowIcon(const WindowIconImage* /*icon*/) {}
     virtual bool IsFrameReady() = 0;
     virtual void SwapBuffersBegin() = 0;
     virtual void SwapBuffersEnd() = 0;

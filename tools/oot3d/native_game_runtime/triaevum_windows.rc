@@ -1,0 +1,4 @@
+// TriAevum.exe's icon: the game icon of the project's branding
+// (tools/triaevum_release/branding/README.md). Icon group 1 is the icon
+// Explorer shows and the one SDL gives the game's window class.
+1 ICON "../../triaevum_release/branding/windows/triaevum.ico"

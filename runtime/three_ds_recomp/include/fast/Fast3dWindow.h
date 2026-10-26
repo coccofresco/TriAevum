@@ -5,6 +5,7 @@
 #include "FastMouseStateManager.h"
 #include "MouseCapturePolicy.h"
 #include "fast/debug/GfxDebugger.h"
+#include "fast/WindowIcon.h"
 
 #include <unordered_set>
 
@@ -93,6 +94,9 @@ class Fast3dWindow : public Ship::Window {
     // The window host's policy for the product's default output request
     // (GfxWindowBackend::ConfigureDefaultWindowExtent), before Init.
     void ConfigureDefaultWindowExtent(bool enabled, bool initialRequestIsDefault);
+    // The product's window icon (GfxWindowBackend::ConfigureWindowIcon),
+    // before Init.
+    void ConfigureWindowIcon(const WindowIconImage* icon);
     bool IsKeyDown(int32_t scancode) const;
     void RequestFocus();
 
@@ -117,6 +121,7 @@ class Fast3dWindow : public Ship::Window {
     bool mOot3dVulkanEnabled = false;
     bool mDefaultExtentEnabled = false;
     bool mInitialRequestIsDefault = false;
+    const WindowIconImage* mWindowIcon = nullptr;
     bool mInitialized = false;
     MouseCapturePolicy mMouseCapturePolicy;
     static std::unordered_set<int32_t> sPressedKeys;

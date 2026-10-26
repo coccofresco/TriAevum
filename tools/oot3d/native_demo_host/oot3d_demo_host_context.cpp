@@ -25,6 +25,7 @@
 #include "ship/controller/physicaldevice/ConnectedPhysicalDeviceManager.h"
 #include "ship/debug/CrashHandler.h"
 #include "ship/resource/ResourceLoader.h"
+#include "triaevum_window_icon.h"
 
 #include <SDL2/SDL_messagebox.h>
 
@@ -206,6 +207,7 @@ void InitContextForDemo(const Args& args) {
         window->EnableOot3dVulkanBackend();
     }
     window->ConfigureDefaultWindowExtent(!args.Scripted(), initialRequestIsDefault);
+    window->ConfigureWindowIcon(&TriAevumWindowIcon());
     if (TestFatal("vulkan-device")) {
         throw std::runtime_error(
             "the Vulkan device could not be created (simulated by TRIAEVUM_TEST_FATAL=vulkan-device)");

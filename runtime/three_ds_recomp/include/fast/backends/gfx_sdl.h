@@ -54,6 +54,7 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
     // area of the window's display (WindowExtentPolicy.h).
     WindowExtent FitWindowedExtent(WindowExtent requested) const;
     void ConfigureDefaultWindowExtent(bool enabled, bool initialRequestIsDefault) override;
+    void ConfigureWindowIcon(const WindowIconImage* icon) override;
     // The extent a windowed presentation request opens at: the default fit
     // of the screen for a default request (when the host enabled it), the
     // request fitted to the work area at startup, the request as asked later.
@@ -71,6 +72,7 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
     void SyncFramerateWithTime() const;
 
     SDL_Window* mWnd = nullptr;
+    const WindowIconImage* mWindowIcon = nullptr;
     SDL_Rect mCursorClip;
     SDL_GLContext mCtx = nullptr;
     SDL_Renderer* mRenderer = nullptr;

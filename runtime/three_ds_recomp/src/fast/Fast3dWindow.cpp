@@ -123,6 +123,7 @@ void Fast3dWindow::Init() {
             "selected Fast3D window or rendering backend is unavailable in this build");
     }
     mWindowManagerApi->ConfigureDefaultWindowExtent(mDefaultExtentEnabled, mInitialRequestIsDefault);
+    mWindowManagerApi->ConfigureWindowIcon(mWindowIcon);
     mGfxDebugger = std::make_shared<GfxDebugger>();
     mInterpreter->SetGfxDebugger(mGfxDebugger);
     mInterpreter->Init(mWindowManagerApi, mRenderingApi, Ship::Context::GetRawInstance()->GetName().c_str(),
@@ -260,6 +261,11 @@ void Fast3dWindow::ConfigureDefaultWindowExtent(bool enabled, bool initialReques
     mDefaultExtentEnabled = enabled;
     mInitialRequestIsDefault = initialRequestIsDefault;
     if (mWindowManagerApi != nullptr) mWindowManagerApi->ConfigureDefaultWindowExtent(enabled, initialRequestIsDefault);
+}
+
+void Fast3dWindow::ConfigureWindowIcon(const WindowIconImage* icon) {
+    mWindowIcon = icon;
+    if (mWindowManagerApi != nullptr) mWindowManagerApi->ConfigureWindowIcon(icon);
 }
 
 void Fast3dWindow::EnableOot3dVulkanBackend() {

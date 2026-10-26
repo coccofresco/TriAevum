@@ -94,7 +94,9 @@ target_sources(oot3d_native_game PRIVATE
 )
 if(WIN32)
     target_sources(oot3d_native_game PRIVATE
-        tools/oot3d/native_game_runtime/triaevum_windows.manifest)
+        tools/oot3d/native_game_runtime/triaevum_windows.manifest
+        # The executable's icon (tools/triaevum_release/branding).
+        tools/oot3d/native_game_runtime/triaevum_windows.rc)
     # Owner decision 12 (UX plan WP-03): players get no console window; an
     # error that ends the game shows a dialog (triaevum_fatal_report.h) and
     # developers ask for a console with --console (triaevum_console.h).

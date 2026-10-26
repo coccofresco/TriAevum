@@ -7,6 +7,7 @@ add_library(oot3d_native_application_host STATIC EXCLUDE_FROM_ALL
     tools/oot3d/native_demo_host/oot3d_demo_host_io.cpp
     tools/oot3d/native_demo_host/oot3d_demo_host_screenshot.cpp
     tools/oot3d/native_demo_host/oot3d_demo_host_window_timing.cpp
+    tools/oot3d/native_demo_host/triaevum_window_icon.cpp
 )
 target_include_directories(oot3d_native_application_host PUBLIC
     tools/oot3d/native_demo_host

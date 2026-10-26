@@ -509,6 +509,21 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
         throw std::runtime_error(std::string("SDL window creation failed for ") + gfxApiName + ": " +
                                  SDL_GetError());
     }
+#if !defined(_WIN32) && !defined(__ANDROID__) && !defined(__IOS__) && !defined(__SWITCH__)
+    // Windows takes every icon size from the executable's icon resource
+    // (SDL's window class uses its first icon); X11 and macOS take the
+    // window's own icon.
+    if (mWindowIcon != nullptr && mWindowIcon->Rgba != nullptr && mWindowIcon->Width > 0 && mWindowIcon->Height > 0) {
+        SDL_Surface* icon = SDL_CreateRGBSurfaceWithFormatFrom(
+            const_cast<uint8_t*>(mWindowIcon->Rgba), static_cast<int>(mWindowIcon->Width),
+            static_cast<int>(mWindowIcon->Height), 32, static_cast<int>(mWindowIcon->Width * 4),
+            SDL_PIXELFORMAT_RGBA32);
+        if (icon != nullptr) {
+            SDL_SetWindowIcon(mWnd, icon);
+            SDL_FreeSurface(icon);
+        }
+    }
+#endif
 #ifdef _WIN32
     // Get Windows window handle and use it to subclass the window procedure.
     // Needed to circumvent SDLs DPI scaling problems under windows (original does only scale *sometimes*).
@@ -1098,6 +1113,10 @@ WindowExtent GfxWindowBackendSDL2::FitWindowedExtent(WindowExtent requested) con
 void GfxWindowBackendSDL2::ConfigureDefaultWindowExtent(bool enabled, bool initialRequestIsDefault) {
     mDefaultExtentEnabled = enabled;
     mInitialRequestIsDefault = initialRequestIsDefault;
+}
+
+void GfxWindowBackendSDL2::ConfigureWindowIcon(const WindowIconImage* icon) {
+    mWindowIcon = icon;
 }
 
 WindowExtent GfxWindowBackendSDL2::ResolveWindowedExtent(WindowExtent requested, bool requestIsDefault,
