@@ -28,7 +28,12 @@ fn state(fixture: &Fixture) -> InstallationState {
 }
 
 fn repair(fixture: &Fixture) -> Result<Value> {
-    repair_installation(&RepairRequest::package(&fixture.package), &FakeRuntime::default(), &mut |_, _| {}, &CancelToken::new())
+    repair_installation(
+        &RepairRequest::package(&fixture.package),
+        &FakeRuntime::default(),
+        &mut |_, _| {},
+        &CancelToken::new(),
+    )
 }
 
 fn installed() -> (Fixture, Vec<(PathBuf, Vec<u8>)>) {
@@ -141,8 +146,8 @@ fn changed_kept_rom_data_needs_the_rom() {
     let (fixture, _) = installed();
     let title = title_directory(&fixture);
     let index = forge_base::fsutil::load_json_object(&title.join("content.tap")).unwrap();
-    let romfs = forge_prepare::paths::resolve_reference(index["inputs"]["romfs"]["path"].as_str().unwrap(), &title)
-        .unwrap();
+    let romfs =
+        forge_prepare::paths::resolve_reference(index["inputs"]["romfs"]["path"].as_str().unwrap(), &title).unwrap();
     let mut bytes = std::fs::read(&romfs).unwrap();
     bytes[0] ^= 0xFF;
     std::fs::write(&romfs, bytes).unwrap();

@@ -55,7 +55,7 @@ use serde_json::{json, Map, Value};
 use crate::active_title::{load_active_title, ACTIVE_TITLE};
 use crate::config_report::{changes_value, config_changes, ConfigSnapshot, Permitted};
 use crate::install::{
-    installation_paths, install_precompiled_title, package_layout, recipes_path, AndroidTarget, InstallTarget,
+    install_precompiled_title, installation_paths, package_layout, recipes_path, AndroidTarget, InstallTarget,
     PrecompiledRequest, Report,
 };
 use crate::layout::{self, HostOs};
@@ -211,7 +211,8 @@ pub fn refresh_installation(
     report: Report<'_>,
     cancel: &CancelToken,
 ) -> Result<Value> {
-    let (package, data_root) = installation_paths(&request.package_root, request.data_root.as_deref(), &request.target)?;
+    let (package, data_root) =
+        installation_paths(&request.package_root, request.data_root.as_deref(), &request.target)?;
     if !package.join(CATALOG).is_file() {
         return Ok(unchanged("developer"));
     }
@@ -265,9 +266,7 @@ pub fn refresh_installation(
     let permitted = Permitted { hud_layout: request.hud_layout, language: false };
     let changes = config_changes(&before, &ConfigSnapshot::take(&context.data_root), permitted);
     report("ready", "The update is installed. Your saves and settings were kept.");
-    let identity = |identity: &PackageIdentity, plugin: &str| {
-        json!({"runtime_sha256": identity.runtime_sha256, "plugin_sha256": plugin, "version": identity.version})
-    };
+    let identity = |identity: &PackageIdentity, plugin: &str| json!({"runtime_sha256": identity.runtime_sha256, "plugin_sha256": plugin, "version": identity.version});
     Ok(json!({
         "status": "updated",
         "recipe": text(&install.recipe, "id"),

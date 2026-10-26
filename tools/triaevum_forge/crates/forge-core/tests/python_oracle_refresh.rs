@@ -163,7 +163,8 @@ fn python_and_rust_refuse_the_same_installations() {
             .join(common::host().title_module)
     };
     let journal = || forge_core::transaction::journal_path(&fixture.package, forge_core::layout::HostOs::current());
-    let cases: [(&str, &str, Box<dyn Fn()>); 4] = [
+    type Damage<'a> = Box<dyn Fn() + 'a>;
+    let cases: [(&str, &str, Damage); 4] = [
         ("launch", "damaged plugin generation", Box::new(|| std::fs::write(old_generation(), b"damaged").unwrap())),
         ("launch", "changed launch profile", Box::new(|| std::fs::write(fixture.launch_profile(), b"{}").unwrap())),
         ("launch", "revision not in the package", Box::new(|| update::drop_title(&fixture))),

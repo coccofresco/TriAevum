@@ -54,7 +54,12 @@ pub struct RepairRequest {
 
 impl RepairRequest {
     pub fn package(package_root: impl Into<PathBuf>) -> Self {
-        Self { package_root: package_root.into(), data_root: None, target: InstallTarget::Package, hud_layout: HudLayout::Keep }
+        Self {
+            package_root: package_root.into(),
+            data_root: None,
+            target: InstallTarget::Package,
+            hud_layout: HudLayout::Keep,
+        }
     }
 }
 
@@ -107,7 +112,8 @@ pub fn repair_installation(
     report: Report<'_>,
     cancel: &CancelToken,
 ) -> Result<Value> {
-    let (package, data_root) = installation_paths(&request.package_root, request.data_root.as_deref(), &request.target)?;
+    let (package, data_root) =
+        installation_paths(&request.package_root, request.data_root.as_deref(), &request.target)?;
     let android = match &request.target {
         InstallTarget::Package => None,
         InstallTarget::Android(android) => Some(android),
@@ -142,10 +148,14 @@ pub fn repair_installation(
                 if error.kind == ErrorKind::Cancelled {
                     return Err(error);
                 }
-                return Err(needs_game_input(format!("The game data kept from your ROM is missing or changed ({})", error.message)));
+                return Err(needs_game_input(format!(
+                    "The game data kept from your ROM is missing or changed ({})",
+                    error.message
+                )));
             }
             let recipe_id = prepared.index.get("recipe").and_then(Value::as_str).unwrap_or_default().to_string();
-            let recipe = load_recipe(&recipes_path(&package), &recipe_id).map_err(|error| error.during(Operation::Repair))?;
+            let recipe =
+                load_recipe(&recipes_path(&package), &recipe_id).map_err(|error| error.during(Operation::Repair))?;
             report("activate", "Installing the verified precompiled title again...");
             let (runtime_plugin, launch_profile, android_runtime) = match android {
                 None => (

@@ -11,10 +11,11 @@
 //! terminal's.
 //!
 //! `launch_runtime` belongs in forge-core beside the activation transaction;
-//! it is here until the lead moves it. Difference from Python:
-//! `package_update.refresh_packaged_runtime` (refreshing the runtime receipt
-//! after a package was unpacked over the installation) has no Rust port yet
-//! and is not called; validation then asks to run Forge again.
+//! it is here until the lead moves it. Differences from Python (UX plan
+//! WP-04A): Play never places a packaged runtime or refreshes the receipts.
+//! A package unpacked over the installation is an update: `--play` opens
+//! Forge, whose Home offers Update (`forge_core::refresh`), and the runtime
+//! is placed inside that update's activation, after validation.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -25,14 +26,15 @@ use forge_base::{ErrorKind, ForgeError, Result};
 use forge_core::diagnostics::{explain_game_run, record_game_run, GameRun, Sources};
 use forge_core::explain::Explanation;
 use forge_core::inventory::{inventory_of, InventoryRequest, Platform};
-use forge_core::layout::{place_installed_runtime, HostOs};
+use forge_core::layout::HostOs;
+use forge_core::state::InstallationState;
 use forge_core::transaction::{installation_lock, journal_path};
 use forge_native::process::{popen_native, return_code, Environment, RunOptions};
 use forge_prepare::content::load_prepared_content;
 use serde_json::Value;
 
 use crate::active_title::load_active_title;
-use crate::installation::{host_platform, Installation};
+use crate::installation::Installation;
 
 const INTERRUPTED: &str = "An activation was interrupted; run Forge again before playing";
 
@@ -77,12 +79,6 @@ pub fn launch_runtime_capturing(installation: &Installation, sources: &Sources) 
 
 fn launch_runtime_with(installation: &Installation, stderr: Stdio) -> Result<Child> {
     let activation = &installation.layout.activation;
-    {
-        let _lock = installation_lock(activation, HostOs::current()).map_err(cannot_launch)?;
-        check_journal(installation)?;
-        // A package unpacked over the installation brings a new runtime.
-        place_installed_runtime(&installation.root, &host_platform()?).map_err(cannot_launch)?;
-    }
     let _lock = installation_lock(activation, HostOs::current()).map_err(cannot_launch)?;
     check_journal(installation)?;
     launch_runtime_locked(installation, stderr)
@@ -185,6 +181,10 @@ pub fn play(arguments: &[String]) -> i32 {
         Err(error) => return crate::app::run(None, Some(error)),
     };
     if options == ["--forge"] || load_active_title(&installation.active_title_state()).is_none() {
+        return crate::app::run(Some(installation), None);
+    }
+    // A new package is here: Forge's Home offers the update first.
+    if matches!(installation.state(), InstallationState::UpdateAvailable { .. }) {
         return crate::app::run(Some(installation), None);
     }
     let started = SystemTime::now();

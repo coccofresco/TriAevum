@@ -131,8 +131,14 @@ fn a_second_install_reuses_the_title_and_keeps_user_state() {
     };
     let options = forge_core::install::InstallOptions { hud_layout: forge_core::publish::HudLayout::Standard };
     let mut report = |_: &str, _: &str| {};
-    forge_core::install::install_private_title_with(request, options, &runtime, &mut report, &forge_base::CancelToken::new())
-        .unwrap();
+    forge_core::install::install_private_title_with(
+        request,
+        options,
+        &runtime,
+        &mut report,
+        &forge_base::CancelToken::new(),
+    )
+    .unwrap();
     let migrated = load_json_object(&topscreen).unwrap();
     assert_eq!(migrated["hud_scale"], 1.0);
     assert_eq!(migrated["hud_margin_x"], 4);

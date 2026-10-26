@@ -15,6 +15,7 @@ mod fonts;
 mod install;
 mod installation;
 mod launch;
+mod maintenance;
 mod mods;
 mod pages;
 mod recognition;

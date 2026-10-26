@@ -12,6 +12,7 @@
 //! redacted report (optionally saving the support bundle), the same JSON the
 //! C ABI and the Android installer receive. `backup` and `restore` are the
 //! Data & backups page's backup and journaled restore (UX plan WP-05B).
+//! `refresh` and `repair` are Update and Repair in place (UX plan WP-04A).
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -59,6 +60,26 @@ enum Command {
     Backup(BackupArgs),
     /// Restore a backup (--preview prints what changes; --recover undoes an interrupted restore).
     Restore(RestoreArgs),
+    /// Bind the newer package in this folder to the prepared game, without the ROM (Update in place).
+    Refresh(MaintenanceArgs),
+    /// Rebuild what is missing from the game data kept from the ROM (Repair in place).
+    Repair(MaintenanceArgs),
+}
+
+#[derive(Args)]
+struct MaintenanceArgs {
+    /// The package (default: this executable's package).
+    #[arg(long)]
+    package_root: Option<PathBuf>,
+    /// The private data folder (default: the package's data folder).
+    #[arg(long)]
+    data_root: Option<PathBuf>,
+    /// Reset the TopScreen HUD layout to the standard profile (default: keep yours).
+    #[arg(long)]
+    standard_hud_layout: bool,
+    /// Install an older package over a newer one (refresh only).
+    #[arg(long)]
+    allow_downgrade: bool,
 }
 
 #[derive(Args)]
@@ -192,6 +213,8 @@ fn main() -> ExitCode {
         Command::Diagnostics(args) => diagnostics(args),
         Command::Backup(args) => backup(args),
         Command::Restore(args) => restore(args),
+        Command::Refresh(args) => maintenance(args, false),
+        Command::Repair(args) => maintenance(args, true),
     }
 }
 
@@ -212,6 +235,65 @@ fn installation_inventory(
 fn failed(error: forge_core::ForgeError) -> ExitCode {
     explain_on_stderr(&forge_core::abi::error_event(&error));
     print_error(&error.message)
+}
+
+/// `refresh` or `repair`: stage lines on stderr and in the Forge log, the
+/// result (or the error with its explanation) as for `install`.
+fn maintenance(args: MaintenanceArgs, repair: bool) -> ExitCode {
+    use forge_core::publish::HudLayout;
+    if repair && args.allow_downgrade {
+        return print_error("--allow-downgrade belongs to refresh");
+    }
+    let package_root = match package_root(args.package_root) {
+        Ok(root) => root,
+        Err(message) => return print_error(&message),
+    };
+    let job = if repair { "repair" } else { "refresh" };
+    let log = forge_core::install::data_root(args.data_root.as_deref(), &package_root)
+        .ok()
+        .map(|data_root| ForgeLog::new(&data_root, job));
+    if let Some(log) = &log {
+        log.line("started");
+    }
+    let mut report = |stage: &str, message: &str| {
+        eprintln!("[{stage}] {message}");
+        if let Some(log) = &log {
+            log.line(&format!("stage {stage}: {message}"));
+        }
+    };
+    let hud_layout = if args.standard_hud_layout { HudLayout::Standard } else { HudLayout::Keep };
+    let cancel = CancelToken::new();
+    let outcome = if repair {
+        let request = forge_core::repair::RepairRequest {
+            data_root: args.data_root,
+            hud_layout,
+            ..forge_core::repair::RepairRequest::package(package_root)
+        };
+        forge_core::repair::repair_installation(&request, &DesktopServices, &mut report, &cancel)
+    } else {
+        let request = forge_core::refresh::RefreshRequest {
+            data_root: args.data_root,
+            hud_layout,
+            allow_downgrade: args.allow_downgrade,
+            ..forge_core::refresh::RefreshRequest::package(package_root)
+        };
+        forge_core::refresh::refresh_installation(&request, &DesktopServices, &mut report, &cancel)
+    };
+    match outcome {
+        Ok(result) => {
+            if let Some(log) = &log {
+                log.event(&forge_core::abi::succeeded_event(result.clone()));
+            }
+            print_result(&result)
+        }
+        Err(error) => {
+            if let Some(log) = &log {
+                log.error(&error);
+            }
+            explain_on_stderr(&forge_core::abi::error_event(&error));
+            print_error(&error.message)
+        }
+    }
 }
 
 fn backup(args: BackupArgs) -> ExitCode {

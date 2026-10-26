@@ -42,10 +42,51 @@ pub fn text(msg: &Msg) -> String {
         }
         UpdateHeadingVersion { present } => return format!("A new TriAevum package is here (version {present})."),
         UpdateHeadingPlain => "A new TriAevum package is here.",
-        UpdateBody => "Select your ROM again, then Update. Your saves are kept.",
-        RepairBody => "Select your ROM again, then Repair. Your saves are kept.",
+        UpdateBody => {
+            "Update installs the new package for your prepared game. Your ROM is not needed; your saves and \
+             settings are kept."
+        }
+        RepairBody => {
+            "Repair rebuilds what is missing from the game data kept from your ROM. Your saves and settings are \
+             kept."
+        }
         NeedsGameInputHeading => "Your game files are needed again to repair this installation",
         NeedsGameInputBody => "You can still play. Select your ROM again, then Repair.",
+        Updating => "Installing the update...",
+        Repairing => "Repairing the installation...",
+        Updated { version, kept } => {
+            let version = if version.is_empty() { String::new() } else { format!(" to {version}") };
+            let kept = if kept { "Your saves and settings were kept." } else { "Your saves were kept." };
+            return format!("Updated{version}. {kept}");
+        }
+        Repaired { kept } => {
+            let kept = if kept { "Your saves and settings were kept." } else { "Your saves were kept." };
+            return format!("Repaired. {kept}");
+        }
+        AlreadyCurrent => "This installation already uses this package.",
+        UpdateChanged { list } => return format!("Update changed: {list}"),
+        RepairChanged { list } => return format!("Repair changed: {list}"),
+        ChangeCreated { file } => return format!("{file} was created with its defaults"),
+        ChangeStandardLayout => "the HUD layout was reset to the standard profile",
+        ChangeLanguage => "the game language you chose was selected",
+        ChangeRemoved { file } => return format!("{file} was removed"),
+        ChangeOther { file } => return format!("{file} was changed"),
+        HudLayoutQuestion => "Reset the HUD layout to the standard profile?",
+        HudLayoutBody => {
+            "Your HUD layout differs from the standard profile. Keep mine leaves it as it is; Use standard changes \
+             these settings:"
+        }
+        HudLayoutField { name, yours, standard } => return format!("{name}: yours {yours}, standard {standard}"),
+        ButtonKeepMine => "Keep mine",
+        ButtonUseStandard => "Use standard",
+        DowngradeHeading => "Install an older package?",
+        DowngradeBody { installed, present } => {
+            return format!(
+                "This package ({present}) is older than the installed one ({installed}). Install the older version \
+                 anyway?"
+            )
+        }
+        ButtonInstallOlder => "Install older version",
         ShowDetails => "Show details",
         HideDetails => "Hide details",
         Dismiss => "Dismiss",

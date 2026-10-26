@@ -51,6 +51,14 @@ pub enum Event {
         notices: Vec<Explanation>,
     },
     InstallCancelled,
+    /// An update or repair in place ended (UX plan WP-04A): what to tell
+    /// the user, and the notices of the installation.
+    MaintenanceDone {
+        message: String,
+        notices: Vec<Explanation>,
+    },
+    /// An update needs the user's answer before it continues.
+    MaintenanceQuestion(crate::maintenance::Question),
     /// The recognized-ROM card for the ROM path `source`.
     Recognition {
         source: String,

@@ -289,6 +289,8 @@ pub struct ForgeApp {
     probe: Option<Box<Probe>>,
     /// The Data & backups page: inventory, previews and its task.
     pub(crate) data: pages::data::DataState,
+    /// Update and Repair in place: the pending question, the last operation.
+    pub(crate) maintenance: crate::maintenance::MaintenanceState,
 }
 
 impl ForgeApp {
@@ -378,6 +380,7 @@ impl ForgeApp {
             action_log: None,
             probe,
             data: Default::default(),
+            maintenance: Default::default(),
         };
         app.refresh_installation();
         app.refresh_hd();
@@ -603,6 +606,7 @@ impl ForgeApp {
             idle: self.idle(),
             revision,
             language,
+            retry_in_place: self.maintenance.last.is_some(),
         })
     }
 
@@ -705,6 +709,20 @@ impl ForgeApp {
                 self.finish_preparation();
                 self.status_note = Some(self.t(Msg::StatusCancelled));
             }
+            Event::MaintenanceDone { mut message, notices } => {
+                self.finish_preparation();
+                self.maintenance.last = None;
+                for notice in &notices {
+                    let (title, next) = (self.texts.title(notice), self.texts.next_action(notice));
+                    message.push_str(&format!("\n\n{title}\n{next}\n{}", notice.details));
+                }
+                self.notices = notices;
+                self.dialog(DialogKind::Info, message);
+            }
+            Event::MaintenanceQuestion(question) => {
+                self.finish_preparation();
+                crate::maintenance::ask(self, question);
+            }
             Event::Recognition { source, card } => {
                 if self.card.as_ref().is_some_and(|(shown, _)| *shown == source) {
                     self.card = Some((source, card));
@@ -771,7 +789,7 @@ impl ForgeApp {
     }
 
     /// The end of this window's preparation, whatever its outcome.
-    fn finish_preparation(&mut self) {
+    pub(crate) fn finish_preparation(&mut self) {
         self.busy = false;
         self.preparing = None;
         self.progress = None;
@@ -917,8 +935,16 @@ impl ForgeApp {
                 self.refresh_texts();
             }
             Action::Command(command) => {
+                use crate::maintenance::Kind;
                 let action = match command {
-                    Command::Prepare | Command::Update | Command::Repair | Command::Retry => Action::Install,
+                    // Update and Repair in place (UX plan WP-04A); Retry repeats the failed one.
+                    Command::Update => return crate::maintenance::begin(self, Kind::Update),
+                    Command::Repair => return crate::maintenance::begin(self, Kind::Repair),
+                    Command::Retry if self.maintenance.last.is_some() => {
+                        let last = self.maintenance.last.expect("checked");
+                        return crate::maintenance::begin(self, last);
+                    }
+                    Command::Prepare | Command::RepairFromRom | Command::Retry => Action::Install,
                     Command::Play => Action::Launch,
                     Command::Cancel => Action::Cancel,
                     Command::CheckInstallation => Action::CheckInstallation,
@@ -1026,7 +1052,7 @@ impl ForgeApp {
         }
     }
 
-    /// Prepare (also Update, Repair and Retry until UX plan WP-04): the
+    /// Prepare (also Repair from a ROM and Retry of a preparation): the
     /// recognized ROM in the field is prepared and installed.
     pub(crate) fn start_install(&mut self) {
         if !self.can_install() {
@@ -1036,13 +1062,25 @@ impl ForgeApp {
         let missing = |contract: Option<&forge_mods::ArchiveContract>, state: &Checked| {
             contract.is_some() && *state == Some(Ok(Status::Missing))
         };
-        self.stage = self.t(if self.hd_auto_download && missing(self.optional.hd_contract.as_ref(), &self.hd_state) {
+        let stage = self.t(if self.hd_auto_download && missing(self.optional.hd_contract.as_ref(), &self.hd_state) {
             Msg::DownloadingHdFirst
         } else if self.mod_enabled && missing(self.optional.mod_contract.as_ref(), &self.mod_state) {
             Msg::DownloadingModFirst
         } else {
             Msg::Starting
         });
+        self.maintenance.last = None;
+        self.start_task(stage, move |optional, notify, cancel| run_install(optional, plan, notify, cancel));
+    }
+
+    /// Starts a preparation (install, update, repair): Home shows its stage
+    /// and Cancel until the task's terminal event.
+    pub(crate) fn start_task(
+        &mut self,
+        stage: String,
+        work: impl FnOnce(Arc<Optional>, Notifier, CancelToken) + Send + 'static,
+    ) {
+        self.stage = stage;
         self.busy = true;
         self.preparing = Some(Instant::now());
         self.progress = None;
@@ -1055,7 +1093,7 @@ impl ForgeApp {
         let (optional, notify, cancel) =
             (Arc::clone(&self.optional), self.notifier.clone(), self.install_cancel.clone());
         self.workers.retain(|worker| !worker.is_finished());
-        self.workers.push(std::thread::spawn(move || run_install(optional, plan, notify, cancel)));
+        self.workers.push(std::thread::spawn(move || work(optional, notify, cancel)));
     }
 
     fn toggle_mod(&mut self) {
@@ -1317,6 +1355,7 @@ impl eframe::App for ForgeApp {
             }
         });
         self.show_dialog(&context);
+        crate::maintenance::show(self, &context);
         self.widgets = record.widgets;
         for action in actions {
             self.apply(action, &context, Some(frame));

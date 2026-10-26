@@ -22,7 +22,10 @@ pub enum Command {
     Prepare,
     Play,
     Update,
+    /// Repair in place from the kept ROM data (no ROM).
     Repair,
+    /// Repair when the kept ROM data is gone: the recognized ROM is prepared.
+    RepairFromRom,
     Cancel,
     CheckInstallation,
     ChooseRom,
@@ -40,7 +43,7 @@ impl Command {
             Self::Prepare => Msg::ButtonPrepare,
             Self::Play => Msg::ButtonPlay,
             Self::Update => Msg::ButtonUpdate,
-            Self::Repair => Msg::ButtonRepair,
+            Self::Repair | Self::RepairFromRom => Msg::ButtonRepair,
             Self::Cancel => Msg::ButtonCancel,
             Self::CheckInstallation => Msg::ButtonCheckInstallation,
             Self::ChooseRom => Msg::ButtonChooseRom,
@@ -53,10 +56,11 @@ impl Command {
         }
     }
 
-    /// Prepare, Update, Repair and Retry run the preparation with the
-    /// recognized ROM (in-place update and repair are UX plan WP-04).
+    /// Prepare, Repair from a ROM and Retry (of a preparation) run the
+    /// preparation with the recognized ROM; Update and Repair work in place
+    /// (UX plan WP-04A).
     fn needs_rom(self) -> bool {
-        matches!(self, Self::Prepare | Self::Update | Self::Repair | Self::Retry)
+        matches!(self, Self::Prepare | Self::RepairFromRom | Self::Retry)
     }
 }
 
@@ -187,11 +191,14 @@ pub struct HomeInput<'a> {
     pub revision: Option<&'a str>,
     /// The installed language's label.
     pub language: Option<&'a str>,
+    /// Retry repeats an update or repair in place, which needs no ROM.
+    pub retry_in_place: bool,
 }
 
 fn button(command: Command, input: &HomeInput) -> CardButton {
     let enabled = match command {
         Command::Cancel => true,
+        Command::Retry if input.retry_in_place => input.idle,
         command if command.needs_rom() => input.recognized && input.idle,
         _ => input.idle,
     };
@@ -315,9 +322,8 @@ fn state_card(input: &HomeInput, card: &mut HomeCard) -> bool {
                 _ => t(Msg::UpdateHeadingPlain),
             };
             card.lines = vec![t(Msg::UpdateBody)];
-            card.rom = RomField::Shown;
+            card.rom = RomField::Collapsed;
             card.languages = true;
-            card.hd_note = true;
             card.primary = button(Command::Update, input);
             card.status = t(Msg::StatusActionNeeded);
         }
@@ -327,7 +333,7 @@ fn state_card(input: &HomeInput, card: &mut HomeCard) -> bool {
             let explanation = state.explanation().expect("a repair state is explained");
             let remedy = remedy_command(explanation.primary_action);
             explained(card, explanation, Some(Msg::RepairBody));
-            card.rom = RomField::Shown;
+            card.rom = RomField::Collapsed;
             card.languages = true;
             card.primary = button(Command::Repair, input);
             let secondary = if remedy == Command::CheckInstallation { Command::CopyDiagnostics } else { remedy };
@@ -341,7 +347,7 @@ fn state_card(input: &HomeInput, card: &mut HomeCard) -> bool {
             card.explanation = state.explanation();
             card.rom = RomField::Shown;
             card.languages = true;
-            card.primary = button(Command::Repair, input);
+            card.primary = button(Command::RepairFromRom, input);
             // Not after "Remove prepared game": the title itself is gone.
             card.secondary = state.can_play().then(|| button(Command::Play, input));
             card.status = t(Msg::StatusActionNeeded);
@@ -593,6 +599,7 @@ mod tests {
             idle: true,
             revision: Some("Ocarina of Time 3D (EUR)"),
             language: Some("Italiano"),
+            retry_in_place: false,
         }
     }
 
@@ -637,10 +644,10 @@ mod tests {
             (Kind::NotInstalled, Command::Prepare, RomField::Shown),
             (Kind::PreparingElsewhere, Command::CheckInstallation, RomField::Hidden),
             (Kind::Ready, Command::Play, RomField::Collapsed),
-            (Kind::UpdateAvailable, Command::Update, RomField::Shown),
-            (Kind::RepairNeeded, Command::Repair, RomField::Shown),
-            (Kind::RepairNeeded, Command::Repair, RomField::Shown),
-            (Kind::NeedsGameInput, Command::Repair, RomField::Shown),
+            (Kind::UpdateAvailable, Command::Update, RomField::Collapsed),
+            (Kind::RepairNeeded, Command::Repair, RomField::Collapsed),
+            (Kind::RepairNeeded, Command::Repair, RomField::Collapsed),
+            (Kind::NeedsGameInput, Command::RepairFromRom, RomField::Shown),
             (Kind::Incompatible, Command::ViewDiagnostics, RomField::Hidden),
             (Kind::Incompatible, Command::ViewDiagnostics, RomField::Hidden),
             (Kind::Failed, Command::ChooseRom, RomField::Hidden),
@@ -689,6 +696,30 @@ mod tests {
         view.recognized = true;
         let card = card(&view);
         assert_eq!(card.secondary, Some(CardButton { command: Command::Prepare, enabled: true }));
+    }
+
+    /// UX plan WP-04A: Update and Repair work in place; only a repair whose
+    /// kept ROM data is gone asks for the ROM.
+    #[test]
+    fn update_and_repair_need_no_rom() {
+        let texts = Texts::default();
+        let states = states();
+        for state in [&states[3], &states[4]] {
+            let card = card(&input(&texts, Some(state)));
+            assert!(card.primary.enabled, "{state:?}");
+            assert!(!card.lines.iter().any(|line| line.contains("Select your ROM")), "{:?}", card.lines);
+        }
+        let needs = card(&input(&texts, Some(&states[6])));
+        assert!(!needs.primary.enabled, "the ROM must be recognized first");
+        // Retry after a failed update or repair repeats it without a ROM.
+        let failure = forge_core::explain::explain(
+            &forge_base::ForgeError::new(ErrorKind::Busy, "game running").because(forge_base::Reason::GameRunning),
+        );
+        let mut view = input(&texts, Some(&states[3]));
+        view.failure = Some(&failure);
+        assert_eq!(card(&view).primary, CardButton { command: Command::Retry, enabled: false });
+        view.retry_in_place = true;
+        assert_eq!(card(&view).primary, CardButton { command: Command::Retry, enabled: true });
     }
 
     #[test]

@@ -28,7 +28,8 @@ pub fn set_version(fixture: &Fixture, version: &str) {
 pub fn replace_package(fixture: &Fixture, version: Option<&str>, runtime: &[u8], plugin: &[u8]) {
     let catalog_path = fixture.package.join("recipes/precompiled-titles.json");
     let mut catalog = Value::Object(load_json_object(&catalog_path).unwrap());
-    let record = |relative: &str, bytes: &[u8]| json!({"path": relative, "bytes": bytes.len(), "sha256": sha256_hex(bytes)});
+    let record =
+        |relative: &str, bytes: &[u8]| json!({"path": relative, "bytes": bytes.len(), "sha256": sha256_hex(bytes)});
     write(&fixture.package.join(host().runtime), runtime);
     catalog["runtime"] = record(host().runtime, runtime);
     let plugin_path = format!("titles/{RECIPE}/{}", host().title_module);
