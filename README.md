@@ -95,17 +95,23 @@ See [ROM compatibility details](docs/TRIAEVUM_CONTENT_FAMILY_IMPORT.md).
 1. Download the **Windows-x64 ZIP**, not GitHub's source-code archive, and
    extract it into a writable folder. Besides `README.md` and `LICENSE`, its
    only file is `TriAevumForge.exe`; everything else is in subfolders.
-2. Run `TriAevumForge.exe` and select your decrypted ROM. The HD font is
-   included. For the HD HUD and menus, leave **Download the HD textures**
-   checked (chubbycubby's OoT3D Vanilla UI/HUD, in the language your ROM boots
-   in; if the download fails, select the zip from
-   [the mod page](https://gamebanana.com/mods/701929) yourself).
-3. When setup finishes, choose **Launch game**. Setup places `TriAevum.exe`
-   beside Forge; afterwards, use `TriAevum.exe`.
+2. Run `TriAevumForge.exe`, select your decrypted ROM on **Home** and press
+   **Prepare**. The HD font is included. The HD HUD and menus
+   (chubbycubby's OoT3D Vanilla UI/HUD, in the language your ROM boots in)
+   are downloaded with the preparation unless you turn them off under
+   **Enhancements**; if the download fails, select the zip from
+   [the mod page](https://gamebanana.com/mods/701929) there yourself.
+3. When preparation finishes, press **Play**. `TriAevum.exe` is then in the
+   same folder as Forge; you can start the game from either one.
 
 Keep the folder path reasonably short: Windows still has a 259-character path
 limit, and Forge now tells you how many characters to give back instead of
 letting Windows find out for you.
+
+To update, extract the new ZIP over the old folder and open Forge (or choose
+**Update from a downloaded ZIP...** on Forge's **Home**), then press
+**Update**; your saves and settings are kept and no ROM is needed. When
+something is broken, **Home** says what and offers **Repair**.
 
 ### Linux and Steam Deck
 
@@ -130,8 +136,9 @@ No compiler or SDK is needed. No ROM or original game assets are included.
 Forge prepares the bundled shaders for your GPU during setup (a few minutes
 the first time on a machine); shaders encountered later are cached while
 playing. An Internet connection is only needed for the optional HD interface
-pack and mods. Back up your saves, settings and prepared data: `data/` beside
-the Windows application, or the Linux folders above.
+pack and mods. Forge's **Data & backups** page backs up your saves, save
+states and settings into one ZIP and restores them; it also shows every
+folder (`data/` inside the Windows folder, or the Linux folders above).
 
 ## Graphics and controls
 
@@ -156,12 +163,12 @@ the Windows application, or the Linux folders above.
 
 Press **Esc** (or **R3** on a pad) for the in-game menu: the everyday
 settings, navigated with the D-pad or sticks, A to select, B to go back,
-LB / RB for the tabs, or with the mouse, while the game keeps running. Press
-**F1** for every setting. **F2** temporarily disables the main added graphics
-effects, then restores them without losing your configuration. Most of the
-presentation is configurable, so if my artistic decisions offend you
-personally, you can probably undo them. Effects can be expensive; adjust them
-to suit your GPU.
+LB / RB for the tabs, or with the mouse. The game pauses behind the menu and
+continues exactly where it stopped when you close it. Press **F1** for every
+setting. **F2** temporarily disables the main added graphics effects, then
+restores them without losing your configuration. Most of the presentation is
+configurable, so if my artistic decisions offend you personally, you can
+probably undo them. Effects can be expensive; adjust them to suit your GPU.
 
 ## Screenshots
 
@@ -200,7 +207,7 @@ qualification run.
     <td><img src="docs/images/beta12-intro-night.jpg" width="100%" alt="Link riding Epona across Hyrule Field under the moon in the title intro"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Esc / R3 in-game menu, game still running behind it</sub></td>
+    <td align="center"><sub>Esc / R3 in-game menu; the game pauses behind it</sub></td>
     <td align="center"><sub>Title intro at night, from the released package</sub></td>
   </tr>
 </table>
@@ -217,11 +224,13 @@ tweaking shaders considerably more entertaining than finishing Zelda again, so
 people willing to actually play through it are especially welcome.
 
 Please [report issues](https://github.com/coccofresco/TriAevum/issues) with the
-version, ROM input/revision, GPU/driver, settings, steps to reproduce and
-`logs/oot3d_native_game.log`. **Normal in-game save files are particularly
-useful for problems later in the game.** Review logs for personal information
-before sharing; do not upload ROMs, extracted assets or memory savestates
-containing game code.
+version, ROM input/revision, GPU/driver, settings, steps to reproduce and the
+support bundle from Forge's **Diagnostics** page (**Save support bundle...**;
+it removes user names and installation folders), or at least
+`oot3d_native_game.log` from the game's log folder, which the same page shows.
+**Normal in-game save files are particularly useful for problems later in the
+game.** Review logs for personal information before sharing; do not upload
+ROMs, extracted assets or memory savestates containing game code.
 
 Contributions, experiments and forks taking the renderer in other directions
 are welcome. [Community contributors and PR credits](docs/TRIAEVUM_CONTRIBUTIONS.md)
