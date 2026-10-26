@@ -194,22 +194,30 @@ pub fn job_update_in(event: &Value, texts: &Texts) -> Option<JobUpdate> {
     }
 }
 
-pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier, cancel: CancelToken) {
-    let download_hd =
-        plan.hd_auto_download && optional.hd_contract.is_some() && optional.hd_state(&cancel) == Ok(Status::Missing);
+/// The optional downloads the window promised before a preparation or an
+/// Apply (UX plan WP-07): the HD interface pack while it is on, the
+/// catalogued mod while it is enabled, each only when it is not stored. A
+/// failed download keeps the native files and never stops what follows.
+pub fn download_missing(
+    optional: &Optional,
+    hd_enabled: bool,
+    mod_enabled: bool,
+    texts: &Texts,
+    notify: &Notifier,
+    cancel: &CancelToken,
+) {
+    let download_hd = hd_enabled && optional.hd_contract.is_some() && optional.hd_state(cancel) == Ok(Status::Missing);
     let download_mod =
-        plan.mod_enabled && optional.mod_contract.is_some() && optional.mod_state(&cancel) == Ok(Status::Missing);
-    let texts = &plan.texts;
+        mod_enabled && optional.mod_contract.is_some() && optional.mod_state(cancel) == Ok(Status::Missing);
     if download_hd {
         notify.send(Event::Stage(texts.get(Msg::DownloadingHdFirst)));
     } else if download_mod {
         notify.send(Event::Stage(texts.get(Msg::DownloadingModFirst)));
     }
-    // A failed download keeps the native files and never stops the installation.
     if download_hd && !cancel.is_cancelled() {
         notify.send(Event::HdStage(texts.get(Msg::DownloadingHd)));
         let mut report = |text: String| notify.send(Event::HdStage(text));
-        match optional.download_hd(&mut report, &cancel) {
+        match optional.download_hd(&mut report, cancel) {
             Ok(()) => notify.send(Event::HdStage(texts.get(Msg::HdArchiveApplied))),
             Err(error) => notify.send(Event::HdFailed(texts.get(Msg::HdDownloadFailed { error: &error.message }))),
         }
@@ -217,11 +225,16 @@ pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier,
     }
     if download_mod && !cancel.is_cancelled() {
         let mut report = |text: String| notify.send(Event::ModStage(text));
-        if let Err(error) = optional.download_mod(&mut report, &cancel) {
+        if let Err(error) = optional.download_mod(&mut report, cancel) {
             notify.send(Event::ModFailed(texts.get(Msg::ModDownloadFailed { error: &error.message })));
         }
         notify.send(Event::Stage(texts.get(Msg::Starting)));
     }
+}
+
+pub fn run_install(optional: Arc<Optional>, plan: InstallPlan, notify: Notifier, cancel: CancelToken) {
+    let texts = &plan.texts;
+    download_missing(&optional, plan.hd_auto_download, plan.mod_enabled, texts, &notify, &cancel);
     if cancel.is_cancelled() {
         notify.send(Event::InstallCancelled);
         return;

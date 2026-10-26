@@ -70,8 +70,9 @@ Everything is inside the folder you extracted (here called
 The title id is `0004000000033600` for a European cartridge and
 `0004000000033500` for a North American one. A texture pack you already
 keep in the Azahar emulator's folder
-(`%APPDATA%\Azahar\load\textures\<title id>\`) keeps working from there;
-TriAevum only reads it.
+(`%APPDATA%\Azahar\load\textures\<title id>\`) keeps working from there
+until you import it on **Enhancements** (**Import it**); TriAevum only reads
+the original.
 
 Versions before this one kept save states in `<your TriAevum folder>\savestates\`
 and game logs in `<your TriAevum folder>\logs\`. After an Update, the game
@@ -159,7 +160,7 @@ A texture pack you add yourself goes, by default, into
 `~/.local/share/TriAevum/data/textures/load/<title id>/` (`0004000000033600`
 for a European cartridge, `0004000000033500` for a North American one). A
 pack you already keep in `~/.local/share/azahar/load/textures/<title id>/`
-keeps working from there.
+keeps working from there until you import it on **Enhancements**.
 
 ### Update
 
@@ -198,7 +199,7 @@ layout is the same as the AppImage's (`data/savedata/`,
 A texture pack you add yourself goes, by default, into
 `data/textures/load/<title id>/` there. A pack you already keep in
 `~/.var/app/io.github.coccofresco.TriAevum/data/azahar/load/textures/<title id>/`
-keeps working from there.
+keeps working from there until you import it on **Enhancements**.
 
 The AppImage and the Flatpak do not share files. Moving from one to the
 other: back up in one, restore in the other.
@@ -394,13 +395,25 @@ The **Enhancements** page in Forge offers:
 - **HD UI textures** for the HUD and menus, in your game's language. Forge
   downloads the author's original archive, checks it and keeps it in your
   data folder. If the download fails, download the zip from the mod page and
-  pick it with **Select .zip...**.
+  pick it with **Select .zip...**. Forge remembers whether you use it.
 - **Optional mods**, such as a Link remodel. Forge downloads the author's
   archive and applies it to your local game data only.
+- **Your texture pack**: **Import folder...** or **Import .zip...** copies
+  your own Azahar/Citra texture pack into the installation and turns on
+  **Load custom textures** (also in the game's menu, Graphics > Custom
+  textures, and in F1 > Materials > Texture packs). A pack that fails the
+  check leaves your previous pack in place.
+- **Custom RomFS folder (unsupported)**: for your own experiments, files in
+  `data/mods/custom-romfs/` replace the game's files with the same RomFS
+  path. It may break the game and is not covered by support; it is off
+  until you turn it on.
 
-A change on this page is applied by the next preparation: select your ROM on
-Home and press **Prepare** again. Without enhancements, the game uses its
-own original textures and models.
+Each card shows whether the enhancement is downloaded, whether you chose it,
+and whether the installed game uses it. **Apply changes** applies your
+choices from the game data kept from your ROM, without asking for the ROM
+again; only if that data is missing or damaged does Forge ask for your ROM.
+Your HUD layout is kept. Without enhancements, the game uses its own
+original textures and models.
 
 ## Troubleshooting
 

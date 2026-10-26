@@ -158,14 +158,13 @@ fn custom_textures(inventory: &Inventory, title_id: Option<&str>) -> Value {
         _ => None,
     };
     // A pack in Azahar's folder: still loading (legacy) or left behind.
-    let legacy = inventory
-        .entry("texture_load_legacy")
-        .map(|entry| entry.resolved_path.clone())
-        .or_else(|| {
-            effective
-                .filter(|entry| entry.origin == Origin::Legacy && crate::inventory::holds_texture_files(&entry.resolved_path))
-                .map(|entry| entry.resolved_path.clone())
-        });
+    let legacy = inventory.entry("texture_load_legacy").map(|entry| entry.resolved_path.clone()).or_else(|| {
+        effective
+            .filter(|entry| {
+                entry.origin == Origin::Legacy && crate::inventory::holds_texture_files(&entry.resolved_path)
+            })
+            .map(|entry| entry.resolved_path.clone())
+    });
     let enabled = settings.as_ref().is_some_and(|settings| settings.load_custom_textures);
     json!({
         "folder": managed.as_ref().map(|path| path.to_string_lossy().into_owned()),
@@ -183,7 +182,8 @@ fn custom_textures(inventory: &Inventory, title_id: Option<&str>) -> Value {
 
 fn same_folder(left: &Path, right: &Path) -> bool {
     let normal = |path: &Path| {
-        let text = forge_prepare::paths::resolve(path).unwrap_or_else(|_| path.to_path_buf()).to_string_lossy().into_owned();
+        let text =
+            forge_prepare::paths::resolve(path).unwrap_or_else(|_| path.to_path_buf()).to_string_lossy().into_owned();
         if cfg!(windows) {
             text.to_lowercase()
         } else {
@@ -316,7 +316,12 @@ fn import_error(error: ForgeError) -> ForgeError {
 /// Imports the user's texture pack (a folder or a zip) into the managed
 /// folder of the installed title and turns custom textures on. A flat pack
 /// first returns `{status: "confirmation_required", reason: "flat"}`.
-pub fn import_textures(request: &InventoryRequest, source: &Path, flat_confirmed: bool, cancel: &CancelToken) -> Result<Value> {
+pub fn import_textures(
+    request: &InventoryRequest,
+    source: &Path,
+    flat_confirmed: bool,
+    cancel: &CancelToken,
+) -> Result<Value> {
     let inventory = inventory_of(&InventoryRequest { sizes: false, ..request.clone() }).map_err(import_error)?;
     let data = inventory.roots.data.clone();
     let Some(title_id) = applied(&data).title_id else {
@@ -393,6 +398,11 @@ pub fn change_settings(request: &InventoryRequest, change: &SettingsChange, canc
     status(request, cancel)
 }
 
+/// Whether the installed title routes the HD interface pack.
+pub fn hd_pack_applied(data_root: &Path) -> bool {
+    applied(data_root).hd_pack
+}
+
 /// One line for the diagnostics report and the support bundle: what is
 /// applied, names and counts only (never file contents or the user's paths).
 pub fn diagnostics_line(data_root: &Path) -> String {
@@ -404,15 +414,19 @@ pub fn diagnostics_line(data_root: &Path) -> String {
     let textures = settings_service::texture_settings(&settings_service::runtime_config(data_root, false))
         .ok()
         .flatten()
-        .or_else(|| settings_service::texture_settings(&settings_service::runtime_config(data_root, true)).ok().flatten())
+        .or_else(|| {
+            settings_service::texture_settings(&settings_service::runtime_config(data_root, true)).ok().flatten()
+        })
         .map(|settings| settings.load_custom_textures);
-    let files = applied
-        .title_id
-        .as_deref()
-        .map_or(0, |title| user_textures::count_files(&data_root.join("textures").join("load").join(title), COUNT_LIMIT));
+    let files = applied.title_id.as_deref().map_or(0, |title| {
+        user_textures::count_files(&data_root.join("textures").join("load").join(title), COUNT_LIMIT)
+    });
     let custom = match (&applied.custom_romfs, custom_romfs::enabled(data_root)) {
         (Some(receipt), _) => {
-            let paths: Vec<&str> = receipt["paths"].as_array().map(|paths| paths.iter().filter_map(Value::as_str).take(10).collect()).unwrap_or_default();
+            let paths: Vec<&str> = receipt["paths"]
+                .as_array()
+                .map(|paths| paths.iter().filter_map(Value::as_str).take(10).collect())
+                .unwrap_or_default();
             format!("ACTIVE (unsupported), {} files: {}", receipt["files"], paths.join(", "))
         }
         (None, Ok(true)) => "on, not applied".to_string(),

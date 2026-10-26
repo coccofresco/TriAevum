@@ -129,8 +129,8 @@ fn folder_entries(folder: &Path, cancel: &CancelToken) -> Result<Vec<Entry>> {
     let mut pending = vec![(folder.to_path_buf(), Vec::<String>::new())];
     while let Some((directory, prefix)) = pending.pop() {
         cancel.check()?;
-        let listing =
-            fs::read_dir(&directory).map_err(|error| io_error(format!("Cannot read {}", directory.display()), error))?;
+        let listing = fs::read_dir(&directory)
+            .map_err(|error| io_error(format!("Cannot read {}", directory.display()), error))?;
         for child in listing {
             let child = child.map_err(|error| io_error(format!("Cannot read {}", directory.display()), error))?;
             let name = child.file_name().to_string_lossy().into_owned();
@@ -198,11 +198,7 @@ impl Layout {
 }
 
 /// The entries of the pack itself, relative to its root.
-fn select(
-    entries: Vec<Entry>,
-    source_name: Option<&str>,
-    title_id: &str,
-) -> Result<(Layout, Vec<Entry>)> {
+fn select(entries: Vec<Entry>, source_name: Option<&str>, title_id: &str) -> Result<(Layout, Vec<Entry>)> {
     // Title folders: the first title-id component of each file's path.
     let mut roots: BTreeSet<(Vec<String>, String)> = BTreeSet::new();
     for entry in &entries {
@@ -378,7 +374,9 @@ fn copy_entry(
     let mut limited = reader.take(MAXIMUM_FILE_BYTES + 1);
     if kind == Kind::Json {
         let mut bytes = Vec::new();
-        (&mut limited).take(MAXIMUM_JSON_BYTES + 1).read_to_end(&mut bytes)
+        (&mut limited)
+            .take(MAXIMUM_JSON_BYTES + 1)
+            .read_to_end(&mut bytes)
             .map_err(|error| io_error(format!("Cannot read {shown}"), error))?;
         if bytes.len() as u64 > MAXIMUM_JSON_BYTES {
             return Err(refuse(format!("{shown} is larger than {MAXIMUM_JSON_BYTES} bytes")));
@@ -388,7 +386,8 @@ fn copy_entry(
         fs::write(target, &bytes).map_err(|error| io_error(format!("Cannot write {}", target.display()), error))?;
         return Ok((bytes.len() as u64, Some(document)));
     }
-    let mut output = File::create(target).map_err(|error| io_error(format!("Cannot write {}", target.display()), error))?;
+    let mut output =
+        File::create(target).map_err(|error| io_error(format!("Cannot write {}", target.display()), error))?;
     let mut buffer = vec![0u8; 1 << 16];
     let mut written = 0u64;
     let mut header = Vec::with_capacity(24);
@@ -406,7 +405,9 @@ fn copy_entry(
         if written > MAXIMUM_FILE_BYTES {
             return Err(refuse(format!("{shown} is larger than {MAXIMUM_FILE_BYTES} bytes")));
         }
-        output.write_all(&buffer[..read]).map_err(|error| io_error(format!("Cannot write {}", target.display()), error))?;
+        output
+            .write_all(&buffer[..read])
+            .map_err(|error| io_error(format!("Cannot write {}", target.display()), error))?;
     }
     if kind == Kind::Png {
         png_header(&header, &shown)?;
@@ -432,10 +433,8 @@ pub fn import(source: &mut Source, request: &ImportRequest<'_>, cancel: &CancelT
     if layout == Layout::Flat && !request.flat_confirmed {
         return Err(refuse("The pack has no folder named after a game; confirm placing it under the installed game"));
     }
-    let parent = request
-        .destination
-        .parent()
-        .ok_or_else(|| ForgeError::internal("The texture folder has no parent folder"))?;
+    let parent =
+        request.destination.parent().ok_or_else(|| ForgeError::internal("The texture folder has no parent folder"))?;
     fs::create_dir_all(parent).map_err(|error| io_error(format!("Cannot create {}", parent.display()), error))?;
     let staging = tempfile::Builder::new()
         .prefix(".import-")
@@ -664,7 +663,13 @@ mod tests {
         import_path(&first, &destination, false).unwrap();
         let second = root.path().join("second.zip");
         let mapped = br#"{"textures": {"0123456789abcdef": "UI/menu.png"}}"#;
-        zip(&second, &[("load/textures/0004000000033600/pack.json", mapped), ("load/textures/0004000000033600/UI/menu.png", &png(8, 8))]);
+        zip(
+            &second,
+            &[
+                ("load/textures/0004000000033600/pack.json", mapped),
+                ("load/textures/0004000000033600/UI/menu.png", &png(8, 8)),
+            ],
+        );
         let summary = import_path(&second, &destination, false).unwrap();
         assert_eq!(summary.textures, 1, "mapped by pack.json");
         assert!(!destination.join("old").exists() && destination.join("UI/menu.png").is_file());
@@ -680,7 +685,13 @@ mod tests {
         assert_eq!(summary.layout, Layout::OtherTitle("0004000000033500".into()));
         assert_eq!(summary.to_value()["source_title"], "0004000000033500");
         let both = root.path().join("both.zip");
-        zip(&both, &[(&format!("0004000000033500/{TEXTURE}"), &png(32, 32)), (&format!("00040000000AAAAA/{TEXTURE}"), &png(32, 32))]);
+        zip(
+            &both,
+            &[
+                (&format!("0004000000033500/{TEXTURE}"), &png(32, 32)),
+                (&format!("00040000000AAAAA/{TEXTURE}"), &png(32, 32)),
+            ],
+        );
         let error = import_path(&both, &destination, false).unwrap_err();
         assert!(error.message.contains("none for the installed game"), "{}", error.message);
         // The chosen folder itself is a title folder (Azahar's own layout).

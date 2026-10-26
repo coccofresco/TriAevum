@@ -564,7 +564,8 @@ fn a_managed_profile_routes_the_data_tree_and_lists_earlier_locations() {
     write(&managed.join("load/0004000000033500/UI/tex1_8x8_00000000000000AA_13_mip0.png"), b"png");
     let inventory = resolved(&root, &installation);
     assert_backup_classes(&inventory);
-    assert_entry(&inventory, "texture_load", &managed.join("load/0004000000033500"), Origin::Default, Backup::Optional);
+    let imported = managed.join("load/0004000000033500");
+    assert_entry(&inventory, "texture_load", &imported, Origin::Default, Backup::Optional);
     let earlier = entry(&inventory, "texture_load_legacy");
     assert_eq!((earlier.origin, earlier.active, earlier.backup), (Origin::Legacy, false, Backup::Exclude));
     assert_eq!(earlier.resolved_path, azahar);

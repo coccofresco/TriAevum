@@ -6,12 +6,17 @@
 //! game's configuration. The window still follows decision 8: a kept
 //! language the ROM in use does not provide is skipped (not forgotten), and
 //! the window falls back to the system language, then English.
+//!
+//! The same file keeps the HD interface pack choice (`hd_interface_pack`,
+//! owner decision 5, UX plan WP-07), which the engine reads for every
+//! preparation (`forge_core::enhancements`); each writer keeps the other's
+//! members.
 
 use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value};
 
-pub const FORMAT: &str = "triaevum_forge_preferences_v1";
+pub const FORMAT: &str = forge_core::enhancements::PREFERENCES_FORMAT;
 const KEY: &str = "ui_language";
 
 pub fn path(data_root: &Path) -> PathBuf {
@@ -82,6 +87,11 @@ mod tests {
         let document = forge_base::fsutil::load_json_object(&file).unwrap();
         assert_eq!(document["other"], 3);
         assert_eq!(document["ui_language"], "fr");
+        // The HD interface pack choice shares the file (WP-07).
+        forge_core::enhancements::set_hd_pack_enabled(root.path(), false).unwrap();
+        save(root.path(), "it").unwrap();
+        assert!(!forge_core::enhancements::hd_pack_enabled(root.path()));
+        assert_eq!(load(root.path()).as_deref(), Some("it"));
         std::fs::write(&file, "not json").unwrap();
         assert_eq!(load(root.path()), None);
         save(root.path(), "es").unwrap();

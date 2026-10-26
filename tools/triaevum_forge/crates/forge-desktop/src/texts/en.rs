@@ -156,10 +156,7 @@ pub fn text(msg: &Msg) -> String {
         ReadyDialog => "The title is ready. You can launch TriAevum \u{2014} Echoes of Time now.",
         CloseWhileBusy => "Title preparation is still running. Close Forge?",
         ConfirmCancel => "Stop the preparation? What was installed before stays usable.",
-        EnhancementsBody => {
-            "Optional enhancements are applied by the next preparation. Without them the game uses its native \
-             assets."
-        }
+        EnhancementsBody => "Choose the enhancements you want, then press Apply changes. Without them the game uses its native assets.",
         HdHeading => "HD UI textures (recommended)",
         HdDescription { title, version, author, credits, license } => {
             return format!(
@@ -176,18 +173,13 @@ pub fn text(msg: &Msg) -> String {
         SelectFolder => "Select extracted folder...",
         ModPage => "Mod page",
         License => "License",
-        HdAutoDownload => "Download the HD textures with \"Prepare\" when they are not stored yet",
+        HdAutoDownload => "Use the HD interface pack (downloaded with Prepare or Apply changes when it is not stored yet)",
         NotAvailable => "Not available for the supported game revisions of this package.",
         CheckingStored => "Checking the stored files...",
         HdCheckFailed { error } => return format!("Cannot check the HD textures: {error}"),
-        HdReady => "HD textures ready. They are applied when you prepare and install the title.",
-        HdArchive => "HD texture archive stored. It is prepared and applied when you prepare and install the title.",
-        HdMissingAuto { megabytes } => {
-            return format!(
-                "Not stored yet: the HD textures ({megabytes} MB) are downloaded when you prepare and install the \
-                 title. Without them the game uses the native textures."
-            )
-        }
+        HdReady => "HD textures ready. They are applied by Apply changes and by the next preparation.",
+        HdArchive => "HD texture archive stored. It is prepared and applied by Apply changes and by the next preparation.",
+        HdMissingAuto { megabytes } => return format!("Not stored yet: the HD textures ({megabytes} MB) are downloaded when you prepare the title or apply changes. Without them the game uses the native textures."),
         HdMissing => "Not installed: the game uses the native textures.",
         ModHeading => "Optional mods",
         ModDescription { title, version, author, testing, tools, license } => {
@@ -198,22 +190,17 @@ pub fn text(msg: &Msg) -> String {
                  download does not work, download the archive from the mod page and select it here."
             )
         }
-        ModCheckbox { title } => return format!("Use {title} (applied by \"Prepare\")"),
+        ModCheckbox { title } => return format!("Use {title}"),
         ModDownload => "Download mod",
         SelectRar => "Select .rar...",
         ModSettingsUnreadable { error } => return format!("Cannot read the mod settings: {error}"),
         ModCheckFailed { error } => return format!("Cannot check the mod files: {error}"),
-        ModMissingEnabled => "Not downloaded. It is downloaded when you prepare and install the title.",
+        ModMissingEnabled => "Not downloaded. It is downloaded when you apply changes or prepare the title.",
         ModOff => "Off: the game uses its native models.",
-        ModOn => "On: applied when you prepare and install the title.",
+        ModOn => "On: applied by Apply changes and by the next preparation.",
         ModOffKept => "Off: the game uses its native models. The downloaded archive is kept.",
-        ApplyModChange => " Prepare and install the title again to apply the change.",
-        HdDownloadFailed { error } => {
-            return format!(
-                "HD texture download failed: {error} The title is prepared with the native textures. Download the \
-                 zip from the mod page and select it with \"Select .zip...\", then prepare and install again."
-            )
-        }
+        ApplyModChange => " Press Apply changes to apply it.",
+        HdDownloadFailed { error } => return format!("HD texture download failed: {error} The title is prepared with the native textures. Download the zip from the mod page and select it with \"Select .zip...\", then apply changes."),
         ModDownloadFailed { error } => {
             return format!(
                 "Mod download failed: {error} The title is prepared with the native models. Download the archive \
@@ -235,10 +222,8 @@ pub fn text(msg: &Msg) -> String {
         VerifyingFiles => "Verifying the extracted files...",
         DownloadingHd => "Downloading the HD textures...",
         DownloadingMod { title } => return format!("Downloading {title}..."),
-        HdReadyReinstall => "HD textures ready. Prepare and install the title again to apply them.",
-        ModReadyReinstall { title } => {
-            return format!("{title} is ready. Prepare and install the title again to apply it.")
-        }
+        HdReadyReinstall => "HD textures ready. Press Apply changes to use them.",
+        ModReadyReinstall { title } => return format!("{title} is ready. Press Apply changes to use it."),
         HdArchiveApplied => "HD texture archive ready. It is applied by this installation.",
         DownloadsFolderNote => {
             "Forge keeps the archives it downloads in this folder, and a checked copy of each archive you select. \
@@ -297,6 +282,10 @@ pub fn text(msg: &Msg) -> String {
                 "forge_logs" => "Forge logs",
                 "crash_dumps" => "Crash reports",
                 "android_diagnostics" => "Startup reports",
+                "texture_load_legacy" => "Texture pack in Azahar's folder",
+                "save_states_legacy" => "Save states in the earlier folder",
+                "game_logs_legacy" => "Game logs in the earlier folder",
+                "crash_dumps_legacy" => "Crash reports in the earlier folder",
                 "active_title" => "Installed game record",
                 other => other,
             }
@@ -519,6 +508,73 @@ pub fn text(msg: &Msg) -> String {
         ForgeLanguage => "Forge language",
         ForgeLanguageNote => {
             "The languages of your game. Texts not translated yet are shown in English. Your choice is remembered."
+        }
+        StateDownloaded { version } => return format!("Downloaded: version {version}"),
+        StateNotDownloaded => "Not downloaded",
+        StateOn => "Your choice: on",
+        StateOff => "Your choice: off",
+        StateApplied => "Applied: the installed game uses it",
+        StateNotApplied => "Applied: no",
+        StateApplyPending => "Not applied yet: press Apply changes",
+        StateAppliedLater => "Applied when you prepare the game",
+        HdPreferenceNotSaved { error } => return format!("The HD interface choice could not be saved: {error}"),
+        TexturesHeading => "Your texture pack",
+        TexturesDescription => "Your own Azahar or Citra texture pack (tex1_... .png files). Forge copies it into the folder below and checks it; the game draws it above the HD interface pack and its own textures. Import a folder or a .zip, with or without the game's title folder.",
+        TexturesImported { files } => return format!("Imported: {files} files"),
+        TexturesNone => "Imported: no texture pack yet",
+        TexturesLoadCheckbox => "Load custom textures",
+        TexturesApplied => "Applied: the game loads it when it starts",
+        TexturesShadowedSettings => "Not loaded: F1 > Materials > Texture packs names another folder (below).",
+        TexturesShadowedEnvironment => "Not loaded: the OOT3D_AZAHAR_LOAD_DIRECTORY environment variable names another folder (below).",
+        TexturesShadowedAzahar => "Not loaded: the game still loads the pack in Azahar's folder (below). Import it to use your installation's folder.",
+        TexturesOlderProfile => "Not loaded yet: press Apply changes so the game uses this folder.",
+        TexturesLegacy => "A texture pack is in Azahar's own folder. Import it to keep it with this installation; the original stays where it is.",
+        ButtonUseThisFolder => "Use the installation's folder",
+        ButtonImportTextureFolder => "Import folder...",
+        ButtonImportTextureZip => "Import .zip...",
+        ButtonImportLegacy => "Import it",
+        TexturesImporting => "Checking and copying your texture pack...",
+        TexturesChoosing => "Choose your texture pack in the dialog...",
+        TexturesImportDone { textures, files } => return format!("Texture pack imported: {textures} textures in {files} files. Load custom textures is on."),
+        TexturesImportOtherTitle { title } => return format!("It was made for {title}; textures are matched by their content, so it works here too."),
+        TexturesImportFailed { error } => return format!("The texture pack was not imported: {error}. Your previous pack is unchanged."),
+        TexturesSettingsFailed { error } => return format!("The texture setting could not be changed: {error}"),
+        TexturesFlatQuestion => "This pack has no folder named after a game. Place it under the installed game anyway?",
+        ButtonPlaceIt => "Place it",
+        PickTexturesFolder => "Select your texture pack folder",
+        PickTexturesZip => "Select your texture pack (.zip)",
+        CustomRomfsHeading => "Custom RomFS folder (unsupported)",
+        CustomRomfsWarning => "Unsupported: may break the game; not covered by support.",
+        CustomRomfsDescription => "For your own experiments: files in this folder replace the game's files with the same RomFS path, for example actor/zelda_link_boy_new.zar. Only files the game has are replaced; at most 4096 files of up to 64 MB each, 1 GB in total. An optional triaevum-custom-romfs.json can name the set. Forge never packages or shares these files.",
+        CustomRomfsFiles { files } => return format!("In the folder: {files} files"),
+        CustomRomfsNamed { name, files } => return format!("In the folder: {name}, {files} files"),
+        CustomRomfsEmpty => "In the folder: nothing yet",
+        CustomRomfsRejected { reason } => return format!("Not usable: {reason}"),
+        CustomRomfsFlagged { reason } => return format!("Note: {reason}"),
+        CustomRomfsCheckbox => "Use the custom RomFS folder",
+        CustomRomfsConfirm => "Turn on the custom RomFS folder? Unsupported: may break the game; not covered by support. You can turn it off and apply changes again at any time.",
+        ButtonTurnOn => "Turn it on",
+        CustomRomfsApplied { files } => return format!("Applied: {files} files replace the game's"),
+        ApplyHeading => "Apply changes",
+        ApplyBody => "Forge applies your choices from the game data kept from your ROM, without asking for the ROM again. Only if that data is missing or damaged does it ask for your ROM.",
+        ApplyPending => "Some choices are not applied yet.",
+        ApplyCurrent => "The installed game uses your current choices.",
+        ApplyNotInstalled => "Your choices are applied when you prepare the game on Home.",
+        ButtonApplyChanges => "Apply changes",
+        HudLayoutPolicyKeep => "HUD layout: yours is kept.",
+        HudLayoutPolicyAsk => "HUD layout: yours differs from the standard profile; Apply changes asks first (Keep mine is the default).",
+        ApplyingEnhancements => "Applying your enhancement choices...",
+        ApplyChanged { list } => return format!("Apply changed: {list}"),
+        EnhancementsLoading => "Reading the enhancement states...",
+        EnhancementsGameRunning => "The game is running: close it to apply changes or change the texture setting.",
+        EnhancementsStatusFailed { error } => return format!("Cannot read the enhancement states: {error}"),
+        SettingNotSaved { error } => return format!("The setting could not be saved: {error}"),
+        SavingSetting => "Saving the setting...",
+        DataInactive => "Not in use",
+        DataOldProfileNote => "Some files are still where an older version kept them. Run Update or Repair on Home (or Apply changes on Enhancements) to use the new folders; files are never moved without it.",
+        EnhancementsApplied { kept } => {
+            let kept = if kept { "Your saves and settings were kept." } else { "Your saves were kept." };
+            return format!("Enhancements applied. {kept}");
         }
         ForgeLanguageNotSaved { error } => return format!("The Forge language could not be saved: {error}"),
         Size { value, power } => {

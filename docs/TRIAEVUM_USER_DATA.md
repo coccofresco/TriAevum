@@ -138,8 +138,11 @@ The game reads a custom texture pack from the first of these that is set
    and `dump/textures/<title id>/`;
 4. the installation's own folders, `D/textures/load/<title id>/` and
    `D/textures/dump/<title id>/`. A pack that is already in the Azahar
-   emulator's folder (below) keeps loading from there, so an installed pack
-   never disappears;
+   emulator's folder (below) keeps loading from there while the
+   installation's load folder holds no file, so an installed pack never
+   disappears; once a pack is imported there (Forge > Enhancements, F1
+   Import...), the installation's folder wins and the Azahar folder is an
+   inactive row on Data & backups ([enhancements](TRIAEVUM_ENHANCEMENTS.md));
 5. the Azahar emulator's user folder: `load/textures/<title id>/` and
    `dump/textures/<title id>/` (installations whose launch profile does not
    name the folders of step 4 yet).

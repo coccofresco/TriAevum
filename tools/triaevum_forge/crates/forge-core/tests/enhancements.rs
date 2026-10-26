@@ -82,10 +82,8 @@ fn apply_needs_no_rom_while_the_kept_data_verifies() {
     assert_eq!(before["apply_needed"], false);
 
     // The catalogued mod on: Apply runs from the kept data, no ROM.
-    let change = enhancements::SettingsChange {
-        mod_enabled: Some(("vanilla_plus_link".into(), true)),
-        ..Default::default()
-    };
+    let change =
+        enhancements::SettingsChange { mod_enabled: Some(("vanilla_plus_link".into(), true)), ..Default::default() };
     let after = enhancements::change_settings(&inventory(&fixture), &change, &CancelToken::new()).unwrap();
     assert_eq!(after["mods"][0]["enabled"], true);
     let mut stages = Vec::new();
@@ -213,7 +211,10 @@ fn the_jobs_follow_the_contract() {
     settings["custom_romfs"] = json!(true);
     let events = run(settings);
     let result = &events.last().unwrap()["result"];
-    assert_eq!((result["hd_pack"]["enabled"].clone(), result["custom_romfs"]["enabled"].clone()), (json!(false), json!(true)));
+    assert_eq!(
+        (result["hd_pack"]["enabled"].clone(), result["custom_romfs"]["enabled"].clone()),
+        (json!(false), json!(true))
+    );
     let mut bad = base("enhancement_settings");
     bad["mod"] = json!({"id": "vanilla_plus_link"});
     assert!(forge_core::jobs::start(serde_json::to_string(&bad).unwrap().as_bytes()).is_err());

@@ -64,10 +64,7 @@ fn graphics<'a>(document: &'a Map<String, Value>, path: &Path) -> Result<&'a Map
         .and_then(Value::as_u64)
         .ok_or_else(|| settings_error(path, "the graphics settings have no schema version"))?;
     if schema > GRAPHICS_SCHEMA {
-        return Err(settings_error(
-            path,
-            "a newer TriAevum wrote these settings; change them in the game's menu",
-        ));
+        return Err(settings_error(path, "a newer TriAevum wrote these settings; change them in the game's menu"));
     }
     if schema < TEXTURE_FOLDERS_SCHEMA {
         return Err(settings_error(path, "the graphics settings are from an older TriAevum; start the game once"));
@@ -111,9 +108,9 @@ pub fn apply_texture_change(config: &Path, change: TextureChange) -> Result<Text
     if !packs.is_object() {
         return Err(settings_error(config, "Graphics.TexturePacks is not an object"));
     }
-    let azahar = packs.as_object_mut().expect("checked").entry("Azahar").or_insert_with(|| {
-        json!({"DumpTextures": false, "LoadCustomTextures": false, "LoadDirectory": "", "DumpDirectory": ""})
-    });
+    let azahar = packs.as_object_mut().expect("checked").entry("Azahar").or_insert_with(
+        || json!({"DumpTextures": false, "LoadCustomTextures": false, "LoadDirectory": "", "DumpDirectory": ""}),
+    );
     let Some(azahar) = azahar.as_object_mut() else {
         return Err(settings_error(config, "Graphics.TexturePacks.Azahar is not an object"));
     };
@@ -165,7 +162,8 @@ mod tests {
         assert_eq!(after["CVars"], before["CVars"]);
         assert_eq!(after["Graphics"]["Preset"], "Enhanced", "the preset stays (presets keep texture packs)");
         assert_eq!(after["Graphics"]["TexturePacks"]["Azahar"]["DumpTextures"], false);
-        let off = apply_texture_change(&path, TextureChange { load_custom_textures: Some(false), ..Default::default() });
+        let off =
+            apply_texture_change(&path, TextureChange { load_custom_textures: Some(false), ..Default::default() });
         assert!(!off.unwrap().load_custom_textures);
     }
 

@@ -6,8 +6,9 @@
 //! WP-09; owner decision 5: there it is always the user's choice):
 //!
 //! - `ui_pack_status`: whether the revision accepts the pack, whether it is
-//!   missing, stored as its original archive or prepared, and its size,
-//!   author and license for the frontend's texts.
+//!   missing, stored as its original archive or prepared, its size, author
+//!   and license for the frontend's texts, and whether the installed game
+//!   uses it (`applied`; `apply_enhancements` applies it without the ROM).
 //! - `ui_pack_download`: the user's download of the original archive into
 //!   `D/downloads` (verified size and SHA-256; progress events; cancellable
 //!   between reads). Nothing is downloaded when it is already there.
@@ -15,9 +16,9 @@
 //!   from a path or (Android) a document descriptor, kept only when it is
 //!   the original.
 //!
-//! The next installation applies a stored archive
-//! (`forge_mods::prepare_ui_texture_pack`); nothing here changes the
-//! installed title. Requests: `package_root?`, `data_root?` and `android?`
+//! The next installation, or `apply_enhancements` from the kept ROM data,
+//! applies a stored archive (`forge_mods::prepare_ui_texture_pack`); nothing
+//! here changes the installed title. Requests: `package_root?`, `data_root?` and `android?`
 //! as for `install`; `ui_pack_import` adds `source`.
 
 use std::io::Read;
@@ -66,7 +67,14 @@ pub(super) fn start(name: &str, request: &Map<String, Value>) -> Result<Job> {
     };
     let job = UiPackJob { kind, package_root, data_root, source };
     let log = (kind != Kind::Status).then(|| ForgeLog::new(&job.data_root, name));
-    Ok(Job::spawn_logged(log, move |sink, cancel| job.run(sink, cancel)))
+    Ok(Job::spawn_logged(log, move |sink, cancel| {
+        // Whether the installed game uses the pack (UX plan WP-07: the
+        // installer offers to apply a stored pack without the ROM).
+        let data_root = job.data_root.clone();
+        let mut value = job.run(sink, cancel)?;
+        value["applied"] = json!(crate::enhancements::hd_pack_applied(&data_root));
+        Ok(value)
+    }))
 }
 
 impl UiPackJob {
@@ -252,6 +260,7 @@ mod tests {
         assert_eq!(result["bytes"], payload.len());
         assert_eq!(result["archive_name"], "pack.zip");
         assert_eq!(result["license_name"], "CC BY-NC-ND 4.0");
+        assert_eq!(result["applied"], false, "nothing installed");
 
         let without = package_with(None);
         let events = run(request("ui_pack_status", without.path(), data.path()));

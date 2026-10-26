@@ -249,11 +249,42 @@ fn apply_screen(app: &mut ForgeApp, screen: &str) {
             crate::pages::data::probe(app, data);
             InstallationState::NotInstalled
         }
+        "enhancements" => {
+            app.page = Page::Enhancements;
+            enhancements_probe(app);
+            InstallationState::NotInstalled
+        }
         page => {
             app.page = Page::ALL.into_iter().find(|candidate| candidate.code() == page).unwrap_or(Page::Home);
             InstallationState::NotInstalled
         }
     });
+}
+
+/// The layout probe's page: every card in its fullest state (synthetic).
+fn enhancements_probe(app: &mut ForgeApp) {
+    let data = app.installation.data_root.display().to_string();
+    let managed = format!("{data}/textures/load/0004000000033600");
+    app.enhancements.status = Some(json!({
+        "format": forge_core::enhancements::STATUS_FORMAT,
+        "installed": true, "title_id": "0004000000033600", "retained_sources": true, "game_running": false,
+        "hd_pack": {"stored": "archive", "enabled": true, "applied": false, "available": true},
+        "mods": [{"id": "vanilla_plus_link", "stored": "ready", "enabled": true, "applied": true}],
+        "custom_textures": {"folder": managed, "files": 1283, "enabled": true, "routed": false,
+            "effective_folder": "C:/Users/Player/AppData/Roaming/Azahar/load/textures/0004000000033600",
+            "shadowed_by": "settings", "settings_error": null,
+            "legacy_folder": "C:/Users/Player/AppData/Roaming/Azahar/load/textures/0004000000033600", "applied": false},
+        "custom_romfs": {"present": true, "name": "Test overlay", "files": 3, "enabled": true, "applicable": true,
+            "applied": false, "applied_files": 0, "applied_current": false,
+            "rejected": [], "flagged": [
+                {"kind": "not_in_romfs", "path": "actor/new.zar", "message": "the game's RomFS has no actor/new.zar; it is left out"},
+                {"kind": "conflicts_with_mod", "path": "misc/menu_link.zar",
+                 "message": "misc/menu_link.zar is also replaced by Vanilla+ - Link Remodel And HD Item Models; this folder's file is used"}]},
+        "hud_layout": {"policy": "keep", "differs": true, "fields": ["hud_margin_x"]},
+        "apply_needed": true,
+    }));
+    app.enhancements.confirm_custom_romfs = true;
+    app.enhancements.flat_pending = Some(std::path::PathBuf::from("C:/Users/Player/Downloads/my_pack.zip"));
 }
 
 /// What the probe does next; `Wait` lets the layout settle.

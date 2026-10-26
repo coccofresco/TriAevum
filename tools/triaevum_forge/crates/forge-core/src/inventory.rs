@@ -860,7 +860,9 @@ impl Resolver<'_> {
 
         // Custom textures.
         let (texture_load, texture_dump, load_origin, dump_origin) = self.texture_folders(&runtime_config)?;
-        self.push(Location::new(C::Textures, "texture_load", texture_load.clone(), Directory, Optional).origin(load_origin));
+        self.push(
+            Location::new(C::Textures, "texture_load", texture_load.clone(), Directory, Optional).origin(load_origin),
+        );
         self.push(Location::new(C::Textures, "texture_dump", texture_dump, Directory, Exclude).origin(dump_origin));
         // A pack imported into the managed folder outranks the one left in
         // Azahar's folder (UX plan WP-07), which stays listed, never touched.

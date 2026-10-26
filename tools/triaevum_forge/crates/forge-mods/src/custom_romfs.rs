@@ -86,16 +86,25 @@ pub enum Issue {
     Link(String),
     InvalidName(String),
     Empty(String),
-    TooLarge { path: String, bytes: u64 },
+    TooLarge {
+        path: String,
+        bytes: u64,
+    },
     TooManyFiles(usize),
     TooLargeTotal(u64),
     TooDeep(String),
     Manifest(String),
-    Unreadable { path: String, error: String },
+    Unreadable {
+        path: String,
+        error: String,
+    },
     /// Flagged: the base RomFS has no such file, so nothing can replace it.
     NotInRomfs(String),
     /// Flagged: a catalogued mod replaces the same file; the custom one wins.
-    ConflictsWithMod { path: String, title: String },
+    ConflictsWithMod {
+        path: String,
+        title: String,
+    },
 }
 
 impl Issue {
@@ -132,7 +141,9 @@ impl Issue {
             Self::Manifest(error) => format!("{MANIFEST_NAME} is invalid: {error}"),
             Self::Unreadable { path, error } => format!("{path} cannot be read: {error}"),
             Self::NotInRomfs(path) => format!("the game's RomFS has no {path}; it is left out"),
-            Self::ConflictsWithMod { path, title } => format!("{path} is also replaced by {title}; this folder's file is used"),
+            Self::ConflictsWithMod { path, title } => {
+                format!("{path} is also replaced by {title}; this folder's file is used")
+            }
         }
     }
 
@@ -390,7 +401,10 @@ mod tests {
         let scan = scan(data.path(), &CancelToken::new()).unwrap();
         assert!(scan.applicable(), "{scan:?}");
         assert_eq!(scan.name.as_deref(), Some("My test"));
-        assert_eq!(scan.files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>(), ["actor/a.zar", "misc/menu.zar"]);
+        assert_eq!(
+            scan.files.iter().map(|file| file.path.as_str()).collect::<Vec<_>>(),
+            ["actor/a.zar", "misc/menu.zar"]
+        );
         assert_eq!(scan.bytes, 3);
         // A romfs/ folder is the root when present.
         let nested = tempfile::tempdir().unwrap();
@@ -477,10 +491,7 @@ mod tests {
         scan.check_mods(&members);
         assert!(scan.applicable());
         assert_eq!(scan.files.len(), 2);
-        assert_eq!(
-            scan.flagged.iter().map(Issue::kind).collect::<Vec<_>>(),
-            ["not_in_romfs", "conflicts_with_mod"]
-        );
+        assert_eq!(scan.flagged.iter().map(Issue::kind).collect::<Vec<_>>(), ["not_in_romfs", "conflicts_with_mod"]);
         let value = scan.to_value();
         assert_eq!(value["flagged"][0]["path"], "actor/new.zar");
         assert_eq!(value["files"], 2);

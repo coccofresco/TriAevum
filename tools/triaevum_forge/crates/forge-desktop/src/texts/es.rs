@@ -173,10 +173,7 @@ pub fn text(msg: &Msg) -> Option<String> {
         ReadyDialog => "El título está listo. Ya puedes iniciar TriAevum \u{2014} Echoes of Time.",
         CloseWhileBusy => "La preparación del título sigue en curso. ¿Cerrar Forge?",
         ConfirmCancel => "¿Detener la preparación? Lo que estaba instalado antes sigue siendo utilizable.",
-        EnhancementsBody => {
-            "Las mejoras opcionales se aplican en la próxima preparación. Sin ellas, el juego usa sus recursos \
-             nativos."
-        }
+        EnhancementsBody => "Elige las mejoras que quieras y pulsa «Aplicar cambios». Sin ellas, el juego usa sus recursos nativos.",
         HdHeading => "Texturas HD de la interfaz (recomendadas)",
         HdDescription { title, version, author, credits, license } => {
             return Some(format!(
@@ -193,18 +190,13 @@ pub fn text(msg: &Msg) -> Option<String> {
         SelectFolder => "Seleccionar carpeta extraída...",
         ModPage => "Página del mod",
         License => "Licencia",
-        HdAutoDownload => "Descargar las texturas HD con «Preparar» si aún no están guardadas",
+        HdAutoDownload => "Usar el paquete de interfaz HD (se descarga con «Preparar» o «Aplicar cambios» si aún no está guardado)",
         NotAvailable => "No disponible para las revisiones del juego compatibles con este paquete.",
         CheckingStored => "Comprobando los archivos guardados...",
         HdCheckFailed { error } => return Some(format!("No se pueden comprobar las texturas HD: {error}")),
-        HdReady => "Texturas HD listas. Se aplican al preparar e instalar el título.",
-        HdArchive => "Archivo de texturas HD guardado. Se prepara y se aplica al preparar e instalar el título.",
-        HdMissingAuto { megabytes } => {
-            return Some(format!(
-                "Aún no guardadas: las texturas HD ({megabytes} MB) se descargan al preparar e instalar el título. \
-                 Sin ellas, el juego usa las texturas nativas."
-            ))
-        }
+        HdReady => "Texturas HD listas. Se aplican con «Aplicar cambios» y en la próxima preparación.",
+        HdArchive => "Archivo de texturas HD guardado. Se prepara y se aplica con «Aplicar cambios» y en la próxima preparación.",
+        HdMissingAuto { megabytes } => return Some(format!("Aún no guardadas: las texturas HD ({megabytes} MB) se descargan al preparar el título o aplicar cambios. Sin ellas, el juego usa las texturas nativas.")),
         HdMissing => "No instaladas: el juego usa las texturas nativas.",
         ModHeading => "Mods opcionales",
         ModDescription { title, version, author, testing, tools, license } => {
@@ -216,23 +208,17 @@ pub fn text(msg: &Msg) -> Option<String> {
                  selecciónalo aquí."
             ))
         }
-        ModCheckbox { title } => return Some(format!("Usar {title} (lo aplica «Preparar»)")),
+        ModCheckbox { title } => return Some(format!("Usar {title}")),
         ModDownload => "Descargar mod",
         SelectRar => "Seleccionar .rar...",
         ModSettingsUnreadable { error } => return Some(format!("No se pueden leer los ajustes del mod: {error}")),
         ModCheckFailed { error } => return Some(format!("No se pueden comprobar los archivos del mod: {error}")),
-        ModMissingEnabled => "No descargado. Se descarga al preparar e instalar el título.",
+        ModMissingEnabled => "No descargado. Se descarga al aplicar cambios o preparar el título.",
         ModOff => "Desactivado: el juego usa sus modelos nativos.",
-        ModOn => "Activado: se aplica al preparar e instalar el título.",
+        ModOn => "Activado: se aplica con «Aplicar cambios» y en la próxima preparación.",
         ModOffKept => "Desactivado: el juego usa sus modelos nativos. Se conserva el archivo descargado.",
-        ApplyModChange => " Vuelve a preparar e instalar el título para aplicar el cambio.",
-        HdDownloadFailed { error } => {
-            return Some(format!(
-                "Error al descargar las texturas HD: {error} El título se prepara con las texturas nativas. \
-                 Descarga el zip desde la página del mod, selecciónalo con «Seleccionar .zip...» y vuelve a \
-                 preparar e instalar."
-            ))
-        }
+        ApplyModChange => " Pulsa «Aplicar cambios» para aplicarlo.",
+        HdDownloadFailed { error } => return Some(format!("Error al descargar las texturas HD: {error} El título se prepara con las texturas nativas. Descarga el zip desde la página del mod, selecciónalo con «Seleccionar .zip...» y aplica los cambios.")),
         ModDownloadFailed { error } => {
             return Some(format!(
                 "Error al descargar el mod: {error} El título se prepara con los modelos nativos. Descarga el \
@@ -256,10 +242,8 @@ pub fn text(msg: &Msg) -> Option<String> {
         VerifyingFiles => "Verificando los archivos extraídos...",
         DownloadingHd => "Descargando las texturas HD...",
         DownloadingMod { title } => return Some(format!("Descargando {title}...")),
-        HdReadyReinstall => "Texturas HD listas. Vuelve a preparar e instalar el título para aplicarlas.",
-        ModReadyReinstall { title } => {
-            return Some(format!("{title} está listo. Vuelve a preparar e instalar el título para aplicarlo."))
-        }
+        HdReadyReinstall => "Texturas HD listas. Pulsa «Aplicar cambios» para usarlas.",
+        ModReadyReinstall { title } => return Some(format!("{title} está listo. Pulsa «Aplicar cambios» para usarlo.")),
         HdArchiveApplied => "Archivo de texturas HD listo. Lo aplica esta instalación.",
         DownloadsFolderNote => {
             "Forge guarda en esta carpeta los archivos que descarga y una copia comprobada de cada archivo que \
@@ -321,6 +305,10 @@ pub fn text(msg: &Msg) -> Option<String> {
                     "forge_logs" => "Registros de Forge",
                     "crash_dumps" => "Informes de fallos",
                     "android_diagnostics" => "Informes de inicio",
+                    "texture_load_legacy" => "Paquete de texturas en la carpeta de Azahar",
+                    "save_states_legacy" => "Estados guardados en la carpeta anterior",
+                    "game_logs_legacy" => "Registros del juego en la carpeta anterior",
+                    "crash_dumps_legacy" => "Informes de fallos en la carpeta anterior",
                     "active_title" => "Registro del juego instalado",
                     other => other,
                 }
@@ -580,6 +568,73 @@ pub fn text(msg: &Msg) -> Option<String> {
         ForgeLanguageNote => {
             "Los idiomas de tu juego. Los textos aún no traducidos se muestran en inglés. Tu elección se \
              recuerda."
+        }
+        StateDownloaded { version } => return Some(format!("Descargado: versión {version}")),
+        StateNotDownloaded => "No descargado",
+        StateOn => "Tu elección: activado",
+        StateOff => "Tu elección: desactivado",
+        StateApplied => "Aplicado: el juego instalado lo usa",
+        StateNotApplied => "Aplicado: no",
+        StateApplyPending => "Aún no aplicado: pulsa «Aplicar cambios»",
+        StateAppliedLater => "Se aplica al preparar el juego",
+        HdPreferenceNotSaved { error } => return Some(format!("No se ha podido guardar la elección de la interfaz HD: {error}")),
+        TexturesHeading => "Tu paquete de texturas",
+        TexturesDescription => "Tu propio paquete de texturas de Azahar o Citra (archivos tex1_... .png). Forge lo copia en la carpeta de abajo y lo comprueba; el juego lo dibuja por encima del paquete de interfaz HD y de sus propias texturas. Importa una carpeta o un .zip, con o sin la carpeta del título del juego.",
+        TexturesImported { files } => return Some(format!("Importado: {files} archivos")),
+        TexturesNone => "Importado: ningún paquete de texturas todavía",
+        TexturesLoadCheckbox => "Cargar texturas personalizadas",
+        TexturesApplied => "Aplicado: el juego lo carga al iniciarse",
+        TexturesShadowedSettings => "No cargado: F1 > Materials > Texture packs indica otra carpeta (abajo).",
+        TexturesShadowedEnvironment => "No cargado: la variable de entorno OOT3D_AZAHAR_LOAD_DIRECTORY indica otra carpeta (abajo).",
+        TexturesShadowedAzahar => "No cargado: el juego sigue cargando el paquete de la carpeta de Azahar (abajo). Impórtalo para usar la carpeta de tu instalación.",
+        TexturesOlderProfile => "Aún no cargado: pulsa «Aplicar cambios» para que el juego use esta carpeta.",
+        TexturesLegacy => "Hay un paquete de texturas en la carpeta de Azahar. Impórtalo para conservarlo con esta instalación; el original se queda donde está.",
+        ButtonUseThisFolder => "Usar la carpeta de la instalación",
+        ButtonImportTextureFolder => "Importar carpeta...",
+        ButtonImportTextureZip => "Importar .zip...",
+        ButtonImportLegacy => "Importarlo",
+        TexturesImporting => "Comprobando y copiando tu paquete de texturas...",
+        TexturesChoosing => "Elige tu paquete de texturas en el diálogo...",
+        TexturesImportDone { textures, files } => return Some(format!("Paquete de texturas importado: {textures} texturas en {files} archivos. «Cargar texturas personalizadas» está activado.")),
+        TexturesImportOtherTitle { title } => return Some(format!("Se hizo para {title}; las texturas se reconocen por su contenido, así que también funciona aquí.")),
+        TexturesImportFailed { error } => return Some(format!("El paquete de texturas no se ha importado: {error}. Tu paquete anterior no ha cambiado.")),
+        TexturesSettingsFailed { error } => return Some(format!("No se ha podido cambiar el ajuste de texturas: {error}")),
+        TexturesFlatQuestion => "Este paquete no tiene una carpeta con el nombre de un juego. ¿Colocarlo igualmente en el juego instalado?",
+        ButtonPlaceIt => "Colocarlo",
+        PickTexturesFolder => "Selecciona la carpeta de tu paquete de texturas",
+        PickTexturesZip => "Selecciona tu paquete de texturas (.zip)",
+        CustomRomfsHeading => "Carpeta RomFS personalizada (sin soporte)",
+        CustomRomfsWarning => "Sin soporte: puede romper el juego; no lo cubre la asistencia.",
+        CustomRomfsDescription => "Para tus propios experimentos: los archivos de esta carpeta sustituyen a los del juego con la misma ruta RomFS, por ejemplo actor/zelda_link_boy_new.zar. Solo se sustituyen archivos que el juego tiene; como máximo 4096 archivos de hasta 64 MB cada uno, 1 GB en total. Un triaevum-custom-romfs.json opcional puede dar nombre al conjunto. Forge nunca empaqueta ni comparte estos archivos.",
+        CustomRomfsFiles { files } => return Some(format!("En la carpeta: {files} archivos")),
+        CustomRomfsNamed { name, files } => return Some(format!("En la carpeta: {name}, {files} archivos")),
+        CustomRomfsEmpty => "En la carpeta: nada todavía",
+        CustomRomfsRejected { reason } => return Some(format!("No se puede usar: {reason}")),
+        CustomRomfsFlagged { reason } => return Some(format!("Nota: {reason}")),
+        CustomRomfsCheckbox => "Usar la carpeta RomFS personalizada",
+        CustomRomfsConfirm => "¿Activar la carpeta RomFS personalizada? Sin soporte: puede romper el juego; no lo cubre la asistencia. Puedes desactivarla y volver a aplicar los cambios en cualquier momento.",
+        ButtonTurnOn => "Activarla",
+        CustomRomfsApplied { files } => return Some(format!("Aplicado: {files} archivos sustituyen a los del juego")),
+        ApplyHeading => "Aplicar cambios",
+        ApplyBody => "Forge aplica tus elecciones a partir de los datos del juego conservados de tu ROM, sin volver a pedir la ROM. Solo la pide si esos datos faltan o están dañados.",
+        ApplyPending => "Algunas elecciones aún no se han aplicado.",
+        ApplyCurrent => "El juego instalado usa tus elecciones actuales.",
+        ApplyNotInstalled => "Tus elecciones se aplican cuando preparas el juego en «Inicio».",
+        ButtonApplyChanges => "Aplicar cambios",
+        HudLayoutPolicyKeep => "Disposición del HUD: se conserva la tuya.",
+        HudLayoutPolicyAsk => "Disposición del HUD: la tuya difiere del perfil estándar; «Aplicar cambios» pregunta antes («Conservar el mío» por defecto).",
+        ApplyingEnhancements => "Aplicando tus elecciones de mejoras...",
+        ApplyChanged { list } => return Some(format!("Cambios de la aplicación: {list}")),
+        EnhancementsLoading => "Leyendo el estado de las mejoras...",
+        EnhancementsGameRunning => "El juego se está ejecutando: ciérralo para aplicar cambios o cambiar el ajuste de texturas.",
+        EnhancementsStatusFailed { error } => return Some(format!("No se puede leer el estado de las mejoras: {error}")),
+        SettingNotSaved { error } => return Some(format!("No se ha podido guardar el ajuste: {error}")),
+        SavingSetting => "Guardando el ajuste...",
+        DataInactive => "Sin uso",
+        DataOldProfileNote => "Algunos archivos siguen donde los guardaba una versión anterior. Ejecuta «Actualizar» o «Reparar» en «Inicio» (o «Aplicar cambios» en «Mejoras») para usar las carpetas nuevas; los archivos nunca se mueven sin ello.",
+        EnhancementsApplied { kept } => {
+            let kept = if kept { "Se han conservado tus partidas guardadas y tus ajustes." } else { "Se han conservado tus partidas guardadas." };
+            return Some(format!("Mejoras aplicadas. {kept}"));
         }
         ForgeLanguageNotSaved { error } => return Some(format!("No se ha podido guardar el idioma de Forge: {error}")),
         Size { value, power } => {

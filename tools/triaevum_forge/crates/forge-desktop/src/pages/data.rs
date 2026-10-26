@@ -502,6 +502,11 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
         }
     }
 
+    // A profile from before the managed data tree (WP-05C): Update or Repair
+    // routes the new folders; nothing is moved without it.
+    if inventory.entry("game_logs").is_some_and(|entry| entry.active && entry.origin == Origin::Legacy) {
+        line(ui, record, "data_old_profile", RichText::new(app.t(Msg::DataOldProfileNote)).color(warn));
+    }
     heading(app, ui, record, "data_actions_heading", Msg::DataActionsHeading);
     ui.horizontal_wrapped(|ui| {
         let buttons = [
@@ -534,7 +539,12 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
             let size = if entry.present { size_text(&app.texts, entry.size) } else { app.t(Msg::DataNotCreated) };
             line(ui, record, "data_row_name", RichText::new(format!("{label} \u{2014} {size}")).strong());
             path_line(ui, record, &entry.resolved_path.display().to_string());
-            let badges = format!("{} \u{b7} {}", app.t(origin_text(entry.origin)), app.t(backup_text(entry.backup)));
+            let mut badges =
+                format!("{} \u{b7} {}", app.t(origin_text(entry.origin)), app.t(backup_text(entry.backup)));
+            if !entry.active {
+                // An earlier location left behind (`*_legacy`, UX plan WP-05C/WP-07).
+                badges = format!("{} \u{b7} {badges}", app.t(Msg::DataInactive));
+            }
             line(ui, record, "data_row_badges", RichText::new(badges).small());
             ui.horizontal_wrapped(|ui| {
                 let folder = match entry.kind {

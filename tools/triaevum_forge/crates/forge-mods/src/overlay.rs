@@ -596,7 +596,10 @@ fn apply_custom(
     let files = match read_records(&mut stream, service_offset, service_size) {
         Ok(records) => records.files,
         Err(Failure::Value(message)) => {
-            report("mods", &format!("The custom RomFS folder is not applied: the game data cannot be read ({message})."));
+            report(
+                "mods",
+                &format!("The custom RomFS folder is not applied: the game data cannot be read ({message})."),
+            );
             return Ok(None);
         }
         Err(Failure::Other(error)) => return Err(error),

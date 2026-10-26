@@ -73,6 +73,8 @@ pub enum Action {
     Command(Command),
     /// The Data & backups page's actions.
     Data(pages::data::DataAction),
+    /// The Enhancements page's actions (UX plan WP-07).
+    Enhancements(pages::enhancements::EnhancementsAction),
 }
 
 impl Action {
@@ -298,6 +300,8 @@ pub struct ForgeApp {
     probe: Option<Box<Probe>>,
     /// The Data & backups page: inventory, previews and its task.
     pub(crate) data: pages::data::DataState,
+    /// The Enhancements page: the states, its task and confirmations.
+    pub(crate) enhancements: pages::enhancements::EnhancementsState,
     /// Update and Repair in place: the pending question, the last operation.
     pub(crate) maintenance: crate::maintenance::MaintenanceState,
     /// The background art behind every page (`theme.rs`).
@@ -320,6 +324,8 @@ impl ForgeApp {
         context.all_styles_mut(|style| style.spacing.scroll = egui::style::ScrollStyle::thin());
         let (sender, events) = channel();
         let (optional, contracts_error) = Optional::load(&installation);
+        // The kept choice (owner decision 5: on by default, UX plan WP-07).
+        let hd_auto_download = forge_core::enhancements::hd_pack_enabled(&installation.data_root);
         let (mod_enabled, mod_settings_error) = match optional.enabled() {
             Ok(enabled) => (enabled, None),
             Err(error) => (false, Some(error.message)),
@@ -358,9 +364,7 @@ impl ForgeApp {
             stage: String::new(),
             hd_status: String::new(),
             hd_state: None,
-            // On by default each start: "Prepare" downloads the HD pack first
-            // when it is not stored yet (owner decision 5).
-            hd_auto_download: true,
+            hd_auto_download,
             hd_failed: false,
             mod_status: String::new(),
             mod_state: None,
@@ -395,6 +399,7 @@ impl ForgeApp {
             action_log: None,
             probe,
             data: Default::default(),
+            enhancements: Default::default(),
             maintenance: Default::default(),
             backdrop,
         };
@@ -674,6 +679,7 @@ impl ForgeApp {
             }
             Event::HdDone { error, state } => {
                 self.busy = false;
+                enhancements::invalidate(self);
                 self.hd_state = Some(state);
                 self.refresh_hd();
                 if let (Some(error), Some(contract)) = (error, self.optional.hd_contract.as_ref()) {
@@ -686,6 +692,7 @@ impl ForgeApp {
             }
             Event::ModDone { error, state } => {
                 self.busy = false;
+                enhancements::invalidate(self);
                 self.mod_state = Some(state);
                 self.refresh_mod();
                 if let (Some(error), Some(contract)) = (error, self.optional.mod_contract.as_ref()) {
@@ -812,6 +819,7 @@ impl ForgeApp {
         self.progress = None;
         self.dialogs.retain(|dialog| dialog.kind != DialogKind::ConfirmCancel);
         self.refresh_installation();
+        enhancements::invalidate(self);
     }
 
     fn selected(&mut self, target: PickTarget, path: PathBuf) {
@@ -947,6 +955,7 @@ impl ForgeApp {
             Action::ToggleNeeds => self.show_needs = !self.show_needs,
             Action::TogglePrepareAgain => self.show_prepare_again = !self.show_prepare_again,
             Action::Data(action) => pages::data::apply(self, action, frame),
+            Action::Enhancements(action) => enhancements::apply(self, action, frame),
             Action::SetUiLanguage(code) => {
                 // Kept for the next sessions; decision 8 still applies to
                 // each ROM (refresh_texts skips a language it lacks).
@@ -1130,6 +1139,7 @@ impl ForgeApp {
             }
         }
         self.refresh_mod();
+        enhancements::invalidate(self);
         if self.active_title.is_some() && self.mod_settings_error.is_none() {
             self.mod_status.push_str(&self.t(Msg::ApplyModChange));
         }
@@ -1332,6 +1342,7 @@ impl eframe::App for ForgeApp {
         let context = ui.ctx().clone();
         self.drain_events();
         pages::data::poll(self, &context);
+        enhancements::poll(self, &context);
         self.handle_close_request(&context);
         self.geometry.update(&context, frame);
         if self.title_language != self.texts.language() {

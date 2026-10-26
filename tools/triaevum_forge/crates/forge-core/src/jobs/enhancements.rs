@@ -24,7 +24,8 @@ use crate::error::{ForgeError, Result};
 use crate::install::InstallTarget;
 use crate::inventory::InventoryRequest;
 
-pub(super) const JOBS: [&str; 4] = ["enhancements_status", "apply_enhancements", "texture_import", "enhancement_settings"];
+pub(super) const JOBS: [&str; 4] =
+    ["enhancements_status", "apply_enhancements", "texture_import", "enhancement_settings"];
 
 fn flag(request: &Map<String, Value>, key: &str) -> Result<Option<bool>> {
     match request.get(key) {
@@ -34,7 +35,11 @@ fn flag(request: &Map<String, Value>, key: &str) -> Result<Option<bool>> {
     }
 }
 
-fn inventory_request(package_root: PathBuf, data_root: Option<PathBuf>, android: Option<&AndroidJob>) -> InventoryRequest {
+fn inventory_request(
+    package_root: PathBuf,
+    data_root: Option<PathBuf>,
+    android: Option<&AndroidJob>,
+) -> InventoryRequest {
     InventoryRequest {
         package_root,
         data_root,
@@ -76,6 +81,8 @@ pub(super) fn start(name: &str, request: &Map<String, Value>) -> Result<Job> {
     match name {
         "enhancements_status" => Ok(Job::spawn(move |_, cancel| crate::enhancements::status(&target, cancel))),
         "texture_import" => {
+            // A descriptor (Android) cannot be a folder: imports take paths.
+            #[cfg_attr(not(unix), allow(clippy::infallible_destructuring_match))]
             let source = match Source::parse(request.get("source"))? {
                 Source::Path(path) => path,
                 #[cfg(unix)]
@@ -103,7 +110,8 @@ pub(super) fn start(name: &str, request: &Map<String, Value>) -> Result<Job> {
                         (InstallTarget::Android(android.target), Box::new(services))
                     }
                 };
-                let repair = crate::repair::RepairRequest { package_root, data_root, target: install_target, hud_layout };
+                let repair =
+                    crate::repair::RepairRequest { package_root, data_root, target: install_target, hud_layout };
                 let mut result = crate::enhancements::apply(&repair, services.as_ref(), &mut report, cancel)?;
                 result["enhancements"] = crate::enhancements::status(&target, cancel).unwrap_or(json!(null));
                 Ok(result)

@@ -174,10 +174,7 @@ pub fn text(msg: &Msg) -> Option<String> {
         ReadyDialog => "Le jeu est prêt. Vous pouvez lancer TriAevum \u{2014} Echoes of Time maintenant.",
         CloseWhileBusy => "La préparation du jeu est toujours en cours. Fermer Forge ?",
         ConfirmCancel => "Arrêter la préparation ? Ce qui était installé auparavant reste utilisable.",
-        EnhancementsBody => {
-            "Les améliorations facultatives sont appliquées par la prochaine préparation. Sans elles, le jeu utilise \
-             ses ressources natives."
-        }
+        EnhancementsBody => "Choisissez les améliorations voulues, puis cliquez sur « Appliquer les modifications ». Sans elles, le jeu utilise ses ressources natives.",
         HdHeading => "Textures HD de l'interface (recommandé)",
         HdDescription { title, version, author, credits, license } => {
             return Some(format!(
@@ -194,20 +191,13 @@ pub fn text(msg: &Msg) -> Option<String> {
         SelectFolder => "Sélectionner le dossier extrait...",
         ModPage => "Page du mod",
         License => "Licence",
-        HdAutoDownload => "Télécharger les textures HD avec « Préparer » si elles ne sont pas encore stockées",
+        HdAutoDownload => "Utiliser le pack d'interface HD (téléchargé avec « Préparer » ou « Appliquer les modifications » s'il n'est pas encore stocké)",
         NotAvailable => "Non disponible pour les révisions du jeu prises en charge par ce paquet.",
         CheckingStored => "Vérification des fichiers stockés...",
         HdCheckFailed { error } => return Some(format!("Impossible de vérifier les textures HD : {error}")),
-        HdReady => "Textures HD prêtes. Elles sont appliquées lorsque vous préparez et installez le jeu.",
-        HdArchive => {
-            "Archive de textures HD stockée. Elle est préparée et appliquée lorsque vous préparez et installez le jeu."
-        }
-        HdMissingAuto { megabytes } => {
-            return Some(format!(
-                "Pas encore stockées : les textures HD ({megabytes} Mo) sont téléchargées lorsque vous préparez et \
-                 installez le jeu. Sans elles, le jeu utilise les textures natives."
-            ))
-        }
+        HdReady => "Textures HD prêtes. Elles sont appliquées par « Appliquer les modifications » et par la prochaine préparation.",
+        HdArchive => "Archive des textures HD stockée. Elle est préparée et appliquée par « Appliquer les modifications » et par la prochaine préparation.",
+        HdMissingAuto { megabytes } => return Some(format!("Pas encore stockées : les textures HD ({megabytes} Mo) sont téléchargées lorsque vous préparez le jeu ou appliquez les modifications. Sans elles, le jeu utilise les textures natives.")),
         HdMissing => "Non installées : le jeu utilise les textures natives.",
         ModHeading => "Mods facultatifs",
         ModDescription { title, version, author, testing, tools, license } => {
@@ -219,23 +209,17 @@ pub fn text(msg: &Msg) -> Option<String> {
                  sélectionnez-la ici."
             ))
         }
-        ModCheckbox { title } => return Some(format!("Utiliser {title} (appliqué par « Préparer »)")),
+        ModCheckbox { title } => return Some(format!("Utiliser {title}")),
         ModDownload => "Télécharger le mod",
         SelectRar => "Sélectionner un .rar...",
         ModSettingsUnreadable { error } => return Some(format!("Impossible de lire les paramètres du mod : {error}")),
         ModCheckFailed { error } => return Some(format!("Impossible de vérifier les fichiers du mod : {error}")),
-        ModMissingEnabled => "Non téléchargé. Il est téléchargé lorsque vous préparez et installez le jeu.",
+        ModMissingEnabled => "Non téléchargé. Il est téléchargé lorsque vous appliquez les modifications ou préparez le jeu.",
         ModOff => "Désactivé : le jeu utilise ses modèles natifs.",
-        ModOn => "Activé : appliqué lorsque vous préparez et installez le jeu.",
+        ModOn => "Activé : appliqué par « Appliquer les modifications » et par la prochaine préparation.",
         ModOffKept => "Désactivé : le jeu utilise ses modèles natifs. L'archive téléchargée est conservée.",
-        ApplyModChange => " Préparez et installez à nouveau le jeu pour appliquer la modification.",
-        HdDownloadFailed { error } => {
-            return Some(format!(
-                "Échec du téléchargement des textures HD : {error} Le jeu est préparé avec les textures natives. \
-                 Téléchargez le zip depuis la page du mod et sélectionnez-le avec « Sélectionner un .zip... », puis \
-                 préparez et installez à nouveau."
-            ))
-        }
+        ApplyModChange => " Cliquez sur « Appliquer les modifications » pour l'appliquer.",
+        HdDownloadFailed { error } => return Some(format!("Échec du téléchargement des textures HD : {error} Le jeu est préparé avec les textures natives. Téléchargez le zip depuis la page du mod et sélectionnez-le avec « Sélectionner un .zip... », puis appliquez les modifications.")),
         ModDownloadFailed { error } => {
             return Some(format!(
                 "Échec du téléchargement du mod : {error} Le jeu est préparé avec les modèles natifs. Téléchargez \
@@ -259,10 +243,8 @@ pub fn text(msg: &Msg) -> Option<String> {
         VerifyingFiles => "Vérification des fichiers extraits...",
         DownloadingHd => "Téléchargement des textures HD...",
         DownloadingMod { title } => return Some(format!("Téléchargement de {title}...")),
-        HdReadyReinstall => "Textures HD prêtes. Préparez et installez à nouveau le jeu pour les appliquer.",
-        ModReadyReinstall { title } => {
-            return Some(format!("{title} est prêt. Préparez et installez à nouveau le jeu pour l'appliquer."))
-        }
+        HdReadyReinstall => "Textures HD prêtes. Cliquez sur « Appliquer les modifications » pour les utiliser.",
+        ModReadyReinstall { title } => return Some(format!("{title} est prêt. Cliquez sur « Appliquer les modifications » pour l'utiliser.")),
         HdArchiveApplied => "Archive de textures HD prête. Elle est appliquée par cette installation.",
         DownloadsFolderNote => {
             "Forge conserve dans ce dossier les archives qu'il télécharge, ainsi qu'une copie vérifiée de chaque \
@@ -326,6 +308,10 @@ pub fn text(msg: &Msg) -> Option<String> {
                     "forge_logs" => "Journaux de Forge",
                     "crash_dumps" => "Rapports de plantage",
                     "android_diagnostics" => "Rapports de démarrage",
+                    "texture_load_legacy" => "Pack de textures dans le dossier d'Azahar",
+                    "save_states_legacy" => "États sauvegardés dans l'ancien dossier",
+                    "game_logs_legacy" => "Journaux du jeu dans l'ancien dossier",
+                    "crash_dumps_legacy" => "Rapports de plantage dans l'ancien dossier",
                     "active_title" => "Fiche du jeu installé",
                     other => other,
                 }
@@ -590,6 +576,73 @@ pub fn text(msg: &Msg) -> Option<String> {
         ForgeLanguageNote => {
             "Les langues de votre jeu. Les textes pas encore traduits s'affichent en anglais. Votre choix est \
              mémorisé."
+        }
+        StateDownloaded { version } => return Some(format!("Téléchargé : version {version}")),
+        StateNotDownloaded => "Non téléchargé",
+        StateOn => "Votre choix : activé",
+        StateOff => "Votre choix : désactivé",
+        StateApplied => "Appliqué : le jeu installé l'utilise",
+        StateNotApplied => "Appliqué : non",
+        StateApplyPending => "Pas encore appliqué : cliquez sur « Appliquer les modifications »",
+        StateAppliedLater => "Appliqué quand vous préparez le jeu",
+        HdPreferenceNotSaved { error } => return Some(format!("Le choix de l'interface HD n'a pas pu être enregistré : {error}")),
+        TexturesHeading => "Votre pack de textures",
+        TexturesDescription => "Votre propre pack de textures Azahar ou Citra (fichiers tex1_... .png). Forge le copie dans le dossier ci-dessous et le vérifie ; le jeu l'affiche par-dessus le pack d'interface HD et ses propres textures. Importez un dossier ou un .zip, avec ou sans le dossier du titre du jeu.",
+        TexturesImported { files } => return Some(format!("Importé : {files} fichiers")),
+        TexturesNone => "Importé : aucun pack de textures pour l'instant",
+        TexturesLoadCheckbox => "Charger les textures personnalisées",
+        TexturesApplied => "Appliqué : le jeu le charge au démarrage",
+        TexturesShadowedSettings => "Non chargé : F1 > Materials > Texture packs indique un autre dossier (ci-dessous).",
+        TexturesShadowedEnvironment => "Non chargé : la variable d'environnement OOT3D_AZAHAR_LOAD_DIRECTORY indique un autre dossier (ci-dessous).",
+        TexturesShadowedAzahar => "Non chargé : le jeu charge encore le pack du dossier d'Azahar (ci-dessous). Importez-le pour utiliser le dossier de votre installation.",
+        TexturesOlderProfile => "Pas encore chargé : cliquez sur « Appliquer les modifications » pour que le jeu utilise ce dossier.",
+        TexturesLegacy => "Un pack de textures se trouve dans le dossier d'Azahar. Importez-le pour le garder avec cette installation ; l'original reste à sa place.",
+        ButtonUseThisFolder => "Utiliser le dossier de l'installation",
+        ButtonImportTextureFolder => "Importer un dossier...",
+        ButtonImportTextureZip => "Importer un .zip...",
+        ButtonImportLegacy => "L'importer",
+        TexturesImporting => "Vérification et copie de votre pack de textures...",
+        TexturesChoosing => "Choisissez votre pack de textures dans la fenêtre...",
+        TexturesImportDone { textures, files } => return Some(format!("Pack de textures importé : {textures} textures dans {files} fichiers. « Charger les textures personnalisées » est activé.")),
+        TexturesImportOtherTitle { title } => return Some(format!("Il a été fait pour {title} ; les textures sont reconnues par leur contenu, il fonctionne donc ici aussi.")),
+        TexturesImportFailed { error } => return Some(format!("Le pack de textures n'a pas été importé : {error}. Votre pack précédent est inchangé.")),
+        TexturesSettingsFailed { error } => return Some(format!("Le réglage des textures n'a pas pu être modifié : {error}")),
+        TexturesFlatQuestion => "Ce pack n'a pas de dossier au nom d'un jeu. Le placer quand même sous le jeu installé ?",
+        ButtonPlaceIt => "Le placer",
+        PickTexturesFolder => "Sélectionnez le dossier de votre pack de textures",
+        PickTexturesZip => "Sélectionnez votre pack de textures (.zip)",
+        CustomRomfsHeading => "Dossier RomFS personnalisé (non pris en charge)",
+        CustomRomfsWarning => "Non pris en charge : peut casser le jeu ; non couvert par l'assistance.",
+        CustomRomfsDescription => "Pour vos propres expériences : les fichiers de ce dossier remplacent les fichiers du jeu ayant le même chemin RomFS, par exemple actor/zelda_link_boy_new.zar. Seuls les fichiers que le jeu possède sont remplacés ; au plus 4096 fichiers de 64 Mo chacun au maximum, 1 Go au total. Un fichier facultatif triaevum-custom-romfs.json peut nommer l'ensemble. Forge n'empaquette ni ne partage jamais ces fichiers.",
+        CustomRomfsFiles { files } => return Some(format!("Dans le dossier : {files} fichiers")),
+        CustomRomfsNamed { name, files } => return Some(format!("Dans le dossier : {name}, {files} fichiers")),
+        CustomRomfsEmpty => "Dans le dossier : rien pour l'instant",
+        CustomRomfsRejected { reason } => return Some(format!("Inutilisable : {reason}")),
+        CustomRomfsFlagged { reason } => return Some(format!("Remarque : {reason}")),
+        CustomRomfsCheckbox => "Utiliser le dossier RomFS personnalisé",
+        CustomRomfsConfirm => "Activer le dossier RomFS personnalisé ? Non pris en charge : peut casser le jeu ; non couvert par l'assistance. Vous pouvez le désactiver et appliquer à nouveau les modifications à tout moment.",
+        ButtonTurnOn => "L'activer",
+        CustomRomfsApplied { files } => return Some(format!("Appliqué : {files} fichiers remplacent ceux du jeu")),
+        ApplyHeading => "Appliquer les modifications",
+        ApplyBody => "Forge applique vos choix à partir des données du jeu conservées de votre ROM, sans redemander la ROM. Il ne la demande que si ces données manquent ou sont endommagées.",
+        ApplyPending => "Certains choix ne sont pas encore appliqués.",
+        ApplyCurrent => "Le jeu installé utilise vos choix actuels.",
+        ApplyNotInstalled => "Vos choix sont appliqués quand vous préparez le jeu dans « Accueil ».",
+        ButtonApplyChanges => "Appliquer les modifications",
+        HudLayoutPolicyKeep => "Disposition du HUD : la vôtre est conservée.",
+        HudLayoutPolicyAsk => "Disposition du HUD : la vôtre diffère du profil standard ; « Appliquer les modifications » demande d'abord (« Garder la mienne » par défaut).",
+        ApplyingEnhancements => "Application de vos choix d'améliorations...",
+        ApplyChanged { list } => return Some(format!("Modifications de l'application : {list}")),
+        EnhancementsLoading => "Lecture de l'état des améliorations...",
+        EnhancementsGameRunning => "Le jeu est en cours d'exécution : fermez-le pour appliquer les modifications ou changer le réglage des textures.",
+        EnhancementsStatusFailed { error } => return Some(format!("Impossible de lire l'état des améliorations : {error}")),
+        SettingNotSaved { error } => return Some(format!("Le réglage n'a pas pu être enregistré : {error}")),
+        SavingSetting => "Enregistrement du réglage...",
+        DataInactive => "Inutilisé",
+        DataOldProfileNote => "Certains fichiers sont encore là où une ancienne version les rangeait. Lancez « Mettre à jour » ou « Réparer » dans « Accueil » (ou « Appliquer les modifications » dans « Améliorations ») pour utiliser les nouveaux dossiers ; les fichiers ne sont jamais déplacés sans cela.",
+        EnhancementsApplied { kept } => {
+            let kept = if kept { "Vos sauvegardes et paramètres ont été conservés." } else { "Vos sauvegardes ont été conservées." };
+            return Some(format!("Améliorations appliquées. {kept}"));
         }
         ForgeLanguageNotSaved { error } => {
             return Some(format!("Impossible d'enregistrer la langue de Forge : {error}"))

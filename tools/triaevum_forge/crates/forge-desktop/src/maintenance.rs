@@ -41,6 +41,9 @@ pub enum Kind {
     ZipUpdate,
     /// Finish or undo an interrupted ZIP update.
     RecoverUpdate,
+    /// The Enhancements page's "Apply changes" (WP-07): the repair in place
+    /// with the current choices, after the downloads the choices need.
+    ApplyEnhancements,
 }
 
 impl Kind {
@@ -51,6 +54,7 @@ impl Kind {
             Self::ZipUpdate if planned => "update",
             Self::ZipUpdate => "update_plan",
             Self::RecoverUpdate => "update_recover",
+            Self::ApplyEnhancements => "apply_enhancements",
         }
     }
 }
@@ -118,7 +122,7 @@ fn request(kind: Kind, app: &ForgeApp, hud_layout: HudLayout, allow_downgrade: b
             request["allow_downgrade"] = json!(allow_downgrade);
             request["relaunch"] = json!(true);
         }
-        Kind::Repair | Kind::RecoverUpdate => {}
+        Kind::Repair | Kind::RecoverUpdate | Kind::ApplyEnhancements => {}
     }
     request
 }
@@ -210,10 +214,18 @@ fn start(app: &mut ForgeApp, kind: Kind, hud_layout: HudLayout, allow_downgrade:
         Kind::Repair | Kind::RecoverUpdate => Msg::Repairing,
         Kind::ZipUpdate if app.maintenance.zip_planned => Msg::Updating,
         Kind::ZipUpdate => Msg::CheckingUpdatePackage,
+        Kind::ApplyEnhancements => Msg::ApplyingEnhancements,
     });
     app.maintenance.last = Some(kind);
     let handed_off = Arc::clone(&app.maintenance.handed_off);
-    app.start_task(stage, move |_, notify, cancel| {
+    let (hd_enabled, mod_enabled) = (app.hd_auto_download, app.mod_enabled);
+    app.start_task(stage, move |optional, notify, cancel| {
+        if kind == Kind::ApplyEnhancements {
+            crate::install::download_missing(&optional, hd_enabled, mod_enabled, &texts, &notify, &cancel);
+            if cancel.is_cancelled() {
+                return notify.send(Event::InstallCancelled);
+            }
+        }
         run(kind, hud_layout, &request, &texts, &notify, &cancel, &handed_off)
     });
 }
@@ -290,18 +302,19 @@ fn summary_text(kind: Kind, result: &Value, texts: &Texts) -> String {
     let kept = changes.iter().all(|change| change["change"] == "created");
     let version = result["present"]["version"].as_str();
     let repair = matches!(kind, Kind::Repair | Kind::RecoverUpdate);
-    let mut message = match (repair, result["status"].as_str()) {
-        (false, Some("unchanged")) => texts.get(Msg::AlreadyCurrent),
-        (false, _) => texts.get(Msg::Updated { version: version.unwrap_or_default(), kept }),
-        (true, _) => texts.get(Msg::Repaired { kept }),
+    let mut message = match (kind, repair, result["status"].as_str()) {
+        (Kind::ApplyEnhancements, _, _) => texts.get(Msg::EnhancementsApplied { kept }),
+        (_, false, Some("unchanged")) => texts.get(Msg::AlreadyCurrent),
+        (_, false, _) => texts.get(Msg::Updated { version: version.unwrap_or_default(), kept }),
+        (_, true, _) => texts.get(Msg::Repaired { kept }),
     };
     if !changed.is_empty() {
         let list = changed.join("; ");
         message.push_str("\n\n");
-        message.push_str(&texts.get(if repair {
-            Msg::RepairChanged { list: &list }
-        } else {
-            Msg::UpdateChanged { list: &list }
+        message.push_str(&texts.get(match kind {
+            Kind::ApplyEnhancements => Msg::ApplyChanged { list: &list },
+            _ if repair => Msg::RepairChanged { list: &list },
+            _ => Msg::UpdateChanged { list: &list },
         }));
     }
     message
