@@ -162,9 +162,9 @@ impl Recorder {
         response.clicked()
     }
 
-    /// Two links kept whole: when the row has no room for both, they start
+    /// Links kept whole: when the row has no room for all of them, they start
     /// the next row.
-    pub fn links(&mut self, ui: &mut egui::Ui, links: [(&'static str, &str, &str); 2]) {
+    pub fn links<const N: usize>(&mut self, ui: &mut egui::Ui, links: [(&'static str, &str, &str); N]) {
         let font = egui::TextStyle::Body.resolve(ui.style());
         let spacing = ui.spacing().item_spacing.x;
         let needed: f32 = links

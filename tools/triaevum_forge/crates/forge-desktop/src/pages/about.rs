@@ -13,6 +13,9 @@ use crate::texts::{native_name, Msg};
 
 pub const PROJECT_URL: &str = "https://github.com/coccofresco/TriAevum";
 pub const LICENSE_URL: &str = "https://www.gnu.org/licenses/gpl-3.0.html";
+/// The user guide (`docs/USER_GUIDE.md`) on the public repository; packages
+/// also carry it under `docs/`.
+pub const USER_GUIDE_URL: &str = "https://github.com/coccofresco/TriAevum/blob/main/docs/USER_GUIDE.md";
 
 /// `release.version` of the package's release manifest, else Forge's own.
 pub fn package_version(package_root: &Path) -> String {
@@ -30,8 +33,15 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
     record.add(ui, "about_version", "label", Label::new(RichText::new(version).strong()));
     record.add(ui, "about_body", "label", Label::new(app.t(Msg::AboutBody)).wrap());
     ui.horizontal_wrapped(|ui| {
-        let (project, license) = (app.t(Msg::ProjectPage), app.t(Msg::License));
-        record.links(ui, [("about_project", &project, PROJECT_URL), ("about_license", &license, LICENSE_URL)]);
+        let (project, guide, license) = (app.t(Msg::ProjectPage), app.t(Msg::UserGuide), app.t(Msg::License));
+        record.links(
+            ui,
+            [
+                ("about_project", &project, PROJECT_URL),
+                ("about_user_guide", &guide, USER_GUIDE_URL),
+                ("about_license", &license, LICENSE_URL),
+            ],
+        );
     });
     ui.add_space(10.0);
     record.add(ui, "about_revisions", "label", Label::new(RichText::new(app.t(Msg::SupportedRevisions)).strong()));

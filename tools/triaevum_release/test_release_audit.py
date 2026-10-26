@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from audit_release import DEFAULT_POLICY, audit_release
+from audit_release import DEFAULT_POLICY, _matches_any, audit_release
 from common import atomic_write_json, sha256_file
 from package_release import package_release
 from test_vulkan_imports import pe_import_fixture
@@ -249,6 +249,26 @@ class PublicReleaseAuditTests(unittest.TestCase):
             result = audit_release(root)
             self.assertTrue(result.ok, result.errors)
             self.assertEqual(result.summary["verified_files"], len(FILES) + 1)
+
+    def test_user_documentation_ships_as_documentation(self) -> None:
+        # The user guide and the user data tree (Forge links the guide from
+        # About and Diagnostics) are allowlisted user documentation.
+        repository = Path(__file__).resolve().parents[2]
+        layout = json.loads(Path(__file__).with_name("runtime_release_layout.example.json")
+                            .read_text(encoding="utf-8"))
+        policy = json.loads(DEFAULT_POLICY.read_text(encoding="utf-8"))
+        for relative in ("docs/USER_GUIDE.md", "docs/TRIAEVUM_USER_DATA.md"):
+            self.assertIn({"source": relative, "path": relative, "role": "documentation"}, layout["files"])
+            self.assertTrue((repository / relative).is_file(), relative)
+            for platform in ("x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"):
+                patterns = policy["platforms"][platform]["allowed_roles"]["documentation"]
+                self.assertTrue(_matches_any(relative, patterns), (platform, relative))
+        with tempfile.TemporaryDirectory() as temporary, \
+             patch.dict(FILES, {"docs/USER_GUIDE.md": ("documentation", b"# User guide\n")}):
+            root = Path(temporary)
+            write_clean_package(root)
+            result = audit_release(root)
+            self.assertTrue(result.ok, result.errors)
 
     def test_singlescreen_assets_are_pinned_and_hd_graphics_excluded(self) -> None:
         def audit_with(relative: str, role: str, data: bytes):

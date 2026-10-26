@@ -63,7 +63,8 @@ class LinuxForgeQualificationTests(unittest.TestCase):
             (bundle / "forge/rust-forge.json").write_text("{}")
             output = stage(reference, bundle, build, root / "title.so", root / "candidate", "1" * 40)
             for name in (LINUX.forge, "forge/triaevum-forge", "forge/rust-forge.json",
-                         "LICENSES/Rust-Forge-crates.md", "LICENSES/SDL2-zlib.txt"):
+                         "LICENSES/Rust-Forge-crates.md", "LICENSES/SDL2-zlib.txt",
+                         "docs/USER_GUIDE.md", "docs/TRIAEVUM_USER_DATA.md"):
                 self.assertTrue((output / name).is_file(), name)
             self.assertFalse((output / "_internal").exists())
             self.assertIn('"forge_profile": "rust"', (output / "linux-candidate.json").read_text())

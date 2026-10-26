@@ -28,6 +28,8 @@
     {"source": "LICENSES/Vanilla-Plus-Link-Remodel.md", "path": "LICENSES/Vanilla-Plus-Link-Remodel.md", "role": "license"},
     {"source": "LICENSES/OoT3D-Vanilla-UI-HUD.md", "path": "LICENSES/OoT3D-Vanilla-UI-HUD.md", "role": "license"},
     {"source": "README.md", "path": "README.md", "role": "documentation"},
+    {"source": "docs/USER_GUIDE.md", "path": "docs/USER_GUIDE.md", "role": "documentation"},
+    {"source": "docs/TRIAEVUM_USER_DATA.md", "path": "docs/TRIAEVUM_USER_DATA.md", "role": "documentation"},
     {"source": "docs/releases/v0.8.0-beta.1.md", "path": "docs/releases/v0.8.0-beta.1.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_OPTISCALER_DLSS5.md", "path": "docs/TRIAEVUM_OPTISCALER_DLSS5.md", "role": "documentation"},
     {"source": "docs/TRIAEVUM_SUPPORTED_ROM.md", "path": "docs/TRIAEVUM_SUPPORTED_ROM.md", "role": "documentation"},

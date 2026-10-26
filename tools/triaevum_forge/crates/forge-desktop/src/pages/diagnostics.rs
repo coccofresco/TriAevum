@@ -104,6 +104,10 @@ fn size_text(texts: &Texts, bytes: u64) -> String {
 
 pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, actions: &mut Vec<Action>) {
     record.add(ui, "diagnostics_body", "label", Label::new(app.t(Msg::DiagnosticsBody)).wrap());
+    ui.horizontal_wrapped(|ui| {
+        let guide = app.t(Msg::UserGuide);
+        record.links(ui, [("diagnostics_user_guide", &guide, super::about::USER_GUIDE_URL)]);
+    });
     ui.add_space(8.0);
     let state = app.state.as_ref().map_or("checking", InstallationState::code);
     record.add(ui, "diagnostics_state", "label", Label::new(app.t(Msg::StateLabel { state })).wrap());

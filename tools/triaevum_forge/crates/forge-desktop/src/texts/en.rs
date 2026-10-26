@@ -515,6 +515,7 @@ pub fn text(msg: &Msg) -> String {
         SupportedRevisions => "Supported game revisions",
         NoSupportedRevisions => "This package lists no supported game revisions.",
         ProjectPage => "Project page",
+        UserGuide => "User guide",
         ForgeLanguage => "Forge language",
         ForgeLanguageNote => {
             "The languages of your game. Texts not translated yet are shown in English. Your choice is remembered."

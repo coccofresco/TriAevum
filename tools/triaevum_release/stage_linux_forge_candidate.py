@@ -19,6 +19,10 @@ except ImportError:
 
 # The Rust Forge build output (rust_forge_build.py) besides TriAevumForge.
 RUST_FILES = (BINARIES[LINUX.target]["triaevum-forge"][0], RECEIPT)
+# The user documentation every package carries (the Windows layout lists the
+# same files), copied from the source tree.
+REPOSITORY = Path(__file__).resolve().parents[2]
+USER_DOCS = ("docs/USER_GUIDE.md", "docs/TRIAEVUM_USER_DATA.md")
 
 
 def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
@@ -50,6 +54,9 @@ def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
         shutil.copytree(reference / name, output / name)
     for name in ("LICENSE", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md"):
         shutil.copy2(reference / name, output / name)
+    for relative in USER_DOCS:
+        (output / relative).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPOSITORY / relative, output / relative)
     for name in (LINUX.runtime, LINUX.title_module):
         shutil.copy2(runtime_build / name, output / name)
     (output / "forge").mkdir()

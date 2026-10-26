@@ -562,6 +562,7 @@ pub fn text(msg: &Msg) -> Option<String> {
         SupportedRevisions => "Revisioni del gioco supportate",
         NoSupportedRevisions => "Questo pacchetto non elenca nessuna revisione del gioco supportata.",
         ProjectPage => "Pagina del progetto",
+        UserGuide => "Guida per l'utente",
         ForgeLanguage => "Lingua di Forge",
         ForgeLanguageNote => {
             "Le lingue del tuo gioco. I testi non ancora tradotti vengono mostrati in inglese. La scelta viene \
