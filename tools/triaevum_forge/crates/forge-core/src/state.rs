@@ -269,10 +269,11 @@ impl InstallationState {
         Some(explain(&error))
     }
 
-    /// Tagged JSON: `{"format", "state", ...fields, "explanation"?}`.
+    /// Tagged JSON: `{"format", "state", "can_play", ...fields, "explanation"?}`;
+    /// `can_play` is [`Self::can_play`], so frontends never re-derive it.
     pub fn to_value(&self) -> Value {
         let redact = crate::redact::redact;
-        let mut value = json!({"format": FORMAT, "state": self.code()});
+        let mut value = json!({"format": FORMAT, "state": self.code(), "can_play": self.can_play()});
         match self {
             Self::NotInstalled | Self::Preparing | Self::Failed { .. } => {}
             Self::Ready { recipe, package_version, language } => {

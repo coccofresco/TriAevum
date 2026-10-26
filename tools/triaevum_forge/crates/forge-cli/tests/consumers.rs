@@ -70,7 +70,7 @@ fn status_prints_the_installation_state() {
     let (_, printed) = forge(&["status", "--package-root", &root.to_string_lossy()]);
     let reference = forge_core::state::inspect(&forge_core::state::InspectRequest::package(root)).to_value();
     assert_eq!(printed, reference);
-    assert_eq!(printed, json!({"format": "triaevum_installation_state_v1", "state": "not_installed"}));
+    assert_eq!(printed, json!({"format": "triaevum_installation_state_v1", "state": "not_installed", "can_play": false}));
 
     let journal = forge_core::transaction::journal_path(root, forge_core::layout::HostOs::current());
     std::fs::create_dir_all(journal.parent().unwrap()).unwrap();

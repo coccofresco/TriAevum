@@ -252,6 +252,7 @@ fn json_requests_through_the_c_abi() {
     assert_eq!(answer, inspect(&InspectRequest::package(&fixture.package)).to_value());
     assert_eq!(answer["format"], "triaevum_installation_state_v1");
     assert_eq!(answer["state"], "ready");
+    assert_eq!(answer["can_play"], true);
 
     let refused = forge_core::state::inspect_bytes(b"{\"format\": \"other\"}");
     let refused: Value = serde_json::from_slice(&refused).unwrap();

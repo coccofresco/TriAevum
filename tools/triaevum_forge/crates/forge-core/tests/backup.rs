@@ -796,6 +796,8 @@ fn removing_the_prepared_game_keeps_saves_settings_mods_and_downloads() {
         InstallationState::NeedsGameInput { recipe: RECIPE.into(), details: PREPARED_GAME_REMOVED.into() }
     );
     assert!(!state.can_play());
+    // Frontends read the same answer from the inspection JSON (Android's installer).
+    assert_eq!(state.to_value()["can_play"], false);
     assert_eq!(state.explanation().unwrap().id, "source.needed");
 }
 

@@ -99,11 +99,12 @@ void TriAevumForgeDestroyJob(TriAevumForgeJob *job);
  * it off a UI thread). Request:
  * {"format":"triaevum_forge_inspect_v1","package_root"?,"data_root"?,
  *  "android"?:{"native_library_dir","profile_root"},"verify_sources"?}
- * Result: {"format":"triaevum_installation_state_v1","state":S,...} with S
- * not_installed, preparing, ready, update_available, repair_needed,
- * needs_game_input, incompatible or failed, plus "explanation" (as below)
- * for the states that need the user. Never fails: an unusable request is a
- * "failed" state. */
+ * Result: {"format":"triaevum_installation_state_v1","state":S,"can_play",...}
+ * with S not_installed, preparing, ready, update_available, repair_needed,
+ * needs_game_input, incompatible or failed, "can_play" whether the installed
+ * title starts as it is (frontends offer Play by it), plus "explanation" (as
+ * below) for the states that need the user. Never fails: an unusable request
+ * is a "failed" state. */
 TriAevumForgeBuffer TriAevumForgeInspect(const uint8_t *request, size_t request_len);
 
 /* v2. The explanation of a failed or cancelled event, an event's "error"
