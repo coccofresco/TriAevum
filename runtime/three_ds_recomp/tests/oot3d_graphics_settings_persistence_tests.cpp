@@ -3,6 +3,8 @@
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
+
 namespace {
 
 Fast::Extension::GraphicsSettings CompleteSettings() {
@@ -1223,6 +1225,63 @@ TEST(GrassMaskPersistence, RoundTripDefaultsValidationAndPresetOwnership) {
     EXPECT_EQ(DeserializeGraphicsSettings(document).Value.Grass.Masks.size(), 1);
     document["Grass"]["Masks"] = "mistyped";
     EXPECT_TRUE(DeserializeGraphicsSettings(document).Value.Grass.Masks.empty());
+}
+
+// The output provenance (UX plan WP-06A): round trip, inference for files
+// from before the field (silently, no rewrite issue), and host ownership.
+TEST(Oot3dGraphicsSettingsPersistence, RoundTripsAndInfersTheOutputProvenance) {
+    using namespace Fast::Extension;
+    auto settings = CompleteSettings();
+    settings.OutputProvenance = Fast::WindowExtentProvenance::User;
+    auto document = SerializeGraphicsSettings(settings);
+    EXPECT_EQ(document["Output"]["Provenance"], "user");
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.OutputProvenance, Fast::WindowExtentProvenance::User);
+    settings.OutputProvenance = Fast::WindowExtentProvenance::Default;
+    document = SerializeGraphicsSettings(settings);
+    EXPECT_EQ(document["Output"]["Provenance"], "default");
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.OutputProvenance, Fast::WindowExtentProvenance::Default);
+    // Before the field: the product's windowed 1280x720 is the fresh
+    // default, any other size or a fullscreen mode the user's choice.
+    document["Output"].erase("Provenance");
+    document["Window"]["Mode"] = "Windowed";
+    document["Output"]["Width"] = 1280;
+    document["Output"]["Height"] = 720;
+    const auto fresh = DeserializeGraphicsSettings(document);
+    EXPECT_EQ(fresh.Value.OutputProvenance, Fast::WindowExtentProvenance::Default);
+    EXPECT_TRUE(std::none_of(fresh.Issues.begin(), fresh.Issues.end(),
+                             [](const auto& issue) { return issue.Field == "Graphics.Output.Provenance"; }));
+    document["Output"]["Width"] = 1920;
+    document["Output"]["Height"] = 1080;
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.OutputProvenance, Fast::WindowExtentProvenance::User);
+    document["Output"]["Width"] = 1280;
+    document["Output"]["Height"] = 720;
+    document["Window"]["Mode"] = "Borderless";
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.OutputProvenance, Fast::WindowExtentProvenance::User);
+    // An unknown name falls back to the default and is corrected.
+    document["Output"]["Provenance"] = "guessed";
+    EXPECT_EQ(DeserializeGraphicsSettings(document).Value.OutputProvenance, Fast::WindowExtentProvenance::Default);
+    // Presets keep it, like the size it describes.
+    settings.OutputProvenance = Fast::WindowExtentProvenance::User;
+    EXPECT_EQ(GraphicsSettingsService::PresetForCurrent(GraphicsPreset::Toon, settings).OutputProvenance,
+              Fast::WindowExtentProvenance::User);
+    // A size change is the user's choice; the mode alone or a reset is not.
+    auto candidate = GraphicsSettings{};
+    const GraphicsSettings current{};
+    candidate.Window = WindowMode::Borderless;
+    MarkUserOutputRequest(candidate, current);
+    EXPECT_EQ(candidate.OutputProvenance, Fast::WindowExtentProvenance::Default);
+    candidate.OutputWidth = 1600U;
+    MarkUserOutputRequest(candidate, current);
+    EXPECT_EQ(candidate.OutputProvenance, Fast::WindowExtentProvenance::User);
+    ResetDisplaySettings(candidate);
+    EXPECT_EQ(candidate.OutputProvenance, Fast::WindowExtentProvenance::Default);
+    EXPECT_EQ(candidate.Window, WindowMode::Windowed);
+    // The product default, the "Modified" baseline: Enhanced at the default window.
+    const auto product = ProductDefaultGraphicsSettings();
+    EXPECT_EQ(product.Preset, kProductDefaultGraphicsPreset);
+    EXPECT_EQ(product.Preset, GraphicsPreset::Enhanced);
+    EXPECT_EQ(product.OutputWidth, 1280U);
+    EXPECT_EQ(product.OutputProvenance, Fast::WindowExtentProvenance::Default);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsTheAspectRatioAsHostOwnedOutputState) {

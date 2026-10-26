@@ -13,10 +13,11 @@
 
 nlohmann::json TriAevumProductDefaultConfig() {
     using namespace Fast::Extension;
-    // A new installation starts from the Enhanced preset with the title's grass
-    // source texture rules, which no preset owns. Existing installations
-    // retain their config.
-    auto graphics = GraphicsSettingsService::Preset(GraphicsPreset::Enhanced);
+    // A new installation starts from the product's default graphics (owned by
+    // the graphics runtime: the Enhanced preset, the default window and the
+    // platform's choices) with the title's grass source texture rules, which
+    // no preset owns. Existing installations retain their config.
+    auto graphics = ProductDefaultGraphicsSettings();
     const auto defaults = nlohmann::json::parse(
 #include "triaevum_product_graphics.inc"
     );
@@ -24,18 +25,6 @@ nlohmann::json TriAevumProductDefaultConfig() {
     document.merge_patch(defaults);
     document["GrassSavedPreset"] = document["Grass"];
     graphics = DeserializeGraphicsSettings(document, graphics).Value;
-    graphics.OutputWidth = 1280;
-    graphics.OutputHeight = 720;
-#if defined(__ANDROID__)
-    // The full Enhanced preset; the picture fills the phone's display instead
-    // of a 16:9 pillarbox (the aspect is host-owned, so the preset stays).
-    graphics.Aspect = AspectRatioMode::Free;
-    // Water keeps its waves, Fresnel sky (fog colour) reflection, sun specular
-    // and foam in the scene shader; the screen-space water trace (Hi-Z, the
-    // material guide on every scene draw, the composite) cost ~4 ms of an
-    // 18 ms frame on the Adreno 830 for reflections that are mostly sky.
-    graphics.Effects.WaterReflections = false;
-#endif
     return {{"Graphics", SerializeGraphicsSettings(graphics)}};
 }
 

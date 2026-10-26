@@ -29,6 +29,11 @@ class GfxWindowBackend {
     virtual Ship::WindowRect GetPrimaryMonitorRect() = 0;
     virtual void HandleEvents() = 0;
     virtual void RequestFocus() {}
+    // The window host's policy for the product's default output request
+    // (fast/WindowExtentPolicy.h), set before Init: when enabled, a default
+    // windowed request opens at the default fit of the screen, centred, and
+    // the first window opens so when the stored request is the default.
+    virtual void ConfigureDefaultWindowExtent(bool /*enabled*/, bool /*initialRequestIsDefault*/) {}
     virtual bool IsFrameReady() = 0;
     virtual void SwapBuffersBegin() = 0;
     virtual void SwapBuffersEnd() = 0;

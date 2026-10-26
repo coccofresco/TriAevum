@@ -90,6 +90,9 @@ class Fast3dWindow : public Ship::Window {
     bool DrawAndRunGraphicsCommands(Gfx* commands, const std::unordered_map<Mtx*, MtxF>& mtxReplacements);
     GfxRenderingAPI* GetCurrentRenderingAPI();
     void EnableOot3dVulkanBackend();
+    // The window host's policy for the product's default output request
+    // (GfxWindowBackend::ConfigureDefaultWindowExtent), before Init.
+    void ConfigureDefaultWindowExtent(bool enabled, bool initialRequestIsDefault);
     bool IsKeyDown(int32_t scancode) const;
     void RequestFocus();
 
@@ -112,6 +115,8 @@ class Fast3dWindow : public Ship::Window {
     std::shared_ptr<Interpreter> mInterpreter = nullptr;
     std::shared_ptr<GfxDebugger> mGfxDebugger;
     bool mOot3dVulkanEnabled = false;
+    bool mDefaultExtentEnabled = false;
+    bool mInitialRequestIsDefault = false;
     bool mInitialized = false;
     MouseCapturePolicy mMouseCapturePolicy;
     static std::unordered_set<int32_t> sPressedKeys;

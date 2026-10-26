@@ -30,4 +30,23 @@ int main() {
     // An unknown work area changes nothing; a tiny one keeps the renderer's minimum.
     require(Fast::FitWindowedExtent({1280, 720}, {}) == WindowExtent{1280, 720});
     require(Fast::FitWindowedExtent({1280, 720}, {300, 200, 0, 0}) == Fast::kMinimumWindowExtent);
+
+    // A fresh default request on a 1366x768 screen (40 px task bar, Windows
+    // decorations): 16:9 inside 90 % of what is left, title bar included.
+    const auto fresh = Fast::DefaultWindowedExtent({1366, 728, 16, 39});
+    require(fresh == WindowExtent{1102, 620});
+    require(fresh.Width + 16 <= 1366 && fresh.Height + 39 <= 728);
+    // 1080p with a task bar, and an ultrawide screen: height-limited, even sizes.
+    require(Fast::DefaultWindowedExtent({1920, 1032, 16, 39}) == WindowExtent{1586, 892});
+    require(Fast::DefaultWindowedExtent({3440, 1400, 16, 39}) == WindowExtent{2176, 1224});
+    // A tall work area is width-limited.
+    require(Fast::DefaultWindowedExtent({1000, 2000, 0, 0}) == WindowExtent{900, 506});
+    // An unknown work area keeps the product default; a tiny one the minimum.
+    require(Fast::DefaultWindowedExtent({}) == Fast::kProductDefaultWindowExtent);
+    require(Fast::DefaultWindowedExtent({300, 200, 0, 0}) == Fast::kMinimumWindowExtent);
+    // Configurations from before the provenance: the product default is fresh.
+    using Fast::WindowExtentProvenance;
+    require(Fast::InferWindowExtentProvenance(true, {1280, 720}) == WindowExtentProvenance::Default);
+    require(Fast::InferWindowExtentProvenance(true, {1920, 1080}) == WindowExtentProvenance::User);
+    require(Fast::InferWindowExtentProvenance(false, {1280, 720}) == WindowExtentProvenance::User);
 }

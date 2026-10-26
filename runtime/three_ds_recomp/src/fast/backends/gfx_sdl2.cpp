@@ -532,12 +532,19 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
     // visible. A requested extent larger than a small or scaled screen keeps
     // its shape at the largest size that fits; the request itself, owned by
     // F1 Display, is not rewritten.
+    // A fresh default request (nobody chose a size yet) opens instead at the
+    // default fit of the screen, centred: the largest 16:9 window inside 90 %
+    // of the work area. Never a fullscreen mode.
     if (WindowPlacementArea placement; !startFullScreen && QueryWindowPlacementArea(mWnd, &placement)) {
         const WindowExtent requested{ static_cast<uint32_t>(mWindowWidth), static_cast<uint32_t>(mWindowHeight) };
-        const WindowExtent fitted = Fast::FitWindowedExtent(requested, placement.Area);
+        const bool defaultRequest = mDefaultExtentEnabled && mInitialRequestIsDefault;
+        const WindowExtent fitted = defaultRequest ? Fast::DefaultWindowedExtent(placement.Area)
+                                                   : Fast::FitWindowedExtent(requested, placement.Area);
         if (fitted != requested) {
             SDL_SetWindowSize(mWnd, static_cast<int>(fitted.Width), static_cast<int>(fitted.Height));
-            SPDLOG_INFO("Window {}x{} fitted to the display work area as {}x{}", requested.Width, requested.Height,
+            SPDLOG_INFO("Window {}x{} {} as {}x{}", requested.Width, requested.Height,
+                        defaultRequest ? "(the default request) opened at the default fit of the screen"
+                                       : "fitted to the display work area",
                         fitted.Width, fitted.Height);
         }
         int x = 0, y = 0;
@@ -545,7 +552,7 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
         const SDL_Rect& usable = placement.Usable;
         const int frameWidth = static_cast<int>(fitted.Width) + placement.Area.DecorationWidth;
         const int frameHeight = static_cast<int>(fitted.Height) + placement.Area.DecorationHeight;
-        if (x - placement.Left < usable.x || y - placement.Top < usable.y ||
+        if (defaultRequest || x - placement.Left < usable.x || y - placement.Top < usable.y ||
             x - placement.Left + frameWidth > usable.x + usable.w ||
             y - placement.Top + frameHeight > usable.y + usable.h) {
             SDL_SetWindowPosition(mWnd, usable.x + placement.Left + std::max(0, (usable.w - frameWidth) / 2),
@@ -1085,6 +1092,25 @@ WindowExtent GfxWindowBackendSDL2::FitWindowedExtent(WindowExtent requested) con
         return requested;
     }
     return Fast::FitWindowedExtent(requested, placement.Area);
+#endif
+}
+
+void GfxWindowBackendSDL2::ConfigureDefaultWindowExtent(bool enabled, bool initialRequestIsDefault) {
+    mDefaultExtentEnabled = enabled;
+    mInitialRequestIsDefault = initialRequestIsDefault;
+}
+
+WindowExtent GfxWindowBackendSDL2::ResolveWindowedExtent(WindowExtent requested, bool requestIsDefault,
+                                                         bool initial) const {
+#if defined(__ANDROID__) || defined(__IOS__) || defined(__SWITCH__)
+    return requested;
+#else
+    WindowPlacementArea placement;
+    if (mWnd == nullptr || !QueryWindowPlacementArea(mWnd, &placement)) {
+        return requested;
+    }
+    if (mDefaultExtentEnabled && requestIsDefault) return Fast::DefaultWindowedExtent(placement.Area);
+    return initial ? Fast::FitWindowedExtent(requested, placement.Area) : requested;
 #endif
 }
 } // namespace Fast

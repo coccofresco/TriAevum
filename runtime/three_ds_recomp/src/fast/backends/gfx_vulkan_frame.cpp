@@ -18,11 +18,15 @@ bool GfxRenderingAPIVulkan::ApplyPresentationSettings(const Extension::TitlePres
 #else
     // At startup a windowed request opens inside the display's work area, as
     // the window host created it; a later choice in F1 is applied as asked.
-    if (settings.WindowMode == 0U &&
-        settings.TransactionKind == static_cast<uint8_t>(Extension::RendererPresentationRequestKind::Initial)) {
-        const WindowExtent fitted = mWindowBackend->FitWindowedExtent({ settings.Width, settings.Height });
-        settings.Width = fitted.Width;
-        settings.Height = fitted.Height;
+    // The product's default request (nobody chose a size, or "Reset display
+    // settings") opens at the default fit of the screen when the host enabled
+    // that policy.
+    if (settings.WindowMode == 0U) {
+        const WindowExtent resolved = mWindowBackend->ResolveWindowedExtent(
+            { settings.Width, settings.Height }, settings.DefaultExtent,
+            settings.TransactionKind == static_cast<uint8_t>(Extension::RendererPresentationRequestKind::Initial));
+        settings.Width = resolved.Width;
+        settings.Height = resolved.Height;
     }
 #endif
     if (!mInitialized || mFrameActive || settings.WindowMode > 2U ||
@@ -256,6 +260,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
             value.Height,
             value.VSync,
             static_cast<uint8_t>(presentationRequest->Kind),
+            value.Provenance == WindowExtentProvenance::Default,
         };
         std::string presentationError;
         if (ApplyPresentationSettings(view, &presentationError)) {

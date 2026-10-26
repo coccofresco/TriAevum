@@ -70,6 +70,10 @@ constexpr EnumNames<AspectRatioMode> kAspectNames{
     {AspectRatioMode::Ultrawide21x9, "Ultrawide21x9"},
     {AspectRatioMode::Free, "Free"},
 };
+constexpr EnumNames<WindowExtentProvenance> kOutputProvenanceNames{
+    {WindowExtentProvenance::Default, "default"},
+    {WindowExtentProvenance::User, "user"},
+};
 constexpr EnumNames<AntiAliasingMode> kAaNames{
     {AntiAliasingMode::Off, "Off"},
     {AntiAliasingMode::Fxaa, "FXAA"},
@@ -1555,6 +1559,7 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
              {"Height", settings.OutputHeight},
              {"RefreshRate", settings.RefreshRate},
              {"Aspect", EnumName(settings.Aspect, kAspectNames)},
+             {"Provenance", EnumName(settings.OutputProvenance, kOutputProvenanceNames)},
          }},
         {"RenderScale", settings.InternalResolutionScale},
         {"AA",
@@ -1813,6 +1818,16 @@ GraphicsSettingsLoadResult DecodeGraphicsSettings(
                    "Graphics.Output.RefreshRate", result);
         ReadEnum(*output, "Aspect", result.Value.Aspect, kAspectNames,
                  "Graphics.Output.Aspect", result);
+        // Configurations from before the provenance hold none: the product's
+        // default windowed size is the fresh default, anything else a choice.
+        if (FindMember(*output, "Provenance") != nullptr) {
+            ReadEnum(*output, "Provenance", result.Value.OutputProvenance,
+                     kOutputProvenanceNames, "Graphics.Output.Provenance", result);
+        } else {
+            result.Value.OutputProvenance = InferWindowExtentProvenance(
+                result.Value.Window == WindowMode::Windowed,
+                {result.Value.OutputWidth, result.Value.OutputHeight});
+        }
     }
     ReadScalar(document, "RenderScale",
                result.Value.InternalResolutionScale,

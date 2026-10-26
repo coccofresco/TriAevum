@@ -53,6 +53,11 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
     // The largest extent of the requested shape that opens inside the work
     // area of the window's display (WindowExtentPolicy.h).
     WindowExtent FitWindowedExtent(WindowExtent requested) const;
+    void ConfigureDefaultWindowExtent(bool enabled, bool initialRequestIsDefault) override;
+    // The extent a windowed presentation request opens at: the default fit
+    // of the screen for a default request (when the host enabled it), the
+    // request fitted to the work area at startup, the request as asked later.
+    WindowExtent ResolveWindowedExtent(WindowExtent requested, bool requestIsDefault, bool initial) const;
 
   private:
     void SetFullscreenImpl(bool on, bool call_callback);
@@ -80,6 +85,8 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
     int mWindowWidth = 640;
     int mWindowHeight = 480;
     bool mExclusiveDisplayModeConfigured = false;
+    bool mDefaultExtentEnabled = false;
+    bool mInitialRequestIsDefault = false;
     void (*mOnAllKeysUp)();
 };
 } // namespace Fast

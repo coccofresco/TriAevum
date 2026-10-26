@@ -218,6 +218,45 @@ GraphicsSettings GraphicsSettingsService::Preset(GraphicsPreset preset) {
     return value;
 }
 
+GraphicsSettings ProductDefaultGraphicsSettings() {
+    auto settings = GraphicsSettingsService::Preset(kProductDefaultGraphicsPreset);
+    settings.OutputWidth = kProductDefaultWindowExtent.Width;
+    settings.OutputHeight = kProductDefaultWindowExtent.Height;
+    settings.OutputProvenance = WindowExtentProvenance::Default;
+#if defined(__ANDROID__)
+    // The full Enhanced preset; the picture fills the phone's display instead
+    // of a 16:9 pillarbox (the aspect is host-owned, so the preset stays).
+    settings.Aspect = AspectRatioMode::Free;
+    // Water keeps its waves, Fresnel sky (fog colour) reflection, sun specular
+    // and foam in the scene shader; the screen-space water trace (Hi-Z, the
+    // material guide on every scene draw, the composite) cost ~4 ms of an
+    // 18 ms frame on the Adreno 830 for reflections that are mostly sky.
+    settings.Effects.WaterReflections = false;
+#endif
+    return settings;
+}
+
+void ResetDisplaySettings(GraphicsSettings& settings) {
+    // The least demanding presentation: a window at the product's default
+    // size, native render scale, no anti-aliasing or upscaler.
+    const GraphicsSettings safe{};
+    settings.Window = safe.Window;
+    settings.OutputWidth = kProductDefaultWindowExtent.Width;
+    settings.OutputHeight = kProductDefaultWindowExtent.Height;
+    settings.OutputProvenance = WindowExtentProvenance::Default;
+    settings.InternalResolutionScale = safe.InternalResolutionScale;
+    settings.AntiAliasing = safe.AntiAliasing;
+    settings.MsaaSamples = safe.MsaaSamples;
+    settings.Upscaler = safe.Upscaler;
+    settings.UpscalerMode = safe.UpscalerMode;
+}
+
+void MarkUserOutputRequest(GraphicsSettings& candidate, const GraphicsSettings& current) {
+    if (candidate.OutputProvenance != current.OutputProvenance) return;
+    if (candidate.OutputWidth != current.OutputWidth || candidate.OutputHeight != current.OutputHeight)
+        candidate.OutputProvenance = WindowExtentProvenance::User;
+}
+
 GraphicsSettings GraphicsSettingsService::PresetForCurrent(
     GraphicsPreset preset, const GraphicsSettings& current) {
     if (preset == GraphicsPreset::Custom) {
@@ -236,6 +275,7 @@ GraphicsSettings GraphicsSettingsService::KeepHostOwnedSettings(
     value.DisplayIndex = current.DisplayIndex;
     value.OutputWidth = current.OutputWidth;
     value.OutputHeight = current.OutputHeight;
+    value.OutputProvenance = current.OutputProvenance;
     value.RefreshRate = current.RefreshRate;
     value.Aspect = current.Aspect;
     value.VSync = current.VSync;

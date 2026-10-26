@@ -87,6 +87,12 @@ class GraphicsSettingsRuntime final {
     // Resolved title-owned profile; never serialized into global graphics settings.
     void PublishSceneEnvironment(const Renderer3ds::PicaEnvironmentLighting& environment);
     GraphicsSettingsValidation Apply(GraphicsSettings candidate, bool persist = true);
+    // The host-owned display recovery (ResetDisplaySettings in
+    // graphics_settings.h): the same reset as the safe presentation after a
+    // launch that ended in its first minute, applied through the display
+    // transaction and saved. Reachable from the in-game menu, so a user whose
+    // F1 is out of sight can recover with the pad.
+    GraphicsSettingsValidation ResetDisplay();
     // Restores previously stored preferences the way the startup load does: a
     // capability missing at this moment (for example view metadata outside
     // gameplay) leaves its effect inert instead of erasing the choice.

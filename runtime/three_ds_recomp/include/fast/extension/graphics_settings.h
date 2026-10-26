@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fast/WindowExtentPolicy.h"
 #include "fast/extension/directional_shadows.h"
 #include "fast/extension/graphics_capabilities.h"
 #include "fast/extension/point_shadows.h"
@@ -365,6 +366,11 @@ struct GraphicsSettings {
     uint32_t DisplayIndex = 0;
     uint32_t OutputWidth = 1280;
     uint32_t OutputHeight = 720;
+    // Whether the output size is the product's fresh default or the user's
+    // choice (fast/WindowExtentPolicy.h). Host-owned: a default windowed
+    // request opens at the default fit of the screen; choosing a size makes
+    // it the user's (MarkUserOutputRequest).
+    WindowExtentProvenance OutputProvenance = WindowExtentProvenance::Default;
     uint32_t RefreshRate = 60;
     // The picture's aspect ratio inside the output (presentation_picture.h):
     // a fixed ratio is letterboxed and centred, Free fills the window or the
@@ -434,5 +440,23 @@ class GraphicsSettingsService {
     GraphicsSettings mLastKnownGood;
     std::optional<GraphicsSettings> mPending;
 };
+
+// The product's default graphics, what a new installation starts from (the
+// struct defaults above are the Authentic look, not the product default). It
+// is the baseline every "Modified" marker compares with; the title adds only
+// its content rules (grass sources) to it when it writes a new configuration.
+inline constexpr GraphicsPreset kProductDefaultGraphicsPreset = GraphicsPreset::Enhanced;
+[[nodiscard]] GraphicsSettings ProductDefaultGraphicsSettings();
+
+// The display part of the settings back at the product defaults: window mode,
+// output size (as the fresh default, so the window opens at the default fit),
+// render scale, anti-aliasing and upscaler. The safe presentation after a
+// launch that ended in its first minute, and "Reset display settings".
+void ResetDisplaySettings(GraphicsSettings& settings);
+
+// A candidate that changes the output size is the user's choice of a size.
+// A change of the window mode alone, or a candidate that sets the provenance
+// itself (a reset), keeps it.
+void MarkUserOutputRequest(GraphicsSettings& candidate, const GraphicsSettings& current);
 
 } // namespace Fast::Extension

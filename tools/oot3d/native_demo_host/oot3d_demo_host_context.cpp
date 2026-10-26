@@ -125,6 +125,22 @@ void InitContextForDemo(const Args& args) {
     const auto extent = Fast::ResolveInitialWindowExtent(storedOutput, {args.Width, args.Height});
     config->SetInt("Window.Width", static_cast<int32_t>(extent.Width));
     config->SetInt("Window.Height", static_cast<int32_t>(extent.Height));
+    // A size nobody chose (the product's fresh default, a configuration
+    // without one, or the safe presentation after a launch that ended in its
+    // first minute) opens at the default fit of the screen, windowed and
+    // centred; a size the user chose opens as stored. Scripted sessions keep
+    // the stored size so their captures reproduce.
+    const auto storedProvenance = [&] {
+        if (!storedOutput.has_value()) return Fast::WindowExtentProvenance::Default;
+        const auto provenance = config->GetString("Graphics.Output.Provenance", "");
+        if (provenance == "default") return Fast::WindowExtentProvenance::Default;
+        if (provenance == "user") return Fast::WindowExtentProvenance::User;
+        return Fast::InferWindowExtentProvenance(config->GetString("Graphics.Window.Mode", "Windowed") == "Windowed",
+                                                 *storedOutput);
+    }();
+    const char* safePresentation = std::getenv("TRIAEVUM_SAFE_PRESENTATION");
+    const bool initialRequestIsDefault = storedProvenance == Fast::WindowExtentProvenance::Default ||
+                                         (safePresentation != nullptr && *safePresentation != '\0');
     if (args.BackendId >= 0) {
         config->SetInt("Window.Backend.Id", args.BackendId);
     }
@@ -162,6 +178,7 @@ void InitContextForDemo(const Args& args) {
     if (args.Renderer == "nri" || args.Renderer == "vulkan") {
         window->EnableOot3dVulkanBackend();
     }
+    window->ConfigureDefaultWindowExtent(!args.Scripted(), initialRequestIsDefault);
     if (!context->InitWindow(window)) {
         throw std::runtime_error("failed to initialize Fast3dWindow");
     }

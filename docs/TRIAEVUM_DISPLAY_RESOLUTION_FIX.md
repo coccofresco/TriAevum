@@ -54,6 +54,20 @@
   (`fast/WindowExtentPolicy.h`, `gfx_sdl2.cpp`). The first presentation adopts
   that window; the stored request is not rewritten, and a later F1 choice is
   applied as asked.
+- The stored request carries its provenance (`Graphics.Output.Provenance`,
+  `default` or `user`, owner: the window host; UX plan WP-06A, decision 3).
+  A fresh product configuration stores 1280x720 as `default`; a configuration
+  from before the field counts as `default` only when it holds that windowed
+  product size. A `default` request opens windowed at the default fit of the
+  screen, centred: the largest 16:9 extent inside 90 % of the work area left
+  by the decorations (`DefaultWindowedExtent`; 1102x620 on a 1366x768 screen
+  with a task bar), never a fullscreen mode. Choosing a size (F1 Display, the
+  menu's Resolution or a fixed aspect that resizes the window) makes it
+  `user` (`MarkUserOutputRequest`), and it is honoured as stored; a window
+  mode change alone keeps the provenance. The safe presentation and the
+  menu's "Reset display settings" store `default` again. Scripted sessions
+  (captures, fixed steps, frame or time limits, timelines, schedules,
+  benchmarks: `Args::Scripted`) keep the stored size so they reproduce.
 - Borderless uses the desktop's actual dimensions; the requested-resolution
   controls are disabled in that mode. Internal scale remains independently
   adjustable. With an upscaler active, its quality owns the effective scale,

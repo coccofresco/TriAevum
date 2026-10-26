@@ -12,6 +12,7 @@ PresentationSettingsValue GetPresentationSettings(
         settings.OutputWidth,
         settings.OutputHeight,
         settings.VSync,
+        settings.OutputProvenance,
     };
 }
 
@@ -22,6 +23,7 @@ void SetPresentationSettings(
     settings.OutputWidth = presentation.Width;
     settings.OutputHeight = presentation.Height;
     settings.VSync = presentation.VSync;
+    settings.OutputProvenance = presentation.Provenance;
 }
 
 bool RequiresPresentationConfirmation(
@@ -58,7 +60,7 @@ bool PresentationSettingsTransaction::MarkApplied(
     const PresentationSettingsValue& applied,
     uint64_t nowMilliseconds, bool waitForVisibleConfirmation) {
     if (mPhase == PresentationTransactionPhase::ApplyRequested &&
-        applied == mRequested) {
+        SamePresentedDisplay(applied, mRequested)) {
         if (!RequiresPresentationConfirmation(mLastKnownGood, mRequested)) {
             mLastKnownGood = mRequested;
             mPhase = PresentationTransactionPhase::Idle;
@@ -71,7 +73,7 @@ bool PresentationSettingsTransaction::MarkApplied(
         return true;
     }
     if (mPhase == PresentationTransactionPhase::RollbackRequested &&
-        applied == mLastKnownGood) {
+        SamePresentedDisplay(applied, mLastKnownGood)) {
         CompleteRollback();
         return true;
     }

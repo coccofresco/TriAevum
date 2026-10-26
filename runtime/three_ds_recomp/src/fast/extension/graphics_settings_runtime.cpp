@@ -419,15 +419,7 @@ GraphicsSettingsRuntime::GraphicsSettingsRuntime() {
     // instead of failing at every launch. Everything else is kept.
     if (const char* safe = std::getenv("TRIAEVUM_SAFE_PRESENTATION");
         selectedInitial && safe != nullptr && *safe != '\0') {
-        const GraphicsSettings defaults{};
-        initial.Window = defaults.Window;
-        initial.OutputWidth = defaults.OutputWidth;
-        initial.OutputHeight = defaults.OutputHeight;
-        initial.InternalResolutionScale = defaults.InternalResolutionScale;
-        initial.AntiAliasing = defaults.AntiAliasing;
-        initial.MsaaSamples = defaults.MsaaSamples;
-        initial.Upscaler = defaults.Upscaler;
-        initial.UpscalerMode = defaults.UpscalerMode;
+        ResetDisplaySettings(initial);
         rewriteLoadedSettings = true;
         SPDLOG_WARN("OOT3D graphics: {}; display, resolution, anti-aliasing and upscaler settings were reset "
                     "to their defaults", safe);
@@ -527,6 +519,12 @@ GraphicsSettingsValidation GraphicsSettingsRuntime::Apply(GraphicsSettings candi
     std::scoped_lock lock(mMutex);
     return ApplyLocked(std::move(candidate), mCapabilities, persist);
 }
+GraphicsSettingsValidation GraphicsSettingsRuntime::ResetDisplay() {
+    std::scoped_lock lock(mMutex);
+    auto candidate = mService.Current();
+    ResetDisplaySettings(candidate);
+    return ApplyLocked(std::move(candidate), mCapabilities, true);
+}
 GraphicsSettingsValidation GraphicsSettingsRuntime::RestorePreferences(GraphicsSettings stored,
                                                                        bool persist) {
     std::scoped_lock lock(mMutex);
@@ -541,6 +539,7 @@ GraphicsSettingsValidation GraphicsSettingsRuntime::ApplyLocked(
     GraphicsSettings candidate, const GraphicsCapabilities& capabilities, bool persist) {
     const auto previous =
         GetPresentationSettings(mService.Current());
+    MarkUserOutputRequest(candidate, mService.Current());
     auto result = mService.Stage(std::move(candidate), capabilities);
     if (mService.ApplyPending()) {
         ++mRevision;
@@ -623,8 +622,8 @@ bool GraphicsSettingsRuntime::RejectPresentationApply(
     std::scoped_lock lock(mMutex);
     const auto status = mPresentationTransaction.Status(
         PresentationClockMilliseconds());
-    if (GetPresentationSettings(rejected) !=
-        GetPresentationSettings(mService.Current())) {
+    if (!SamePresentedDisplay(GetPresentationSettings(rejected),
+                              GetPresentationSettings(mService.Current()))) {
         return false;
     }
     if (status.Phase ==

@@ -14,6 +14,10 @@ struct TitlePresentationSettingsView {
     bool VSync = true;
     // 0 baseline, 1 candidate awaiting confirmation, 2 rollback.
     uint8_t TransactionKind = 0;
+    // The size is the product's fresh default, not a choice: a windowed
+    // request then opens at the default fit of the screen (the window host
+    // decides whether that policy applies, fast/WindowExtentPolicy.h).
+    bool DefaultExtent = false;
 };
 
 struct TitleSceneViewSubmission {

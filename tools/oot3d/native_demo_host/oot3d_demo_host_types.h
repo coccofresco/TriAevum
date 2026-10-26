@@ -39,4 +39,13 @@ struct Args {
     int32_t AudioDesiredBuffered = 2480;
     int32_t BackendId = -1;
     std::string Renderer = "nri";
+
+    // A scripted session (captures, fixed steps, bounded or replayed runs,
+    // benchmarks, scheduled settings): what the host adds for a person at the
+    // screen (the default window fit, the first-play help card) stays out, so
+    // such runs keep their stored window size and reproduce frame for frame.
+    [[nodiscard]] bool Scripted() const noexcept {
+        return !ScreenshotPath.empty() || FrameLimit != 0U || ThroughputBenchmark || MaxSeconds > 0.0 ||
+               FixedDeltaSeconds > 0.0 || !InputTimelinePath.empty() || !GraphicsSettingsSchedulePath.empty();
+    }
 };

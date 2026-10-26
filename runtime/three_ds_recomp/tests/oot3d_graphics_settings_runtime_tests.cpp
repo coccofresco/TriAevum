@@ -94,6 +94,74 @@ TEST(GraphicsSettingsRuntimeTest, PublishesChangesAndDefersOutputPersistenceUnti
                   .get<uint32_t>(),
               1080U);
     EXPECT_FALSE(runtime.TickPresentation());
+    // Choosing a size made the request the user's.
+    EXPECT_EQ(runtime.Snapshot().OutputProvenance, Fast::WindowExtentProvenance::User);
+    EXPECT_EQ(persistence->Root["Graphics"]["Output"]["Provenance"].get<std::string>(), "user");
+}
+
+// The host-owned output provenance (UX plan WP-06A): a size the user chooses
+// is theirs, a window mode change alone keeps the provenance, and the display
+// reset (the safe presentation's) stores the fresh default again.
+TEST(GraphicsSettingsRuntimeTest, OutputProvenanceFollowsTheUsersSizeChoice) {
+    using namespace Fast::Extension;
+    const auto persistence = Store();
+    auto& runtime = Runtime();
+    const auto settle = [&] {
+        if (runtime.PresentationStatus().Phase == PresentationTransactionPhase::ApplyRequested)
+            ASSERT_TRUE(runtime.AcknowledgePresentationApplied(runtime.Snapshot()));
+        if (runtime.PresentationStatus().Phase == PresentationTransactionPhase::AwaitingConfirmation)
+            ASSERT_TRUE(runtime.ConfirmPresentation());
+        ASSERT_EQ(runtime.PresentationStatus().Phase, PresentationTransactionPhase::Idle);
+    };
+    auto user = runtime.Snapshot();
+    user.OutputWidth = 1600U;
+    user.OutputHeight = 900U;
+    ASSERT_TRUE(runtime.Apply(user).Accepted());
+    settle();
+    ASSERT_EQ(runtime.Snapshot().OutputProvenance, Fast::WindowExtentProvenance::User);
+
+    auto settings = runtime.Snapshot();
+    settings.AntiAliasing = AntiAliasingMode::Fxaa;
+    settings.InternalResolutionScale = 1.5F;
+    ASSERT_TRUE(runtime.Apply(settings).Accepted());
+    ASSERT_TRUE(runtime.ResetDisplay().Accepted());
+    settle();
+    const auto reset = runtime.Snapshot();
+    EXPECT_EQ(reset.OutputProvenance, Fast::WindowExtentProvenance::Default);
+    EXPECT_EQ(reset.Window, WindowMode::Windowed);
+    EXPECT_EQ(reset.OutputWidth, 1280U);
+    EXPECT_EQ(reset.OutputHeight, 720U);
+    EXPECT_EQ(reset.AntiAliasing, AntiAliasingMode::Off);
+    EXPECT_FLOAT_EQ(reset.InternalResolutionScale, 1.0F);
+    EXPECT_FLOAT_EQ(reset.FovMultiplier, settings.FovMultiplier); // the rest stays
+    EXPECT_EQ(persistence->Root["Graphics"]["Output"]["Provenance"].get<std::string>(), "default");
+
+    // The window mode alone is not a size choice.
+    auto borderless = runtime.Snapshot();
+    borderless.Window = WindowMode::Borderless;
+    ASSERT_TRUE(runtime.Apply(borderless).Accepted());
+    EXPECT_EQ(runtime.PresentationStatus().Requested.Provenance, Fast::WindowExtentProvenance::Default);
+    settle();
+    EXPECT_EQ(runtime.Snapshot().OutputProvenance, Fast::WindowExtentProvenance::Default);
+    auto windowed = runtime.Snapshot();
+    windowed.Window = WindowMode::Windowed;
+    ASSERT_TRUE(runtime.Apply(windowed).Accepted());
+    settle();
+
+    // A size choice the user reverts restores the default with its size.
+    auto bigger = runtime.Snapshot();
+    bigger.Window = WindowMode::Borderless;
+    bigger.OutputWidth = 1920U;
+    bigger.OutputHeight = 1080U;
+    ASSERT_TRUE(runtime.Apply(bigger).Accepted());
+    ASSERT_TRUE(runtime.AcknowledgePresentationApplied(runtime.Snapshot()));
+    ASSERT_EQ(runtime.PresentationStatus().Phase, PresentationTransactionPhase::AwaitingConfirmation);
+    EXPECT_EQ(runtime.Snapshot().OutputProvenance, Fast::WindowExtentProvenance::User);
+    ASSERT_TRUE(runtime.RollbackPresentation());
+    EXPECT_EQ(runtime.Snapshot().OutputProvenance, Fast::WindowExtentProvenance::Default);
+    EXPECT_EQ(runtime.Snapshot().OutputWidth, 1280U);
+    ASSERT_TRUE(runtime.AcknowledgePresentationApplied(runtime.Snapshot()));
+    EXPECT_EQ(runtime.PresentationStatus().Phase, PresentationTransactionPhase::Idle);
 }
 
 TEST(GraphicsSettingsRuntimeTest, SavesLoadsAndDeletesUserPresetsButNeverBuiltIns) {
