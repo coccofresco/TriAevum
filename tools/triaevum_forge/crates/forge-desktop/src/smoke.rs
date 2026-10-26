@@ -172,6 +172,9 @@ pub const SCREENS: &[&str] = &[
     "failed",
     "enhancements",
     "data",
+    "data_backup",
+    "data_restore",
+    "data_remove",
     "diagnostics",
     "about",
 ];
@@ -239,6 +242,11 @@ fn apply_screen(app: &mut ForgeApp, screen: &str) {
             .join("\n");
             let error = ForgeError::new(ErrorKind::PreparationFailed, details).during(Operation::NativeHelper);
             app.failure = Some(forge_core::explain::explain(&error));
+            InstallationState::NotInstalled
+        }
+        data if data.starts_with("data") => {
+            app.page = Page::Data;
+            crate::pages::data::probe(app, data);
             InstallationState::NotInstalled
         }
         page => {

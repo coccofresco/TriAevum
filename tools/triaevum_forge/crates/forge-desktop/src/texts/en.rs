@@ -316,9 +316,13 @@ pub fn text(msg: &Msg) -> String {
             "This backup was made with another revision of the game than the one installed here."
         }
         RestoreUnavailable { path } => {
-            return format!("A setting in this backup names a folder that does not exist here; it stays as it is: {path}")
+            return format!(
+                "A setting in this backup names a folder that does not exist here; it stays as it is: {path}"
+            )
         }
-        RestoreKeptExisting { path } => return format!("A file of this backup is not restored, the one here stays: {path}"),
+        RestoreKeptExisting { path } => {
+            return format!("A file of this backup is not restored, the one here stays: {path}")
+        }
         RestoreGroupLine { label, replaced, added, removed } => {
             return format!("{label}: {replaced} replaced, {added} added, {removed} removed")
         }
@@ -355,9 +359,7 @@ pub fn text(msg: &Msg) -> String {
                  settings stay. This can take several minutes."
             )
         }
-        RebuildNoSource => {
-            "The ROM data Forge kept is missing. Choose your ROM on Home to prepare the game again."
-        }
+        RebuildNoSource => "The ROM data Forge kept is missing. Choose your ROM on Home to prepare the game again.",
         RebuildDone => "The prepared game was rebuilt.",
         UninstallWindows { path } => {
             return format!(

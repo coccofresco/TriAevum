@@ -66,7 +66,7 @@ fn every_state_fits_small_and_scaled_screens() {
                 assert_eq!(*value, true, "{screen}: keyboard {key}");
             }
         }
-        assert_eq!(report["screens"].as_object().unwrap().len(), 14, "{screen}");
+        assert_eq!(report["screens"].as_object().unwrap().len(), 17, "{screen}");
         assert_eq!(report["pixels_per_point"].as_f64(), scale.parse::<f64>().ok(), "{screen}");
         assert!(status.success() && report["status"] == "passed", "{screen}\n{report:#}");
     }

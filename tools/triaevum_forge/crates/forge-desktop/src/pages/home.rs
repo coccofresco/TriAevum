@@ -342,7 +342,8 @@ fn state_card(input: &HomeInput, card: &mut HomeCard) -> bool {
             card.rom = RomField::Shown;
             card.languages = true;
             card.primary = button(Command::Repair, input);
-            card.secondary = Some(button(Command::Play, input));
+            // Not after "Remove prepared game": the title itself is gone.
+            card.secondary = state.can_play().then(|| button(Command::Play, input));
             card.status = t(Msg::StatusActionNeeded);
         }
         InstallationState::Incompatible { .. } => {

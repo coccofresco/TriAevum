@@ -48,8 +48,16 @@ impl Installation {
         resolve(&layout::installed_runtime_path(&self.root, &host_platform()?))
     }
 
-    /// The installation state (`forge_core::state::inspect`, read-only).
+    /// The installation state (`forge_core::state::inspect`). An interrupted
+    /// restore is recovered first (UX plan WP-05B), so Play is offered only
+    /// for one coherent version of the user's files; when recovery cannot
+    /// run now (the game holds the session), inspection reports it.
     pub fn state(&self) -> InstallationState {
+        if forge_core::restore::pending_restore(&self.data_root).is_some() {
+            if let Err(error) = crate::pages::data::recover(self) {
+                forge_core::log::ForgeLog::new(&self.data_root, "restore_recover").error(&error);
+            }
+        }
         inspect(&InspectRequest { data_root: Some(self.data_root.clone()), ..InspectRequest::package(&self.root) })
     }
 }

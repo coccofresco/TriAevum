@@ -86,7 +86,8 @@ pub(crate) fn platform_from_code(code: &str) -> Option<Platform> {
         .find(|platform| platform.code() == code)
 }
 
-pub(crate) fn os_of(platform: Platform) -> HostOs {
+/// The host family of an installation model.
+pub fn os_of(platform: Platform) -> HostOs {
     match platform {
         Platform::WindowsPortable => HostOs::Windows,
         Platform::Android => HostOs::Android,
@@ -117,6 +118,11 @@ pub(crate) fn stamp(time: std::time::SystemTime) -> String {
     let text = crate::log::timestamp(time);
     let digits: String = text.chars().filter(char::is_ascii_digit).collect();
     format!("{}-{}", &digits[..8], &digits[8..14])
+}
+
+/// `YYYYMMDD-HHMM` (UTC), for backup file names.
+pub fn stamp_minutes(time: std::time::SystemTime) -> String {
+    stamp(time)[..13].to_string()
 }
 
 /// The entries above `entry`, innermost first.

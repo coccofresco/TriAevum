@@ -71,6 +71,8 @@ pub enum Action {
     TogglePrepareAgain,
     SetUiLanguage(String),
     Command(Command),
+    /// The Data & backups page's actions.
+    Data(pages::data::DataAction),
 }
 
 impl Action {
@@ -285,6 +287,8 @@ pub struct ForgeApp {
     /// The probe's keyboard check: actions are logged instead of run.
     pub(crate) action_log: Option<Vec<String>>,
     probe: Option<Box<Probe>>,
+    /// The Data & backups page: inventory, previews and its task.
+    pub(crate) data: pages::data::DataState,
 }
 
 impl ForgeApp {
@@ -373,6 +377,7 @@ impl ForgeApp {
             scroll_top: false,
             action_log: None,
             probe,
+            data: Default::default(),
         };
         app.refresh_installation();
         app.refresh_hd();
@@ -906,6 +911,7 @@ impl ForgeApp {
             Action::ToggleDetails => self.show_details = !self.show_details,
             Action::ToggleNeeds => self.show_needs = !self.show_needs,
             Action::TogglePrepareAgain => self.show_prepare_again = !self.show_prepare_again,
+            Action::Data(action) => pages::data::apply(self, action, frame),
             Action::SetUiLanguage(code) => {
                 self.ui_language_choice = Some(code);
                 self.refresh_texts();
@@ -1257,6 +1263,7 @@ impl eframe::App for ForgeApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let context = ui.ctx().clone();
         self.drain_events();
+        pages::data::poll(self, &context);
         self.handle_close_request(&context);
         self.geometry.update(&context, frame);
         if self.title_language != self.texts.language() {

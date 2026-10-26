@@ -45,6 +45,14 @@ fn check_journal(installation: &Installation) -> Result<()> {
     if journal_path(&installation.layout.activation, HostOs::current()).exists() {
         return Err(ForgeError::new(ErrorKind::RecoveryRequired, INTERRUPTED));
     }
+    // An interrupted restore is undone by the window before Play (WP-05B).
+    if forge_core::restore::pending_restore(&installation.data_root).is_some() {
+        return Err(ForgeError::new(
+            ErrorKind::RecoveryRequired,
+            "A restore was interrupted; open Forge before playing",
+        )
+        .because(forge_base::Reason::InterruptedRestore));
+    }
     Ok(())
 }
 
