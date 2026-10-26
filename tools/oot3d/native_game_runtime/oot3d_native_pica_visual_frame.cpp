@@ -961,6 +961,19 @@ void BuildVisualDrawMatching(
         matching.StrictOrdinalMatches, &matching.AmbiguousPrevious,
         &matching.AmbiguousCurrent);
 
+    // A UI draw pairs with its previous self only on native evidence (its
+    // temporal identity or its strict draw identity: source, buffers and
+    // textures). Ordinal pairing by shape alone lets a HUD element that
+    // appears, vanishes or blinks (the Navi prompt) take another element's
+    // place, which then slides across the screen between native frames. An
+    // unpaired UI draw is presented as the guest drew it.
+    for (size_t index = 0; index < previous.Draws.size(); ++index)
+        if (previous.Draws[index].CompositionDomain == Oot3dPicaCompositionDomain::Ui)
+            scratch.PreviousMatched[index] = 1U;
+    for (size_t index = 0; index < current.Draws.size(); ++index)
+        if (current.Draws[index].CompositionDomain == Oot3dPicaCompositionDomain::Ui)
+            scratch.CurrentMatched[index] = 1U;
+
     size_t unusedStructuralUniqueMatches = 0;
     MatchEqualCardinalityGroups(
         previous, current, nullptr, scratch,

@@ -136,7 +136,11 @@ RootedFilesystemBackendV1::Create(RootedFilesystemConfigV1 config,
     }
     impl->SaveRoot =
         std::filesystem::weakly_canonical(config.saveRoot, directoryError);
-    if (directoryError || !std::filesystem::is_directory(impl->SaveRoot)) {
+    // The error_code overload: an empty canonical path must report an
+    // invalid root, not throw from inside the check.
+    if (directoryError ||
+        !std::filesystem::is_directory(impl->SaveRoot, directoryError) ||
+        directoryError) {
       throw std::runtime_error("save root is invalid");
     }
     return std::unique_ptr<RootedFilesystemBackendV1>(
@@ -336,7 +340,8 @@ RootedFilesystemBackendV1::Stat(TriAevumFilesystemRootV1 root,
   }
   std::error_code fileError;
   const bool regular = std::filesystem::is_regular_file(*path, fileError);
-  const bool directory = !fileError && std::filesystem::is_directory(*path);
+  const bool directory =
+      !fileError && std::filesystem::is_directory(*path, fileError);
   if (fileError || (!regular && !directory)) {
     return TRIAEVUM_MODULE_TITLE_ERROR_V1;
   }

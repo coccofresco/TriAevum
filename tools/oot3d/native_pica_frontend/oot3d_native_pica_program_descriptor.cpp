@@ -56,7 +56,9 @@ class CanonicalHashBuilder {
     explicit CanonicalHashBuilder(std::string_view domain) {
         AppendU32(kOot3dPicaProgramDescriptorSchemaVersion);
         AppendU32(static_cast<uint32_t>(domain.size()));
-        AppendBytes(std::as_bytes(std::span(domain)));
+        // span(data, size): span(range) needs the C++23 range constructor,
+        // which some libc++ builds lack.
+        AppendBytes(std::as_bytes(std::span{domain.data(), domain.size()}));
     }
 
     void AppendU8(uint8_t value) {

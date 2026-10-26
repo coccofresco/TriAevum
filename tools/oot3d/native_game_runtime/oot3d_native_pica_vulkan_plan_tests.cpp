@@ -385,6 +385,60 @@ void TestSharedActorPaletteMotion() {
     }
 }
 
+// A HUD element that vanishes while another of the same shape appears must
+// not be interpolated from the vanished one's place (elserxxoo 455b7a1e: the
+// Navi prompt sliding at 60 fps). UI draws pair only on native evidence.
+void TestUiDrawsPairOnlyOnNativeEvidence() {
+    using namespace Oot3dNativeGame;
+    // One native draw site, three elements told apart by their vertex buffers.
+    const auto make = [](Oot3dPicaCompositionDomain domain, uint32_t vertices, float x) {
+        Oot3dPicaVulkanDrawPlan plan;
+        plan.CompositionDomain = domain;
+        plan.Composition.SourcePc = 0x00400000U;
+        plan.State.VertexInput.PhysicalBaseAddress = vertices;
+        plan.VertexShader.StateKey = 9;
+        plan.VertexCount = 4;
+        plan.VertexAttributes.push_back({0,0,Oot3dPicaVertexFormat::UnsignedByte,1,0});
+        Oot3dPicaVulkanVertexBinding binding;
+        binding.ByteStride = 1;
+        binding.Bytes = {0, 1, 2, 3};
+        plan.VertexBindings.push_back(binding);
+        plan.VertexShader.Uniforms.Floats[0] = {x, 0, 0, 1};
+        return plan;
+    };
+    for (const auto domain : {Oot3dPicaCompositionDomain::Ui, Oot3dPicaCompositionDomain::Scene}) {
+        Oot3dPicaVisualFrame aFrame, bFrame;
+        aFrame.Sequence = 1; bFrame.Sequence = 2;
+        // The prompt (0x100) vanishes, the button (0x200) moves, a new
+        // element of the same shape (0x300) appears.
+        aFrame.Draws = {make(domain, 0x100, 10), make(domain, 0x200, 100)};
+        bFrame.Draws = {make(domain, 0x200, 110), make(domain, 0x300, 50)};
+        Oot3dPicaPreparedVisualTransition prepared;
+        Require(prepared.Prepare(aFrame, bFrame), "UI transition prepare failed");
+        Oot3dPicaVisualFrameSample frame;
+        Oot3dPicaVisualFrameViewSample view;
+        Require(SampleOot3dPicaVisualFrame(aFrame, bFrame, 0.5F, frame) && frame.Draws.size() == 2,
+                "UI full-frame sample failed");
+        Require(prepared.Sample(aFrame, bFrame, 0.5F, view) && view.Draws.size() == 2,
+                "UI prepared sample failed");
+        const auto viewX = [&](size_t i) {
+            return (view.Draws[i].VertexUniforms ? *view.Draws[i].VertexUniforms
+                                                 : view.Draws[i].BasePlan->VertexShader.Uniforms).Floats[0][0];
+        };
+        // The same element (strict identity) still moves smoothly.
+        Require(frame.Draws[0].VertexShader.Uniforms.Floats[0][0] == 105.0F && viewX(0) == 105.0F,
+                "an element with native evidence lost its interpolation");
+        const float appeared = frame.Draws[1].VertexShader.Uniforms.Floats[0][0];
+        Require(viewX(1) == appeared, "UI full-frame and prepared-view outputs differ");
+        if (domain == Oot3dPicaCompositionDomain::Ui) {
+            Require(appeared == 50.0F && frame.MatchedDraws == 1,
+                    "a new HUD element slid in from a vanished element's place");
+        } else {
+            Require(frame.MatchedDraws == 2, "scene draws lost their structural matching");
+        }
+    }
+}
+
 void TestPeriodicTextureInterpolationContract() {
     using namespace Fast::Renderer3ds;
     std::array<std::array<float,4>,96> a{},b{},output{};
@@ -609,6 +663,7 @@ int main() {
     TestPeriodicTextureTranslationSampling();
     TestFactoredCmbUniformInterpolation();
     TestSharedActorPaletteMotion();
+    TestUiDrawsPairOnlyOnNativeEvidence();
     Oot3dNativeGame::Oot3dPicaShaderState mutableShader;
     mutableShader.Program[0] = 0x88000000U;
     const uint64_t sharedProgramIdentity =
