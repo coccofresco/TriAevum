@@ -10,7 +10,8 @@
 //! prints the installation state, `explain` the explanation of an event,
 //! `inventory` where the installation keeps its files and `diagnostics` the
 //! redacted report (optionally saving the support bundle), the same JSON the
-//! C ABI and the Android installer receive.
+//! C ABI and the Android installer receive. `backup` and `restore` are the
+//! Data & backups page's backup and journaled restore (UX plan WP-05B).
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -54,6 +55,51 @@ enum Command {
     Inventory(InventoryArgs),
     /// Print the redacted diagnostics report and the support bundle's planned contents; --bundle saves it.
     Diagnostics(DiagnosticsArgs),
+    /// Back up saves, save states and settings into one zip (--plan only prints what it would hold).
+    Backup(BackupArgs),
+    /// Restore a backup (--preview prints what changes; --recover undoes an interrupted restore).
+    Restore(RestoreArgs),
+}
+
+#[derive(Args)]
+struct BackupArgs {
+    /// The zip to write.
+    #[arg(required_unless_present = "plan")]
+    destination: Option<PathBuf>,
+    /// Also back up an optional location: mods, downloads or texture_load (repeatable).
+    #[arg(long = "include")]
+    include: Vec<String>,
+    /// Print the backup plan instead of writing it.
+    #[arg(long)]
+    plan: bool,
+    /// The package (default: this executable's package).
+    #[arg(long)]
+    package_root: Option<PathBuf>,
+    /// The private data folder (default: the package's data folder).
+    #[arg(long)]
+    data_root: Option<PathBuf>,
+}
+
+#[derive(Args)]
+struct RestoreArgs {
+    /// The backup zip.
+    #[arg(required_unless_present = "recover")]
+    backup: Option<PathBuf>,
+    /// Verify the backup and print what the restore would change; write nothing.
+    #[arg(long, conflicts_with = "recover")]
+    preview: bool,
+    /// Undo an interrupted restore (nothing else).
+    #[arg(long)]
+    recover: bool,
+    /// Restore only this unit (save_data, save_states, config, ...; repeatable).
+    #[arg(long = "only")]
+    only: Vec<String>,
+    /// The package (default: this executable's package).
+    #[arg(long)]
+    package_root: Option<PathBuf>,
+    /// The private data folder (default: the package's data folder).
+    #[arg(long)]
+    data_root: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -144,6 +190,85 @@ fn main() -> ExitCode {
         Command::Explain { input } => explain(&input),
         Command::Inventory(args) => inventory(args),
         Command::Diagnostics(args) => diagnostics(args),
+        Command::Backup(args) => backup(args),
+        Command::Restore(args) => restore(args),
+    }
+}
+
+/// The inventory of the installation the arguments name (no folder sizes).
+fn installation_inventory(
+    package: Option<PathBuf>,
+    data_root: Option<PathBuf>,
+) -> Result<forge_core::inventory::Inventory, String> {
+    let request = forge_core::inventory::InventoryRequest {
+        data_root,
+        sizes: false,
+        ..forge_core::inventory::InventoryRequest::package(package_root(package)?)
+    };
+    forge_core::inventory::inventory_of(&request).map_err(|error| error.message)
+}
+
+/// Prints the explained failure and exits 1.
+fn failed(error: forge_core::ForgeError) -> ExitCode {
+    explain_on_stderr(&forge_core::abi::error_event(&error));
+    print_error(&error.message)
+}
+
+fn backup(args: BackupArgs) -> ExitCode {
+    let inventory = match installation_inventory(args.package_root, args.data_root) {
+        Ok(inventory) => inventory,
+        Err(message) => return print_error(&message),
+    };
+    if args.plan {
+        return match forge_core::backup::backup_plan(&inventory, &args.include, None) {
+            Ok(plan) => print_result(&plan.to_value()),
+            Err(error) => failed(error),
+        };
+    }
+    let request = forge_core::backup::BackupRequest {
+        destination: args.destination.unwrap_or_default(),
+        optional: args.include,
+        touch_preferences: None,
+    };
+    let mut progress = |_: &str, _: u64, _: Option<u64>| {};
+    match forge_core::backup::create_backup(&inventory, &request, &mut progress, &CancelToken::new()) {
+        Ok(result) => print_result(&result),
+        Err(error) => failed(error),
+    }
+}
+
+fn restore(args: RestoreArgs) -> ExitCode {
+    let inventory = match installation_inventory(args.package_root, args.data_root) {
+        Ok(inventory) => inventory,
+        Err(message) => return print_error(&message),
+    };
+    let cancel = CancelToken::new();
+    if args.recover {
+        let os = forge_core::backup::os_of(inventory.roots.platform);
+        return match forge_core::restore::recover_pending(
+            &inventory.roots.activation,
+            os,
+            &inventory.roots.data,
+            &cancel,
+        ) {
+            Ok(settled) => print_result(&json!({"recovered": settled})),
+            Err(error) => failed(error),
+        };
+    }
+    let options = forge_core::restore::RestoreOptions {
+        units: (!args.only.is_empty()).then_some(args.only),
+        abort_after_category: None,
+    };
+    let backup = args.backup.unwrap_or_default();
+    let outcome = if args.preview {
+        forge_core::restore::restore_preview(&inventory, &backup, &options, &cancel).map(|plan| plan.to_value())
+    } else {
+        let mut progress = |_: &str, _: u64, _: Option<u64>| {};
+        forge_core::restore::restore(&inventory, &backup, &options, &mut progress, &cancel)
+    };
+    match outcome {
+        Ok(result) => print_result(&result),
+        Err(error) => failed(error),
     }
 }
 
