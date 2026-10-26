@@ -13,9 +13,13 @@
 #include "oot3d_native_input_admission.h"
 #include "oot3d_top_screen_config.h"
 #include "oot3d_top_screen_mod_profile.h"
+#include "triaevum_data_routing.h"
 
 struct Oot3dNativeGameLaunch {
     Args Host;
+    // The managed data folders Forge names (triaevum_data_routing.h); empty
+    // fields keep the earlier locations. The log folder is also in Host.
+    Oot3dNativeGame::DataRouting Routing;
     std::filesystem::path A32ProcessManifestPath;
     std::filesystem::path TopScreenTextureOverridePackPath;
     // SingleScreen 3.0 zelda_link_ext.zar imported by Forge (Roll Dash).

@@ -404,6 +404,9 @@ private:
   std::filesystem::path saveDataDirectory{};
   std::filesystem::path quickStatePath{};
   std::shared_ptr<Oot3dNativeGame::SavestateLibrary> savestateLibrary{};
+  // The save-state move's outcome (oot3d_savestate_migration.h), logged once
+  // the runtime log is open; empty when no managed folder was routed.
+  std::string savestateMigrationMessage{};
   std::string lastSavestateMessage;
   Oot3dNativeGame::NativeA32SavestateCompatibility savestateCompatibility{};
   std::optional<Oot3dNativeGame::NativeA32CtrHostServices> hostServicesStorage;

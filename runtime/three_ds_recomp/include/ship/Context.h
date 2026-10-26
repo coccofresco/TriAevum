@@ -112,6 +112,16 @@ class Context {
     static std::string GetPathRelativeToAppDirectory(const std::string& path, const std::string& appName = "");
 
     /**
+     * @brief Routes the log folder (the log file, crash reports and records
+     * that sit beside it) for this process. Set before InitLogging; an empty
+     * path restores the default `logs/` in the application directory. The
+     * application directory itself (configuration, resources) is unchanged.
+     */
+    static void SetLogDirectory(const std::string& path);
+    /** @brief The routed log folder, else `logs/` in the application directory. */
+    static std::string GetLogDirectory();
+
+    /**
      * @brief Resolves a path relative to the application bundle directory.
      * @param path Relative path to resolve.
      * @return Absolute path string.

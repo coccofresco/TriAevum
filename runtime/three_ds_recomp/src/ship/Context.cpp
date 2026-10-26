@@ -1,6 +1,7 @@
 #include "ship/Context.h"
 #include "ship/controller/controldevice/controller/mapping/keyboard/KeyboardScancodes.h"
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
@@ -30,6 +31,26 @@
 
 namespace Ship {
 std::unique_ptr<Context> Context::mContext;
+
+namespace {
+// Process-wide: the host routes it before the context exists, and the fatal
+// error report reads it after the context is gone.
+std::string& RoutedLogDirectory() {
+    static std::string directory;
+    return directory;
+}
+} // namespace
+
+void Context::SetLogDirectory(const std::string& path) {
+    RoutedLogDirectory() = path;
+}
+
+std::string Context::GetLogDirectory() {
+    if (!RoutedLogDirectory().empty()) {
+        return std::filesystem::path(RoutedLogDirectory()).lexically_normal().string();
+    }
+    return GetPathRelativeToAppDirectory("logs");
+}
 
 Context* Context::GetRawInstance() {
     return mContext.get();
@@ -171,7 +192,8 @@ bool Context::InitLogging(spdlog::level::level_enum debugBuildLogLevel,
 #endif
 
         // The short name: the display name may hold spaces and non-ASCII text.
-        auto logPath = GetPathRelativeToAppDirectory(("logs/" + GetShortName() + ".log"));
+        // In the routed log folder (SetLogDirectory), else logs/.
+        auto logPath = (std::filesystem::path(GetLogDirectory()) / (GetShortName() + ".log")).string();
         // Each launch starts a fresh file; earlier launches stay as .1, .2, ...
         auto fileSink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logPath, 1024 * 1024 * 10, 10, true);
         sinks.push_back(fileSink);

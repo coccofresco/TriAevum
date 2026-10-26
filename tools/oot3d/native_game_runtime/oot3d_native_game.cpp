@@ -27,10 +27,12 @@
 #include "oot3d_native_game_bootstrap.h"
 #include "oot3d_native_game_launch_profile.h"
 #include "triaevum_console.h"
+#include "triaevum_early_log.h"
 #include "triaevum_fatal_report.h"
 #include "triaevum_game_session_lock.h"
 #include "triaevum_product_info.h"
 #include "oot3d_native_a32_window.h"
+#include "ship/Context.h"
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
 #include "oot3d_native_direct_aot.h"
 #include "triaevum_title_plugin_loader.h"
@@ -153,22 +155,32 @@ struct NativeGameArguments {
     std::filesystem::path ProfilePath;
 };
 
-NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
-    NativeGameArguments prepared;
-    std::filesystem::path profilePath;
-    int commandLineStart = argc;
-
+// The launch profile the arguments select (the default one without
+// arguments, or --launch-profile's), and where the command line resumes.
+// Empty for explicit arguments.
+std::filesystem::path SelectedLaunchProfile(int argc, char** argv, int* commandLineStart = nullptr) {
+    if (commandLineStart != nullptr)
+        *commandLineStart = argc;
     if (argc <= 1) {
-        profilePath = Oot3dNativeGame::DefaultNativeGameLaunchProfilePath(
+        return Oot3dNativeGame::DefaultNativeGameLaunchProfilePath(
             argc > 0 ? argv[0] : "oot3d_native_game");
-        commandLineStart = argc;
-    } else if (std::string_view(argv[1]) == "--launch-profile") {
+    }
+    if (std::string_view(argv[1]) == "--launch-profile") {
         if (argc <= 2) {
             throw std::runtime_error("--launch-profile requires a path");
         }
-        profilePath = argv[2];
-        commandLineStart = 3;
-    } else {
+        if (commandLineStart != nullptr)
+            *commandLineStart = 3;
+        return argv[2];
+    }
+    return {};
+}
+
+NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
+    NativeGameArguments prepared;
+    int commandLineStart = argc;
+    const std::filesystem::path profilePath = SelectedLaunchProfile(argc, argv, &commandLineStart);
+    if (profilePath.empty()) {
         return prepared;
     }
 
@@ -222,6 +234,68 @@ void RefusePendingUpdate(const std::filesystem::path& profilePath) {
     const auto journal = Oot3dNativeGame::PendingUpdateJournal(ExecutableDirectory(), profilePath);
     if (!journal.empty())
         throw std::runtime_error("An update is in progress; open Forge");
+}
+
+// Where messages before the log folder is known are spooled
+// (triaevum_early_log.h): the installation's writable state folder (Windows
+// <exe>/data, elsewhere the launch profile's folder), never the package.
+std::filesystem::path EarlyStateDirectory(int argc, char** argv) {
+    std::error_code error;
+#ifdef _WIN32
+    if (const auto directory = ExecutableDirectory();
+        !directory.empty() && std::filesystem::is_directory(directory / "data", error))
+        return directory / "data";
+#endif
+    try {
+        const auto profile = SelectedLaunchProfile(argc, argv);
+        if (!profile.empty()) {
+            const auto folder = std::filesystem::absolute(profile, error).parent_path();
+            if (!error && std::filesystem::is_directory(folder, error))
+                return folder;
+        }
+    } catch (...) {
+    }
+    return {};
+}
+
+// The log folder, routed before the logger starts (UX plan WP-05C): the
+// profile's --log-directory, else the earlier logs/ in the application
+// directory. A folder that cannot be written (a read-only package or working
+// directory) falls back to <temp>/TriAevum/logs. The early spool is then
+// handed over to it. Returns the folder in use, or empty.
+std::filesystem::path PrepareLogDirectory(const Oot3dNativeGameLaunch& launch,
+                                          const std::filesystem::path& stateDirectory) {
+    std::filesystem::path directory = launch.Host.LogDirectory;
+    if (directory.empty())
+        directory = std::filesystem::path(Ship::Context::GetLogDirectory());
+    std::error_code status;
+    directory = std::filesystem::absolute(directory, status).lexically_normal();
+    std::string error;
+    if (!TriAevum::PrepareWritableDirectory(directory, &error)) {
+        const auto fallback = TriAevum::TemporaryDiagnosticDirectory() / "logs";
+        TriAevum::EarlyLog("the log folder cannot be written (" + error + "); logs go to " +
+                           fallback.string());
+        if (!TriAevum::PrepareWritableDirectory(fallback, &error))
+            return {};
+        directory = fallback;
+    }
+    try {
+        Ship::Context::SetLogDirectory(directory.string());
+    } catch (const std::exception&) {
+        // A name the system's narrow encoding cannot spell: keep logs/.
+        return {};
+    }
+    const auto temporary = TriAevum::TemporaryDiagnosticDirectory();
+    for (const auto& spool : {stateDirectory.empty() ? std::filesystem::path{}
+                                                     : stateDirectory / TriAevum::kEarlyLogSpoolName,
+                              temporary.empty() ? std::filesystem::path{}
+                                                : temporary / TriAevum::kEarlyLogSpoolName}) {
+        if (spool.empty() || !std::filesystem::exists(spool, status))
+            continue;
+        if (!TriAevum::HandOffEarlyLog(spool, directory, &error))
+            std::cerr << "oot3d_native_game: the early log stays in " << spool << ": " << error << '\n';
+    }
+    return directory;
 }
 
 struct GameLanguageInfoRequest {
@@ -297,12 +371,17 @@ int main(int argc, char** argv) {
     bool fatalDialog = TriAevum::FatalDialogWanted(argc, argv);
     // Held for the game's life, past the context teardown below.
     Oot3dNativeGame::GameSessionLock sessionLock;
+    // The log folder once validated (PrepareLogDirectory); before that, an
+    // error goes to the early spool (triaevum_early_log.h).
+    std::filesystem::path logDirectory;
     try {
         if (const auto status = RunTriAevumToolMode(argc, argv))
             return *status;
 #if defined(__ANDROID__)
         InitializeAndroidGameHost();
 #endif
+        const auto earlyStateDirectory = EarlyStateDirectory(argc, argv);
+        TriAevum::SetEarlyLogStateDirectory(earlyStateDirectory);
         Oot3dNativeGameLaunch launch;
         NativeGameArguments preparedArguments;
 #if defined(__SWITCH__)
@@ -371,9 +450,13 @@ int main(int argc, char** argv) {
 #endif
         fatalDialog = TriAevum::FatalDialogWanted(argc, argv);
         if (!ParseOot3dNativeGameArgs(argc, argv, launch)) {
+            TriAevum::EarlyLog("the launch arguments are invalid (an unknown option or a missing value)");
             PrintOot3dNativeGameUsage();
             return 2;
         }
+#if !defined(__SWITCH__)
+        logDirectory = PrepareLogDirectory(launch, earlyStateDirectory);
+#endif
 
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
         if (!Oot3dNativeGame::Oot3dWholeAotPluginV2Available()) {
@@ -422,11 +505,21 @@ int main(int argc, char** argv) {
         WriteSwitchBootStatus("failed", ex.what());
 #endif
         const bool logged = LogFatalErrorForDemo(ex.what());
-        const auto logDirectory = logged ? FatalLogDirectoryForDemo() : std::string();
+        std::string reportDirectory = logged ? FatalLogDirectoryForDemo() : std::string();
+        if (!logged) {
+            // Before the runtime log: the validated log folder's early log,
+            // else the spool, which the next launch hands over to D/logs.
+            const auto earlyLog = !logDirectory.empty() ? logDirectory / TriAevum::kEarlyLogName
+                                                        : TriAevum::EarlyLogSpool();
+            if (!earlyLog.empty() && TriAevum::AppendEarlyLog(earlyLog, ex.what())) {
+                const auto folder = earlyLog.parent_path().u8string();
+                reportDirectory.assign(folder.begin(), folder.end());
+            }
+        }
         DestroyContextForDemo();
         // After the window is gone, so the dialog is not hidden behind it.
         if (fatalDialog)
-            ShowFatalErrorForDemo(TriAevum::kFatalDialogTitle, TriAevum::FatalDialogText(ex.what(), logDirectory));
+            ShowFatalErrorForDemo(TriAevum::kFatalDialogTitle, TriAevum::FatalDialogText(ex.what(), reportDirectory));
         return 1;
     }
 }

@@ -116,7 +116,14 @@ void ClearLaunchMarkerForDemo() noexcept {
 void InitContextForDemo(const Args& args) {
     RecordSwitchHostInitStage("host_create_context");
     ArmLaunchMarker(args.ConfigurationPath);
-    std::filesystem::create_directories("logs");
+    // The log folder: --log-directory (D/logs), else logs/ in the application
+    // directory. The native game routes and checks it before this
+    // (oot3d_native_game.cpp PrepareLogDirectory, with a temporary fallback);
+    // a folder that cannot be created surfaces as the logger's own failure.
+    {
+        std::error_code logError;
+        std::filesystem::create_directories(Ship::Context::GetLogDirectory(), logError);
+    }
     auto* context = Ship::Context::CreateUninitializedInstance(
         args.ApplicationName, args.ApplicationId, args.ConfigurationPath);
     if (context == nullptr) {
@@ -258,7 +265,7 @@ bool LogFatalErrorForDemo(const char* message) noexcept {
 std::string FatalLogDirectoryForDemo() {
     try {
         std::error_code error;
-        const auto logs = std::filesystem::path(Ship::Context::GetPathRelativeToAppDirectory("logs"));
+        const auto logs = std::filesystem::path(Ship::Context::GetLogDirectory());
         const auto absolute = std::filesystem::absolute(logs, error);
         const auto utf8 = (error ? logs : absolute).lexically_normal().u8string();
         return std::string(utf8.begin(), utf8.end());

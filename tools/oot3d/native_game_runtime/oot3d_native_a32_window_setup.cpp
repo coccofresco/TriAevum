@@ -6,11 +6,13 @@
 #include "oot3d_title_grass_rules.h"
 #include "triaevum_audio_settings_panel.h"
 #include "triaevum_host_audio.h"
+#include "oot3d_savestate_migration.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
 
 #include <SDL2/SDL.h>
+#include <spdlog/spdlog.h>
 #include <stb_image.h>
 
 #if defined(__ANDROID__)
@@ -208,6 +210,18 @@ void NativeA32WindowSession::Setup() {
     directories.push_back(launch.UiTexturePackDirectory / "common");
     Oot3d::Renderer::AzaharTexturePackRuntime::Instance().SetBaseDirectories(std::move(directories));
   }
+  // The installed game's program ID and the managed custom texture folders
+  // (UX plan WP-05C), kept across every settings reconfigure; the
+  // environment and the F1 folders keep their precedence. Without them (an
+  // older launch profile) the folders resolve as before.
+  if (launch.Routing.TitleId.has_value() || !launch.Routing.TextureLoadDirectory.empty() ||
+      !launch.Routing.TextureDumpDirectory.empty()) {
+    Oot3d::Renderer::AzaharTexturePackRuntime::Instance().SetHostDefaults({
+        .TitleId = launch.Routing.TitleId,
+        .LoadDirectory = launch.Routing.TextureLoadDirectory,
+        .DumpDirectory = launch.Routing.TextureDumpDirectory,
+    });
+  }
   hostConfig.ResourceLimitValues = manifest->ResourceLimitValues;
   hostConfig.ResourceCurrentValues = manifest->ResourceCurrentValues;
   hostConfig.LinearHeapBaseAddress = manifest->LinearHeapBaseAddress;
@@ -283,14 +297,31 @@ void NativeA32WindowSession::Setup() {
 #else
   constexpr bool kSavestatesBesideExecutable = false;
 #endif
+  const auto configurationDirectory = std::filesystem::path(launch.Host.ConfigurationPath).parent_path();
+  const auto earlierSavestates = Oot3dNativeGame::DefaultSavestateDirectory(
+      kSavestatesBesideExecutable,
+      std::filesystem::path(std::u8string(
+          reinterpret_cast<const char8_t *>(Ship::Context::GetAppBundlePath().c_str()))),
+      hostConfig.SaveDataDirectory);
+  auto defaultSavestates = earlierSavestates;
+  if (!launch.Routing.SavestateDirectory.empty()) {
+    // The managed default (D/savestates, UX plan WP-05C): states saved in the
+    // earlier default folder are copied there first, verified, never deleted.
+    const auto migration = Oot3dNativeGame::MigrateLegacySavestates({
+        .PreferencesPath = configurationDirectory / "savestates.json",
+        .MigrationsPath = configurationDirectory / "migrations.json",
+        .LegacyDirectory = earlierSavestates,
+        .ManagedDirectory = launch.Routing.SavestateDirectory,
+        .FixedSlot = !launch.QuickStatePath.empty(),
+    });
+    defaultSavestates = migration.DefaultDirectory;
+    savestateMigrationMessage = std::string("save-state migration ") +
+                                Oot3dNativeGame::SavestateMigrationStatusName(migration.Status) + ": " +
+                                migration.Message;
+    std::cerr << "TRIAEVUM_SAVESTATE_MIGRATION " << savestateMigrationMessage << '\n';
+  }
   savestateLibrary = std::make_shared<Oot3dNativeGame::SavestateLibrary>(
-      std::filesystem::path(launch.Host.ConfigurationPath).parent_path() / "savestates.json",
-      Oot3dNativeGame::DefaultSavestateDirectory(
-          kSavestatesBesideExecutable,
-          std::filesystem::path(std::u8string(
-              reinterpret_cast<const char8_t *>(Ship::Context::GetAppBundlePath().c_str()))),
-          hostConfig.SaveDataDirectory),
-      launch.QuickStatePath);
+      configurationDirectory / "savestates.json", defaultSavestates, launch.QuickStatePath);
   quickStatePath = launch.QuickStatePath.empty() ? savestateLibrary->Directory()
                                                  : launch.QuickStatePath;
   savestateCompatibility = Oot3dNativeGame::NativeA32SavestateCompatibility{
@@ -1254,10 +1285,14 @@ void NativeA32WindowSession::Setup() {
 #if defined(__SWITCH__)
   WriteSwitchBootStage("host_context_initialized");
 #endif
+  if (!savestateMigrationMessage.empty())
+    SPDLOG_INFO("oot3d_native_game: {}", savestateMigrationMessage);
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE) && defined(_WIN32)
+  // --crash-directory (D/logs/crashes), else the earlier <save data>/crashes.
   std::string crashDiagnosticsError;
   if (!Oot3dNativeGame::InstallWholeAotCrashDiagnostics(
-          saveDataDirectory / "crashes", &crashDiagnosticsError)) {
+          launch.Routing.CrashDirectory.empty() ? saveDataDirectory / "crashes" : launch.Routing.CrashDirectory,
+          &crashDiagnosticsError)) {
     throw std::runtime_error("whole-AOT crash diagnostics failed: " +
                              crashDiagnosticsError);
   }
@@ -1320,7 +1355,7 @@ void NativeA32WindowSession::Setup() {
   Oot3dNativeGame::InGameMenuHost menuHost;
   menuHost.SaveDataDirectory = saveDataDirectory;
   menuHost.LogsDirectory = std::filesystem::path(std::u8string(reinterpret_cast<const char8_t *>(
-      Ship::Context::GetPathRelativeToAppDirectory("logs").c_str())));
+      Ship::Context::GetLogDirectory().c_str())));
 #if defined(__ANDROID__)
   menuHost.Controls = Oot3dNativeGame::Menu::HelpControls::Touch;
   menuHost.InstallerRoute = "Close the game, then the TriAevum installer: Saves, Diagnostics";

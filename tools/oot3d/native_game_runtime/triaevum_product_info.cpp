@@ -1,4 +1,5 @@
 #include "triaevum_product_info.h"
+#include "triaevum_data_routing.h"
 #include "triaevum_product_build.h"
 
 #include "fast/extension/graphics_settings.h"
@@ -82,6 +83,9 @@ void WriteTriAevumProductInfo(std::ostream& output) {
         {"capabilities", {{"nri", kTriAevumProductNri},
                           {"experimental_global_illumination", kTriAevumProductExperimentalGi},
                           {"developer_tools", kTriAevumProductDeveloperTools},
+                          // --log-directory, --crash-directory, --texture-{load,dump}-directory,
+                          // --savestate-directory and --title-id (triaevum_data_routing.h).
+                          {Oot3dNativeGame::kManagedDataPathsCapability, true},
 #ifdef OOT3D_NATIVE_A32_WINDOW_AVAILABLE
                           {"f1", true}, {"topscreen", true}}},
 #else

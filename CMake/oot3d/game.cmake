@@ -89,6 +89,8 @@ target_sources(oot3d_native_game PRIVATE
     tools/oot3d/native_game_runtime/triaevum_game_session_lock.cpp
     tools/oot3d/native_game_runtime/triaevum_fatal_report.cpp
     tools/oot3d/native_game_runtime/triaevum_console.cpp
+    tools/oot3d/native_game_runtime/triaevum_data_routing.cpp
+    tools/oot3d/native_game_runtime/triaevum_early_log.cpp
 )
 if(WIN32)
     target_sources(oot3d_native_game PRIVATE
@@ -202,6 +204,17 @@ add_executable(triaevum_game_session_lock_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/triaevum_game_session_lock_tests.cpp
 )
 oot3d_target_defaults(triaevum_game_session_lock_tests FOLDER Tests)
+
+# The managed data tree's runtime side (UX plan WP-05C): routing options,
+# the save-state move and its record, the early log spool. No window.
+add_executable(triaevum_data_routing_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_data_routing.cpp
+    tools/oot3d/native_game_runtime/triaevum_early_log.cpp
+    tools/oot3d/native_game_runtime/oot3d_savestate_migration.cpp
+    tools/oot3d/native_game_runtime/triaevum_data_routing_tests.cpp
+)
+target_link_libraries(triaevum_data_routing_tests PRIVATE nlohmann_json::nlohmann_json)
+oot3d_target_defaults(triaevum_data_routing_tests FOLDER Tests)
 
 # The error reports and display-recovery record (UX plan WP-03); no window.
 add_executable(triaevum_fatal_report_tests EXCLUDE_FROM_ALL

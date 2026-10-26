@@ -7,6 +7,8 @@
 #include <mutex>
 #include <stdexcept>
 
+#include "ship/Context.h"
+
 namespace {
 
 std::mutex installerPageMutex;
@@ -47,10 +49,15 @@ void InitializeAndroidGameHost() {
         throw std::runtime_error("Android application data directory is unavailable");
     }
     std::filesystem::current_path(root);
-    std::filesystem::create_directories("logs");
-    // Android does not preserve a console stream; retain diagnostics beside user data.
-    if (!std::freopen("logs/native-stdout.log", "w", stdout) ||
-        !std::freopen("logs/native-stderr.log", "w", stderr)) {
+    // The managed data tree's logs (UX plan WP-05C): D/logs, D = <app
+    // storage>/data, established here before any argument is parsed. Android
+    // does not preserve a console stream; stdout and stderr are kept there
+    // too. A launch profile's --log-directory may still route the runtime log.
+    const auto logs = std::filesystem::path(root) / "data" / "logs";
+    std::filesystem::create_directories(logs);
+    Ship::Context::SetLogDirectory(logs.string());
+    if (!std::freopen((logs / "native-stdout.log").c_str(), "w", stdout) ||
+        !std::freopen((logs / "native-stderr.log").c_str(), "w", stderr)) {
         throw std::runtime_error("Cannot open Android runtime logs");
     }
     std::setvbuf(stdout, nullptr, _IOLBF, 0);

@@ -9,7 +9,7 @@ import org.triaevum.android.forge.ForgePackage
 /**
  * Forge's diagnostics for this installation (forge-core `diagnostics`, the same report and
  * support bundle as the desktop Forge): the redacted report text, the game's last fatal error
- * from logs/native-stderr.log, and the support bundle zip written to this app's cache, where
+ * from data/logs/native-stderr.log, and the support bundle zip written to this app's cache, where
  * [DiagnosticsBundleProvider] serves it for sharing. Built only when the user opens the
  * Diagnostics screen; nothing is sent anywhere.
  */

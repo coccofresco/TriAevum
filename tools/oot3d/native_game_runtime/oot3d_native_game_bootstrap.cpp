@@ -59,6 +59,10 @@ void PrintOot3dNativeGameUsage() {
                  "[--romfs-overlay <romfs_overlay.o3ro>] [--ui-texture-pack <directory>] "
                  "[--controls-config <oot3d_controls.json>] "
                  "[--save-data <directory>] "
+                 "[--log-directory <directory>] [--crash-directory <directory>] "
+                 "[--texture-load-directory <directory>] "
+                 "[--texture-dump-directory <directory>] "
+                 "[--savestate-directory <directory>] [--title-id <16 hex digits>] "
                  "[--output <summary.json>] [--screenshot "
                  "<capture.bmp>] "
                  "[--screenshot-sequence] [--screenshot-interval <frames>] "
@@ -369,10 +373,13 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.Host.Width = std::max<uint32_t>(1, ParseU32(argv[++index], "width"));
         } else if (arg == "--height" && index + 1 < argc) {
             launch.Host.Height = std::max<uint32_t>(1, ParseU32(argv[++index], "height"));
+        } else if (Oot3dNativeGame::ParseDataRoutingOption(argc, argv, index, launch.Routing)) {
+            // The managed data folders (triaevum_data_routing.h).
         } else {
             return false;
         }
     }
+    launch.Host.LogDirectory = launch.Routing.LogDirectory;
 
     if (launch.ScenarioCatalogPath.empty() != launch.ScenarioId.empty()) {
         throw std::runtime_error(

@@ -11,6 +11,9 @@ struct Args {
     std::string ApplicationName = "OOT3D Native Fast3D Demo";
     std::string ApplicationId = "oot3d_native_fast3d_demo";
     std::string ConfigurationPath = "oot3d_native_fast3d_demo.json";
+    // The log folder (--log-directory, D/logs); empty keeps logs/ in the
+    // application directory. Routed before the logger starts.
+    std::filesystem::path LogDirectory;
     std::filesystem::path ResourceRoot;
     std::vector<std::filesystem::path> ResourceArchives;
     std::filesystem::path OutputPath;

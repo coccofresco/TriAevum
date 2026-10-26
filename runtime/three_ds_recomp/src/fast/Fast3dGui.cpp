@@ -88,7 +88,8 @@ class Oot3dGraphicsSettingsPersistence final
 
     // Beside the runtime's log, where Forge's diagnostics read it.
     void ReportDisplayRecovery(const Extension::DisplayRecovery& recovery) override {
-        const auto path = Ship::Context::GetPathRelativeToAppDirectory("logs/last-recovery.json");
+        const auto path =
+            (std::filesystem::path(Ship::Context::GetLogDirectory()) / "last-recovery.json").string();
         std::string error;
         if (!Extension::WriteDisplayRecoveryRecord(
                 path, Extension::DisplayRecoveryRecord(recovery, std::chrono::system_clock::now()), &error))
