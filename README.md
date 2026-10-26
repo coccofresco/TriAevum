@@ -77,6 +77,10 @@ Apparently, even AI slop can still consume several months of your life.
 
 ## Install
 
+Step by step for Windows, Linux and Android, with updating, backups,
+uninstalling and what Forge's messages mean: the
+[user guide](docs/USER_GUIDE.md).
+
 Requires Windows or Linux x64, a Vulkan-capable GPU with current drivers, and
 your own supported decrypted ROM. Forge accepts `.3ds` and `.cci` and checks
 the contents, not just the filename.
