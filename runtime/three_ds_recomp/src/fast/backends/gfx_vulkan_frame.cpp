@@ -15,6 +15,15 @@ bool GfxRenderingAPIVulkan::ApplyPresentationSettings(const Extension::TitlePres
     settings.WindowMode = 1;
     int32_t outputX = 0, outputY = 0;
     mWindowBackend->GetDimensions(&settings.Width, &settings.Height, &outputX, &outputY);
+#else
+    // At startup a windowed request opens inside the display's work area, as
+    // the window host created it; a later choice in F1 is applied as asked.
+    if (settings.WindowMode == 0U &&
+        settings.TransactionKind == static_cast<uint8_t>(Extension::RendererPresentationRequestKind::Initial)) {
+        const WindowExtent fitted = mWindowBackend->FitWindowedExtent({ settings.Width, settings.Height });
+        settings.Width = fitted.Width;
+        settings.Height = fitted.Height;
+    }
 #endif
     if (!mInitialized || mFrameActive || settings.WindowMode > 2U ||
         settings.Width < 320U || settings.Height < 240U) {

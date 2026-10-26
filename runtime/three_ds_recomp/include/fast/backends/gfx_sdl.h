@@ -3,6 +3,7 @@
 #include <SDL2/SDL.h>
 
 #include "gfx_window_manager_api.h"
+#include "fast/WindowExtentPolicy.h"
 namespace Fast {
 class GfxWindowBackendSDL2 final : public GfxWindowBackend {
   public:
@@ -49,6 +50,9 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
                                            uint32_t height);
     void* GetNativeWindow() const;
     bool UsesVulkan() const;
+    // The largest extent of the requested shape that opens inside the work
+    // area of the window's display (WindowExtentPolicy.h).
+    WindowExtent FitWindowedExtent(WindowExtent requested) const;
 
   private:
     void SetFullscreenImpl(bool on, bool call_callback);

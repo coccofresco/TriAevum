@@ -6,12 +6,14 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "fast/Fast3dWindow.h"
+#include "fast/WindowExtentPolicy.h"
 #include "fast/backends/gfx_rendering_api.h"
 #include "fast/resource/ResourceType.h"
 #include "fast/resource/factory/TextureFactory.h"
@@ -110,8 +112,19 @@ void InitContextForDemo(const Args& args) {
 
     auto config = context->GetConfig();
     config->SetBool("Window.Fullscreen.Enabled", false);
-    config->SetInt("Window.Width", static_cast<int32_t>(args.Width));
-    config->SetInt("Window.Height", static_cast<int32_t>(args.Height));
+    // The window host owns the output extent: the size chosen in F1 Display
+    // (Graphics.Output) wins, and the launch arguments only seed a
+    // configuration that stores none yet. The window backend then fits it to
+    // the display's work area (gfx_sdl2.cpp).
+    const auto storedOutput = [&]() -> std::optional<Fast::WindowExtent> {
+        const int32_t width = config->GetInt("Graphics.Output.Width", 0);
+        const int32_t height = config->GetInt("Graphics.Output.Height", 0);
+        if (width <= 0 || height <= 0) return std::nullopt;
+        return Fast::WindowExtent{static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
+    }();
+    const auto extent = Fast::ResolveInitialWindowExtent(storedOutput, {args.Width, args.Height});
+    config->SetInt("Window.Width", static_cast<int32_t>(extent.Width));
+    config->SetInt("Window.Height", static_cast<int32_t>(extent.Height));
     if (args.BackendId >= 0) {
         config->SetInt("Window.Backend.Id", args.BackendId);
     }

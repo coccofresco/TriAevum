@@ -340,6 +340,37 @@ static void EnsureWindowPositionIsVisible(int32_t& posX, int32_t& posY, uint32_t
     posY = primaryBounds.y + std::max<int32_t>(0, (primaryBounds.h - visibleHeight) / 2);
 }
 
+struct WindowPlacementArea {
+    WindowWorkArea Area;
+    SDL_Rect Usable{};
+    int Left = 0;
+    int Top = 0;
+};
+
+// The work area of the window's display and the window's decorations. A
+// platform that cannot report decorations (client-side title bars on Wayland)
+// keeps room for a title bar.
+static bool QueryWindowPlacementArea(SDL_Window* window, WindowPlacementArea* placement) {
+    constexpr int kUnreportedTitleBarHeight = 40;
+    const int display = std::max(0, SDL_GetWindowDisplayIndex(window));
+    if (SDL_GetDisplayUsableBounds(display, &placement->Usable) != 0 || placement->Usable.w <= 0 ||
+        placement->Usable.h <= 0) {
+        return false;
+    }
+    int top = 0, left = 0, bottom = 0, right = 0;
+    placement->Area = { placement->Usable.w, placement->Usable.h, 0, 0 };
+    if (SDL_GetWindowBordersSize(window, &top, &left, &bottom, &right) == 0) {
+        placement->Area.DecorationWidth = left + right;
+        placement->Area.DecorationHeight = top + bottom;
+        placement->Left = left;
+        placement->Top = top;
+    } else if ((SDL_GetWindowFlags(window) & SDL_WINDOW_BORDERLESS) == 0) {
+        placement->Area.DecorationHeight = kUnreportedTitleBarHeight;
+        placement->Top = kUnreportedTitleBarHeight;
+    }
+    return true;
+}
+
 #define FRAME_INTERVAL_US_NUMERATOR 1000000
 #define FRAME_INTERVAL_US_DENOMINATOR (mTargetFps)
 
@@ -496,6 +527,32 @@ void GfxWindowBackendSDL2::Init(const char* gameName, const char* gfxApiName, bo
         posY = 100;
         SDL_SetWindowPosition(mWnd, posX, posY);
     }
+#if !defined(__ANDROID__) && !defined(__IOS__) && !defined(__SWITCH__)
+    // The window opens inside its display's work area with its whole frame
+    // visible. A requested extent larger than a small or scaled screen keeps
+    // its shape at the largest size that fits; the request itself, owned by
+    // F1 Display, is not rewritten.
+    if (WindowPlacementArea placement; !startFullScreen && QueryWindowPlacementArea(mWnd, &placement)) {
+        const WindowExtent requested{ static_cast<uint32_t>(mWindowWidth), static_cast<uint32_t>(mWindowHeight) };
+        const WindowExtent fitted = Fast::FitWindowedExtent(requested, placement.Area);
+        if (fitted != requested) {
+            SDL_SetWindowSize(mWnd, static_cast<int>(fitted.Width), static_cast<int>(fitted.Height));
+            SPDLOG_INFO("Window {}x{} fitted to the display work area as {}x{}", requested.Width, requested.Height,
+                        fitted.Width, fitted.Height);
+        }
+        int x = 0, y = 0;
+        SDL_GetWindowPosition(mWnd, &x, &y);
+        const SDL_Rect& usable = placement.Usable;
+        const int frameWidth = static_cast<int>(fitted.Width) + placement.Area.DecorationWidth;
+        const int frameHeight = static_cast<int>(fitted.Height) + placement.Area.DecorationHeight;
+        if (x - placement.Left < usable.x || y - placement.Top < usable.y ||
+            x - placement.Left + frameWidth > usable.x + usable.w ||
+            y - placement.Top + frameHeight > usable.y + usable.h) {
+            SDL_SetWindowPosition(mWnd, usable.x + placement.Left + std::max(0, (usable.w - frameWidth) / 2),
+                                  usable.y + placement.Top + std::max(0, (usable.h - frameHeight) / 2));
+        }
+    }
+#endif
 
     if (mUsesVulkan) {
 #ifdef ENABLE_OOT3D_VULKAN
@@ -1017,6 +1074,18 @@ void* GfxWindowBackendSDL2::GetNativeWindow() const {
 
 bool GfxWindowBackendSDL2::UsesVulkan() const {
     return mUsesVulkan;
+}
+
+WindowExtent GfxWindowBackendSDL2::FitWindowedExtent(WindowExtent requested) const {
+#if defined(__ANDROID__) || defined(__IOS__) || defined(__SWITCH__)
+    return requested;
+#else
+    WindowPlacementArea placement;
+    if (mWnd == nullptr || !QueryWindowPlacementArea(mWnd, &placement)) {
+        return requested;
+    }
+    return Fast::FitWindowedExtent(requested, placement.Area);
+#endif
 }
 } // namespace Fast
 #endif

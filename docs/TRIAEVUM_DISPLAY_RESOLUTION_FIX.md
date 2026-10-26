@@ -45,6 +45,15 @@
 - Requested output settings are separate from observed output framebuffer and
   scene-image dimensions. F1 shows both actual extents; observations are not
   persisted as new user preferences.
+- The window host owns the initial extent (issue #111). The size stored by F1
+  (`Graphics.Output`) wins over `--width/--height`, which only seed a
+  configuration that stores none yet (the installer's launch profile always
+  passes 1280x720). The window opens inside the work area of its display:
+  a larger request keeps its shape at the largest size whose decorated window
+  fits, measured in SDL window coordinates under per-monitor DPI awareness
+  (`fast/WindowExtentPolicy.h`, `gfx_sdl2.cpp`). The first presentation adopts
+  that window; the stored request is not rewritten, and a later F1 choice is
+  applied as asked.
 - Borderless uses the desktop's actual dimensions; the requested-resolution
   controls are disabled in that mode. Internal scale remains independently
   adjustable. With an upscaler active, its quality owns the effective scale,
