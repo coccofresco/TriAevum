@@ -26,6 +26,7 @@
 #endif
 #include "oot3d_native_game_bootstrap.h"
 #include "oot3d_native_game_launch_profile.h"
+#include "triaevum_game_session_lock.h"
 #include "triaevum_product_info.h"
 #include "oot3d_native_a32_window.h"
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
@@ -45,6 +46,25 @@
 
 namespace {
 
+// The folder of the running executable (empty when unknown; only Windows
+// needs it).
+std::filesystem::path ExecutableDirectory() {
+#ifdef _WIN32
+    std::wstring executable(MAX_PATH, L'\0');
+    for (;;) {
+        const DWORD length = GetModuleFileNameW(nullptr, executable.data(), DWORD(executable.size()));
+        if (length == 0) return {};
+        if (length < executable.size()) {
+            executable.resize(length);
+            return std::filesystem::path(executable).parent_path();
+        }
+        executable.resize(executable.size() * 2);
+    }
+#else
+    return {};
+#endif
+}
+
 #ifdef _WIN32
 // The Windows package keeps every DLL in runtime/ beside the installed
 // TriAevum.exe. Libraries loaded by name (the delay-loaded shaderc and its
@@ -52,17 +72,9 @@ namespace {
 // SetDllDirectoryW keeps the rest of the standard search (PATH included)
 // that drivers and Vulkan layers may rely on.
 void UseRuntimeLibraryDirectory() {
-    std::wstring executable(MAX_PATH, L'\0');
-    for (;;) {
-        const DWORD length = GetModuleFileNameW(nullptr, executable.data(), DWORD(executable.size()));
-        if (length == 0) return;
-        if (length < executable.size()) {
-            executable.resize(length);
-            break;
-        }
-        executable.resize(executable.size() * 2);
-    }
-    const auto runtime = std::filesystem::path(executable).parent_path() / "runtime";
+    const auto directory = ExecutableDirectory();
+    if (directory.empty()) return;
+    const auto runtime = directory / "runtime";
     std::error_code error;
     if (std::filesystem::is_directory(runtime, error))
         SetDllDirectoryW(runtime.c_str());
@@ -135,6 +147,8 @@ void ConfigurePicaAotShaders(const Oot3dNativeGameLaunch& launch) {
 struct NativeGameArguments {
     std::vector<std::string> Storage;
     std::vector<char*> Pointers;
+    // The launch profile the arguments came from; empty for explicit arguments.
+    std::filesystem::path ProfilePath;
 };
 
 NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
@@ -173,7 +187,30 @@ NativeGameArguments PrepareNativeGameArguments(int argc, char** argv) {
     std::cout << "Using native game launch profile: "
               << std::filesystem::absolute(profilePath).lexically_normal()
               << '\n';
+    prepared.ProfilePath = profilePath;
     return prepared;
+}
+
+// The quiescence contract (triaevum_game_session_lock.h): a game started
+// from an activated installation's profile holds the session lock for its
+// whole life, so Forge does not back up, restore or move files under it.
+void TakeGameSessionLock(const std::filesystem::path& profilePath,
+                         Oot3dNativeGame::GameSessionLock& lock) {
+    const auto path = Oot3dNativeGame::GameSessionLockPath(ExecutableDirectory(), profilePath);
+    if (path.empty())
+        return;
+    std::string error;
+    switch (lock.Acquire(path, &error)) {
+    case Oot3dNativeGame::GameSessionLock::Result::Held:
+        return;
+    case Oot3dNativeGame::GameSessionLock::Result::Busy:
+        throw std::runtime_error(
+            "TriAevum is already running from this installation, or Forge is changing its files. "
+            "Close the other game or wait for Forge to finish, then start the game again.");
+    case Oot3dNativeGame::GameSessionLock::Result::Unavailable:
+        std::cerr << "oot3d_native_game: running without the game session lock: " << error << '\n';
+        return;
+    }
 }
 
 struct GameLanguageInfoRequest {
@@ -244,6 +281,8 @@ int main(int argc, char** argv) {
 #ifdef _WIN32
     UseRuntimeLibraryDirectory();
 #endif
+    // Held for the game's life, past the context teardown below.
+    Oot3dNativeGame::GameSessionLock sessionLock;
     try {
         if (const auto status = RunTriAevumToolMode(argc, argv))
             return *status;
@@ -296,6 +335,8 @@ int main(int argc, char** argv) {
             argc = static_cast<int>(preparedArguments.Pointers.size());
             argv = preparedArguments.Pointers.data();
         }
+        // Before anything writes the user's files; released on return.
+        TakeGameSessionLock(preparedArguments.ProfilePath, sessionLock);
 #endif
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)
         std::vector<char*> runtimeArguments;

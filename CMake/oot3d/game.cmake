@@ -86,6 +86,7 @@ target_sources(oot3d_native_game PRIVATE
     tools/oot3d/native_game_runtime/triaevum_product_info.cpp
     tools/oot3d/native_game_runtime/oot3d_native_game_bootstrap.cpp
     tools/oot3d/native_game_runtime/oot3d_native_game_launch_profile.cpp
+    tools/oot3d/native_game_runtime/triaevum_game_session_lock.cpp
 )
 if(WIN32)
     target_sources(oot3d_native_game PRIVATE
@@ -184,6 +185,12 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set_property(TARGET oot3d_native_game_launch_profile_tests PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
+
+add_executable(triaevum_game_session_lock_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_game_session_lock.cpp
+    tools/oot3d/native_game_runtime/triaevum_game_session_lock_tests.cpp
+)
+oot3d_target_defaults(triaevum_game_session_lock_tests FOLDER Tests)
 set_property(TARGET oot3d_native_game_launch_profile_tests PROPERTY
     FOLDER Tests)
 
