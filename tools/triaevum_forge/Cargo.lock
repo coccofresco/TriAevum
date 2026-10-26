@@ -1257,8 +1257,10 @@ dependencies = [
  "forge-native",
  "forge-prepare",
  "forge-rom",
+ "ring",
  "serde_json",
  "tempfile",
+ "windows-sys 0.61.2",
  "zip",
 ]
 
@@ -1322,6 +1324,15 @@ name = "forge-rom"
 version = "0.1.0"
 dependencies = [
  "forge-base",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "forge-update-helper"
+version = "0.1.0"
+dependencies = [
+ "forge-core",
  "serde_json",
  "tempfile",
 ]

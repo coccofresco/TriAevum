@@ -21,16 +21,27 @@ pub mod jobs;
 pub mod layout;
 pub mod lock;
 pub mod log;
+pub mod package_inventory;
 pub mod preflight;
 pub mod publish;
 pub mod recognize;
 pub mod redact;
 pub mod refresh;
+#[cfg(not(target_os = "android"))]
+pub mod release_signature;
 pub mod repair;
 pub mod restore;
 pub mod session;
 pub mod state;
 pub mod transaction;
+// Update from ZIP (UX plan WP-04B); the signature, planning and helper
+// parts are desktop only.
+#[cfg(not(target_os = "android"))]
+pub mod update;
+pub mod update_gate;
+#[cfg(not(target_os = "android"))]
+pub mod update_helper;
+pub mod update_journal;
 
 pub use forge_base::{cancel, error, fsutil, hashing, legacy_json};
 pub use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Reason, Result, Subject, LEGACY_TOOL_VERSION};

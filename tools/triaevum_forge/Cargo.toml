@@ -12,6 +12,7 @@ members = [
     "crates/forge-cli",
     "crates/forge-android",
     "crates/forge-desktop",
+    "crates/forge-update-helper",
 ]
 
 [workspace.package]

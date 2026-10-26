@@ -211,6 +211,14 @@ coded! {
         InvalidBackup = "invalid_backup",
         /// A restore stopped before it finished; its journal is pending.
         InterruptedRestore = "interrupted_restore",
+        /// An update package carries no publisher signature.
+        UnsignedPackage = "unsigned_package",
+        /// An update package's signature is invalid or from an unknown key.
+        InvalidSignature = "invalid_signature",
+        /// An update helper holds this installation's update gate.
+        UpdateInProgress = "update_in_progress",
+        /// An update stopped before it finished; its journal is pending.
+        InterruptedUpdate = "interrupted_update",
     }
 }
 

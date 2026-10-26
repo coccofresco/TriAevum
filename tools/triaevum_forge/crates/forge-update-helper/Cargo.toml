@@ -1,0 +1,21 @@
+[package]
+name = "forge-update-helper"
+description = "TriAevum Forge update helper: replaces a Windows package from a staged update (UX plan WP-04B)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "triaevum-update-helper"
+path = "src/main.rs"
+
+[dependencies]
+# Statically linked: the helper runs from the staging folder and depends on
+# no file of the package it replaces.
+forge-core = { path = "../forge-core", default-features = false }
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

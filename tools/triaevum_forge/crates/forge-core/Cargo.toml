@@ -28,5 +28,19 @@ tempfile.workspace = true
 # The support bundle (same version and features as forge-mods and forge-native).
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
+# Update packages' publisher signatures (Ed25519), desktop only: the same
+# ring the HTTPS client already links (UX plan WP-04B, owner decision 10).
+[target.'cfg(not(target_os = "android"))'.dependencies]
+ring = "0.17"
+
+[target.'cfg(windows)'.dependencies]
+# The update helper: inherited process handle, kill-on-close job.
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
 [dev-dependencies]
 tempfile.workspace = true

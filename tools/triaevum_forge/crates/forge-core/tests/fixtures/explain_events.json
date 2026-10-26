@@ -1044,6 +1044,70 @@
    "id": "restore.interrupted"
   },
   {
+   "name": "refinement update.unsigned",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "artifact_integrity",
+     "stage": null,
+     "message": "This package has no publisher signature, so Forge cannot tell who made it",
+     "os_code": null,
+     "retryable": false,
+     "operation": "package_verify",
+     "reason": "unsigned_package"
+    }
+   },
+   "id": "update.unsigned"
+  },
+  {
+   "name": "refinement update.bad_signature",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "artifact_integrity",
+     "stage": null,
+     "message": "The package's publisher signature does not verify",
+     "os_code": null,
+     "retryable": false,
+     "operation": "package_verify",
+     "reason": "invalid_signature"
+    }
+   },
+   "id": "update.bad_signature"
+  },
+  {
+   "name": "refinement update.in_progress",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "busy",
+     "stage": null,
+     "message": "An update is in progress; wait until it finishes and Forge opens again",
+     "os_code": null,
+     "retryable": true,
+     "operation": "update",
+     "reason": "update_in_progress"
+    }
+   },
+   "id": "update.in_progress"
+  },
+  {
+   "name": "refinement update.interrupted",
+   "input": {
+    "event": "failed",
+    "error": {
+     "code": "recovery_required",
+     "stage": null,
+     "message": "An update was interrupted; open Forge to finish or undo it before changing this installation (C:\\Users\\Someone\\Games\\TriAevum\\.forge-update\\journal.json)",
+     "os_code": null,
+     "retryable": false,
+     "operation": "install",
+     "reason": "interrupted_update"
+    }
+   },
+   "id": "update.interrupted"
+  },
+  {
    "name": "a refinement reason under another kind falls back to the kind",
    "input": {
     "event": "failed",

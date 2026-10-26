@@ -123,6 +123,8 @@ pub enum RepairReason {
     },
     /// A restore journal is pending (`restore::pending_restore`).
     InterruptedRestore,
+    /// An update journal is pending (`update_gate::pending`).
+    InterruptedUpdate,
 }
 
 impl RepairReason {
@@ -130,6 +132,7 @@ impl RepairReason {
         match self {
             Self::InterruptedActivation => json!({"kind": "interrupted_activation"}),
             Self::InterruptedRestore => json!({"kind": "interrupted_restore"}),
+            Self::InterruptedUpdate => json!({"kind": "interrupted_update"}),
             Self::RuntimeMissing => json!({"kind": "runtime_missing"}),
             Self::ReceiptMismatch => json!({"kind": "receipt_mismatch"}),
             Self::ConfigUnreadable { file } => json!({"kind": "config_unreadable", "file": file}),
@@ -237,6 +240,11 @@ impl InstallationState {
                 ForgeError::new(ErrorKind::RecoveryRequired, details.clone())
                     .during(Operation::Inspect)
                     .because(Reason::InterruptedRestore)
+            }
+            Self::RepairNeeded { reason: RepairReason::InterruptedUpdate, details } => {
+                ForgeError::new(ErrorKind::RecoveryRequired, details.clone())
+                    .during(Operation::Inspect)
+                    .because(Reason::InterruptedUpdate)
             }
             Self::RepairNeeded { details, .. } => {
                 ForgeError::new(ErrorKind::RecoveryRequired, details.clone()).during(Operation::Inspect)
@@ -415,8 +423,15 @@ impl<'a> Context<'a> {
             return Ok(incompatible(IncompatibleReason::TargetMismatch, details));
         }
         let state = installation_state(&self.installation, HostOs::current());
-        if crate::lock::is_held(&state.join(".forge-activation.lock")) {
+        // The update helper's own validation sees the installation as is.
+        let delegate = crate::update_gate::delegated(&self.installation);
+        if crate::lock::is_held(&state.join(".forge-activation.lock"))
+            || (!delegate && crate::update_gate::held(&self.installation, HostOs::current()))
+        {
             return Ok(InstallationState::Preparing);
+        }
+        if !delegate && crate::update_gate::pending(&self.installation) {
+            return Ok(repair(RepairReason::InterruptedUpdate, "An update was interrupted"));
         }
         if journal_path(&self.installation, HostOs::current()).exists() {
             return Ok(repair(RepairReason::InterruptedActivation, "An activation was interrupted"));

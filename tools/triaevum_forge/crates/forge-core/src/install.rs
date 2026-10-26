@@ -324,6 +324,13 @@ pub fn install_private_title_with(
         InstallTarget::Android(android) => Some(android),
     };
     let game_language = request.game_language;
+    // The update gate (UX plan WP-04B): no install while an update runs or
+    // an interrupted one is pending.
+    let activation = match android {
+        None => package_layout(&package_root)?.activation,
+        Some(android) => resolve(&android.profile_root)?,
+    };
+    let _gate = crate::update_gate::enter(&activation, HostOs::current(), Operation::Install)?;
     std::fs::create_dir_all(&data_root)
         .map_err(|error| ForgeError::io(format!("Cannot create {}", data_root.display()), error))?;
     let output_root = data_root.join("titles");

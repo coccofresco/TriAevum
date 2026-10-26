@@ -23,7 +23,7 @@ use crate::recognize::{recognize_rom, RecognizeRequest};
 pub const REQUEST_FORMAT: &str = "triaevum_forge_request_v1";
 
 pub fn capabilities() -> Value {
-    json!({
+    let mut capabilities = json!({
         "format": "triaevum_forge_capabilities_v1",
         "abi_version": crate::abi::ABI_VERSION,
         "engine_version": env!("CARGO_PKG_VERSION"),
@@ -35,7 +35,14 @@ pub fn capabilities() -> Value {
                  "clear_renderer_cache", "remove_prepared_game", "rebuild_prepared_assets",
                  "refresh", "repair", "hud_layout_preview"],
         "queries": ["inspect", "explain"],
-    })
+    });
+    // Update from ZIP (UX plan WP-04B): desktop builds only.
+    if cfg!(not(target_os = "android")) {
+        if let Some(jobs) = capabilities["jobs"].as_array_mut() {
+            jobs.extend(["update_plan", "update", "update_recover"].map(Value::from));
+        }
+    }
+    capabilities
 }
 
 pub fn target_triple() -> &'static str {
@@ -118,6 +125,9 @@ fn start_job(request: &[u8]) -> Result<Job> {
                 Ok(crate::config_report::preview_value(&fields))
             }))
         }
+        // Update from ZIP (UX plan WP-04B).
+        #[cfg(not(target_os = "android"))]
+        Some(name @ ("update_plan" | "update" | "update_recover")) => crate::update::start_job(name, &request),
         // Data & backups (UX plan WP-05B).
         Some(other) => crate::data_actions::start(other, &request)?
             .ok_or_else(|| ForgeError::invalid(format!("Unknown Forge job: {other}"))),

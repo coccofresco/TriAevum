@@ -32,6 +32,7 @@ use serde_json::{json, Value};
 use crate::explain::explain;
 use crate::layout::{installation_state, HostOs};
 use crate::lock::{self, KernelLock};
+use crate::update_gate::Gate;
 
 /// The folder of the activation journal, its backups and the session lock.
 pub const ACTIVATION_DIRECTORY: &str = ".forge-activation";
@@ -115,18 +116,33 @@ fn forge_running(path: &Path, operation: Operation) -> ForgeError {
         .because(Reason::ForgeRunning)
 }
 
-/// Both locks, held until dropped.
+/// Both locks (and the update gate), held until dropped.
 #[derive(Debug)]
 pub struct Quiescence {
     _forge: KernelLock,
     _game: KernelLock,
+    _gate: Option<Gate>,
 }
 
-/// Takes the installation lock, then the game session lock, for an
-/// operation that must not overlap the game or another Forge. A held lock
-/// is a `busy` error whose reason names the holder; a legacy lock keeps its
-/// own error.
+/// Takes the update gate (`update_gate`), the installation lock, then the
+/// game session lock, for an operation that must not overlap the game,
+/// another Forge or an update. A held lock is a `busy` error whose reason
+/// names the holder; a legacy lock keeps its own error; a pending update
+/// journal is `recovery_required`.
 pub fn quiesce(installation: &Path, os: HostOs, operation: Operation) -> Result<Quiescence> {
+    let gate = crate::update_gate::enter(installation, os, operation)?;
+    let mut quiet = quiesce_locks(installation, os, operation)?;
+    quiet._gate = Some(gate);
+    Ok(quiet)
+}
+
+/// The two locks without the gate, for the update helper (which holds the
+/// gate itself) while it replaces files or rolls them back.
+pub fn quiesce_for_update(installation: &Path, os: HostOs) -> Result<Quiescence> {
+    quiesce_locks(installation, os, Operation::Update)
+}
+
+fn quiesce_locks(installation: &Path, os: HostOs, operation: Operation) -> Result<Quiescence> {
     let state = installation_state(installation, os);
     let directory = state.join(ACTIVATION_DIRECTORY);
     std::fs::create_dir_all(&directory)
@@ -141,23 +157,32 @@ pub fn quiesce(installation: &Path, os: HostOs, operation: Operation) -> Result<
         ErrorKind::Busy => game_running(&game_lock, operation),
         _ => error.during(operation),
     })?;
-    Ok(Quiescence { _forge: forge, _game: game })
+    Ok(Quiescence { _forge: forge, _game: game, _gate: None })
 }
 
-/// Only the game session lock, for an operation that publishes through the
-/// activation transaction (refresh, repair): the transaction takes the
-/// non-reentrant installation lock itself, so holding it here would nest.
-/// The game cannot start meanwhile, and another Forge's quiescent operation
-/// waits; a held lock is the `busy` error naming the game.
-pub fn hold_game_session(installation: &Path, os: HostOs, operation: Operation) -> Result<KernelLock> {
+/// The update gate and the game session lock, held until dropped.
+#[derive(Debug)]
+pub struct SessionHold {
+    _gate: Gate,
+    _game: KernelLock,
+}
+
+/// The update gate and only the game session lock, for an operation that
+/// publishes through the activation transaction (refresh, repair): the
+/// transaction takes the non-reentrant installation lock itself, so holding
+/// it here would nest. The game cannot start meanwhile, and another Forge's
+/// quiescent operation waits; a held lock is the `busy` error naming the game.
+pub fn hold_game_session(installation: &Path, os: HostOs, operation: Operation) -> Result<SessionHold> {
+    let gate = crate::update_gate::enter(installation, os, operation)?;
     let directory = installation_state(installation, os).join(ACTIVATION_DIRECTORY);
     std::fs::create_dir_all(&directory)
         .map_err(|error| ForgeError::io(format!("Cannot create {}", directory.display()), error).during(operation))?;
     let game_lock = session_lock_path(installation, os);
-    lock::acquire(&game_lock).map_err(|error| match error.kind {
+    let game = lock::acquire(&game_lock).map_err(|error| match error.kind {
         ErrorKind::Busy => game_running(&game_lock, operation),
         _ => error.during(operation),
-    })
+    })?;
+    Ok(SessionHold { _gate: gate, _game: game })
 }
 
 #[cfg(test)]

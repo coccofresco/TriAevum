@@ -66,6 +66,35 @@ pub fn is_held(path: &Path) -> bool {
     matches!(file.try_lock(), Err(TryLockError::WouldBlock))
 }
 
+/// A shared hold of the lock at `path` (`LockFileEx` without the exclusive
+/// flag, `flock(LOCK_SH)`): any number of shared holders, no exclusive one.
+/// Only Rust Forges use shared holds (the update gate, `update_gate`).
+pub fn acquire_shared(path: &Path) -> Result<KernelLock> {
+    let mut options = OpenOptions::new();
+    options.read(true).write(true).create(true).truncate(false);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file =
+        options.open(path).map_err(|error| ForgeError::io(format!("Cannot open lock {}", path.display()), error))?;
+    let empty = file.metadata().map_err(|error| ForgeError::io("Cannot inspect the lock", error))?.len() == 0;
+    if empty {
+        // Best effort: a shared holder that created it first locks the range.
+        let _ = file.write_all(b"\0");
+    }
+    match file.try_lock_shared() {
+        Ok(()) => Ok(KernelLock { _file: file, path: path.to_path_buf() }),
+        Err(TryLockError::WouldBlock) => Err(busy(path)),
+        Err(TryLockError::Error(error)) => Err(ForgeError::io(format!("Cannot lock {}", path.display()), error)),
+    }
+}
+
+/// Whether another holder has the lock at `path` exclusively (shared holds
+/// do not count), without creating or writing it.
+pub fn is_held_exclusively(path: &Path) -> bool {
+    let Ok(file) = File::open(path) else { return false };
+    matches!(file.try_lock_shared(), Err(TryLockError::WouldBlock))
+}
+
 fn busy(path: &Path) -> ForgeError {
     ForgeError::new(
         ErrorKind::Busy,
@@ -76,6 +105,21 @@ fn busy(path: &Path) -> ForgeError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_holders_coexist_and_exclude_an_exclusive_one() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join(".forge-update.lock");
+        let first = acquire_shared(&path).unwrap();
+        let second = acquire_shared(&path).unwrap();
+        assert!(is_held(&path) && !is_held_exclusively(&path));
+        assert_eq!(acquire(&path).unwrap_err().kind, ErrorKind::Busy);
+        drop((first, second));
+        let exclusive = acquire(&path).unwrap();
+        assert!(is_held_exclusively(&path));
+        assert_eq!(acquire_shared(&path).unwrap_err().kind, ErrorKind::Busy);
+        drop(exclusive);
+    }
 
     #[test]
     fn excludes_a_second_holder_until_released() {

@@ -12,7 +12,8 @@
 //! redacted report (optionally saving the support bundle), the same JSON the
 //! C ABI and the Android installer receive. `backup` and `restore` are the
 //! Data & backups page's backup and journaled restore (UX plan WP-05B).
-//! `refresh` and `repair` are Update and Repair in place (UX plan WP-04A).
+//! `refresh` and `repair` are Update and Repair in place (UX plan WP-04A);
+//! `update` installs a downloaded release ZIP (UX plan WP-04B, `update_cli`).
 
 use std::ffi::OsString;
 use std::io::Write;
@@ -27,6 +28,8 @@ use forge_core::state::{inspect, InspectRequest, InstallationState};
 use forge_core::CancelToken;
 use forge_native::DesktopServices;
 use serde_json::{json, Value};
+
+mod update_cli;
 
 /// `json.dumps(value, indent=2)` without `sort_keys`.
 const PYTHON_RESULT: Options = Options { style: Style::Pretty, sort_keys: false, ensure_ascii: true };
@@ -64,6 +67,8 @@ enum Command {
     Refresh(MaintenanceArgs),
     /// Rebuild what is missing from the game data kept from the ROM (Repair in place).
     Repair(MaintenanceArgs),
+    /// Update this installation from a downloaded TriAevum ZIP (or, with --update-target, from this package).
+    Update(update_cli::UpdateArgs),
 }
 
 #[derive(Args)]
@@ -215,7 +220,14 @@ fn main() -> ExitCode {
         Command::Restore(args) => restore(args),
         Command::Refresh(args) => maintenance(args, false),
         Command::Repair(args) => maintenance(args, true),
+        Command::Update(args) => update_cli::run(args, || package_root(None)),
     }
+}
+
+/// Explains a failure on stderr and returns its message.
+fn explained(error: forge_core::ForgeError) -> String {
+    explain_on_stderr(&forge_core::abi::error_event(&error));
+    error.message
 }
 
 /// The inventory of the installation the arguments name (no folder sizes).

@@ -44,6 +44,11 @@ fn cannot_launch(error: ForgeError) -> ForgeError {
 }
 
 fn check_journal(installation: &Installation) -> Result<()> {
+    // An update between two package versions (UX plan WP-04B play guard).
+    if forge_core::update_gate::pending(&installation.layout.activation) {
+        return Err(ForgeError::new(ErrorKind::RecoveryRequired, "An update is in progress; open Forge")
+            .because(forge_base::Reason::InterruptedUpdate));
+    }
     if journal_path(&installation.layout.activation, HostOs::current()).exists() {
         return Err(ForgeError::new(ErrorKind::RecoveryRequired, INTERRUPTED));
     }
