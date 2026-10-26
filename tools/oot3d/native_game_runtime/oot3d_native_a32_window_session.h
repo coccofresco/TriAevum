@@ -476,6 +476,17 @@ private:
   std::optional<oot3d::ui::N64UiFast3dRenderer> n64UiRendererStorage;
   // The in-game menu (Esc / R3), drawn by the UI renderer after the HUD.
   std::optional<Oot3dNativeGame::InGameMenu> inGameMenuStorage;
+  // While the menu is open the guest is held (decision 3b of the UX plan):
+  // no guest refresh is due, the presentation clock does not run and the
+  // last scene frame is presented again at the last interpolation sample.
+  float heldVisualInterpolationAlpha = 1.0F;
+  // The menu's Quit game: the next frame flushes pending host settings and
+  // closes the window through the normal exit path.
+  bool menuQuitRequested = false;
+  // The first-play help card is considered once, after the preparation
+  // screen, in sessions a person plays (not scripted runs).
+  bool helpCardConsidered = false;
+  bool helpCardEligible = false;
   std::array<std::vector<oot3d::ui::UiPrimitive>, oot3d::ui::kUiSubsystemCount> lastTopScreenPrimitivesBySubsystem;
   // The touch controls' letter badges, eased across frames.
   Oot3dNativeGame::TopScreenTouchSkinState touchSkinState;

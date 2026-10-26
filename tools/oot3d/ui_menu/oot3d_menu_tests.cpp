@@ -2,6 +2,7 @@
 // fonts, and the presentation's primitives.
 #include "oot3d_menu_font.h"
 #include "oot3d_menu_font_atlas_data.h"
+#include "oot3d_menu_help.h"
 #include "oot3d_menu_model.h"
 #include "oot3d_menu_presentation.h"
 
@@ -459,6 +460,192 @@ void TestPresentation() {
     Expect(std::any_of(output.begin(), output.end(), [](const auto& p) { return p.layer >= 20; }), "modal layers");
 }
 
+const HitRegion* FindRegion(const Model& model, HitKind kind) {
+    for (const auto& region : model.CurrentLayout().Regions)
+        if (region.Kind == kind) return &region;
+    return nullptr;
+}
+
+// A notice has one button: confirm and Back both dismiss it with its answer,
+// and left / right do not move to a missing Cancel.
+void TestSingleButtonModal() {
+    Store store;
+    Model model(BuildDocument(store));
+    model.Open();
+    int dismissed = 0;
+    Modal notice;
+    notice.Title = "Notice";
+    notice.CancelLabel.clear();
+    notice.OnConfirm = [&] { ++dismissed; };
+    model.SetModal(notice);
+    model.Update(Input{}, 0.016);
+    Tap(model, &Input::Right);
+    Expect(model.ModalConfirmHighlighted(), "a notice keeps its only button highlighted");
+    Tap(model, &Input::Back);
+    Expect(dismissed == 1 && !model.CurrentModal() && model.IsOpen(), "back dismisses a notice like OK");
+    model.SetModal(notice);
+    model.Update(Input{}, 0.016);
+    Tap(model, &Input::Confirm);
+    Expect(dismissed == 2, "confirm dismisses a notice");
+    std::vector<oot3d::ui::UiPrimitive> output;
+    model.SetModal(notice);
+    AppendMenuPresentation(model, 1280.0F / 3.0F, 240.0F, output);
+    Expect(FindRegion(model, HitKind::ModalConfirm) != nullptr && FindRegion(model, HitKind::ModalCancel) == nullptr,
+           "a notice draws one button");
+}
+
+// The first-play help card: the menu open with the card alone (no window,
+// tabs or rows behind it, the game held), dismissed by its button, Back or
+// the menu key, which closes the menu and runs the dismissal once.
+void TestHelpCard() {
+    Store store;
+    Model model(BuildDocument(store));
+    int remembered = 0;
+    HelpContent content;
+    content.SaveDataPath = "D:/Games/TriAevum/data/savedata";
+    const auto lines = HelpCardLines(content);
+    Expect(lines.size() == 5 && lines[0] == "Esc or R3: game menu." && lines[1] == "F1 or L3+R3: all settings." &&
+               lines[2] == "F5 / F8: save / load a state." &&
+               lines[4] == "Your saves: D:/Games/TriAevum/data/savedata",
+           "the desktop card names the menu, the settings, the state keys and the saves");
+    HelpContent touch;
+    touch.Controls = HelpControls::Touch;
+    const auto touchLines = HelpCardLines(touch);
+    Expect(touchLines.size() == 3 && touchLines[0] == "Tap HOME: game menu." && touchLines[1] == "Hold HOME: all settings.",
+           "the touch card names HOME, without an empty saves line");
+    model.OpenCard(HelpCard(content, [&] { ++remembered; }));
+    Expect(model.IsOpen() && model.CardOnly() && model.FocusPane() == Pane::Modal, "the card opens alone");
+    std::vector<oot3d::ui::UiPrimitive> output;
+    AppendMenuPresentation(model, 1280.0F / 3.0F, 240.0F, output);
+    Expect(FindRegion(model, HitKind::Tab) == nullptr && FindRegion(model, HitKind::Row) == nullptr &&
+               FindRegion(model, HitKind::Close) == nullptr && FindRegion(model, HitKind::ModalConfirm) != nullptr,
+           "the card draws no menu behind it");
+    model.Update(Press(&Input::Confirm), 0.016);
+    Expect(remembered == 0 && model.IsOpen(), "the press held when the card appeared does not dismiss it");
+    model.Update(Input{}, 0.016);
+    Tap(model, &Input::Confirm);
+    Expect(remembered == 1 && !model.IsOpen() && !model.CardOnly(), "OK dismisses the card and closes the menu");
+    model.OpenCard(HelpCard(content, [&] { ++remembered; }));
+    model.DismissCard();
+    Expect(remembered == 2 && !model.IsOpen(), "the menu key dismisses the card the same way");
+    // Re-opened from the menu, the card is a notice over the menu.
+    model.Open();
+    model.SetModal(HelpCard(content, nullptr));
+    model.Update(Input{}, 0.016);
+    Tap(model, &Input::Confirm);
+    Expect(model.IsOpen() && !model.CurrentModal(), "the card over the menu returns to the menu");
+    // A click on its button dismisses it too.
+    model.Close();
+    model.OpenCard(HelpCard(content, [&] { ++remembered; }));
+    output.clear();
+    AppendMenuPresentation(model, 1280.0F / 3.0F, 240.0F, output);
+    const auto* ok = FindRegion(model, HitKind::ModalConfirm);
+    Expect(ok != nullptr, "the card's button is a pointer target");
+    const float okX = ok->Area.X + ok->Area.Width * 0.5F;
+    const float okY = ok->Area.Y + ok->Area.Height * 0.5F;
+    model.Update(Input{}, Pointer{true, okX, okY, false, 0.0F}, 0.016);
+    model.Update(Input{}, Pointer{true, okX, okY, true, 0.0F}, 0.016);
+    Expect(remembered == 3 && !model.IsOpen(), "a click on OK dismisses the card");
+}
+
+// Resume is the footer's persistent action on every tab.
+void TestResumeFooter() {
+    Store store;
+    Model model(BuildDocument(store));
+    model.Open();
+    for (std::size_t tab = 0; tab < model.Doc().Tabs.size(); ++tab) {
+        model.SelectTab(tab);
+        std::vector<oot3d::ui::UiPrimitive> output;
+        AppendMenuPresentation(model, 1280.0F / 3.0F, 240.0F, output);
+        Expect(FindRegion(model, HitKind::Close) != nullptr, "every tab has the Resume button");
+    }
+    const auto area = FindRegion(model, HitKind::Close)->Area;
+    model.Update(Input{}, Pointer{true, area.X + 1.0F, area.Y + 1.0F, false, 0.0F}, 0.016);
+    model.Update(Input{}, Pointer{true, area.X + 1.0F, area.Y + 1.0F, true, 0.0F}, 0.016);
+    Expect(!model.IsOpen(), "Resume closes the menu");
+}
+
+// The Help & folders tab, the quit question and a failed save's retry.
+void TestHelpTabAndSession() {
+    int cards = 0, saves = 0, logs = 0;
+    HelpTabActions actions;
+    actions.Content.SaveDataPath = "D:/Games/TriAevum/data/savedata";
+    actions.ShowHelpCard = [&] { ++cards; return WriteResult{"Help card shown", false}; };
+    actions.OpenSavesFolder = [&] { ++saves; return WriteResult{"Opened the saves folder", false}; };
+    actions.OpenLogsFolder = [&] { ++logs; return WriteResult{"Opened the logs folder", false}; };
+    Document document;
+    document.Tabs.push_back(BuildHelpTab(actions));
+    const auto& rows = document.Tabs[0].Rows;
+    const auto find = [&](const char* key) {
+        return std::find_if(rows.begin(), rows.end(), [&](const Row& row) { return row.Key == key; });
+    };
+    Expect(document.Tabs[0].Title == "Help & folders", "the tab's title");
+    Expect(find("Game menu") != rows.end() && find("Game menu")->Text == "Esc \xC2\xB7 R3" &&
+               find("All settings (F1)") != rows.end() && find("Save / load a state") != rows.end(),
+           "the desktop controls summary");
+    Expect(find("Open saves folder") != rows.end() &&
+               find("Open saves folder")->Help.find("D:/Games/TriAevum/data/savedata") != std::string::npos,
+           "the saves row names the resolved folder");
+    Model model(std::move(document));
+    model.Open();
+    Expect(model.FocusedRow()->Key == std::string("Show the help card"), "the first action is the help card");
+    model.Update(Input{}, 0.016);
+    Tap(model, &Input::Confirm);
+    Tap(model, &Input::Down);
+    Tap(model, &Input::Confirm);
+    Tap(model, &Input::Down);
+    Tap(model, &Input::Confirm);
+    Expect(cards == 1 && saves == 1 && logs == 1 && model.Status() == "Opened the logs folder",
+           "the help card and folder rows ask the host");
+    // Without a file browser the folder rows are left out and the installer
+    // route is named instead; with the installer hook they are actions.
+    HelpTabActions android;
+    android.Content.Controls = HelpControls::Touch;
+    android.InstallerRoute = "Close the game, then the TriAevum installer: Saves, Diagnostics";
+    const auto androidTab = BuildHelpTab(android);
+    Expect(std::none_of(androidTab.Rows.begin(), androidTab.Rows.end(),
+                        [](const Row& row) { return row.Key == "Open saves folder" || row.Key == "Open logs folder"; }) &&
+               std::any_of(androidTab.Rows.begin(), androidTab.Rows.end(),
+                           [](const Row& row) { return row.Key == "Saves and diagnostics" && row.Kind == RowKind::Info; }) &&
+               std::any_of(androidTab.Rows.begin(), androidTab.Rows.end(),
+                           [](const Row& row) { return row.Key == "Game menu" && row.Text == "Tap HOME"; }),
+           "the touch tab names HOME and the installer route");
+    android.ExportSavesInInstaller = [] { return WriteResult{}; };
+    const auto hooked = BuildHelpTab(android);
+    Expect(std::any_of(hooked.Rows.begin(), hooked.Rows.end(),
+                       [](const Row& row) { return row.Key == "Export saves" && row.Kind == RowKind::Action; }),
+           "the installer hook becomes an action row");
+
+    // Quit asks first; Back keeps the game.
+    int quits = 0;
+    Store store;
+    Model menu(BuildDocument(store));
+    menu.Open();
+    menu.SetModal(QuitConfirmation([&] { ++quits; }));
+    menu.Update(Input{}, 0.016);
+    Expect(menu.CurrentModal()->Title == "Quit the game?" && menu.CurrentModal()->ConfirmLabel == "Quit",
+           "the quit question");
+    Expect(menu.CurrentModal()->Lines[0].find("not saved by quitting") != std::string::npos,
+           "the question says the game's progress is not saved by quitting");
+    Tap(menu, &Input::Back);
+    Expect(quits == 0 && menu.IsOpen(), "back keeps the game");
+    menu.SetModal(QuitConfirmation([&] { ++quits; }));
+    menu.Update(Input{}, 0.016);
+    Tap(menu, &Input::Confirm);
+    Expect(quits == 1, "Quit quits");
+    // A failed save offers Retry through the owner.
+    int retries = 0;
+    menu.SetModal(SaveFailure("disk full", [&] { ++retries; }));
+    menu.Update(Input{}, 0.016);
+    Expect(menu.CurrentModal()->ConfirmLabel == "Retry", "a failed save offers Retry");
+    Tap(menu, &Input::Confirm);
+    Expect(retries == 1, "Retry asks the owner again");
+    Expect(std::string(kStatusSaved) == "Saved" && std::string(kStatusSessionOnly) == "Session only" &&
+               std::string(kStatusPreview) == "Preview: press Save in F1 to keep" &&
+               std::string(kStatusSaveFailed) == "Could not save: Retry",
+           "the status vocabulary");
+}
+
 } // namespace
 
 int main() {
@@ -468,6 +655,10 @@ int main() {
         TestPointer();
         TestFonts();
         TestPresentation();
+        TestSingleButtonModal();
+        TestHelpCard();
+        TestResumeFooter();
+        TestHelpTabAndSession();
     } catch (const std::exception& exception) {
         std::cerr << "oot3d_menu_tests: " << exception.what() << '\n';
         return EXIT_FAILURE;

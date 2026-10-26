@@ -58,6 +58,7 @@ Model::Model(Document document) : mDocument(std::move(document)) {
 void Model::Open() {
     if (mOpen) return;
     mOpen = true;
+    mCardOnly = false;
     mInChoices = false;
     mStatus.clear();
     mStatusError = false;
@@ -73,8 +74,25 @@ void Model::Open() {
     Refresh();
 }
 
+void Model::OpenCard(Modal card) {
+    Close();
+    Open();
+    mCardOnly = true;
+    SetModal(std::move(card));
+}
+
+void Model::DismissCard() {
+    if (!mCardOnly) return;
+    if (mModal.has_value()) {
+        ResolveModal(false);
+    } else {
+        Close();
+    }
+}
+
 void Model::Close() {
     mOpen = false;
+    mCardOnly = false;
     mInChoices = false;
     mModal.reset();
     mLayout = {};
@@ -284,6 +302,18 @@ void Model::ChooseValue(Row& row, int value) {
     if (value != row.Value) Apply(row, value);
 }
 
+void Model::ResolveModal(bool confirm) {
+    if (!mModal.has_value()) return;
+    auto modal = std::move(*mModal);
+    mModal.reset();
+    // A notice's only button and its Back both dismiss it.
+    if (modal.SingleButton()) confirm = confirm || !modal.OnCancel;
+    if (confirm && modal.OnConfirm) modal.OnConfirm();
+    if (!confirm && modal.OnCancel) modal.OnCancel();
+    // The card was the whole menu; a new modal raised by the answer stays.
+    if (mCardOnly && !mModal.has_value()) Close();
+}
+
 HitRegion Model::HitTest(float x, float y) const noexcept {
     for (const auto& region : mLayout.Regions) {
         if (region.Area.Contains(x, y)) return region;
@@ -315,12 +345,7 @@ bool Model::UpdatePointer(const Pointer& pointer, double elapsedSeconds) {
             return true;
         }
         if (moved) mModalConfirm = mHover.Kind == HitKind::ModalConfirm;
-        if (click) {
-            auto modal = std::move(*mModal);
-            mModal.reset();
-            if (mHover.Kind == HitKind::ModalConfirm && modal.OnConfirm) modal.OnConfirm();
-            if (mHover.Kind == HitKind::ModalCancel && modal.OnCancel) modal.OnCancel();
-        }
+        if (click) ResolveModal(mHover.Kind == HitKind::ModalConfirm);
         return true;
     }
     auto* tab = CurrentTab();
@@ -412,16 +437,11 @@ void Model::Update(const Input& held, const Pointer& pointer, double elapsedSeco
     const bool tabNext = mTabNext.Fire(held.TabNext);
 
     if (mModal.has_value()) {
-        if (left || right) mModalConfirm = !mModalConfirm;
+        if ((left || right) && !mModal->SingleButton()) mModalConfirm = !mModalConfirm;
         if (confirm) {
-            auto modal = std::move(*mModal);
-            mModal.reset();
-            if (mModalConfirm && modal.OnConfirm) modal.OnConfirm();
-            if (!mModalConfirm && modal.OnCancel) modal.OnCancel();
+            ResolveModal(mModalConfirm || mModal->SingleButton());
         } else if (back) {
-            auto modal = std::move(*mModal);
-            mModal.reset();
-            if (modal.OnCancel) modal.OnCancel();
+            ResolveModal(false);
         }
         return;
     }

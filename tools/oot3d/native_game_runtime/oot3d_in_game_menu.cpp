@@ -79,7 +79,8 @@ int PhotoSpeedLevel(float speed) {
 } // namespace
 
 InGameMenu::InGameMenu(InGameMenuOwners owners)
-    : mOwners(std::move(owners)), mModel((RefreshSnapshots(), BuildDocument())) {}
+    : mOwners(std::move(owners)), mBaseline(Fast::Extension::ProductDefaultGraphicsSettings()),
+      mModel((RefreshSnapshots(), BuildDocument())) {}
 
 void InGameMenu::RefreshSnapshots() {
   auto &graphics = Fast::Extension::GraphicsSettingsRuntime::Instance();
@@ -94,8 +95,44 @@ void InGameMenu::Refresh() {
   mModel.Refresh();
 }
 
-Menu::WriteResult InGameMenu::ApplyGraphics(GraphicsSettings settings, bool keepPreset) {
+// A save the owner could not write: the status line says so, and the
+// question offers to retry through the same owner.
+Menu::WriteResult InGameMenu::SaveFailed(std::string detail, std::function<bool(std::string *)> retry) {
+  mModel.SetModal(Menu::SaveFailure(detail, [this, retry] {
+    std::string error;
+    const bool saved = retry && retry(&error);
+    Refresh();
+    // Still failing: the status line keeps offering it (the next change of
+    // the row asks again).
+    mModel.SetStatus(saved ? Menu::kStatusSaved : Menu::kStatusSaveFailed, !saved);
+  }));
+  return {Menu::kStatusSaveFailed, true};
+}
+
+Menu::WriteResult InGameMenu::DescribeGraphicsSave() {
   using Fast::Extension::GraphicsSettingsSaveState;
+  auto &runtime = Fast::Extension::GraphicsSettingsRuntime::Instance();
+  switch (runtime.SaveState()) {
+  case GraphicsSettingsSaveState::Saved:
+    return {Menu::kStatusSaved, false};
+  case GraphicsSettingsSaveState::Pending:
+    // Applied while F1 holds an edit (a slider still dragged): written when
+    // F1 lets go of it.
+    return {Menu::kStatusPreview, false};
+  case GraphicsSettingsSaveState::WaitingForDisplay:
+    return {"Applied. Keep or revert the display change.", false};
+  case GraphicsSettingsSaveState::SessionOnly:
+    // Not a failure: this launch does not save settings (F1 says "session only").
+    return {std::string(Menu::kStatusSessionOnly) + ": this launch does not save settings", false};
+  case GraphicsSettingsSaveState::Failed:
+    return SaveFailed("The settings file could not be written.", [](std::string *) {
+      return Fast::Extension::GraphicsSettingsRuntime::Instance().RetrySave();
+    });
+  }
+  return {};
+}
+
+Menu::WriteResult InGameMenu::ApplyGraphics(GraphicsSettings settings, bool keepPreset) {
   auto &runtime = Fast::Extension::GraphicsSettingsRuntime::Instance();
   if (!keepPreset) settings.Preset = Fast::Extension::GraphicsPreset::Custom;
   const auto validation = runtime.Apply(settings, true);
@@ -105,20 +142,7 @@ Menu::WriteResult InGameMenu::ApplyGraphics(GraphicsSettings settings, bool keep
     for (const auto &issue : validation.Issues) message += ": " + issue.Field + " " + issue.Message;
     return {message, true};
   }
-  switch (runtime.SaveState()) {
-  case GraphicsSettingsSaveState::Saved:
-    return {};
-  case GraphicsSettingsSaveState::Pending:
-    return {"Applied, saving", false};
-  case GraphicsSettingsSaveState::WaitingForDisplay:
-    return {"Applied. Keep or revert the display change.", false};
-  case GraphicsSettingsSaveState::SessionOnly:
-    // Not a failure: this launch does not save settings (F1 says "session only").
-    return {"Applied for this session only: this launch does not save settings", false};
-  case GraphicsSettingsSaveState::Failed:
-    return {"Applied but not saved: the settings file could not be written", true};
-  }
-  return {};
+  return DescribeGraphicsSave();
 }
 
 Menu::WriteResult InGameMenu::ApplyControls(const NativeControlConfig &config) {
@@ -126,9 +150,14 @@ Menu::WriteResult InGameMenu::ApplyControls(const NativeControlConfig &config) {
   std::string error;
   const bool applied = mOwners.Controls->Apply(config, &error);
   RefreshSnapshots();
-  if (!applied) return {"Not saved: " + error, true};
-  if (!mOwners.Controls->Persistent()) return {"Applied for this session only: no configuration file", false};
-  return {};
+  if (!applied) {
+    return SaveFailed(error, [this, config](std::string *retryError) {
+      return mOwners.Controls->Apply(config, retryError);
+    });
+  }
+  if (!mOwners.Controls->Persistent())
+    return {std::string(Menu::kStatusSessionOnly) + ": no configuration file", false};
+  return {Menu::kStatusSaved, false};
 }
 
 // The same write as F1's TopScreen controls: the whole configuration through
@@ -139,13 +168,17 @@ Menu::WriteResult InGameMenu::ApplyTopScreen(const TopScreenUiConfig &config) {
   if (!mOwners.TopScreen->Persistent()) {
     mOwners.TopScreen->Preview(config);
     RefreshSnapshots();
-    return {"Applied for this session only: no configuration file", false};
+    return {std::string(Menu::kStatusSessionOnly) + ": no configuration file", false};
   }
   std::string error;
   const bool applied = mOwners.TopScreen->Apply(config, &error);
   RefreshSnapshots();
-  if (!applied) return {"Not saved: " + error, true};
-  return {};
+  if (!applied) {
+    return SaveFailed(error, [this, config](std::string *retryError) {
+      return mOwners.TopScreen->Apply(config, retryError);
+    });
+  }
+  return {Menu::kStatusSaved, false};
 }
 
 Menu::Document InGameMenu::BuildDocument() {
@@ -155,7 +188,75 @@ Menu::Document InGameMenu::BuildDocument() {
   BuildControlsTab(document);
   BuildPhotoModeTab(document);
   BuildGameTab(document);
+  BuildHelpTab(document);
   return document;
+}
+
+Menu::HelpContent InGameMenu::HelpContent() const {
+  Menu::HelpContent content;
+  content.Controls = mOwners.Host.Controls;
+  // The resolved folder, shown at runtime only (never stored anywhere).
+  if (!mOwners.Host.SaveDataDirectory.empty()) {
+    const auto text = std::filesystem::absolute(mOwners.Host.SaveDataDirectory).lexically_normal().u8string();
+    content.SaveDataPath.assign(text.begin(), text.end());
+  }
+  return content;
+}
+
+void InGameMenu::ShowHelpCard(bool firstPlay) {
+  if (!firstPlay) {
+    mModel.SetModal(Menu::HelpCard(HelpContent(), nullptr));
+    return;
+  }
+  RefreshSnapshots();
+  mModel.OpenCard(Menu::HelpCard(HelpContent(), [this] {
+    std::string error;
+    if (mOwners.Host.RememberHelpCardShown && !mOwners.Host.RememberHelpCardShown(&error))
+      std::fprintf(stderr, "TRIAEVUM_HELP_CARD could not be remembered: %s\n", error.c_str());
+  }));
+}
+
+bool InGameMenu::ShowFirstPlayHelpCard() {
+  if (!mOwners.Host.HelpCardShown || mOwners.Host.HelpCardShown()) return false;
+  ShowHelpCard(true);
+  std::fprintf(stderr, "TRIAEVUM_HELP_CARD shown (first play)\n");
+  return true;
+}
+
+void InGameMenu::BuildHelpTab(Menu::Document &document) {
+  const auto &host = mOwners.Host;
+  Menu::HelpTabActions actions;
+  actions.Content = HelpContent();
+  actions.ShowHelpCard = [this]() -> WriteResult {
+    ShowHelpCard(false);
+    return {"Help card shown", false};
+  };
+  const auto openFolder = [this](std::filesystem::path folder, std::string name) {
+    return [this, folder = std::move(folder), name = std::move(name)]() -> WriteResult {
+      std::string error;
+      std::error_code created;
+      std::filesystem::create_directories(folder, created);
+      if (!mOwners.Host.OpenFolder(folder, &error)) return {"Could not open the " + name + " folder: " + error, true};
+      return {"Opened the " + name + " folder", false};
+    };
+  };
+  if (host.OpenFolder && !host.SaveDataDirectory.empty())
+    actions.OpenSavesFolder = openFolder(host.SaveDataDirectory, "saves");
+  if (host.OpenFolder && !host.LogsDirectory.empty()) actions.OpenLogsFolder = openFolder(host.LogsDirectory, "logs");
+  if (host.OpenInstallerPage) {
+    const auto installerPage = [this](std::string page) {
+      return [this, page = std::move(page)]() -> WriteResult {
+        std::string error;
+        if (!mOwners.Host.OpenInstallerPage(page, &error)) return {"Could not open the installer: " + error, true};
+        return {"Opening the installer", false};
+      };
+    };
+    actions.ExportSavesInInstaller = installerPage("saves");
+    actions.ShareDiagnosticsInInstaller = installerPage("diagnostics");
+  } else {
+    actions.InstallerRoute = host.InstallerRoute;
+  }
+  document.Tabs.push_back(Menu::BuildHelpTab(actions));
 }
 
 void InGameMenu::BuildVideoTab(Menu::Document &document) {
@@ -187,7 +288,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       const auto validation = GraphicsSettingsService::Validate(candidate, mCapabilities);
       return validation.Accepted() && get(validation.Value) == value;
     };
-    row.Modified = [this, get] { return get(mGraphics) != get(GraphicsSettings{}); };
+    row.Modified = [this, get] { return get(mGraphics) != get(mBaseline); };
     return row;
   };
   const auto graphicsToggle = [this](std::string key, std::string help, std::function<bool(const GraphicsSettings &)> get,
@@ -202,7 +303,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       set(settings, value != 0);
       return ApplyGraphics(settings, hostOwned);
     };
-    row.Modified = [this, get] { return get(mGraphics) != get(GraphicsSettings{}); };
+    row.Modified = [this, get] { return get(mGraphics) != get(mBaseline); };
     return row;
   };
 
@@ -221,6 +322,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       return ApplyGraphics(GraphicsSettingsService::PresetForCurrent(static_cast<GraphicsPreset>(value), mGraphics), true);
     };
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(GraphicsPreset::Custom); };
+    row.Modified = [this] { return mGraphics.Preset != mBaseline.Preset; };
     tab.Rows.push_back(std::move(row));
   }
   const auto hostWindow = [this] { return mCapabilities.Has(GraphicsCapability::HostWindowOutput); };
@@ -250,7 +352,8 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     Row row;
     row.Key = "Resolution";
     row.Kind = RowKind::Choice;
-    row.Help = "The output size of the window or the fullscreen mode. Borderless uses the desktop resolution.";
+    row.Help = "The output size of the window or the fullscreen mode. Borderless uses the desktop resolution. "
+               "Until you choose a size, the window opens at the largest 16:9 size that fits the screen.";
     for (const auto &preset : kResolutions) row.Choices.emplace_back(preset.Label);
     row.Choices.emplace_back("Custom");
     row.Read = [this] {
@@ -270,6 +373,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     row.ChoiceAvailable = [](int value) { return value < static_cast<int>(kResolutions.size()); };
     row.Available = [this, hostWindow] { return hostWindow() && mGraphics.Window != WindowMode::Borderless; };
     row.UnavailableReason = hostWindow() ? "Borderless uses the desktop resolution." : hostWindowReason();
+    row.Modified = [this] { return mGraphics.OutputProvenance == Fast::WindowExtentProvenance::User; };
     tab.Rows.push_back(std::move(row));
   }
   tab.Rows.push_back(graphicsToggle(
@@ -281,6 +385,24 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       {"Original 30 FPS", "Interpolated 2x (60 FPS)", "Interpolated 3x (90 FPS)", "Uncapped"},
       [](const auto &s) { return static_cast<int>(s.FrameRate); },
       [](auto &s, int value) { s.FrameRate = static_cast<FrameRateMode>(value); }));
+  {
+    // Recovery from the pad when F1 is out of sight (#93, #109, #51): the
+    // host-owned reset the safe presentation applies after a launch that
+    // ended in its first minute.
+    Row row;
+    row.Key = "Reset display settings";
+    row.Kind = RowKind::Action;
+    row.Help = "Back to a window of the default size with native render scale and no anti-aliasing or "
+               "upscaler, as after a failed start. The rest of the settings stay. A window mode change asks "
+               "you to keep it.";
+    row.Activate = [this]() -> WriteResult {
+      const auto validation = Fast::Extension::GraphicsSettingsRuntime::Instance().ResetDisplay();
+      RefreshSnapshots();
+      if (!validation.Accepted()) return {"The display reset was rejected", true};
+      return DescribeGraphicsSave();
+    };
+    tab.Rows.push_back(std::move(row));
+  }
 
   tab.Rows.push_back(Heading("Rendering"));
   {
@@ -300,7 +422,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     };
     row.Available = [this] { return mGraphics.AntiAliasing != AntiAliasingMode::Upscaler; };
     row.UnavailableReason = "The upscaler quality sets the render scale.";
-    row.Modified = [this] { return mGraphics.InternalResolutionScale != GraphicsSettings{}.InternalResolutionScale; };
+    row.Modified = [this] { return mGraphics.InternalResolutionScale != mBaseline.InternalResolutionScale; };
     tab.Rows.push_back(std::move(row));
   }
   tab.Rows.push_back(graphicsChoice(
@@ -342,7 +464,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       settings.FovMultiplier = static_cast<float>(value) / 100.0F;
       return ApplyGraphics(settings, false);
     };
-    row.Modified = [this] { return mGraphics.FovMultiplier != GraphicsSettings{}.FovMultiplier; };
+    row.Modified = [this] { return mGraphics.FovMultiplier != mBaseline.FovMultiplier; };
     tab.Rows.push_back(std::move(row));
   }
   tab.Rows.push_back(graphicsToggle(
@@ -396,7 +518,7 @@ void InGameMenu::BuildGraphicsTab(Menu::Document &document) {
       const auto validation = GraphicsSettingsService::Validate(candidate, mCapabilities);
       return validation.Accepted() && get(validation.Value) == value;
     };
-    row.Modified = [this, get] { return get(mGraphics) != get(GraphicsSettings{}); };
+    row.Modified = [this, get] { return get(mGraphics) != get(mBaseline); };
     return row;
   };
 
@@ -463,7 +585,7 @@ void InGameMenu::BuildGraphicsTab(Menu::Document &document) {
       return ApplyGraphics(settings, false);
     };
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(GrassQuality::Custom); };
-    row.Modified = [this] { return mGraphics.Grass.Quality != GraphicsSettings{}.Grass.Quality; };
+    row.Modified = [this] { return mGraphics.Grass.Quality != mBaseline.Grass.Quality; };
     tab.Rows.push_back(std::move(row));
   }
   {
@@ -479,7 +601,7 @@ void InGameMenu::BuildGraphicsTab(Menu::Document &document) {
       settings.Grass.CardLodEnabled = value != 0;
       return ApplyGraphics(settings, false);
     };
-    row.Modified = [this] { return mGraphics.Grass.CardLodEnabled != GraphicsSettings{}.Grass.CardLodEnabled; };
+    row.Modified = [this] { return mGraphics.Grass.CardLodEnabled != mBaseline.Grass.CardLodEnabled; };
     row.Available = [this] { return mGraphics.Grass.Quality != GrassQuality::Off; };
     row.UnavailableReason = "Grass is off";
     tab.Rows.push_back(std::move(row));
@@ -504,7 +626,7 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
     row.Modified = [this, field] { return mControls.*field != NativeControlConfig{}.*field; };
     return row;
   };
-  // The TopScreen rows F1 > Controls > Camera offers (Free camera, C-stick
+  // The TopScreen rows F1 > Controls > Camera offers (Gameplay camera, C-stick
   // aiming). "Modified" compares with the standard profile, the defaults.
   const auto topScreenToggle = [this](std::string key, std::string help, bool TopScreenUiConfig::*field) {
     Row row;
@@ -680,15 +802,15 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
 
   if (mOwners.TopScreen) {
     tab.Rows.push_back(Heading("Camera"));
-    tab.Rows.push_back(topScreenToggle("Free camera", "The right stick orbits the camera around Link during gameplay.",
+    tab.Rows.push_back(topScreenToggle("Gameplay camera", "The right stick orbits the camera around Link during gameplay (the free camera).",
                                        &TopScreenUiConfig::FreeCameraEnabled));
-    tab.Rows.push_back(topScreenLevel("Free camera speed", "How fast the free camera turns.", &TopScreenUiConfig::FreeCameraSpeedLevel,
+    tab.Rows.push_back(topScreenLevel("Gameplay camera speed", "How fast the gameplay camera turns.", &TopScreenUiConfig::FreeCameraSpeedLevel,
                                       0, 6, 1, [](int value) { return std::to_string(value + 1) + " / 7"; }));
     {
       Row row;
-      row.Key = "Free camera smoothing";
+      row.Key = "Gameplay camera smoothing";
       row.Kind = RowKind::Choice;
-      row.Help = "Smooths the free camera's response to the stick.";
+      row.Help = "Smooths the gameplay camera's response to the stick.";
       row.Choices = {"Off", "Light", "Medium", "Default", "Heavy"};
       row.Read = [this] { return static_cast<int>(mTopScreen.FreeCameraSmoothing); };
       row.Write = [this](int value) {
@@ -699,9 +821,9 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
       row.Modified = [this] { return mTopScreen.FreeCameraSmoothing != TopScreenUiConfig{}.FreeCameraSmoothing; };
       tab.Rows.push_back(std::move(row));
     }
-    tab.Rows.push_back(topScreenToggle("Invert free camera X", "Mirrors the free camera's horizontal turn.",
+    tab.Rows.push_back(topScreenToggle("Invert gameplay camera X", "Mirrors the gameplay camera's horizontal turn.",
                                        &TopScreenUiConfig::FreeCameraInvertX));
-    tab.Rows.push_back(topScreenToggle("Invert free camera Y", "Mirrors the free camera's vertical turn.",
+    tab.Rows.push_back(topScreenToggle("Invert gameplay camera Y", "Mirrors the gameplay camera's vertical turn.",
                                        &TopScreenUiConfig::FreeCameraInvertY));
     tab.Rows.push_back(topScreenLevel("Camera zoom", "The gameplay camera's distance from Link; 100% is the game's own.",
                                       &TopScreenUiConfig::CameraZoomPercent, kTopScreenCameraZoomMinimum,
@@ -733,14 +855,14 @@ void InGameMenu::BuildPhotoModeTab(Menu::Document &document) {
   tab.Rows.push_back(Heading("Camera"));
   {
     Row row;
-    row.Key = "Free camera (F6)";
+    row.Key = "Photo camera (F6)";
     row.Kind = RowKind::Toggle;
     row.Help = "A camera detached from Link: the game draws from it and Link stays still, for this session. "
                "Close the menu and drive it with the controls listed below.";
     row.Read = [this] { return mOwners.FreeCamera->Active() ? 1 : 0; };
     row.Write = [this](int value) {
       mOwners.FreeCamera->SetActive(value != 0);
-      return WriteResult{value != 0 ? "Free camera on for this session" : "Free camera off", false};
+      return WriteResult{value != 0 ? "Photo camera on for this session" : "Photo camera off", false};
     };
     row.Modified = [this] { return mOwners.FreeCamera->Active(); };
     tab.Rows.push_back(std::move(row));
@@ -761,7 +883,7 @@ void InGameMenu::BuildPhotoModeTab(Menu::Document &document) {
   }
   {
     Row row;
-    row.Key = "Free camera speed";
+    row.Key = "Photo camera speed";
     row.Kind = RowKind::Number;
     row.Help = "How fast the camera moves, from a slow glide to a fast flight. Shift and Ctrl change it while driving.";
     row.Minimum = 1;
@@ -781,13 +903,13 @@ void InGameMenu::BuildPhotoModeTab(Menu::Document &document) {
     Row row;
     row.Key = "Back to the game's view";
     row.Kind = RowKind::Action;
-    row.Help = "Returns the free camera to where the game's camera is now.";
+    row.Help = "Returns the photo camera to where the game's camera is now.";
     row.Activate = [this] {
       mOwners.FreeCamera->ResetToGame();
       return WriteResult{"Camera reset to the game's view", false};
     };
     row.Available = [this] { return mOwners.FreeCamera->Active(); };
-    row.UnavailableReason = "Turn the free camera on first.";
+    row.UnavailableReason = "Turn the photo camera on first.";
     tab.Rows.push_back(std::move(row));
   }
 
@@ -913,6 +1035,9 @@ void InGameMenu::BuildGameTab(Menu::Document &document) {
       row.Help = std::move(help);
       row.Activate = [this, kind, withSettings] {
         mOwners.Savestates->Request({kind, withSettings, {}});
+        // The game is held while the menu is open: a loaded state shows once
+        // the menu closes, so loading resumes the game at once.
+        if (kind == SavestateRequestKind::Load) mModel.Close();
         return WriteResult{kind == SavestateRequestKind::Save ? "Saving the state" : "Loading the last state", false};
       };
       return row;
@@ -921,9 +1046,39 @@ void InGameMenu::BuildGameTab(Menu::Document &document) {
                               SavestateRequestKind::Save, false));
     tab.Rows.push_back(action("Save state + settings", "Saves the game moment with the current host settings beside it.",
                               SavestateRequestKind::Save, true));
-    tab.Rows.push_back(action("Load last state (F8)", "Loads the most recent save state.", SavestateRequestKind::Load, false));
-    tab.Rows.push_back(action("Load last state + settings", "Loads the most recent save state and applies the settings it carries.",
+    tab.Rows.push_back(action("Load last state (F8)", "Loads the most recent save state and resumes the game.",
+                              SavestateRequestKind::Load, false));
+    tab.Rows.push_back(action("Load last state + settings",
+                              "Loads the most recent save state, applies the settings it carries and resumes the game.",
                               SavestateRequestKind::Load, true));
+  }
+
+  // The session: F1 for everything this menu has no row for, and quitting.
+  const auto &host = mOwners.Host;
+  if (host.OpenAdvancedSettings || host.QuitGame) tab.Rows.push_back(Heading("Session"));
+  if (host.OpenAdvancedSettings) {
+    Row row;
+    row.Key = "Advanced settings (F1)";
+    row.Kind = RowKind::Action;
+    row.Help = "Opens F1, the window with every setting (grass rules, materials, scene lights, bindings, texture "
+               "packs). F1 is made for a mouse; this menu closes while it is open.";
+    row.Activate = [this]() -> WriteResult {
+      mOwners.Host.OpenAdvancedSettings();
+      return {"Opening F1", false};
+    };
+    tab.Rows.push_back(std::move(row));
+  }
+  if (host.QuitGame) {
+    Row row;
+    row.Key = "Quit game";
+    row.Kind = RowKind::Action;
+    row.Help = "Closes the game after asking. Settings are kept; the game's own progress is saved only by "
+               "saving in the game (or by a save state).";
+    row.Activate = [this]() -> WriteResult {
+      mModel.SetModal(Menu::QuitConfirmation([this] { mOwners.Host.QuitGame(); }));
+      return {"Quit the game?", false};
+    };
+    tab.Rows.push_back(std::move(row));
   }
   document.Tabs.push_back(std::move(tab));
 }
@@ -994,7 +1149,9 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
     return;
   }
   if (toggle) {
-    if (mModel.IsOpen()) {
+    if (mModel.CardOnly()) {
+      mModel.DismissCard();
+    } else if (mModel.IsOpen()) {
       mModel.Close();
     } else {
       RefreshSnapshots();

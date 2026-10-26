@@ -6,7 +6,9 @@
 #include "oot3d_title_grass_rules.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
+#include "ship/config/Config.h"
 
+#include <SDL2/SDL.h>
 #include <stb_image.h>
 
 namespace Oot3dA32Window {
@@ -54,6 +56,42 @@ struct UntranslatedCodeLog {
 void ObserveUntranslatedCode(uint32_t pc, bool thumb, void *user) {
   auto &log = *static_cast<UntranslatedCodeLog *>(user);
   ++(thumb ? log.Thumb : log.Arm)[pc];
+}
+#endif
+
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+// The desktop's file browser on a folder: SDL hands a file URL to the
+// desktop's handler (Explorer, the Linux file manager, Finder).
+bool OpenFolderInFileBrowser(const std::filesystem::path &folder, std::string *error) {
+  std::error_code status;
+  const auto absolute = std::filesystem::absolute(folder, status).lexically_normal();
+  if (status) {
+    *error = status.message();
+    return false;
+  }
+  const auto utf8 = absolute.generic_u8string();
+  std::string url = "file://";
+#if defined(_WIN32)
+  url += '/';
+#endif
+  static constexpr char kHex[] = "0123456789ABCDEF";
+  for (const char8_t unit : utf8) {
+    const auto c = static_cast<unsigned char>(unit);
+    const bool plain = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '/' ||
+                       c == '-' || c == '_' || c == '.' || c == '~' || c == ':';
+    if (plain) {
+      url += static_cast<char>(c);
+    } else {
+      url += '%';
+      url += kHex[c >> 4U];
+      url += kHex[c & 15U];
+    }
+  }
+  if (SDL_OpenURL(url.c_str()) != 0) {
+    *error = SDL_GetError();
+    return false;
+  }
+  return true;
 }
 #endif
 
@@ -1264,10 +1302,52 @@ void NativeA32WindowSession::Setup() {
   // reads the settings file through the persistence port the window's GUI
   // installs. Built earlier, the runtime would start without the port, run the
   // launch on the defaults ("session only") and never load or save the file.
+  // The window host's part: its folders, the help card's record in the
+  // runtime configuration, F1 and the normal exit.
+  Oot3dNativeGame::InGameMenuHost menuHost;
+  menuHost.SaveDataDirectory = saveDataDirectory;
+  menuHost.LogsDirectory = std::filesystem::path(std::u8string(reinterpret_cast<const char8_t *>(
+      Ship::Context::GetPathRelativeToAppDirectory("logs").c_str())));
+#if defined(__ANDROID__)
+  menuHost.Controls = Oot3dNativeGame::Menu::HelpControls::Touch;
+  menuHost.InstallerRoute = "Close the game, then the TriAevum installer: Saves, Diagnostics";
+#elif !defined(__SWITCH__)
+  menuHost.OpenFolder = OpenFolderInFileBrowser;
+#endif
+  menuHost.HelpCardShown = [] {
+    auto *context = Ship::Context::GetRawInstance();
+    return context != nullptr && context->GetConfig() != nullptr && context->GetConfig()->GetBool("Help.Shown", false);
+  };
+  menuHost.RememberHelpCardShown = [](std::string *error) {
+    auto *context = Ship::Context::GetRawInstance();
+    if (context == nullptr || context->GetConfig() == nullptr) {
+      *error = "no runtime configuration";
+      return false;
+    }
+    context->GetConfig()->SetBool("Help.Shown", true);
+    if (!context->GetConfig()->Save()) {
+      *error = "the configuration file could not be written";
+      return false;
+    }
+    return true;
+  };
+  menuHost.OpenAdvancedSettings = [this] {
+    if (auto f1 = gui->GetGuiWindow("OOT3D Graphics"); f1 != nullptr) f1->Show();
+  };
+  menuHost.QuitGame = [this] { menuQuitRequested = true; };
   inGameMenuStorage.emplace(Oot3dNativeGame::InGameMenuOwners{
       controlConfigRuntime,
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen ? topScreenConfigRuntime : nullptr,
-      languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode});
+      languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode, std::move(menuHost)});
+  // The first-play help card belongs to sessions a person plays: scripted
+  // runs (captures, fixed steps, replays, the developer lab) never see it.
+  // TRIAEVUM_HELP_CARD=1 or 0 overrides that, for qualification.
+  helpCardEligible = !hostArgs.Scripted();
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  if (std::getenv("TRIAEVUM_DEV_LAB") != nullptr) helpCardEligible = false;
+#endif
+  if (const char *override = std::getenv("TRIAEVUM_HELP_CARD"); override != nullptr && *override != '\0')
+    helpCardEligible = std::string_view(override) == "1";
 #if defined(__SWITCH__)
   WriteSwitchBootStage("opengl_renderer_initialized");
 #endif

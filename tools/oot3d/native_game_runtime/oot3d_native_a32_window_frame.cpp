@@ -3,6 +3,7 @@
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #include "oot3d_native_room_shadow_shell.h"
+#include "ship/config/Config.h"
 #include "three_ds_touch_overlay_settings.h"
 
 namespace Oot3dA32Window {
@@ -272,11 +273,22 @@ bool NativeA32WindowSession::RunFrame() {
                 .count();
   lastPresentationTime = presentationTime;
   const auto presentationStateBeforeFrame = presentationScheduler.CaptureState();
+  // The in-game menu holds the game (UX decision 3b): while it is open the
+  // presentation clock does not run, so no guest refresh is due (no game
+  // time, input, audio or physics) and the frame presents the last scene
+  // again at the interpolation sample it last showed, with the menu over it.
+  // Decided from the menu as the previous frame left it, so a frame never
+  // changes its mind halfway; closing resumes from the same clock phase.
+  // With the menu closed this is the unchanged schedule.
+  const bool guestHeld = inGameMenu.HoldsGame();
   const auto presentationStep =
-      presentationScheduler.Advance(presentationElapsedSeconds);
+      guestHeld ? Oot3dNativeGame::NativePresentationStep{}
+                : presentationScheduler.Advance(presentationElapsedSeconds);
   const uint32_t guestRefreshesDue = presentationStep.GuestRefreshesDue;
-  const float visualInterpolationAlpha = static_cast<float>(
-      std::clamp(presentationStep.InterpolationAlpha, 0.0, 1.0));
+  const float visualInterpolationAlpha =
+      guestHeld ? heldVisualInterpolationAlpha
+                : static_cast<float>(std::clamp(presentationStep.InterpolationAlpha, 0.0, 1.0));
+  heldVisualInterpolationAlpha = visualInterpolationAlpha;
   ApplyTopScreenConfigSnapshot();
   ApplyPhotoModeHud();
   uiLifecycleBridge.BeginHostFrame(
@@ -549,9 +561,27 @@ bool NativeA32WindowSession::RunFrame() {
 #else
   inGameMenu.Update(nativeControlPollingState.Menu, imGuiOwnsInput, presentationElapsedSeconds);
 #endif
+  // The first-play help card, once per installation, when the game is first
+  // shown (after the preparation screen) and no other host surface is up.
+  if (!helpCardConsidered && (!helpCardEligible || (preparationScreen.Done() && !imGuiOwnsInput &&
+                                                    !inGameMenu.IsOpen()))) {
+    helpCardConsidered = true;
+    if (helpCardEligible) inGameMenu.ShowFirstPlayHelpCard();
+  }
   // L3+R3: the settings window, as F1 (the SDL key path toggles it there).
   if (nativeControlPollingState.SettingsToggleRequested && f1Window != nullptr) {
     f1Window->ToggleVisibility();
+  }
+  if (menuQuitRequested) {
+    // The menu's Quit game: what the host owners still hold is written (a
+    // graphics change F1 deferred, the window's own configuration), then the
+    // normal exit path runs, which also clears the launch marker.
+    Fast::Extension::GraphicsSettingsRuntime::Instance().SavePending();
+    if (auto *context = Ship::Context::GetRawInstance(); context != nullptr && context->GetConfig() != nullptr)
+      (void)context->GetConfig()->Save();
+    std::fprintf(stderr, "TRIAEVUM_MENU_QUIT host settings flushed; closing the window\n");
+    window.Close();
+    return false;
   }
   if (physicalInputFrame.Exit || devLabQuit) {
     window.Close();
@@ -574,6 +604,12 @@ bool NativeA32WindowSession::RunFrame() {
   phaseTiming.InputPollSeconds += SecondsSince(inputPhaseStart);
   if (!lateInputSample && !beginGuestFrame(false)) return true;
   phaseTiming.FrameStartSeconds += SecondsSince(phaseStart);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  // The developer lab advances at guest refresh boundaries; while the menu
+  // holds the game there are none, so it advances once per presented frame
+  // (its menu presses, waits and captures keep working over the held game).
+  if (guestHeld && devWarp != nullptr && devLab) UpdateDevLab(frameCount);
+#endif
   const uint32_t guestRefreshIterations =
       std::max<uint32_t>(1U, guestRefreshesDue);
   for (uint32_t guestRefreshIndex = 0;
@@ -2513,6 +2549,8 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
     const auto &model = inGameMenuStorage->Model();
     Json state{{"frame", guestFrame},
                {"open", model.IsOpen()},
+               {"cardOnly", model.CardOnly()},
+               {"hostFrame", presentationFrameCount},
                {"tabIndex", model.TabIndex()},
                {"rowIndex", model.RowIndex()},
                {"statusLine", model.Status()},

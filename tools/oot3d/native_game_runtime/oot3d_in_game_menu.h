@@ -12,6 +12,7 @@
 #include "oot3d_dev_free_camera.h"
 #include "oot3d_game_language.h"
 #include "oot3d_menu_font.h"
+#include "oot3d_menu_help.h"
 #include "oot3d_menu_model.h"
 #include "oot3d_native_control_config.h"
 #include "oot3d_photo_mode_panel.h"
@@ -23,9 +24,12 @@
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace Oot3dNativeGame {
@@ -53,6 +57,37 @@ struct InGameMenuHostInput {
   float PointerWheel = 0.0F;
 };
 
+// What the window host does for the menu's session rows: its folders, the
+// help card's "shown once" record, F1 and quitting. Each action is optional;
+// an absent one leaves its row out. The host owns all of it; the menu only
+// asks.
+struct InGameMenuHost {
+  Menu::HelpControls Controls = Menu::HelpControls::KeyboardAndController;
+  std::filesystem::path SaveDataDirectory;
+  std::filesystem::path LogsDirectory;
+  // Opens a folder in the platform's file browser (desktop); null where the
+  // platform has none.
+  std::function<bool(const std::filesystem::path &, std::string *)> OpenFolder;
+  // Where the saves and the diagnostics are handled instead (Android: the
+  // installer's Saves and Diagnostics pages, which run while the game is
+  // closed).
+  std::string InstallerRoute;
+  // Android hook, not wired yet: starts the installer's page ("saves" for
+  // SavesActivity, "diagnostics" for DiagnosticsActivity). Those pages run
+  // in the installer's process and refuse a save import while the game's
+  // process lives, so starting them from the game needs the JNI bridge and
+  // a quit-then-open flow first. While null, the Help tab names the route.
+  std::function<bool(std::string_view page, std::string *error)> OpenInstallerPage;
+  // The help card's record in the runtime configuration (Help.Shown).
+  std::function<bool()> HelpCardShown;
+  std::function<bool(std::string *)> RememberHelpCardShown;
+  // Opens F1 (which closes this menu).
+  std::function<void()> OpenAdvancedSettings;
+  // Ends the session normally: pending host settings are written through
+  // their owners and the window closes (the launch marker is cleared).
+  std::function<void()> QuitGame;
+};
+
 struct InGameMenuOwners {
   std::shared_ptr<NativeControlConfigRuntime> Controls;
   // Null unless the TopScreen profile is active: the TopScreen rows then stay out.
@@ -61,6 +96,7 @@ struct InGameMenuOwners {
   std::shared_ptr<SavestateLibrary> Savestates;
   std::shared_ptr<DevFreeCamera> FreeCamera;
   std::shared_ptr<PhotoModeState> PhotoMode;
+  InGameMenuHost Host;
 };
 
 class InGameMenu {
@@ -71,6 +107,15 @@ public:
   // being open: the menu closes and ignores its controls while it is.
   void Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput, double elapsedSeconds);
   [[nodiscard]] bool IsOpen() const noexcept { return mModel.IsOpen(); }
+  // The game holds while the menu (or the help card) is up: the window host
+  // advances no guest frame then (decision 3b of the UX plan).
+  [[nodiscard]] bool HoldsGame() const noexcept { return mModel.IsOpen(); }
+  // The help card: on its own over the game (`firstPlay`, remembered once it
+  // is dismissed), or over the menu from its Help & folders tab.
+  void ShowHelpCard(bool firstPlay);
+  // The first-play card unless the runtime configuration records it was
+  // already shown (Help.Shown); true when it is shown now.
+  bool ShowFirstPlayHelpCard();
   // The frame's primitives on the given canvas (canvas units).
   [[nodiscard]] std::vector<oot3d::ui::UiPrimitive> BuildPresentation(float canvasWidth, float canvasHeight);
 
@@ -86,7 +131,13 @@ private:
   void BuildControlsTab(Menu::Document &document);
   void BuildPhotoModeTab(Menu::Document &document);
   void BuildGameTab(Menu::Document &document);
+  void BuildHelpTab(Menu::Document &document);
+  [[nodiscard]] Menu::HelpContent HelpContent() const;
   void RefreshSnapshots();
+  // The status line's word for the graphics owner's save state; a failed
+  // save also asks whether to retry.
+  Menu::WriteResult DescribeGraphicsSave();
+  Menu::WriteResult SaveFailed(std::string detail, std::function<bool(std::string *)> retry);
   Menu::WriteResult ApplyGraphics(Fast::Extension::GraphicsSettings settings, bool keepPreset);
   Menu::WriteResult ApplyControls(const NativeControlConfig &config);
   Menu::WriteResult ApplyTopScreen(const TopScreenUiConfig &config);
@@ -94,6 +145,10 @@ private:
   void UpdateSavestateOutcome();
 
   InGameMenuOwners mOwners;
+  // "Modified" compares with the product's default graphics, owned by the
+  // graphics runtime (ProductDefaultGraphicsSettings), not the struct
+  // defaults (the Authentic look).
+  Fast::Extension::GraphicsSettings mBaseline;
   Fast::Extension::GraphicsSettings mGraphics;
   Fast::Extension::GraphicsCapabilities mCapabilities;
   NativeControlConfig mControls;

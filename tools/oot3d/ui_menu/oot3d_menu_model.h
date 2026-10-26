@@ -128,9 +128,13 @@ struct Modal {
     std::string Title;
     std::vector<std::string> Lines;
     std::string ConfirmLabel = "OK";
+    // Empty: a notice with the one button; Back then dismisses it like OK.
     std::string CancelLabel = "Cancel";
     std::function<void()> OnConfirm;
     std::function<void()> OnCancel;
+    // The box's width in dp (a card of help text is wider than a question).
+    float WidthDp = 560.0F;
+    [[nodiscard]] bool SingleButton() const noexcept { return CancelLabel.empty(); }
 };
 
 enum class Pane : std::uint8_t { Rows, Choices, Modal };
@@ -143,8 +147,14 @@ class Model {
     explicit Model(Document document);
 
     void Open();
+    // Opens the menu showing only the card (the first-play help card): no
+    // window or tabs behind it, and dismissing the card closes the menu.
+    void OpenCard(Modal card);
+    // The card's dismissal by the menu key (Esc / R3): answered like Back.
+    void DismissCard();
     void Close();
     [[nodiscard]] bool IsOpen() const noexcept { return mOpen; }
+    [[nodiscard]] bool CardOnly() const noexcept { return mCardOnly; }
 
     // Navigation and edits from the held inputs since the previous update.
     void Update(const Input& held, double elapsedSeconds) { Update(held, Pointer{}, elapsedSeconds); }
@@ -209,11 +219,14 @@ class Model {
     void ClampScroll() noexcept;
     void FocusFirstRow();
     [[nodiscard]] HitRegion HitTest(float x, float y) const noexcept;
+    // Takes the modal down and runs its answer; a card-only menu closes.
+    void ResolveModal(bool confirm);
     // True when the pointer consumed this update (a modal click, for instance).
     bool UpdatePointer(const Pointer& pointer, double elapsedSeconds);
 
     Document mDocument;
     bool mOpen = false;
+    bool mCardOnly = false;
     std::size_t mTab = 0;
     std::size_t mRow = 0;
     std::size_t mScroll = 0;

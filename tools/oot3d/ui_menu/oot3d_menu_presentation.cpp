@@ -317,28 +317,46 @@ void DrawStatusAndHints(const Model& model, const Frame& frame, const Palette& p
     const bool choices = model.FocusPane() == Pane::Choices;
     const bool modal = model.FocusPane() == Pane::Modal;
     hint(hints.Confirm, modal ? "Choose" : "Select");
-    hint(hints.Back, modal ? "Cancel" : choices ? "Back" : "Close");
+    hint(hints.Back, modal ? "Cancel" : choices ? "Back" : "Resume");
     if (!modal) {
         hint(hints.Tabs, "Tabs");
         hint(hints.Change, "Change");
     }
-    // The close hint is also the pointer's close button.
-    const bool closeHovered = model.Hover().Kind == HitKind::Close;
-    TextStyle close{FontStyle::Body, hintSize, WithAlpha(palette.Text, closeHovered ? 1.0F : 0.5F), TextAlign::Right,
-                    false, kLayerText};
+    // Resume, a persistent action of the footer on every tab: a button for
+    // the pointer, with the keys that close the menu beside its label.
+    const bool resumeHovered = model.Hover().Kind == HitKind::Close;
+    const float labelSize = 15.0F * kDp;
+    const float labelWidth = MeasureText(FontStyle::Heading, labelSize, kResumeLabel);
+    const float keysWidth = MeasureText(FontStyle::Body, hintSize, hints.Close);
+    const float inner = 12.0F * kDp;
+    const float buttonWidth = inner + labelWidth + 8.0F * kDp + keysWidth + inner;
+    const float buttonHeight = 28.0F * kDp;
     const float right = frame.Content.x + frame.Content.width;
-    const float closeWidth = AppendText(output, close, right, baseline, hints.Close);
-    layout.Regions.push_back(
-        {{right - closeWidth - 12.0F * kDp, frame.HintsY, closeWidth + 24.0F * kDp, 36.0F * kDp}, HitKind::Close, 0});
+    const UiRect button{right - buttonWidth, frame.HintsY + (36.0F * kDp - buttonHeight) * 0.5F, buttonWidth,
+                        buttonHeight};
+    Quad(output, button, resumeHovered ? palette.Selected : palette.Interactive, kLayerRow);
+    Outline(output, button, 1.0F * kDp, WithAlpha(palette.Accent, resumeHovered ? 1.0F : 0.6F), kLayerOutline);
+    TextStyle label{FontStyle::Heading, labelSize, palette.Text, TextAlign::Left, false, kLayerText};
+    const float labelEnd = button.x + inner + AppendText(output, label, button.x + inner,
+                                                         CenteredBaseline(FontStyle::Heading, labelSize, button.y,
+                                                                          button.height),
+                                                         kResumeLabel);
+    TextStyle keys{FontStyle::Body, hintSize, WithAlpha(palette.Text, resumeHovered ? 0.9F : 0.6F), TextAlign::Left,
+                   false, kLayerText};
+    AppendText(output, keys, labelEnd + 8.0F * kDp,
+               CenteredBaseline(FontStyle::Body, hintSize, button.y, button.height), hints.Close);
+    layout.Regions.push_back({ToRect(button), HitKind::Close, 0});
 }
 
-void DrawModal(const Model& model, const Frame& frame, const Palette& palette, std::vector<UiPrimitive>& output,
+// The modal question over `area` (the menu's window, or the whole canvas for
+// a card shown without the menu).
+void DrawModal(const Model& model, const UiRect& area, const Palette& palette, std::vector<UiPrimitive>& output,
                Layout& layout) {
     const auto& modal = model.CurrentModal();
     if (!modal.has_value()) return;
-    Quad(output, frame.Window, WithAlpha(palette.Backdrop, 1.2F), kLayerModalBackdrop);
+    if (!model.CardOnly()) Quad(output, area, WithAlpha(palette.Backdrop, 1.2F), kLayerModalBackdrop);
     const float padding = 24.0F * kDp;
-    const float width = std::min(560.0F * kDp, frame.Window.width - 2.0F * padding);
+    const float width = std::min(std::max(240.0F, modal->WidthDp) * kDp, area.width - 2.0F * padding);
     const float titleSize = 24.0F * kDp;
     const float lineSize = 17.0F * kDp;
     const auto lineMetrics = MeasureFont(FontStyle::Body, lineSize);
@@ -350,8 +368,8 @@ void DrawModal(const Model& model, const Frame& frame, const Palette& palette, s
     const float buttonHeight = 44.0F * kDp;
     const float height = padding + 36.0F * kDp + 8.0F * kDp + static_cast<float>(lines.size()) * lineHeight + 16.0F * kDp +
                          buttonHeight + padding;
-    const UiRect box{frame.Window.x + (frame.Window.width - width) * 0.5F,
-                     frame.Window.y + (frame.Window.height - height) * 0.5F, width, height};
+    const UiRect box{area.x + (area.width - width) * 0.5F, area.y + std::max(0.0F, (area.height - height) * 0.5F),
+                     width, height};
     Quad(output, box, WithAlpha(palette.Surface, 1.0F), kLayerModalBox);
     Outline(output, box, 2.0F * kDp, palette.Border, kLayerModalOutline);
     float y = box.y + padding;
@@ -374,6 +392,11 @@ void DrawModal(const Model& model, const Frame& frame, const Palette& palette, s
                    CenteredBaseline(FontStyle::Heading, style.Size, rect.y, rect.height), label);
         layout.Regions.push_back({ToRect(rect), kind, 0});
     };
+    if (modal->SingleButton()) {
+        // A notice: its one button, centred.
+        button(box.x + (width - buttonWidth) * 0.5F, modal->ConfirmLabel, true, HitKind::ModalConfirm);
+        return;
+    }
     button(box.x + padding, modal->ConfirmLabel, model.ModalConfirmHighlighted(), HitKind::ModalConfirm);
     button(box.x + padding + buttonWidth + 16.0F * kDp, modal->CancelLabel, !model.ModalConfirmHighlighted(),
            HitKind::ModalCancel);
@@ -387,6 +410,13 @@ std::size_t AppendMenuPresentation(Model& model, float canvasWidth, float canvas
     if (!model.IsOpen()) return 0;
     const Frame frame = ComputeFrame(canvasWidth, canvasHeight);
     Quad(output, {0.0F, 0.0F, canvasWidth, canvasHeight}, palette.Backdrop, kLayerBackdrop);
+    if (model.CardOnly()) {
+        // The card alone over the dimmed game, centred on the canvas.
+        Layout cardLayout;
+        DrawModal(model, {0.0F, 0.0F, canvasWidth, canvasHeight}, palette, output, cardLayout);
+        model.SetLayout(std::move(cardLayout));
+        return output.size() - before;
+    }
     Quad(output, frame.Window, palette.Surface, kLayerWindow);
     Outline(output, frame.Window, 2.0F * kDp, palette.Border, kLayerBorder);
     Layout layout;
@@ -396,7 +426,7 @@ std::size_t AppendMenuPresentation(Model& model, float canvasWidth, float canvas
     DrawStatusAndHints(model, frame, palette, hints, output, layout);
     // The modal's buttons go first: they are the only targets while it is up.
     Layout modalLayout;
-    DrawModal(model, frame, palette, output, modalLayout);
+    DrawModal(model, frame.Window, palette, output, modalLayout);
     modalLayout.Regions.insert(modalLayout.Regions.end(), layout.Regions.begin(), layout.Regions.end());
     model.SetLayout(std::move(modalLayout));
     return output.size() - before;

@@ -31,6 +31,9 @@ struct Palette {
     oot3d::ui::UiColor Backdrop{0.0F, 0.0F, 0.0F, 0.45F};
 };
 
+// The footer's persistent action that closes the menu and resumes the game.
+inline constexpr const char* kResumeLabel = "Resume";
+
 struct Hints {
     std::string Confirm = "A";
     std::string Back = "B";
