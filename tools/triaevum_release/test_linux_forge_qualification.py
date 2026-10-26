@@ -44,3 +44,31 @@ class LinuxForgeQualificationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "bootstrap"):
                 stage(root, root, root, root / LINUX.title_module, root / "new", "1" * 40)
             self.assertFalse((root / "new").exists())
+
+    def test_candidate_stages_the_rust_forge_without_python(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+             patch("stage_linux_forge_candidate.host_platform", return_value=LINUX), \
+             patch("stage_linux_forge_candidate.create_catalog") as catalog:
+            root = Path(temporary)
+            reference, bundle, build = root / "reference", root / "rust-forge", root / "build"
+            for name in ("recipes/oot3d.json", "resources/gamecontrollerdb.txt", "source/titles/t.zip",
+                         "LICENSES/SDL2-zlib.txt", "LICENSE", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md"):
+                (reference / name).parent.mkdir(parents=True, exist_ok=True)
+                (reference / name).write_text("fixture")
+            for path in (build / LINUX.runtime, build / LINUX.title_module, build / "oot3d_game_module.so",
+                         root / "title.so", bundle / LINUX.forge, bundle / "forge/triaevum-forge"):
+                elf(path)
+            with (root / "title.so").open("ab") as title:
+                title.write(b"title code")
+            (bundle / "forge/rust-forge.json").write_text("{}")
+            output = stage(reference, bundle, build, root / "title.so", root / "candidate", "1" * 40)
+            for name in (LINUX.forge, "forge/triaevum-forge", "forge/rust-forge.json",
+                         "LICENSES/Rust-Forge-crates.md", "LICENSES/SDL2-zlib.txt"):
+                self.assertTrue((output / name).is_file(), name)
+            self.assertFalse((output / "_internal").exists())
+            self.assertIn('"forge_profile": "rust"', (output / "linux-candidate.json").read_text())
+            catalog.assert_called_once()
+            (bundle / "forge/rust-forge.json").unlink()
+            with self.assertRaisesRegex(ValueError, "neither a Rust Forge build nor a PyInstaller bundle"):
+                stage(reference, bundle, build, root / "title.so", root / "second", "1" * 40)
+            self.assertFalse((root / "second").exists())

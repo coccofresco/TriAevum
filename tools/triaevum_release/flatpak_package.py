@@ -18,6 +18,26 @@ except ImportError:
 
 
 ASSETS = Path(__file__).resolve().parent / "flatpak"
+EXECUTABLE_ROLES = ("runtime_executable", "forge_executable", "forge_command_line", "forge_tool",
+                    "shader_preparation_tool")
+# The PyInstaller Forge's Tk window reaches the file chooser portal through
+# this helper; the Rust Forge's window talks to the portal itself.
+FILE_CHOOSER = "file_chooser.c"
+
+
+def build_manifest(forge_profile: str) -> str:
+    template = (ASSETS / f"{FLATPAK_ID}.json").read_text(encoding="utf-8")
+    if forge_profile != "rust":
+        return template
+    manifest = json.loads(template)
+    module = manifest["modules"][0]
+    commands = [command for command in module["build-commands"] if "file_chooser" not in command
+                and "file-chooser" not in command]
+    module["build-commands"] = [
+        command + " /app/lib/triaevum/forge/triaevum-forge" if command.startswith("chmod 755 ") else command
+        for command in commands]
+    module["sources"] = [source for source in module["sources"] if source.get("path") != FILE_CHOOSER]
+    return json.dumps(manifest, indent=2) + "\n"
 
 
 def stage_flatpak(package: Path, output: Path, *, policy_path: Path = DEFAULT_POLICY) -> Path:
@@ -38,17 +58,20 @@ def stage_flatpak(package: Path, output: Path, *, policy_path: Path = DEFAULT_PO
             destination = output / "package" / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(package / relative, destination)
-            destination.chmod(0o755 if entry["role"] in (
-                "runtime_executable", "forge_executable", "forge_tool", "shader_preparation_tool") else 0o644)
+            destination.chmod(0o755 if entry["role"] in EXECUTABLE_ROLES else 0o644)
         # Recheck after copying; never silently publish changed or extra inputs.
         copied_audit = audit_release(output / "package", policy_path=policy_path)
         if not copied_audit.ok:
             raise ValueError("Copied Flatpak inventory failed audit: " + "; ".join(copied_audit.errors))
-        for name in (f"{FLATPAK_ID}.json", f"{FLATPAK_ID}.desktop", "file_chooser.c", "triaevum"):
+        forge_profile = copied_audit.summary["forge_profile"]
+        (output / f"{FLATPAK_ID}.json").write_text(build_manifest(forge_profile), encoding="utf-8", newline="\n")
+        for name in (f"{FLATPAK_ID}.desktop", "triaevum",
+                     *((FILE_CHOOSER,) if forge_profile == "python_pyinstaller" else ())):
             shutil.copyfile(ASSETS / name, output / name)
         atomic_write_json(output / "flatpak-staging.json", {
             "format": "triaevum_flatpak_staging_v1",
             "package_qualification": manifest["release"].get("qualification", "unspecified"),
+            "forge_profile": forge_profile,
             "flatpak_qualified": False,
             "source_manifest": "package/release-manifest.json",
         })

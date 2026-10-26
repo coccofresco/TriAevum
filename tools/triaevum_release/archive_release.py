@@ -47,7 +47,8 @@ def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFA
         directories.update(p.as_posix() for p in (parent, *parent.parents) if p != Path("."))
 
     def mode(relative: str) -> int:
-        return 0o755 if entries[relative]["role"] in ("runtime_executable", "forge_executable") else 0o644
+        return 0o755 if entries[relative]["role"] in ("runtime_executable", "forge_executable",
+                                                      "forge_command_line") else 0o644
 
     output.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation protects existing releases. Failed writes never leave an archive.

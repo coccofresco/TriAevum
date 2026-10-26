@@ -8,10 +8,17 @@ try:
     from .common import atomic_write_json, sha256_file
     from .linux_precompiled_catalog import create_catalog, require_elf
     from .release_platform import LINUX, host_platform
+    from .rust_forge_build import BINARIES, RECEIPT
+    from .rust_forge_notices import NOTICES, NOTICES_RELATIVE
 except ImportError:
     from common import atomic_write_json, sha256_file
     from linux_precompiled_catalog import create_catalog, require_elf
     from release_platform import LINUX, host_platform
+    from rust_forge_build import BINARIES, RECEIPT
+    from rust_forge_notices import NOTICES, NOTICES_RELATIVE
+
+# The Rust Forge build output (rust_forge_build.py) besides TriAevumForge.
+RUST_FILES = (BINARIES[LINUX.target]["triaevum-forge"][0], RECEIPT)
 
 
 def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
@@ -21,18 +28,24 @@ def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
         raise ValueError("Stage and qualify Linux candidates on Linux")
     if output.exists():
         raise ValueError("Candidate output must not exist; preserve existing installations")
+    # A Rust Forge build, or (for older candidates) a PyInstaller onedir bundle.
+    rust = (forge_bundle / RECEIPT).is_file()
     for path, shared in ((runtime_build / LINUX.runtime, False),
                          (runtime_build / LINUX.title_module, True),
                          (runtime_build / "oot3d_game_module.so", True), (title, True),
-                         (forge_bundle / LINUX.forge, False)):
+                         (forge_bundle / LINUX.forge, False),
+                         *(((forge_bundle / RUST_FILES[0], False),) if rust else ())):
         require_elf(path, shared=shared)
     if sha256_file(title) == sha256_file(runtime_build / LINUX.title_module):
         raise ValueError("The game title cannot be the empty runtime bootstrap library")
+    if not rust and not (forge_bundle / "_internal").is_dir():
+        raise ValueError("Forge bundle is neither a Rust Forge build nor a PyInstaller bundle")
     output.mkdir(parents=True)
     # Preserve PyInstaller's internal symlinks; do not import data/ or any
     # Windows executable, title binary or release manifest from the reference.
     shutil.copy2(forge_bundle / LINUX.forge, output / LINUX.forge)
-    shutil.copytree(forge_bundle / "_internal", output / "_internal", symlinks=True)
+    if not rust:
+        shutil.copytree(forge_bundle / "_internal", output / "_internal", symlinks=True)
     for name in ("recipes", "resources", "source/titles", "LICENSES"):
         shutil.copytree(reference / name, output / name)
     for name in ("LICENSE", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md"):
@@ -40,6 +53,10 @@ def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
     for name in (LINUX.runtime, LINUX.title_module):
         shutil.copy2(runtime_build / name, output / name)
     (output / "forge").mkdir()
+    if rust:
+        for relative in RUST_FILES:
+            shutil.copy2(forge_bundle / relative, output / relative)
+        shutil.copy2(NOTICES, output / NOTICES_RELATIVE)
     shutil.copy2(runtime_build / "oot3d_game_module.so", output / LINUX.native_module)
     plugin = output / "titles/shared-execution" / LINUX.title_module
     plugin.parent.mkdir(parents=True)
@@ -57,6 +74,7 @@ def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
         "runtime_sha256": sha256_file(output / LINUX.runtime),
         "bootstrap_sha256": sha256_file(output / LINUX.title_module),
         "forge_sha256": sha256_file(output / LINUX.forge),
+        "forge_profile": "rust" if rust else "python_pyinstaller",
         "title_sha256": sha256_file(plugin),
         "system_libraries_bundled": False,
     })

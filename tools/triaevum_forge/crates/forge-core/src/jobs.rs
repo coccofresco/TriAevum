@@ -266,7 +266,7 @@ fn optional_path(request: &Map<String, Value>, key: &str) -> Option<PathBuf> {
 fn package_root(request: &Map<String, Value>) -> Result<PathBuf> {
     match optional_path(request, "package_root") {
         Some(root) => Ok(root),
-        None => executable_directory(),
+        None => crate::layout::executable_package_root(),
     }
 }
 
@@ -446,12 +446,6 @@ impl StageEvents<'_> {
             self.sink.stage(stage, message);
         }
     }
-}
-
-fn executable_directory() -> Result<PathBuf> {
-    let executable =
-        std::env::current_exe().map_err(|error| ForgeError::io("Cannot locate the Forge executable", error))?;
-    Ok(executable.parent().map(Path::to_path_buf).unwrap_or_default())
 }
 
 /// The GUI's "download the HD textures first" (`_download_hd_for_install`):

@@ -14,9 +14,11 @@ from typing import Any, Sequence
 try:
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .source_contracts import source_contract_errors
+    from .platform_policy import forge_profile_name, source_policy
 except ImportError:
     from common import load_json_object, normalize_relative_path, sha256_file
     from source_contracts import source_contract_errors
+    from platform_policy import forge_profile_name, source_policy
 
 
 ROOT = Path(__file__).resolve().parent
@@ -151,10 +153,15 @@ def create_source_archive(
     *,
     source_commit: str,
     policy_path: Path = DEFAULT_POLICY,
+    forge_profile: str | None = None,
 ) -> dict[str, Any]:
     policy = load_json_object(policy_path)
     if policy.get("format") != "triaevum_public_release_policy_v1":
         raise ValueError("unsupported release policy format")
+    # The package's Forge build adds its own source requirements (the Rust
+    # workspace, lockfile, toolchain pin and crate notices).
+    if forge_profile is not None or "forge_profiles" in policy:
+        policy = source_policy(policy, forge_profile or forge_profile_name(policy))
     files, commits = collect_source_files(repository, source_commit)
     included = sorted(
         (item for item in files if source_path_allowed(item.archive_path, policy)),
@@ -208,6 +215,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
+    parser.add_argument("--forge-profile", help="Forge profile of the package (release_policy.json)")
     args = parser.parse_args(argv)
     try:
         result = create_source_archive(
@@ -215,6 +223,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.output,
             source_commit=args.source_commit,
             policy_path=args.policy,
+            forge_profile=args.forge_profile,
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(json.dumps({"status": "error", "error": str(exc)}, indent=2))

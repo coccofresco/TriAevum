@@ -1,7 +1,8 @@
 """AppImage native-runtime dependency/ABI gate; never execute payload ELFs.
 
-Forge's frozen Python closure remains owned by its bundle qualification. Audit
-the game, modules, shader helpers and every lib/ ELF against payload providers.
+A frozen Python Forge's closure remains owned by its bundle qualification. Audit
+the game, modules, shader helpers, every lib/ ELF and the Rust Forge binaries
+against payload providers.
 """
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -121,13 +122,16 @@ def dependency_errors(objects: dict[str, Elf], *, max_glibc=(2, 40)) -> list[str
                         errors.append(f"{relative}: requires {version}, AppImage ceiling is GLIBC_{'.'.join(map(str, max_glibc))}")
     return errors
 
-def audit_native_elfs(package: Path) -> None:
+def audit_native_elfs(package: Path, *, frozen_forge: bool) -> None:
+    """`frozen_forge`: TriAevumForge is a PyInstaller bootloader whose closure
+    lives in _internal/ (the PyInstaller Forge profile), not a native binary."""
     objects = {}
     for path in sorted(package.rglob("*")):
         if not path.is_file():
             continue
         relative = path.relative_to(package).as_posix()
-        if relative.startswith(("_internal/", "source/", "resources/")) or relative == "TriAevumForge":
+        if relative.startswith(("_internal/", "source/", "resources/")) or (
+                frozen_forge and relative == "TriAevumForge"):
             continue
         with path.open("rb") as stream:
             magic = stream.read(4)

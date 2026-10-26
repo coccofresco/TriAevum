@@ -17,7 +17,7 @@ try:
     from .product_contract import validate_product_info
     from .precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
     from .release_platform import WINDOWS, for_target, catalog_platform
-    from .platform_policy import resolve_policy
+    from .platform_policy import forge_profile_name, resolve_policy
     from .common import (RELEASE_MANIFEST_PATHS, load_json_object, normalize_relative_path,
                          release_manifest_path, sha256_file)
     from .input_adapters import validate_adapter
@@ -30,7 +30,7 @@ except ImportError:
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
     from release_platform import WINDOWS, for_target, catalog_platform
-    from platform_policy import resolve_policy
+    from platform_policy import forge_profile_name, resolve_policy
     from common import (RELEASE_MANIFEST_PATHS, load_json_object, normalize_relative_path,
                         release_manifest_path, sha256_file)
     from input_adapters import validate_adapter
@@ -45,6 +45,12 @@ ROOT = Path(__file__).resolve().parent
 DEFAULT_POLICY = ROOT / "release_policy.json"
 DEFAULT_MANIFEST_NAME = "release-manifest.json"
 _ABSOLUTE_HOST_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|/(?:home|Users|i|c|mnt)/)")
+# The Rust Forge profile: the publisher's build receipt binds the packaged
+# binaries to the corresponding source's lockfile, toolchain and notices.
+RUST_FORGE_RECEIPT_FORMAT = "triaevum_rust_forge_build_v1"
+RUST_FORGE_SOURCE_LOCK = "tools/triaevum_forge/Cargo.lock"
+RUST_FORGE_SOURCE_TOOLCHAIN = "tools/triaevum_forge/rust-toolchain.toml"
+RUST_FORGE_NOTICES = "LICENSES/Rust-Forge-crates.md"
 
 
 @dataclass(frozen=True)
@@ -108,6 +114,87 @@ def _binary_marker(path: Path, markers: Sequence[bytes]) -> bytes | None:
                     return marker
             tail = window[-overlap:] if overlap > 0 else b""
     return None
+
+
+def _binary_pattern(path: Path, patterns: Sequence[re.Pattern[bytes]]) -> str | None:
+    """The first text matching one of `patterns`, read in overlapping chunks."""
+    if not patterns:
+        return None
+    overlap = 512
+    tail = b""
+    with path.open("rb") as stream:
+        while chunk := stream.read(8 * 1024 * 1024):
+            window = tail + chunk
+            for pattern in patterns:
+                match = pattern.search(window)
+                if match is not None:
+                    return match.group(0).decode("latin-1")
+            tail = window[-overlap:]
+    return None
+
+
+def build_machine_path(path: Path, policy: dict[str, Any]) -> str | None:
+    """A build-machine path embedded in a Rust Forge binary (the rust profile's
+    markers), for publisher steps outside a desktop package audit."""
+    markers = policy.get("forge_profiles", {}).get("rust", {}).get("binary_host_path_markers", [])
+    return _binary_pattern(path, [re.compile(str(marker).encode("ascii")) for marker in markers])
+
+
+def _rust_forge_errors(root: Path, declared: dict[str, dict[str, Any]], release: dict[str, Any],
+                       target: str, binary_roles: set[str]) -> Iterable[str]:
+    receipts = [path for path, item in declared.items() if item.get("role") == "forge_build_receipt"]
+    if len(receipts) != 1:
+        yield "Rust Forge package needs exactly one forge_build_receipt"
+        return
+    try:
+        receipt = load_json_object(root / receipts[0])
+    except (OSError, ValueError) as exc:
+        yield f"cannot read the Rust Forge build receipt: {exc}"
+        return
+    if receipt.get("format") != RUST_FORGE_RECEIPT_FORMAT:
+        yield "unsupported Rust Forge build receipt format"
+    if receipt.get("target") != target:
+        yield "Rust Forge build receipt target differs from the release target"
+    if release.get("source_commit") and receipt.get("source_commit") != release.get("source_commit"):
+        yield "Rust Forge build receipt source commit differs from the release"
+    expected = {path: item for path, item in declared.items() if item.get("role") in binary_roles}
+    binaries = receipt.get("binaries")
+    recorded = {}
+    for entry in binaries if isinstance(binaries, list) else []:
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+            recorded[entry["path"]] = entry
+    if not isinstance(binaries, list) or len(recorded) != len(binaries):
+        yield "Rust Forge build receipt binaries are malformed"
+    if set(recorded) != set(expected):
+        yield (f"Rust Forge build receipt names {sorted(recorded)}, "
+               f"the package declares Forge binaries {sorted(expected)}")
+    for path in sorted(set(recorded) & set(expected)):
+        entry, item = recorded[path], expected[path]
+        if (entry.get("role"), entry.get("bytes"), str(entry.get("sha256", "")).lower()) != (
+                item.get("role"), item.get("bytes"), str(item.get("sha256", "")).lower()):
+            yield f"Rust Forge build receipt does not match the packaged binary: {path}"
+    notices = declared.get(RUST_FORGE_NOTICES, {})
+    if receipt.get("notices_sha256") != notices.get("sha256"):
+        yield "Rust Forge build receipt does not bind the packaged crate notices"
+    sources = [path for path, item in declared.items() if item.get("role") == "corresponding_source"]
+    if len(sources) != 1:
+        yield "Rust Forge package needs exactly one corresponding source archive"
+        return
+    try:
+        with zipfile.ZipFile(root / sources[0]) as source:
+            lock = source.read(RUST_FORGE_SOURCE_LOCK)
+            toolchain = source.read(RUST_FORGE_SOURCE_TOOLCHAIN).decode("utf-8")
+            source_notices = source.read(RUST_FORGE_NOTICES)
+    except (OSError, KeyError, UnicodeError, zipfile.BadZipFile) as exc:
+        yield f"cannot verify the Rust Forge corresponding source: {exc}"
+        return
+    if receipt.get("cargo_lock_sha256") != hashlib.sha256(lock).hexdigest():
+        yield "Rust Forge was not built from the corresponding source's Cargo.lock"
+    channel = re.search(r'^\s*channel\s*=\s*"([^"]+)"', toolchain, re.MULTILINE)
+    if channel is None or receipt.get("toolchain") != channel[1]:
+        yield "Rust Forge toolchain differs from the corresponding source's rust-toolchain.toml"
+    if hashlib.sha256(source_notices).hexdigest() != notices.get("sha256"):
+        yield "packaged Rust crate notices differ from the corresponding source"
 
 
 def _path_policy_errors(
@@ -227,7 +314,7 @@ def audit_release(
         release = {}
     try:
         platform = for_target(release.get("target", WINDOWS.target))
-        policy = resolve_policy(policy, platform.target)
+        policy = resolve_policy(policy, platform.target, forge_profile_name(policy, release))
     except ValueError as exc:
         return ReleaseAuditResult({}, (str(exc),))
     precompiled = release.get("distribution_model") == MODEL
@@ -325,6 +412,17 @@ def audit_release(
     # older Vulkan loader without ending the process: its provider is then
     # simply not offered. Everything loaded at startup stays checked.
     vulkan_exempt_roles = {str(role) for role in policy.get("vulkan_import_exempt_roles", [])}
+    # The Forge profile's own exclusions (no frozen Python payload beside a
+    # Rust Forge) and its binaries' scan for build-machine paths.
+    forbidden_package_patterns = [str(pattern) for pattern in policy.get("forbidden_package_patterns", [])]
+    for role in sorted(roles_seen & {str(role) for role in policy.get("forbidden_roles", [])}):
+        reject(f"role {role} is not allowed in a package with the {policy['forge_profile']} Forge profile")
+    rust_binary_roles = {str(role) for role in policy.get("rust_forge_binary_roles", [])}
+    try:
+        host_path_markers = [re.compile(str(marker).encode("ascii"))
+                             for marker in policy.get("binary_host_path_markers", [])]
+    except (re.error, UnicodeError) as exc:
+        return ReleaseAuditResult({}, (f"release policy binary_host_path_markers is malformed: {exc}",))
 
     manifest_relative = manifest_path.relative_to(root).as_posix()
     contract = release.get("runtime_contract")
@@ -362,6 +460,9 @@ def audit_release(
         reject(f"undeclared file in public package: {relative}")
     for relative in missing:
         reject(f"declared file is missing: {relative}")
+    for relative in sorted(set(actual) | set(declared)):
+        if _matches_any(relative, forbidden_package_patterns):
+            reject(f"{relative} is forbidden in a package with the {policy['forge_profile']} Forge profile")
 
     true_fields = {str(item) for item in policy.get("forbidden_json_true_fields", [])}
     false_fields = {str(item) for item in policy.get("forbidden_json_false_fields", [])}
@@ -397,6 +498,11 @@ def audit_release(
             if marker is not None:
                 reject(f"{relative} contains proprietary SDK code ({marker.decode('ascii')}); "
                        "it belongs only in its separately licensed module")
+        if role in rust_binary_roles:
+            leaked = _binary_pattern(path, host_path_markers)
+            if leaked is not None:
+                reject(f"{relative} embeds a build-machine path ({leaked[:80]}); "
+                       "build it with the publisher's path remapping")
         package_forbidden_extensions = {
             extension
             for extension in forbidden_extensions
@@ -447,6 +553,9 @@ def audit_release(
     for role in policy.get("required_roles", []):
         if str(role) not in roles_seen:
             reject(f"required release role is missing: {role}")
+    if rust_binary_roles:
+        for error in _rust_forge_errors(root, declared, release, platform.target, rust_binary_roles):
+            reject(error)
 
     title_roles = {"precompiled_catalog", "precompiled_title", "translated_title_source", "title_build_source"}
     adapter_paths = set()
@@ -536,6 +645,7 @@ def audit_release(
     summary = {
         "package": str(root),
         "target": platform.target,
+        "forge_profile": policy["forge_profile"],
         "manifest": manifest_relative,
         "declared_files": len(declared),
         "verified_files": verified_files,

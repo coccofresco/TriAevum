@@ -30,8 +30,6 @@
     "LICENSES/zstd-BSD-3-Clause.txt",
     "LICENSES/Aurora-MIT.txt",
     "LICENSES/shaderc-Apache-2.0.txt",
-    "LICENSES/Capstone-BSD.txt",
-    "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt",
     "LICENSES/LLVM-exception.txt",
     "LICENSES/iMMERSE-MXAO.md",
     "LICENSES/iMMERSE-LICENSE.txt",
@@ -65,7 +63,18 @@
         "precompiled_title": ["titles/*/triaevum_title_aot.dll"],
         "documentation": ["README.md", "docs/*", "docs/**/*"]
       },
-      "required_paths": ["runtime/TriAevum.exe", "TriAevumForge.exe", "forge/oot3d_game_module.dll", "runtime/msvcp140.dll", "runtime/vcruntime140.dll", "runtime/vcruntime140_1.dll", "docs/LICENSE_SCOPE.md", "docs/THIRD_PARTY_NOTICES.md", "docs/SOURCE_OFFER.md", "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "LICENSES/Python-3.13.txt"]
+      "required_paths": ["runtime/TriAevum.exe", "TriAevumForge.exe", "forge/oot3d_game_module.dll", "runtime/msvcp140.dll", "runtime/vcruntime140.dll", "runtime/vcruntime140_1.dll", "docs/LICENSE_SCOPE.md", "docs/THIRD_PARTY_NOTICES.md", "docs/SOURCE_OFFER.md", "LICENSES/Microsoft-Visual-Cpp-Runtime.md"],
+      "forge_profiles": {
+        "python_pyinstaller": {
+          "required_paths": ["LICENSES/Python-3.13.txt"]
+        },
+        "rust": {
+          "allowed_roles": {
+            "forge_command_line": ["forge/triaevum-forge.exe"]
+          },
+          "required_paths": ["forge/triaevum-forge.exe"]
+        }
+      }
     },
     "x86_64-unknown-linux-gnu": {
       "allowed_roles": {
@@ -75,13 +84,64 @@
         "shader_preparation_tool": ["forge/oot3d_native_pica_aot_compiler", "forge/oot3d_native_nri_pipeline_prepare"],
         "runtime_library": ["triaevum_title_aot.so", "lib/*.so", "lib/*.so.*", "lib/compat-cxx/*.so.*"],
         "separately_licensed_module": ["libtriaevum_immerse.so", "lib/libtriaevum_immerse.so", "libtriaevum_dlss.so", "lib/libtriaevum_dlss.so", "libnvidia-ngx-dlss.so.*", "lib/libnvidia-ngx-dlss.so.*"],
-        "forge_frozen_resource": ["_internal/*", "_internal/**/*"],
         "precompiled_title": ["titles/*/triaevum_title_aot.so"],
         "documentation": ["README.md", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md", "docs/*", "docs/**/*"]
       },
-      "required_paths": ["TriAevum", "TriAevumForge", "forge/oot3d_game_module.so", "triaevum_title_aot.so", "_internal/base_library.zip", "LICENSES/Python-3.13.txt", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"],
+      "required_paths": ["TriAevum", "TriAevumForge", "forge/oot3d_game_module.so", "triaevum_title_aot.so", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"],
       "forbidden_basenames": ["libc.so.6", "libpthread.so.0", "libdl.so.2", "ld-linux-x86-64.so.2", "libvulkan.so.1"],
-      "forbidden_extensions": [".dll", ".exe", ".lib"]
+      "forbidden_extensions": [".dll", ".exe", ".lib"],
+      "forge_profiles": {
+        "python_pyinstaller": {
+          "allowed_roles": {
+            "forge_frozen_resource": ["_internal/*", "_internal/**/*"]
+          },
+          "required_paths": ["_internal/base_library.zip", "LICENSES/Python-3.13.txt"]
+        },
+        "rust": {
+          "allowed_roles": {
+            "forge_command_line": ["forge/triaevum-forge"]
+          },
+          "required_paths": ["forge/triaevum-forge"]
+        }
+      }
+    }
+  },
+  "default_forge_profile": "python_pyinstaller",
+  "forge_profiles": {
+    "python_pyinstaller": {
+      "required_paths": [
+        "LICENSES/Capstone-BSD.txt",
+        "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt"
+      ]
+    },
+    "rust": {
+      "allowed_roles": {
+        "forge_build_receipt": ["forge/rust-forge.json"]
+      },
+      "required_paths": ["forge/rust-forge.json", "LICENSES/Rust-Forge-crates.md"],
+      "source_archive_required_paths": [
+        "tools/triaevum_forge/Cargo.toml",
+        "tools/triaevum_forge/Cargo.lock",
+        "tools/triaevum_forge/rust-toolchain.toml",
+        "tools/triaevum_forge/.cargo/config.toml",
+        "tools/triaevum_forge/include/triaevum_forge.h",
+        "tools/triaevum_forge/THIRD_PARTY_CRATES.json",
+        "LICENSES/Rust-Forge-crates.md"
+      ],
+      "rust_forge_binary_roles": ["forge_executable", "forge_command_line"],
+      "forbidden_roles": ["forge_tool", "forge_toolchain_setup", "forge_link_library", "forge_tool_resource",
+                          "forge_clang_header", "forge_frozen_resource"],
+      "forbidden_package_patterns": [
+        "_internal/*", "*.pyc", "*.pyd", "*.pyz", "*base_library.zip",
+        "*python3*.dll", "*libpython3*", "*tcl86t.dll", "*tk86t.dll", "*libtcl8*", "*libtk8*"
+      ],
+      "binary_host_path_markers": [
+        "[A-Za-z]:[\\\\/]Users[\\\\/]",
+        "/home/[A-Za-z0-9._-]+/",
+        "/Users/[A-Za-z0-9._-]+/",
+        "\\.cargo[\\\\/]registry[\\\\/]src",
+        "\\.rustup[\\\\/]toolchains"
+      ]
     }
   },
   "required_roles": [
@@ -95,7 +155,7 @@
   "vulkan_import_exempt_roles": ["optional_vulkan_runtime"],
   "proprietary_sdk_markers": {
     "markers": ["NVSDK_NGX_"],
-    "scanned_roles": ["runtime_executable", "runtime_library", "forge_executable", "forge_tool", "forge_runtime_module", "shader_preparation_tool", "precompiled_title"]
+    "scanned_roles": ["runtime_executable", "runtime_library", "forge_executable", "forge_command_line", "forge_tool", "forge_runtime_module", "shader_preparation_tool", "precompiled_title"]
   },
   "forbidden_basenames": [
     "AGENTS.md",

@@ -1,0 +1,172 @@
+"""Publisher build of the Rust Forge for a desktop release package.
+
+Builds TriAevumForge (window and launcher) and triaevum-forge (command line)
+from tools/triaevum_forge with the pinned toolchain and Cargo.lock, remaps
+build-machine paths out of the binaries, and writes the build receipt
+(forge/rust-forge.json) the release audit binds to the corresponding source.
+The public import path then needs no Python: the release tooling stays Python.
+
+    python tools/triaevum_release/rust_forge_build.py --target x86_64-pc-windows-msvc \
+        --source-commit <commit> --output <empty folder>
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+
+try:
+    from .audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
+    from .common import atomic_write_json, load_json_object, sha256_file
+    from .release_platform import ANDROID, LINUX, WINDOWS, for_target, host_platform
+    from . import rust_forge_notices
+except ImportError:
+    from audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
+    from common import atomic_write_json, load_json_object, sha256_file
+    from release_platform import ANDROID, LINUX, WINDOWS, for_target, host_platform
+    import rust_forge_notices
+
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+FORGE_ROOT = REPO_ROOT / "tools/triaevum_forge"
+RECEIPT = "forge/rust-forge.json"
+PACKAGES = ("forge-desktop", "forge-cli")
+# Cargo binary name -> (package path, release role), per desktop target.
+BINARIES = {
+    WINDOWS.target: {"TriAevumForge.exe": (WINDOWS.forge, "forge_executable"),
+                     "triaevum-forge.exe": ("forge/triaevum-forge.exe", "forge_command_line")},
+    LINUX.target: {"TriAevumForge": (LINUX.forge, "forge_executable"),
+                   "triaevum-forge": ("forge/triaevum-forge", "forge_command_line")},
+}
+
+
+def toolchain_channel(root: Path = FORGE_ROOT) -> str:
+    return tomllib.loads((root / "rust-toolchain.toml").read_text(encoding="utf-8"))["toolchain"]["channel"]
+
+
+def _home(variable: str, default: str) -> Path:
+    return Path(os.environ.get(variable) or Path.home() / default).resolve()
+
+
+def rustflags(target: str) -> list[str]:
+    """Flags of a public build (CARGO_ENCODED_RUSTFLAGS, which replaces the
+    workspace config's target flags, so those come first): no build-machine
+    paths in panic locations or debug records, and on Windows a static CRT
+    (TriAevumForge.exe sits in the package root, away from the runtime's Visual
+    C++ DLLs). Android's libtriaevum_forge.so takes the same remapping."""
+    config = tomllib.loads((FORGE_ROOT / ".cargo/config.toml").read_text(encoding="utf-8"))
+    flags = [str(flag) for flag in config.get("target", {}).get(target, {}).get("rustflags", [])]
+    remaps = [(_home("RUSTUP_HOME", ".rustup"), "/rustup"), (_home("CARGO_HOME", ".cargo"), "/cargo"),
+              (REPO_ROOT, "/triaevum")]
+    flags += [f"--remap-path-prefix={source}={replacement}" for source, replacement in remaps]
+    if target == WINDOWS.target:
+        flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/PDBALTPATH:%_PDB%"]
+    return flags
+
+
+def _rustc_release(cargo: str) -> str:
+    rustc = Path(cargo).with_name("rustc" + Path(cargo).suffix) if Path(cargo).parent != Path() else "rustc"
+    version = subprocess.run([str(rustc), "-vV"], cwd=FORGE_ROOT, capture_output=True, text=True, check=True).stdout
+    match = re.search(r"^release: (\S+)$", version, re.MULTILINE)
+    if match is None:
+        raise ValueError("rustc -vV did not report its release")
+    return match[1]
+
+
+def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo",
+          target_dir: Path | None = None, policy_path: Path = DEFAULT_POLICY) -> dict:
+    platform = for_target(target)
+    if target not in BINARIES:
+        raise ValueError(f"No desktop Rust Forge build for {target}")
+    if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
+        raise ValueError("Source commit must be a full Git commit ID")
+    errors = rust_forge_notices.check_checked_in()
+    if errors:
+        raise ValueError("Rust crate notices are stale: " + "; ".join(errors))
+    channel = toolchain_channel()
+    if _rustc_release(cargo) != channel:
+        raise ValueError(f"Build with the pinned Rust {channel} (rustup honors rust-toolchain.toml)")
+    output = output.resolve()
+    if output.exists() and any(output.iterdir()):
+        raise ValueError(f"Rust Forge output must be a new or empty folder: {output}")
+    target_dir = (target_dir or FORGE_ROOT / "target").resolve()
+    environment = {**os.environ, "CARGO_TARGET_DIR": str(target_dir),
+                   "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target))}
+    environment.pop("RUSTFLAGS", None)
+    command = [cargo, "build", "--release", "--locked", "--target", target,
+               *[argument for package in PACKAGES for argument in ("-p", package)]]
+    subprocess.run(command, cwd=FORGE_ROOT, env=environment, check=True)
+
+    policy = load_json_object(policy_path)
+    built = target_dir / target / "release"
+    binaries = []
+    output.mkdir(parents=True, exist_ok=True)
+    for name, (relative, role) in BINARIES[target].items():
+        destination = output / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(built / name, destination)
+        destination.chmod(0o755)
+        leaked = build_machine_path(destination, policy)
+        if leaked is not None:
+            raise ValueError(f"{name} embeds a build-machine path ({leaked[:80]})")
+        binaries.append({"path": relative, "role": role, "bytes": destination.stat().st_size,
+                         "sha256": sha256_file(destination)})
+    if host_platform() == platform:
+        command_line = next(item["path"] for item in binaries if item["role"] == "forge_command_line")
+        completed = subprocess.run([str(output / command_line), "capabilities"],
+                                   capture_output=True, text=True, check=True)
+        if not isinstance(json.loads(completed.stdout), dict):
+            raise RuntimeError("triaevum-forge capabilities did not print a JSON object")
+    receipt = {
+        "format": RUST_FORGE_RECEIPT_FORMAT,
+        "target": target,
+        "source_commit": source_commit,
+        "toolchain": channel,
+        "packages": list(PACKAGES),
+        "static_crt": target == WINDOWS.target,
+        "cargo_lock_sha256": sha256_file(FORGE_ROOT / "Cargo.lock"),
+        "notices_sha256": sha256_file(rust_forge_notices.NOTICES),
+        "binaries": binaries,
+    }
+    atomic_write_json(output / RECEIPT, receipt)
+    files = [{"source": str(output / item["path"]), "path": item["path"], "role": item["role"]} for item in binaries]
+    files += [{"source": str(output / RECEIPT), "path": RECEIPT, "role": "forge_build_receipt"},
+              {"source": str(rust_forge_notices.NOTICES), "path": rust_forge_notices.NOTICES_RELATIVE,
+               "role": "license"}]
+    return {"receipt": receipt, "files": files}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--target", required=True, choices=sorted([*BINARIES, ANDROID.target]))
+    parser.add_argument("--source-commit")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--cargo", default="cargo")
+    parser.add_argument("--target-dir", type=Path, help="Cargo target folder (default tools/triaevum_forge/target)")
+    parser.add_argument("--print-rustflags", action="store_true",
+                        help="print CARGO_ENCODED_RUSTFLAGS for the target (Android's forge-android build) and exit")
+    args = parser.parse_args()
+    if args.print_rustflags:
+        sys.stdout.write("\x1f".join(rustflags(args.target)))
+        return 0
+    if args.target == ANDROID.target or args.source_commit is None or args.output is None:
+        parser.error("a desktop build needs a desktop --target, --source-commit and --output")
+    try:
+        result = build(args.output, target=args.target, source_commit=args.source_commit,
+                       cargo=args.cargo, target_dir=args.target_dir)
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
+        print(f"Rust Forge build failed: {exc}", file=sys.stderr)
+        return 1
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

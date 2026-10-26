@@ -18,11 +18,13 @@ import struct
 import zipfile
 
 try:
+    from .audit_release import DEFAULT_POLICY, build_machine_path
     from .common import atomic_write_json, load_json_object, normalize_relative_path, sha256_file
     from .precompiled_titles import load_catalog, checked_file, CATALOG
     from .precompiled_title_layout import artifact
     from .release_platform import ANDROID
 except ImportError:
+    from audit_release import DEFAULT_POLICY, build_machine_path
     from common import atomic_write_json, load_json_object, normalize_relative_path, sha256_file
     from precompiled_titles import load_catalog, checked_file, CATALOG
     from precompiled_title_layout import artifact
@@ -49,7 +51,7 @@ EXCLUDED_ROLES = frozenset({
     "optional_vulkan_runtime", "precompiled_title", "precompiled_catalog",
     "corresponding_source", "translated_title_source", "title_build_source", "configuration",
     "forge_tool", "forge_tool_resource", "forge_toolchain_setup", "forge_link_library", "forge_clang_header",
-    "forge_frozen_resource",
+    "forge_frozen_resource", "forge_command_line", "forge_build_receipt",
 })
 
 
@@ -121,8 +123,15 @@ def create_package(reference_root: Path, native_stage: Path, output: Path, *, so
     libraries = native_stage / "arm64-v8a"
     runtime = libraries / Path(ANDROID.runtime).name
     plugin = libraries / ANDROID.title_module
-    for path in (runtime, plugin):
+    # The Rust Forge library the installer activity loads (crates/forge-android).
+    forge = libraries / Path(ANDROID.forge).name
+    for path in (runtime, plugin, forge):
         require_arm64_library(path)
+    # The Forge library ships in the APK: no home or registry paths of the build machine.
+    leaked = build_machine_path(forge, load_json_object(DEFAULT_POLICY))
+    if leaked is not None:
+        raise ValueError(f"{forge.name} embeds a build-machine path ({leaked[:80]}); build it with "
+                         "rust_forge_build.rustflags (CARGO_ENCODED_RUSTFLAGS) path remapping")
     reference = load_catalog(reference_root)
     data = _reference_data(reference_root)
 
@@ -179,7 +188,7 @@ def create_package(reference_root: Path, native_stage: Path, output: Path, *, so
         "target": ANDROID.target,
         "source_commit": source_commit,
         # The APK must carry these exact libraries (Gradle keeps them unstripped).
-        "libraries": [runtime_record, result["titles"][0]["plugin"]],
+        "libraries": [runtime_record, result["titles"][0]["plugin"], artifact(forge, ANDROID.forge)],
         "files": [record for record, _ in (data[path] for path in sorted(data))],
         "corresponding_source": sorted(sources),
     }

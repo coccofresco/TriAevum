@@ -105,7 +105,8 @@ fn package_root(explicit: Option<PathBuf>) -> Result<PathBuf, String> {
         return Ok(root);
     }
     let executable = std::env::current_exe().map_err(|error| format!("Cannot locate the Forge executable: {error}"))?;
-    Ok(executable.parent().map(PathBuf::from).unwrap_or_default())
+    // Packages ship this tool in forge/: its package is the folder above.
+    Ok(forge_core::layout::package_root_of(&executable))
 }
 
 fn install(args: InstallArgs) -> ExitCode {

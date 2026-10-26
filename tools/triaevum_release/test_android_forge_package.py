@@ -80,6 +80,7 @@ class Fixture:
         self.write_manifest()
         elf(self.stage / "arm64-v8a/libTriAevum.so", payload=b"runtime")
         elf(self.stage / "arm64-v8a/libtriaevum_title_aot.so", payload=b"title")
+        elf(self.stage / "arm64-v8a/libtriaevum_forge.so", payload=b"forge")
 
     def write_manifest(self):
         atomic_write_json(self.reference / "release-manifest.json",
@@ -94,8 +95,10 @@ class AndroidForgePackageTests(unittest.TestCase):
         import android_forge_package
         policy = json.loads((Path(__file__).parent / "release_policy.json").read_text())
         roles = set(policy["allowed_roles"])
-        for platform in policy.get("platforms", {}).values():
+        for platform in [policy, *policy.get("platforms", {}).values()]:
             roles |= set(platform.get("allowed_roles", {}))
+            for profile in platform.get("forge_profiles", {}).values():
+                roles |= set(profile.get("allowed_roles", {}))
         classified = android_forge_package.DATA_ROLES | android_forge_package.EXCLUDED_ROLES
         self.assertEqual(sorted(roles - classified), [])
         self.assertEqual(android_forge_package.DATA_ROLES & android_forge_package.EXCLUDED_ROLES, set())
@@ -143,7 +146,8 @@ class AndroidForgePackageTests(unittest.TestCase):
                 "forge/shader-corpus/pipelines-0.json", "forge/shader-corpus/portable.o3ps",
                 "forge/precomputed/scene-lights.json"]))
             self.assertEqual(json.loads((package / INVENTORY).read_text()), inventory)
-            self.assertEqual(inventory["libraries"], [runtime, title["plugin"]])
+            forge = artifact(fixture.stage / "arm64-v8a/libtriaevum_forge.so", ANDROID.forge)
+            self.assertEqual(inventory["libraries"], [runtime, title["plugin"], forge])
             self.assertEqual(inventory["corresponding_source"], ["source/titles/fixture-translated.zip"])
             self.assertEqual(json.loads((fixture.reference / CATALOG).read_text()), fixture.catalog)
             with self.assertRaisesRegex(ValueError, "not empty"):
@@ -160,6 +164,20 @@ class AndroidForgePackageTests(unittest.TestCase):
             fixture.files = [item for item in fixture.files if item["role"] != "portable_shader_corpus"]
             fixture.write_manifest()
             with self.assertRaisesRegex(ValueError, "not in the reference release: forge/shader-corpus/portable.o3ps"):
+                fixture.create()
+            self.assertFalse(fixture.output.exists())
+
+    def test_rust_forge_library_is_required(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            (fixture.stage / "arm64-v8a/libtriaevum_forge.so").unlink()
+            with self.assertRaises(OSError):
+                fixture.create()
+            self.assertFalse(fixture.output.exists())
+            # A library built without path remapping carries the builder's home folder.
+            elf(fixture.stage / "arm64-v8a/libtriaevum_forge.so",
+                payload=b"panic at C:\\Users\\builder\\.cargo\\registry\\src\\index\\serde\\lib.rs")
+            with self.assertRaisesRegex(ValueError, "build-machine path"):
                 fixture.create()
             self.assertFalse(fixture.output.exists())
 

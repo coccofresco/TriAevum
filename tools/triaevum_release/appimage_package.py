@@ -16,7 +16,8 @@ from .linux_elf_audit import audit_native_elfs
 
 ASSETS = Path(__file__).resolve().parent / "appimage"
 APP_ID = "io.github.coccofresco.TriAevum"
-EXECUTABLE_ROLES = {"runtime_executable", "forge_executable", "forge_tool", "shader_preparation_tool"}
+EXECUTABLE_ROLES = {"runtime_executable", "forge_executable", "forge_command_line", "forge_tool",
+                    "shader_preparation_tool"}
 
 
 def stage_appimage(package: Path, output: Path, *, policy_path: Path = DEFAULT_POLICY) -> Path:
@@ -30,7 +31,7 @@ def stage_appimage(package: Path, output: Path, *, policy_path: Path = DEFAULT_P
     manifest = load_json_object(release_manifest_path(package))
     if manifest["release"].get("target") != LINUX.target:
         raise ValueError("AppImage requires an audited Linux x86-64 package")
-    audit_native_elfs(package)
+    audit_native_elfs(package, frozen_forge=result.summary["forge_profile"] == "python_pyinstaller")
     output.mkdir(parents=True)
     try:
         payload = output / "usr/lib/triaevum"

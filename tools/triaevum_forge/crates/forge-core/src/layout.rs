@@ -119,6 +119,27 @@ pub fn process_env(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
 
+/// The folder of a package that holds the command-line tool
+/// (`forge/triaevum-forge[.exe]`, release_policy.json `forge_command_line`).
+pub const COMMAND_LINE_FOLDER: &str = "forge";
+
+/// The package of a Forge executable: its own folder (TriAevumForge sits in the
+/// package root), or the folder above for the command-line tool in `forge/`.
+pub fn package_root_of(executable: &Path) -> PathBuf {
+    let directory = executable.parent().map(Path::to_path_buf).unwrap_or_default();
+    match (directory.file_name(), directory.parent()) {
+        (Some(name), Some(parent)) if name == COMMAND_LINE_FOLDER => parent.to_path_buf(),
+        _ => directory,
+    }
+}
+
+/// [`package_root_of`] this process's executable.
+pub fn executable_package_root() -> Result<PathBuf> {
+    let executable =
+        std::env::current_exe().map_err(|error| ForgeError::io("Cannot locate the Forge executable", error))?;
+    Ok(package_root_of(&executable))
+}
+
 /// A desktop release target (`release_platform.ReleasePlatform`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReleasePlatform {
@@ -254,6 +275,17 @@ mod tests {
 
     fn env_of(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
         move |name| pairs.iter().find(|(key, _)| *key == name).map(|(_, value)| value.to_string())
+    }
+
+    #[test]
+    fn command_line_in_forge_folder_belongs_to_the_package_above() {
+        let package = Path::new("pkg");
+        assert_eq!(package_root_of(&package.join("forge").join("triaevum-forge.exe")), package);
+        assert_eq!(package_root_of(&package.join("TriAevumForge.exe")), package);
+        assert_eq!(
+            package_root_of(&Path::new("target").join("release").join("triaevum-forge")),
+            Path::new("target/release")
+        );
     }
 
     #[test]

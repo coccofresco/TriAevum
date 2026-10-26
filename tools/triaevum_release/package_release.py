@@ -21,6 +21,7 @@ try:
     from .readiness import DEFAULT_READINESS, evaluate_readiness
     from .product_contract import query_product
     from .release_platform import WINDOWS, for_target
+    from .platform_policy import forge_profile_name
 except ImportError:
     from audit_release import DEFAULT_POLICY, audit_release
     from common import (
@@ -33,6 +34,7 @@ except ImportError:
     from readiness import DEFAULT_READINESS, evaluate_readiness
     from product_contract import query_product
     from release_platform import WINDOWS, for_target
+    from platform_policy import forge_profile_name
 
 
 def package_release(
@@ -63,6 +65,8 @@ def package_release(
     items = layout.get("files")
     if not isinstance(items, list) or not items:
         raise ValueError("release layout has no files")
+    # Which Forge build the package carries (release_policy.json forge_profiles).
+    forge_profile = forge_profile_name(load_json_object(policy_path), layout)
 
     source_root = source_root.resolve()
     output = output.resolve()
@@ -125,6 +129,7 @@ def package_release(
                 "proprietary_sdk_included": False,
                 "redistributable": True,
                 "qualification": "release" if enforce_readiness else "candidate",
+                "forge_profile": forge_profile,
                 "runtime_contract": runtime_contract,
             },
             "files": sorted(inventory, key=lambda item: item["path"]),

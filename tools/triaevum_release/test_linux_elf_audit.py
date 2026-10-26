@@ -92,11 +92,30 @@ class LinuxElfTests(unittest.TestCase):
             with patch("tools.triaevum_release.linux_elf_audit.inspect_elf",
                        side_effect=[Elf(), Elf({"libdecor-0.so.0"})]):
                 with self.assertRaisesRegex(ValueError, "libdecor"):
-                    audit_native_elfs(root)
+                    audit_native_elfs(root, frozen_forge=True)
 
     def test_native_executable_must_be_elf(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             (root / "TriAevum").write_bytes(b"not ELF")
             with self.assertRaisesRegex(ValueError, "not an ELF"):
-                audit_native_elfs(root)
+                audit_native_elfs(root, frozen_forge=True)
+
+    def test_rust_forge_binaries_are_audited_unless_frozen(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "forge").mkdir()
+            for name in ("TriAevum", "TriAevumForge", "forge/triaevum-forge"):
+                (root / name).write_bytes(b"\x7fELFfixture")
+            # Rust std links libgcc_s for unwinding: the payload must provide it.
+            missing = {"libgcc_s.so.1"}
+            with patch("tools.triaevum_release.linux_elf_audit.inspect_elf",
+                       side_effect=lambda path: Elf(set(missing) if path.name != "TriAevum" else set())) as inspect:
+                with self.assertRaisesRegex(ValueError, "TriAevumForge: missing bundled dependency libgcc_s"):
+                    audit_native_elfs(root, frozen_forge=False)
+                self.assertEqual(inspect.call_count, 3)
+            with patch("tools.triaevum_release.linux_elf_audit.inspect_elf",
+                       side_effect=lambda path: Elf()) as inspect:
+                (root / "forge/triaevum-forge").unlink()
+                audit_native_elfs(root, frozen_forge=True)
+                self.assertEqual(inspect.call_count, 1)

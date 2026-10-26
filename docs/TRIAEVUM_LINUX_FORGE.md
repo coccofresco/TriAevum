@@ -1,5 +1,15 @@
 # Linux Forge
 
+From beta 1.3 Linux packages ship the Rust Forge instead of the PyInstaller
+bundle described below: build `TriAevumForge` and `forge/triaevum-forge` on
+Linux with `python3 tools/triaevum_release/rust_forge_build.py --target
+x86_64-unknown-linux-gnu --source-commit <commit> --output <folder>` (pinned
+toolchain, path remapping, `forge/rust-forge.json` receipt) and declare the
+layout with `"forge_profile": "rust"`. There is no `_internal/`; the AppImage
+ELF gate then audits both Forge binaries (Rust's std needs `libgcc_s.so.1`
+from `lib/compat-cxx`). `stage_linux_forge_candidate.py --forge-bundle` accepts
+that output folder. The sections below document the PyInstaller Forge.
+
 Latest development alignment and external Tk packaging repair:
 [September 10-11 qualification](TRIAEVUM_LINUX_PARITY_20260911.md).
 The host Forge is rebuilt and GUI-tested; the installed Flatpak is not yet

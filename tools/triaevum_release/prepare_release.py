@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 from pathlib import Path
 
 try:
-    from .build_forge_binary import build as build_forge
+    from .rust_forge_build import build as build_rust_forge
     from .common import atomic_write_json, load_json_object
+    from .release_platform import WINDOWS
     from .package_release import package_release
     from .archive_release import create_release_archive
     from .product_contract import query_product
@@ -24,8 +24,9 @@ try:
     from .precomputed_tables import bind_precomputed_tables
     from .forge import load_recipe, DEFAULT_RECIPES
 except ImportError:
-    from build_forge_binary import build as build_forge
+    from rust_forge_build import build as build_rust_forge
     from common import atomic_write_json, load_json_object
+    from release_platform import WINDOWS
     from package_release import package_release
     from archive_release import create_release_archive
     from product_contract import query_product
@@ -115,15 +116,17 @@ def prepare(args) -> dict:
     if receipt["product"]["capabilities"].get("developer_tools") is not False:
         raise ValueError("The release runtime must not contain the developer tools "
                          "(configure with TRIAEVUM_DEVELOPER_TOOLS=OFF)")
-    source_zip = work / "TriAevum-source.zip"
-    create_source_archive(ROOT, source_zip, source_commit=commit)
-    forge_exe = build_forge(work / "forge-binary", work / "forge-build",
-                            python=Path(sys.executable), nlohmann_include=args.include)
     layout = load_json_object(ROOT / "tools/triaevum_release/runtime_release_layout.example.json")
+    source_zip = work / "TriAevum-source.zip"
+    create_source_archive(ROOT, source_zip, source_commit=commit, forge_profile=layout["forge_profile"])
+    # The Rust Forge (window, launcher and command line) with its build receipt
+    # and crate notices; the public import path runs no Python.
+    forge = build_rust_forge(work / "forge-rust", target=WINDOWS.target, source_commit=commit,
+                             cargo=args.cargo, target_dir=args.cargo_target_dir)
+    layout["files"].extend(forge["files"])
     artifacts = {
         "TriAevum.exe": Path(targets["runtime"]),
         "triaevum_title_aot.dll": Path(targets["stub"]),
-        "TriAevumForge.exe": forge_exe,
         "TriAevum-source.zip": source_zip,
         "shaderc_shared.dll": Path(targets["runtime"]).parent / "shaderc_shared.dll",
         "oot3d_game_module.dll": build_dir / "oot3d_game_module.dll",
@@ -199,7 +202,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--cmake", type=Path, required=True)
-    parser.add_argument("--include", type=Path, required=True)
+    parser.add_argument("--cargo", default="cargo", help="Cargo of the pinned Rust toolchain")
+    parser.add_argument("--cargo-target-dir", type=Path, help="Cargo target folder for the Rust Forge build")
     parser.add_argument("--vc-redist-dir", type=Path, required=True,
                         help="Licensed Visual Studio x64/Microsoft.VC143.CRT redistributable directory")
     parser.add_argument("--work", type=Path, required=True)

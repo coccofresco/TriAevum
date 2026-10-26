@@ -437,11 +437,24 @@ are included.
 
 ## Forge and runtime binary dependencies
 
-Windows `TriAevumForge.exe` embeds CPython 3.13; the initial Linux Forge build
-embeds CPython 3.12. Both include Capstone 5.0.7 and the PyInstaller
-6.16.0 bootloader. Their license texts, including PyInstaller's bootloader
-exception, are distributed under `LICENSES/`. PyInstaller is a packaging tool;
-its presence does not change the license selected for TriAevum source.
+From beta 1.3 the Forge is written in Rust (`tools/triaevum_forge`,
+GPL-3.0-or-later): `TriAevumForge` (window and launcher), `forge/triaevum-forge`
+(command line) on Windows and Linux, and `libtriaevum_forge.so` in the Android
+application. They statically link the Rust crates pinned by
+`tools/triaevum_forge/Cargo.lock` and the Rust standard library (MIT OR
+Apache-2.0). Every shipped crate, its declared and elected license and its
+license texts are listed in `LICENSES/Rust-Forge-crates.md`, generated with
+`tools/triaevum_release/rust_forge_notices.py`; its machine-readable inventory is
+`tools/triaevum_forge/THIRD_PARTY_CRATES.json`. HTTPS downloads use rustls with
+the operating system's certificate store (`rustls-platform-verifier`); no CA
+bundle is shipped. The Rust Forge embeds no Python runtime.
+
+Packages before beta 1.3 shipped a PyInstaller Forge: Windows `TriAevumForge.exe`
+embedded CPython 3.13 and the initial Linux Forge build CPython 3.12, both with
+Capstone 5.0.7 and the PyInstaller 6.16.0 bootloader, whose license texts
+(including PyInstaller's bootloader exception) those packages distributed under
+`LICENSES/`. PyInstaller is a packaging tool; its presence did not change the
+license selected for TriAevum source.
 
 Developer-only Forge build commands can invoke LLVM 22 tools `clang-cl.exe`,
 `llvm-lib.exe` and `lld-link.exe`. The current precompiled player release does
@@ -451,14 +464,14 @@ LLVM-exception; the Apache 2.0 text and LLVM exception are distributed under
 archive and the public `forge/oot3d_game_module.dll` are title-neutral and
 contain no game code or content.
 
-Portable Forge builds include [certifi](https://github.com/certifi/python-certifi)
+The PyInstaller Forge builds included [certifi](https://github.com/certifi/python-certifi)
 2026.7.22 and its Mozilla root certificate collection to verify HTTPS downloads
 independently of the build host's OpenSSL CA paths. Certifi is MPL-2.0 licensed;
-its distribution metadata and license are included in the frozen bundle.
+its distribution metadata and license were included in the frozen bundle.
 Certificate and hostname verification remain enabled.
 
-Forge embeds the minimal nlohmann/json forward-declaration headers needed by
-the generated source interface. nlohmann/json is MIT licensed, copyright
+The PyInstaller Forge embedded the minimal nlohmann/json forward-declaration
+headers needed by the generated source interface. nlohmann/json is MIT licensed, copyright
 2013-2025 Niels Lohmann; its notice is distributed as
 `LICENSES/nlohmann-json-MIT.txt`.
 

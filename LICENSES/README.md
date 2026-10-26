@@ -22,9 +22,10 @@ their imported source.
 | Microsoft Visual C++ runtime for shaderc | Microsoft runtime redistribution terms | `LICENSES/Microsoft-Visual-Cpp-Runtime.md` |
 | NXVK probe | GPL-2.0-or-later | `ports/switch_vulkan_probe/COPYING` |
 | shaderc shared runtime | Apache-2.0 | `LICENSES/shaderc-Apache-2.0.txt` |
-| CPython 3.13 runtime embedded by Forge | Python Software Foundation License | `LICENSES/Python-3.13.txt` |
-| Capstone 5.0.7 embedded by Forge | BSD-style | `LICENSES/Capstone-BSD.txt` |
-| PyInstaller 6.16.0 bootloader | GPL-2.0-or-later with bootloader exception | `LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt` |
+| Rust crates statically linked by the Rust Forge (beta 1.3 and later) | Per crate (MIT, Apache-2.0, BSD, ISC, Zlib, BSL-1.0, Unicode-3.0 and others), listed with their texts | `LICENSES/Rust-Forge-crates.md`, generated from `tools/triaevum_forge/Cargo.lock` |
+| CPython 3.13 runtime embedded by the PyInstaller Forge (packages before beta 1.3) | Python Software Foundation License | `LICENSES/Python-3.13.txt` |
+| Capstone 5.0.7 embedded by the PyInstaller Forge | BSD-style | `LICENSES/Capstone-BSD.txt` |
+| PyInstaller 6.16.0 bootloader (PyInstaller Forge) | GPL-2.0-or-later with bootloader exception | `LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt` |
 | LLVM 22 Forge tools (`llc`, `lld-link`) | Apache-2.0 WITH LLVM-exception | `LICENSES/shaderc-Apache-2.0.txt` plus `LICENSES/LLVM-exception.txt` |
 | Fira Sans Condensed (in-game menu font atlases, compiled into the runtime) | SIL OFL 1.1 | `LICENSES/FiraSans-OFL.txt` and `tools/oot3d/ui_menu/font/OFL.txt` |
 

@@ -1,5 +1,6 @@
 {
   "format": "triaevum_public_release_layout_v1",
+  "forge_profile": "rust",
   "files": [
     {
       "source": "docs/TRIAEVUM_DESKTOP_PACKAGING.md",
@@ -13,7 +14,6 @@
     },
     {"source": "build-release/TriAevum.exe", "path": "runtime/TriAevum.exe", "role": "runtime_executable"},
     {"source": "build-release/triaevum_title_aot.dll", "path": "runtime/triaevum_title_aot.dll", "role": "runtime_library"},
-    {"source": "build-release/TriAevumForge.exe", "path": "TriAevumForge.exe", "role": "forge_executable"},
     {"source": "build-release/shaderc_shared.dll", "path": "runtime/shaderc_shared.dll", "role": "runtime_library"},
     {"source": "build-release/msvcp140.dll", "path": "runtime/msvcp140.dll", "role": "runtime_library"},
     {"source": "build-release/vcruntime140.dll", "path": "runtime/vcruntime140.dll", "role": "runtime_library"},
@@ -63,9 +63,6 @@
     {"source": "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "path": "LICENSES/Microsoft-Visual-Cpp-Runtime.md", "role": "license"},
     {"source": "LICENSES/nlohmann-json-MIT.txt", "path": "LICENSES/nlohmann-json-MIT.txt", "role": "license"},
     {"source": "LICENSES/shaderc-Apache-2.0.txt", "path": "LICENSES/shaderc-Apache-2.0.txt", "role": "license"},
-    {"source": "LICENSES/Python-3.13.txt", "path": "LICENSES/Python-3.13.txt", "role": "license"},
-    {"source": "LICENSES/Capstone-BSD.txt", "path": "LICENSES/Capstone-BSD.txt", "role": "license"},
-    {"source": "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt", "path": "LICENSES/PyInstaller-GPL-2.0-or-later-with-bootloader-exception.txt", "role": "license"},
     {"source": "LICENSES/LLVM-exception.txt", "path": "LICENSES/LLVM-exception.txt", "role": "license"},
     {"source": "runtime/three_ds_recomp/LICENSE", "path": "LICENSES/libultraship-MIT.txt", "role": "license"},
     {"source": "runtime/three_ds_recomp/src/fast/immerse/LICENSE.md", "path": "LICENSES/iMMERSE-MXAO.md", "role": "license"},

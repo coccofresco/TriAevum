@@ -97,10 +97,24 @@ guarantee for every possible artifact.
 - `precompiled_title_layout.py`: publisher promotion of a completed optimized
   build, generated source verification and source/catalog packaging.
 - `precompiled_titles.py`: strict revision selection and transactional activation.
-- `forge_gui.py` / `install_worker.py`: ROM-only user flow, with no compiler fallback.
+- The Rust Forge (`tools/triaevum_forge`, `install` job): ROM-only user flow, with
+  no compiler fallback. `forge_gui.py` / `install_worker.py` remain the Python
+  oracle and developer tools; packages from beta 1.3 do not ship them.
+- `rust_forge_build.py`: publisher build of `TriAevumForge` and
+  `forge/triaevum-forge` with the pinned toolchain and Cargo.lock, remapped
+  build-machine paths and the `forge/rust-forge.json` receipt.
+- `rust_forge_notices.py`: `LICENSES/Rust-Forge-crates.md` and
+  `tools/triaevum_forge/THIRD_PARTY_CRATES.json` from Cargo.lock; its test fails
+  when Cargo.lock gains a crate without a notice decision.
 - `prepare_release.py`: developer build/package workflow, not user preparation.
 - `audit_release.py`: explicit precompiled roles; rejects uncatalogued modules,
-  ROM/content contamination and compiler payloads in the user package.
+  ROM/content contamination and compiler payloads in the user package. The
+  manifest's `release.forge_profile` selects the Forge profile of
+  `release_policy.json`: `rust` adds the command-line and receipt roles, binds
+  the receipt to the packaged binaries and to the corresponding source's
+  Cargo.lock, toolchain pin and crate notices, rejects build-machine paths in
+  the binaries, compiler roles and any frozen Python payload. Manifests without
+  the field keep the `python_pyinstaller` profile of earlier packages.
 - Existing `forge build-title`: developer-only optimized title generation.
 
 ## Reproduce a release
@@ -111,7 +125,8 @@ the corresponding generated C++ manifest/files and the exact source snapshot
 used for that build. Never copy an entire translator cache into a release.
 
 Run `python -m tools.triaevum_release.prepare_release` with `--build-dir`,
-`--cmake`, `--include`, `--work`, `--output`, `--version`, and:
+`--cmake`, `--work`, `--output`, `--version` (optionally `--cargo` and
+`--cargo-target-dir` for the Rust Forge build), and:
 
 ```
 --title-build <whole-aot-plugin.json>
