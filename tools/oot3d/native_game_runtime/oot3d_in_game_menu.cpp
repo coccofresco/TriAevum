@@ -529,7 +529,7 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       [](const auto &s) { return s.ExtendedDrawDistance; }, [](auto &s, bool value) { s.ExtendedDrawDistance = value; }));
   if (mOwners.TopScreen) {
     // F1 > Display > TopScreen HUD: the standard profile fixes the layout,
-    // the user chooses only the size.
+    // the user chooses the size and the button labels.
     tab.Rows.push_back(Heading("HUD"));
     Row row;
     row.Key = "HUD size";
@@ -544,6 +544,21 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     };
     row.Modified = [this] { return mTopScreen.HudScale != kTopScreenHudScaleDefault; };
     tab.Rows.push_back(std::move(row));
+    // F1 > Display > TopScreen HUD > HUD button labels.
+    Row labels;
+    labels.Key = "Button labels";
+    labels.Kind = RowKind::Choice;
+    labels.Help = "Controller shows the buttons and keys you bound to A, B, X, Y, ZL and ZR, for the device in use; "
+                  "Original 3DS shows the 3DS letters. With touch controls the HUD keeps its letters.";
+    labels.Choices = {"Controller", "Original 3DS"};
+    labels.Read = [this] { return mTopScreen.HudButtonLabels == TopScreenHudButtonLabels::Original ? 1 : 0; };
+    labels.Write = [this](int value) {
+      auto config = mTopScreen;
+      config.HudButtonLabels = value == 1 ? TopScreenHudButtonLabels::Original : TopScreenHudButtonLabels::Controller;
+      return ApplyTopScreen(config);
+    };
+    labels.Modified = [this] { return mTopScreen.HudButtonLabels != TopScreenHudButtonLabels::Controller; };
+    tab.Rows.push_back(std::move(labels));
   }
   document.Tabs.push_back(std::move(tab));
 }

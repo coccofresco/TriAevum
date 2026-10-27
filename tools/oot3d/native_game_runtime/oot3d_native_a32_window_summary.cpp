@@ -1277,6 +1277,9 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                activeTopScreenConfig.RenderDpadIcons},
               {"render_items_hint",
                activeTopScreenConfig.RenderItemsHint},
+              {"hud_button_labels",
+               Oot3dNativeGame::TopScreenHudButtonLabelsName(
+                   activeTopScreenConfig.HudButtonLabels)},
               {"select_action",
                Oot3dNativeGame::TopScreenSelectActionName(
                    activeTopScreenConfig.SelectAction)},

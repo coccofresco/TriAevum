@@ -9,8 +9,8 @@ namespace Oot3dNativeGame {
 namespace {
 
 // The TopScreen section of the Display tab. The standard profile fixes the
-// HUD layout; the user chooses only its size. A choice applies and saves at
-// once.
+// HUD layout; the user chooses only its size and its button labels. A choice
+// applies and saves at once.
 class TopScreenSettingsPanel final
     : public Fast::Extension::GraphicsSettingsPanelTab {
 public:
@@ -49,6 +49,26 @@ public:
         config.HudScale != kTopScreenHudScaleOptimized) {
       ImGui::TextDisabled("Configuration file size: %.2fx", config.HudScale);
     }
+    // The letters on the HUD's buttons: the glyphs of the inputs bound to
+    // them (Controls > Bindings, in Controls > Devices > Button prompts'
+    // family) or the 3DS letters.
+    const auto labels = [&](const char *label, TopScreenHudButtonLabels value) {
+      if (ImGui::RadioButton(label, config.HudButtonLabels == value) &&
+          config.HudButtonLabels != value) {
+        config.HudButtonLabels = value;
+        Store(config);
+      }
+    };
+    ImGui::TextUnformatted("HUD button labels");
+    labels("Controller##hud_button_labels", TopScreenHudButtonLabels::Controller);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The buttons and keys you bound to A, B, X, Y, ZL and ZR,\n"
+                        "drawn for the device in use (Controls > Devices > Button prompts).\n"
+                        "With touch controls the HUD keeps its letters.");
+    ImGui::SameLine();
+    labels("Original 3DS##hud_button_labels", TopScreenHudButtonLabels::Original);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The 3DS letters A, B, X, Y, ZL and ZR.");
     if (!mRuntime->Persistent()) {
       ImGui::TextDisabled("TopScreen: session only");
     } else if (!mStatus.empty()) {
@@ -72,7 +92,7 @@ private:
       return;
     }
     mRuntime->Preview(config);
-    mStatus = "HUD size applied for this session, but could not be saved: " +
+    mStatus = "TopScreen HUD applied for this session, but could not be saved: " +
               error;
   }
 

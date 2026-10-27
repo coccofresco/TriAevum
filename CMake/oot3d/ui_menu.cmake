@@ -27,3 +27,12 @@ add_executable(oot3d_menu_tests EXCLUDE_FROM_ALL
     tools/oot3d/ui_menu/oot3d_menu_tests.cpp)
 target_link_libraries(oot3d_menu_tests PRIVATE oot3d_ui_menu)
 oot3d_target_defaults(oot3d_menu_tests FOLDER Tests)
+
+# The TopScreen HUD's button labels as the glyphs of the bound inputs: the
+# controls owner, the TopScreen labels and the menu's glyph art together.
+add_executable(oot3d_hud_button_labels_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_hud_button_labels.cpp
+    tools/oot3d/native_game_runtime/oot3d_hud_button_labels_tests.cpp)
+target_link_libraries(oot3d_hud_button_labels_tests PRIVATE
+    oot3d_ui_menu oot3d_ui_topscreen oot3d_native_control_config)
+oot3d_target_defaults(oot3d_hud_button_labels_tests FOLDER Tests)

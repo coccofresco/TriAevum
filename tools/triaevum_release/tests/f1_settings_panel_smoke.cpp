@@ -2826,6 +2826,21 @@ int main(int argc, char** argv) try {
         Check(topScreen->Snapshot().Config.HudScale == Oot3dNativeGame::kTopScreenHudScaleOptimized &&
                   topScreen->Snapshot().Config.HudMarginX == 8,
               "HUD size overwrote an external TopScreen change");
+        // HUD button labels: one control, beside the size, Controller by
+        // default; the choice applies at once and keeps the other fields.
+        Check(topScreen->Snapshot().Config.HudButtonLabels == Oot3dNativeGame::TopScreenHudButtonLabels::Controller,
+              "Controller is not the default HUD button labels");
+        Check(loggedPanelText.find("HUD button labels") != std::string::npos, "Display lacks HUD button labels");
+        Check(Find("Controller##hud_button_labels").Rect.Min.y > Find("Native (100%)").Rect.Min.y,
+              "HUD button labels are not below the HUD size");
+        Click("Original 3DS##hud_button_labels");
+        Check(topScreen->Snapshot().Config.HudButtonLabels == Oot3dNativeGame::TopScreenHudButtonLabels::Original &&
+                  topScreen->Snapshot().Config.HudScale == Oot3dNativeGame::kTopScreenHudScaleOptimized &&
+                  topScreen->Snapshot().Config.HudMarginX == 8,
+              "Original 3DS did not apply alone");
+        Click("Controller##hud_button_labels");
+        Check(topScreen->Snapshot().Config.HudButtonLabels == Oot3dNativeGame::TopScreenHudButtonLabels::Controller,
+              "Controller did not apply");
         size = pageSize;
     }
     size = ImVec2(520, 400);

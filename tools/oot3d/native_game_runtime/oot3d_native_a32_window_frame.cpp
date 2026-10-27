@@ -3,6 +3,7 @@
 #include "fast/extension/visual_clock.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
+#include "oot3d_hud_button_labels.h"
 #include "oot3d_native_room_shadow_shell.h"
 #include "ship/config/Config.h"
 #include "three_ds_touch_overlay_settings.h"
@@ -710,6 +711,20 @@ bool NativeA32WindowSession::RunFrame() {
       AppendTopScreenDpadPickerHoldRings(uiLifecycleBridge, primitives);
       touchControls = Oot3dNativeGame::ExtractTopScreenTouchControls(primitives, activeTopScreenConfig,
                                                                      touchAnchors, touchCanvasWidth);
+      // The HUD's button labels as the glyphs of the bound inputs, in the
+      // prompts of the device in use (labels the touch controls took are
+      // gone already). Off (Original) or with touch, the HUD is untouched.
+      if (controlConfigRuntime) {
+        const auto prompts = controlConfigRuntime->ActivePromptSet();
+        if (Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels, prompts)) {
+          const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
+              std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 400.0F, 240.0F);
+          (void)Oot3dNativeGame::ApplyTopScreenHudButtonGlyphs(
+              primitives, uiLifecycleBridge.TopScreenComposedActionLetter(),
+              Oot3dNativeGame::ResolveTopScreenHudButtonGlyphs(prompts, controlConfigRuntime->Snapshot().Config),
+              static_cast<float>(std::max<uint32_t>(1U, canvas.Height)) / 240.0F);
+        }
+      }
     }
     if (topScreenPresentation && subsystem == oot3d::ui::UiSubsystem::TouchControls) {
       ocarinaText.Append(primitives);

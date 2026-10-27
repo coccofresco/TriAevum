@@ -198,7 +198,7 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
     return false;
   }
 
-  constexpr std::array<std::string_view, 39> kAllowedFields{
+  constexpr std::array<std::string_view, 40> kAllowedFields{
       "schema",
       "hud_layout",
       "hud_scale",
@@ -216,6 +216,7 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
       "render_hud",
       "render_dpad_icons",
       "render_items_hint",
+      "hud_button_labels",
       "select_action",
       "exit_items_to_save_screen",
       "camera_zoom_percent",
@@ -349,6 +350,14 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
     SetError(error, "TopScreen select_action is unknown");
     return false;
   }
+  if (document.contains("hud_button_labels") &&
+      (!document.at("hud_button_labels").is_string() ||
+       !ParseTopScreenHudButtonLabels(
+           document.at("hud_button_labels").get<std::string>(),
+           &parsed.HudButtonLabels))) {
+    SetError(error, "TopScreen hud_button_labels must be controller or original");
+    return false;
+  }
   if (document.contains("free_camera_smoothing") &&
       (!document.at("free_camera_smoothing").is_string() ||
        !ParseTopScreenFreeCameraSmoothing(
@@ -458,6 +467,31 @@ bool ParseTopScreenHudLayout(std::string_view value,
   }
   if (value == "restoration") {
     *layout = TopScreenHudLayout::Restoration;
+    return true;
+  }
+  return false;
+}
+
+const char *TopScreenHudButtonLabelsName(TopScreenHudButtonLabels labels) noexcept {
+  switch (labels) {
+  case TopScreenHudButtonLabels::Controller:
+    return "controller";
+  case TopScreenHudButtonLabels::Original:
+    return "original";
+  }
+  return "unknown";
+}
+
+bool ParseTopScreenHudButtonLabels(std::string_view value,
+                                   TopScreenHudButtonLabels *labels) noexcept {
+  if (labels == nullptr)
+    return false;
+  if (value == "controller") {
+    *labels = TopScreenHudButtonLabels::Controller;
+    return true;
+  }
+  if (value == "original") {
+    *labels = TopScreenHudButtonLabels::Original;
     return true;
   }
   return false;
@@ -622,7 +656,7 @@ bool SerializeTopScreenUiConfigText(const TopScreenUiConfig &config,
     SetError(error, "TopScreen UI config text output is null");
     return false;
   }
-  const nlohmann::json document{
+  nlohmann::json document{
       {"schema", kTopScreenUiConfigSchema},
       {"hud_layout", TopScreenHudLayoutName(config.HudLayout)},
       {"hud_scale", config.HudScale},
@@ -673,6 +707,10 @@ bool SerializeTopScreenUiConfigText(const TopScreenUiConfig &config,
        {config.ItemsShortcutOrder[0], config.ItemsShortcutOrder[1],
         config.ItemsShortcutOrder[2], config.ItemsShortcutOrder[3]}},
   };
+  // Only the non-default value is written: older builds reject unknown keys.
+  if (config.HudButtonLabels != TopScreenHudButtonLabels::Controller)
+    document["hud_button_labels"] =
+        TopScreenHudButtonLabelsName(config.HudButtonLabels);
   TopScreenUiConfig validated;
   if (!DecodeTopScreenUiConfig(document, &validated, error)) {
     return false;

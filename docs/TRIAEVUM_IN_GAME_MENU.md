@@ -51,7 +51,7 @@ presets by name, the dev tools and the rest).
 
 | Tab | Rows |
 | --- | --- |
-| Video | Graphics preset (Authentic / Enhanced / Toon; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile) |
+| Video | Graphics preset (Authentic / Enhanced / Toon; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile), Button labels (Controller / Original 3DS, see "HUD button labels") |
 | Graphics | Lighting model, Global illumination, Ambient occlusion, Shadows (modern lighting only), Reflections, Toon, Grass quality, Distant grass cards, Textures > Custom textures (F1's "Load custom textures"; keeps the preset) |
 | Controls | Keyboard / Mouse / Controller / Capture mouse, Button prompts, Control preset, Aim source, Invert aim X / Y; with the TopScreen profile, Camera (Gameplay camera, speed, smoothing, invert X / Y, Camera zoom, Camera FOV) and C-Stick aiming (speed, invert X / Y) |
 | Photo mode | Photo camera (F6), Hide HUD, Photo camera speed, Back to the game's view, then the camera's controls as read-only rows (F6, WASD / left stick, Q / E / shoulders, mouse drag / right stick, Shift / Ctrl) |
@@ -142,8 +142,8 @@ summary and the help card show the buttons of the device in the user's hands
 | PlayStation | cross / circle | L1 R1 | D-pad | R3 / L3 + R3 |
 | Nintendo | A / B (the printed labels: SDL maps a Nintendo pad by label) | L R | D-pad | RS / LS + RS |
 | Steam Deck | A / B | L1 R1 | D-pad | R3 / L3 + R3 |
-| Generic | the south / east button of a four-button diamond | L R | D-pad | R3 / L3 + R3 |
-| Keyboard | Enter / Backspace | Q E | arrow keys | Esc / F1 (and F5 / F8, F6, F11 in the summary) |
+| Generic | A / B (SDL's names for the south and east positions) | L R | D-pad | R3 / L3 + R3 |
+| Keyboard | return / backspace (their key symbols) | Q E | left / right arrow keys | Esc / F1 (and F5 / F8, F6, F11 in the summary) |
 | Touch | a tap (no Back or tab hint: a tap does it) | | | tap HOME / hold HOME |
 
 - **Who decides.** Input owns it. The controls owner
@@ -177,18 +177,86 @@ summary and the help card show the buttons of the device in the user's hands
 - **While the menu is open** the family is re-read every frame: the footer
   changes at once, the Help & folders tab is rebuilt with the focus kept on
   its row (`Model::ReplaceTab`), and an open help card's lines follow.
-- **The glyphs** are TriAevum's own art (`tools/oot3d/ui_menu/
-  oot3d_menu_glyphs.*`): discs, pills, keycaps, a stick ring, the
-  PlayStation symbols as plain strokes cut out of a disc, a D-pad, a tap and
-  a house for HOME, described as signed distances and rasterized at first
-  use into one 512 x 256 coverage atlas (`triaevum/menu/glyphs`, served by
-  the menu's texture provider). No font, picture, console logo or
+- **The glyphs** are TriAevum's own art, one set for the menu and the HUD
+  (`tools/oot3d/ui_menu/oot3d_menu_button_glyphs.*`, drawn in text by
+  `oot3d_menu_glyphs.*`): discs, pills, keycaps, a stick ring, the
+  PlayStation symbols as plain strokes, a D-pad, a mouse, a tap, a house for
+  HOME, and keycaps with the keyboard's conventional symbols instead of words
+  (space bar, shift, return, backspace, tab, caps lock, arrows, page up /
+  down, home, end, insert, delete; letters, digits and F-keys stay text).
+  Black and white only (owner rule, 2026-10-27): a white body with a black
+  mark or label and a thin black edge, the same on the dark panel and over
+  the game; one simple sign per button (no four-button diamond with one
+  lit). They are signed distances rasterized at first use into an atlas in
+  three sizes, 32, 64 and 128 texels a cell (`triaevum/button_glyphs/<cell>`,
+  straight RGBA, served by the menu's texture provider); the menu's text
+  draws from the 64-texel one. No font, picture, console logo or
   third-party glyph set is used. Text carries them as Private Use Area
   codepoints, so the menu's text layout measures, wraps, elides and draws
   them with the letters: an icon is one codepoint (U+E000...), a labelled
   button is an opening codepoint, its label in the menu's heading font and a
-  closing one (U+E100...). HUD action icons (the TopScreen HUD's A/B/X/Y)
-  are not part of this (decision 7).
+  closing one (U+E100...). The TopScreen HUD's own button letters follow
+  the same families (see "HUD button labels").
+
+## HUD button labels
+
+The letters that name the 3DS buttons on the TopScreen HUD (A, B, X, Y, ZL,
+ZR) show the glyph of the button or key the player has bound to that 3DS
+button, in the prompt family of the device in use (UX decision 7):
+
+| Family | A / B / X / Y bound to a face button | Shoulder | Trigger | Stick click | D-pad |
+| --- | --- | --- | --- | --- | --- |
+| Xbox | disc with A / B / X / Y | LB / RB | LT / RT | ring LS / RS | D-pad, arm filled |
+| PlayStation | cross / circle / square / triangle cut out of a disc | L1 / R1 | L2 / R2 | ring L3 / R3 | D-pad |
+| Nintendo | disc with the printed letter (SDL maps by label) | L / R | ZL / ZR | ring LS / RS | D-pad |
+| Steam Deck | disc with A / B / X / Y | L1 / R1 | L2 / R2 | ring L3 / R3 | D-pad |
+| Generic | disc with A / B / X / Y (SDL's names for the positions) | L / R | L2 / R2 | ring L3 / R3 | D-pad |
+| Keyboard | a keycap with the key's symbol (space bar, shift, return, backspace, tab, arrows) or its name (C, 1, Esc, Ctrl, Num8); without a key, the mouse with its bound button filled | | | | |
+
+- **Which input.** The binding of that 3DS button in the controls owner
+  (`oot3d_controls.json`, F1 > Controls > Bindings): a pad family shows the
+  pad button, the keyboard its first key, else its second, else its mouse
+  button (while the mouse is enabled). A 3DS button with nothing bound on
+  that device keeps its letter. Touch keeps every letter (the on-screen
+  controls own theirs, see the touch layout). The family is the one the
+  menu uses (`ActivePromptSet`), read at every HUD composition, so the HUD
+  changes with the device in the hands and with a binding at the next frame.
+- **The setting.** TopScreen owns it (`TopScreenUiConfig::HudButtonLabels`,
+  `hud_button_labels` in `topscreen_ui.json`, written only when
+  `original` so older builds still read the file): **Controller** (the
+  default) or **Original 3DS**. F1 > Display > TopScreen HUD > **HUD button
+  labels** is its control; the menu's Video > HUD > **Button labels** row
+  mirrors it. Both apply and save at once.
+- **Which letters.** Identified by their native owners, never by where they
+  are drawn, so a UI texture pack (the Vanilla UI/HUD pack, the HD
+  `--topscreen-ui-atlas-hd` atlas or a user pack) changes nothing
+  (`oot3d_top_screen_button_labels.h`): X, Y and the horseback B are
+  TopScreen's hub labels (owner 0x005C9940, touch quads 34, 35, 36 on layer
+  13), ZR and ZL its touch labels (quads 0 and 1 on layer 13), B the native
+  PauseTouchButton's B letter (owner 0x005D4A8C, copy 34). The A is baked
+  into the native A ring of the HUD atlas (texels 78..89 x 1..11 of 256, the
+  same on the pack's 16x art); the ring quad is read from the Quest render
+  buffer after its transform, at the materialized hook (read only), and the
+  letter's box mapped through its UVs.
+- **How they are drawn.** In the UI domain, as part of the HUD's own
+  primitive list: each glyph takes its label's place in the list (its layer
+  and order, so an item icon drawn after a label still covers its glyph, as
+  it covered the letter), centred on the letter's ink and one texel taller,
+  with the label's colour and alpha, so it scales with the HUD size and fades
+  and hides with the HUD. The A glyph is drawn after the HUD over the native
+  ring and covers its letter (a glyph is opaque wherever it is drawn: a thin
+  black edge around a white body). Black and white like the menu's glyphs
+  (the white takes only the label's own dimming); the art is the same set
+  (`oot3d_menu_button_glyphs.*`, atlas `triaevum/button_glyphs/<cell>`);
+  each glyph samples the smallest atlas that
+  is at least as tall as it is drawn (the UI renderer has no mipmaps), and a
+  label uses the menu's 72 px heading font: crisp from 720p to 4K.
+- **Off.** With Original 3DS the HUD list is not touched and no guest
+  memory is read for it (with touch the ring is read, never written, and the
+  list is not touched): frames are byte-identical to a build without
+  the feature (measured on the Epona and Kokiri states, with and without the
+  Vanilla UI pack, at HUD 100 % and 70 %).
+- MM3D's HUD and the pause pages' L / R / SELECT hints keep their letters.
 
 ## Pause
 

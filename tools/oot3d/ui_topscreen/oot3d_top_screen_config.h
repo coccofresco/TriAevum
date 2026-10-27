@@ -64,6 +64,19 @@ const char *TopScreenHudLayoutName(TopScreenHudLayout layout) noexcept;
 bool ParseTopScreenHudLayout(std::string_view value,
                              TopScreenHudLayout *layout) noexcept;
 
+// The HUD's button labels (A, B, X, Y, ZL, ZR): the glyph of the input the
+// player has bound to each button in the prompts of the device in use
+// (Controller, the default), or the console's own letters (Original). Written
+// only when Original, so the file stays readable by older builds.
+enum class TopScreenHudButtonLabels : std::uint8_t {
+  Controller,
+  Original,
+};
+
+const char *TopScreenHudButtonLabelsName(TopScreenHudButtonLabels labels) noexcept;
+bool ParseTopScreenHudButtonLabels(std::string_view value,
+                                   TopScreenHudButtonLabels *labels) noexcept;
+
 enum class TopScreenSelectAction : std::uint8_t {
   SaveScreen,
   MinimapToggle,
@@ -142,6 +155,7 @@ struct TopScreenUiConfig {
   bool RenderHud = true;
   bool RenderDpadIcons = true;
   bool RenderItemsHint = true;
+  TopScreenHudButtonLabels HudButtonLabels = TopScreenHudButtonLabels::Controller;
   TopScreenSelectAction SelectAction = TopScreenSelectAction::SaveScreen;
   bool ExitItemsToSaveScreen = true;
   std::uint8_t CameraZoomPercent = 100U;

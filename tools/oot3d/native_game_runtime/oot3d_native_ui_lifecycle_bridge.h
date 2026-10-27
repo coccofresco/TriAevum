@@ -3,6 +3,7 @@
 #include "oot3d_n64_integrated_ui_runtime.h"
 #include "oot3d_native_a32_memory.h"
 #include "oot3d_native_omote_ura_selector.h"
+#include "oot3d_top_screen_button_labels.h"
 #include "oot3d_top_screen_config.h"
 #include "oot3d_top_screen_dpad_picker.h"
 #include "oot3d_top_screen_items_hint.h"
@@ -127,6 +128,12 @@ public:
   const TopScreenDpadPickerHoldCursor &TopScreenItemsShortcutCursor() const noexcept {
     return mTopScreenItemsShortcutCursor;
   }
+  // The native A ring's letter, read at the Quest materialization with the
+  // HUD button labels on (HudButtonLabels Controller); set by
+  // BuildTopScreenPresentation(GameplayHud) only when that HUD was composed.
+  const std::optional<TopScreenHudLabelSlot> &TopScreenComposedActionLetter() const noexcept {
+    return mTopScreenComposedActionLetter;
+  }
   bool ReadOcarinaGeometry(TopScreenOcarinaGeometry &geometry, std::string *error) {
     return ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, error);
   }
@@ -187,6 +194,8 @@ private:
   std::vector<TopScreenQuestCopiedQuad> mTopScreenQuestBCopies;
   std::vector<TopScreenQuestHiddenColor> mTopScreenQuestHiddenColors;
   std::vector<TopScreenQuestCopiedQuad> mTopScreenQuestActionCopies;
+  std::optional<TopScreenHudLabelSlot> mTopScreenActionLetter;
+  std::optional<TopScreenHudLabelSlot> mTopScreenComposedActionLetter;
   std::optional<TopScreenPauseEdgeGeometry> mTopScreenPauseEdgeGeometry;
   std::optional<TopScreenPauseEdgeGeometry>
       mTopScreenPausePageRedrawEdgeGeometry;

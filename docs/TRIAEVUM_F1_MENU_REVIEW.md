@@ -178,6 +178,22 @@ Actual-widget smoke: **10,934 assertions**, including the absence of the HUD
 tab and of the layout controls, both sizes, an external change surviving a size
 choice, the immediate save and a visible failed save.
 
+## TopScreen HUD button labels (2026-10-27, UX decision 7)
+
+**Display > TopScreen HUD > HUD button labels**, below the HUD size:
+**Controller** (the default: the HUD's A, B, X, Y, ZL and ZR letters show the
+glyph of the input bound to each, in the prompt family of the device in use)
+or **Original 3DS** (the letters). TopScreenUiConfigRuntime owns it
+(`hud_button_labels`, written only when `original`); it applies and saves at
+once like the size, and the in-game menu's Video > HUD > Button labels row
+mirrors it. The bindings and the family stay Controls' (Bindings, Devices >
+Button prompts); the HUD reads them, it has no control of its own for them.
+Design, rules and captures: [In-game menu, HUD button labels](TRIAEVUM_IN_GAME_MENU.md#hud-button-labels).
+
+Actual-widget smoke: **11,956 assertions** (full run), including the control
+below the HUD size, Controller as the default, Original 3DS applied alone (the
+size and an external margin kept) and Controller again.
+
 ## Grass masks (2026-10-11, round 36)
 
 Grass > Masks identifies current overlay/source overlaps with thumbnails,
@@ -808,7 +824,7 @@ Current surfaces (since the 2026-10-06 tab rationalization above):
 
 | Surface | Sections | Owner |
 | --- | --- | --- |
-| Display | Screen, Antialiasing and upscaling, Motion and camera, TopScreen HUD size | GraphicsSettingsRuntime; TopScreenUiConfigRuntime (HUD size) |
+| Display | Screen, Antialiasing and upscaling, Motion and camera, TopScreen HUD size and button labels | GraphicsSettingsRuntime; TopScreenUiConfigRuntime (HUD size, HUD button labels) |
 | Lighting | Lighting & GI, Shadows, Occlusion, Reflections, Scene environment, Toon | GraphicsSettingsRuntime; SceneEnvironmentRuntime (Scene environment) |
 | Grass | Sources, Masks, Generation, Appearance, Performance, Wind, Interaction | GraphicsSettingsRuntime / grass module |
 | Materials | Texture packs, Material editor, Reflection materials | GraphicsSettingsRuntime / texture-pack module / material JSON |

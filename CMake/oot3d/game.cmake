@@ -434,6 +434,7 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         titles/oot3d/topscreen/oot3d_top_screen_settings_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_photo_mode_panel.cpp
         tools/oot3d/native_game_runtime/oot3d_in_game_menu.cpp
+        tools/oot3d/native_game_runtime/oot3d_hud_button_labels.cpp
         tools/oot3d/native_game_runtime/oot3d_graphics_settings_schedule.cpp)
     set_source_files_properties(titles/oot3d/gameplay/oot3d_native_actor_interactions.cpp
         PROPERTIES INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/decomp_support/include")

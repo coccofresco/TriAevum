@@ -239,6 +239,7 @@ bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
 
   ++mStats.topscreen_quest_hook_calls;
   mTopScreenQuestActionCopies.clear();
+  mTopScreenActionLetter.reset();
   constexpr uint32_t kQuestRenderBufferBinding = 0x004FC660U;
   uint32_t renderBuffer = 0U;
   TopScreenQuestGeometryContext context;
@@ -271,11 +272,16 @@ bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
     return true;
   }
   // The touch layout draws the A ring and word inside the overlay's A.
-  if (mTopScreenConfig.TouchLayout && mTopScreenConfig.RenderHud &&
-      ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot()[static_cast<std::size_t>(
-          ThreeDsRecomp::Input::TouchAnchor::A)].Present &&
-      !CaptureTopScreenQuestActionCopies(mMemory, renderBuffer, mTopScreenConfig,
-                                         &mTopScreenQuestActionCopies, &error)) {
+  const bool touchA = mTopScreenConfig.TouchLayout && mTopScreenConfig.RenderHud &&
+                      ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot()[static_cast<std::size_t>(
+                          ThreeDsRecomp::Input::TouchAnchor::A)].Present;
+  if (touchA && !CaptureTopScreenQuestActionCopies(mMemory, renderBuffer, mTopScreenConfig,
+                                                   &mTopScreenQuestActionCopies, &error)) {
+    ++mStats.topscreen_quest_hook_failures;
+  }
+  // The HUD button labels: where the native ring draws its A (read only).
+  if (!touchA && mTopScreenConfig.HudButtonLabels == TopScreenHudButtonLabels::Controller &&
+      !ReadTopScreenActionLetter(mMemory, renderBuffer, mTopScreenConfig, &mTopScreenActionLetter, &error)) {
     ++mStats.topscreen_quest_hook_failures;
   }
   ++mStats.topscreen_quest_transforms;
@@ -363,6 +369,7 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
   }
   mTopScreenDpadPickerCursor = {};
   mTopScreenItemsShortcutCursor = {};
+  mTopScreenComposedActionLetter.reset();
   if (mTopScreenItemsShortcuts != nullptr) mTopScreenItemsShortcuts->ObserveDpadPickerPage();
   TopScreenHudCompositorGate compositorGate;
   std::string compositorGateError;
@@ -375,6 +382,7 @@ Oot3dNativeUiLifecycleBridge::BuildTopScreenPresentation(
   }
   if (compositorGateKnown && compositorGate.Draw &&
       mTopScreenConfig.RenderHud) {
+    mTopScreenComposedActionLetter = mTopScreenActionLetter;
     std::uint32_t pulsePhase = 0U;
     (void)mMemory.Read32(0x0050AF8CU, &pulsePhase);
     // TopScreen's compositor reads current native state, not the set of UI
