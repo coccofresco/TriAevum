@@ -99,18 +99,26 @@ constexpr float kStaffNoteCover = 15.5F / 16.0F;
 
 // The native Items page (state 0x005066F8): its controller state at +0x34,
 // the model of the slot labels I, X, Y, II at +0x30. Those are drawn from the
-// 128 x 128 pause parts atlas; X at texels (67, 51), Y at (83, 51), 11 x 11.
+// 128 x 128 pause parts atlas: X at texels (67, 51) and Y at (83, 51),
+// 11 x 11; I at (63, 34) and II at (80, 34), 18 x 13. With SingleScreen the
+// I and II slots are the ZR and ZL items (ResolveTopScreenItemQuery: ZR is
+// Item I, ZL Item II), and the Vanilla UI pack draws "ZR" / "ZL" there.
 constexpr std::uint32_t kPauseItemsState = 0x005066F8U;
 constexpr std::uint32_t kPauseItemsLabelModel = 0x30U;
 constexpr std::uint32_t kPauseItemsController = 0x34U;
 constexpr std::uint32_t kPauseItemsAtRest = 2U;
 constexpr float kPausePartsAtlasSize = 128.0F;
-constexpr float kItemsLabelLetterY = 51.0F;
-constexpr float kItemsLabelLetterSize = 11.0F;
-constexpr float kItemsLabelXLetterX = 67.0F;
-constexpr float kItemsLabelYLetterX = 83.0F;
-// The X fills its 11 x 11 crop: a disc covers its corners at 1.35 times.
-constexpr float kItemsLabelCover = 1.35F;
+struct ItemsLabelCrop {
+  float X, Y, Width, Height;
+  TopScreenHudButton Button;
+};
+constexpr std::array<ItemsLabelCrop, 4> kItemsLabelCrops{{{67.0F, 51.0F, 11.0F, 11.0F, TopScreenHudButton::X},
+                                                          {83.0F, 51.0F, 11.0F, 11.0F, TopScreenHudButton::Y},
+                                                          {63.0F, 34.0F, 18.0F, 13.0F, TopScreenHudButton::Zr},
+                                                          {80.0F, 34.0F, 18.0F, 13.0F, TopScreenHudButton::Zl}}};
+// A glyph as tall as the crop's diagonal covers the letter's corners (a
+// disc), wider glyphs the more.
+constexpr float kItemsLabelCover = 1.0F;
 
 // A texel rectangle of custom_ui01 for a primitive's UV (host, top-left).
 bool UvAt(const oot3d::ui::UiRect &uv, float x, float y, float width, float height) noexcept {
@@ -414,16 +422,15 @@ bool ReadTopScreenItemsPageButtonLabels(NativeA32Memory &memory, std::vector<Top
       return false;
     }
     const auto uv = NativePicaQuadUvToHost(quadUvs);
-    const auto at = [&](float x) {
-      return std::abs(std::min(uv.x, uv.x + uv.width) * kPausePartsAtlasSize - x) < 0.25F &&
-             std::abs(std::min(uv.y, uv.y + uv.height) * kPausePartsAtlasSize - kItemsLabelLetterY) < 0.25F &&
-             std::abs(std::abs(uv.width) * kPausePartsAtlasSize - kItemsLabelLetterSize) < 0.25F &&
-             std::abs(std::abs(uv.height) * kPausePartsAtlasSize - kItemsLabelLetterSize) < 0.25F;
-    };
     TopScreenHudButton button = TopScreenHudButton::Count;
-    if (at(kItemsLabelXLetterX)) button = TopScreenHudButton::X;
-    else if (at(kItemsLabelYLetterX)) button = TopScreenHudButton::Y;
-    else continue;
+    for (const auto &crop : kItemsLabelCrops) {
+      if (std::abs(std::min(uv.x, uv.x + uv.width) * kPausePartsAtlasSize - crop.X) < 0.25F &&
+          std::abs(std::min(uv.y, uv.y + uv.height) * kPausePartsAtlasSize - crop.Y) < 0.25F &&
+          std::abs(std::abs(uv.width) * kPausePartsAtlasSize - crop.Width) < 0.25F &&
+          std::abs(std::abs(uv.height) * kPausePartsAtlasSize - crop.Height) < 0.25F)
+        button = crop.Button;
+    }
+    if (button == TopScreenHudButton::Count) continue;
     if (!std::all_of(quadPositions.begin(), quadPositions.end(), [](float value) { return std::isfinite(value); }))
       continue;
     const float minimumX = std::min({quadPositions[0], quadPositions[3], quadPositions[6], quadPositions[9]});
@@ -438,7 +445,7 @@ bool ReadTopScreenItemsPageButtonLabels(NativeA32Memory &memory, std::vector<Top
     slot.Button = button;
     slot.CenterX = (minimumX + maximumX) * 0.5F + offsetX;
     slot.CenterY = (minimumY + maximumY) * 0.5F;
-    slot.Height = std::max(maximumX - minimumX, maximumY - minimumY) * kItemsLabelCover;
+    slot.Height = std::hypot(maximumX - minimumX, maximumY - minimumY) * kItemsLabelCover;
     slot.Color = {1.0F, 1.0F, 1.0F, 1.0F};
     slot.Layer = 14U;
     slot.Owner = kPauseItemsState;

@@ -717,18 +717,22 @@ bool NativeA32WindowSession::RunFrame() {
       if (controlConfigRuntime) {
         const auto prompts = controlConfigRuntime->ActivePromptSet();
         if (Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels, prompts)) {
-          // The Items page's X / Y slot labels are native art: covered (read
-          // only) while the page is redrawn on the upper screen.
-          std::vector<Oot3dNativeGame::TopScreenHudLabelSlot> itemsLabels;
-          if (widescreenProjection.TopScreenPausePageRedrawActive &&
-              !Oot3dNativeGame::ReadTopScreenItemsPageButtonLabels(process.Memory(), &itemsLabels))
-            itemsLabels.clear();
+          // Native letters (the A ring's, the Items page's slot labels) are
+          // covered where the presented native frame drew them: the record
+          // read when that frame's draws were submitted, not the latest
+          // guest state, which the presented frame lags.
+          static const std::vector<Oot3dNativeGame::TopScreenHudLabelSlot> kNoLabels;
+          const auto &presented = presentedNativeLabels;
+          const bool hudComposed = uiLifecycleBridge.TopScreenComposedActionLetter().has_value();
           const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
               std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 400.0F, 240.0F);
           (void)Oot3dNativeGame::ApplyTopScreenHudButtonGlyphs(
-              primitives, uiLifecycleBridge.TopScreenComposedActionLetter(),
+              primitives,
+              presented && hudComposed ? presented->ActionLetter
+                                       : std::optional<Oot3dNativeGame::TopScreenHudLabelSlot>{},
               Oot3dNativeGame::ResolveTopScreenHudButtonGlyphs(prompts, controlConfigRuntime->Snapshot().Config),
-              static_cast<float>(std::max<uint32_t>(1U, canvas.Height)) / 240.0F, itemsLabels);
+              static_cast<float>(std::max<uint32_t>(1U, canvas.Height)) / 240.0F,
+              presented ? presented->ItemsLabels : kNoLabels);
         }
       }
     }
@@ -740,9 +744,9 @@ bool NativeA32WindowSession::RunFrame() {
       if (controlConfigRuntime) {
         const auto prompts = controlConfigRuntime->ActivePromptSet();
         if (Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels, prompts)) {
-          std::vector<Oot3dNativeGame::TopScreenHudLabelSlot> staffNotes;
-          if (!Oot3dNativeGame::ReadTopScreenOcarinaStaffNotes(process.Memory(), &staffNotes))
-            staffNotes.clear();
+          // The staff notes of the presented native frame (see the HUD's).
+          static const std::vector<Oot3dNativeGame::TopScreenHudLabelSlot> kNoNotes;
+          const auto &staffNotes = presentedNativeLabels ? presentedNativeLabels->StaffNotes : kNoNotes;
           const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
               std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 400.0F, 240.0F);
           (void)Oot3dNativeGame::ApplyTopScreenHudButtonGlyphs(
@@ -2059,7 +2063,36 @@ void NativeA32WindowSession::RunGuestRefresh() {
   picaStats.MaximumPicaDrainPassesPerRefresh = std::max<uint64_t>(
       picaStats.MaximumPicaDrainPassesPerRefresh, drainPassesThisRefresh);
   picaStats.RefreshesWithNativeDraws += refreshHadNativeDraws ? 1U : 0U;
+  // The native letters of this update (the state its draws are built from),
+  // kept for the frame that presents them.
+  if (refreshHadNativeDraws) RecordNativeButtonLabels();
   phaseTiming.PicaSubmitSeconds += SecondsSince(picaSubmitStart);
+}
+
+void NativeA32WindowSession::RecordNativeButtonLabels() {
+  // Off (Original 3DS), with touch or without TopScreen: nothing is read.
+  if (launch.UiProfile != Oot3dNativeGame::Oot3dUiProfile::TopScreen || !controlConfigRuntime ||
+      !Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels,
+                                                       controlConfigRuntime->ActivePromptSet())) {
+    nativeLabelFrames.Reset();
+    return;
+  }
+  auto &process = *processStorage;
+  auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
+  Oot3dNativeGame::TopScreenNativeLabelRecord record;
+  record.ThroughDraw = lastSubmittedDrawId;
+  if (!Oot3dNativeGame::ReadTopScreenOcarinaStaffNotes(process.Memory(), &record.StaffNotes))
+    record.StaffNotes.clear();
+  // The Items labels while the page is redrawn on the upper screen.
+  if (widescreenProjection.TopScreenPausePageRedrawActive &&
+      !Oot3dNativeGame::ReadTopScreenItemsPageButtonLabels(process.Memory(), &record.ItemsLabels))
+    record.ItemsLabels.clear();
+  // The A ring's letter only when its Quest materialization ran for these
+  // draws (a letter read for an earlier frame is not this frame's).
+  const auto questHookCalls = uiLifecycleBridge.Stats().topscreen_quest_hook_calls;
+  if (questHookCalls != nativeLabelQuestHookCalls) record.ActionLetter = uiLifecycleBridge.TopScreenActionLetter();
+  nativeLabelQuestHookCalls = questHookCalls;
+  nativeLabelFrames.Record(std::move(record));
 }
 
 // Presents the host frame: selects the top-screen transfer and replays the visual frame or its samples.
@@ -2159,6 +2192,12 @@ void NativeA32WindowSession::PresentVisualFrame(
                   std::move(finishedFrames));
           }
           if (finished.has_value()) {
+            // The native letters of the frame now presented (button labels).
+            presentedNativeLabels.reset();
+            if (nativeLabelFrames.Size() != 0U && !finished->Draws.empty()) {
+              if (const auto *labels = nativeLabelFrames.ForFrame(finished->Draws.back().SubmissionId))
+                presentedNativeLabels = *labels;
+            }
             frameActors = Oot3dNativeGame::CollectNativeActorInteractions(
                 process.Memory(),
                 sceneViewProbe.Stats().LastPlayStateAddress,

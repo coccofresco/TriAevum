@@ -35,6 +35,37 @@ using TopScreenHudButtonGlyphs = std::array<std::optional<Menu::ButtonGlyph>, kT
 // Black and white: a white body (dimmed as the label is) and black ink.
 [[nodiscard]] Menu::ButtonGlyphColors TopScreenHudButtonGlyphColors(const oot3d::ui::UiColor &label) noexcept;
 
+// The native letters a native frame draws (the staff's notes, the Items
+// page's slot labels, the A ring's letter), read from guest memory at the end
+// of the guest update that built that frame, so the glyphs drawn over them
+// belong to the frame being presented, not to the latest guest update (the
+// presented native frame lags the guest by its submission pipeline).
+struct TopScreenNativeLabelRecord {
+  // The last draw submission decoded by the end of that update.
+  std::uint64_t ThroughDraw = 0U;
+  std::vector<TopScreenHudLabelSlot> StaffNotes;
+  std::vector<TopScreenHudLabelSlot> ItemsLabels;
+  std::optional<TopScreenHudLabelSlot> ActionLetter;
+};
+
+class TopScreenNativeLabelFrames {
+public:
+  // One record per guest update with native draws; draw ids only grow (a
+  // savestate load that restarts them restarts the history).
+  void Record(TopScreenNativeLabelRecord record);
+  // The record of the update that built a frame whose last draw is
+  // `lastDraw`: the guest submits a frame's command list on the next update,
+  // so it is the record before the first one through that draw. Nothing
+  // when none was kept.
+  [[nodiscard]] const TopScreenNativeLabelRecord *ForFrame(std::uint64_t lastDraw) const noexcept;
+  void Reset() noexcept { mRecords.clear(); }
+  [[nodiscard]] std::size_t Size() const noexcept { return mRecords.size(); }
+
+private:
+  static constexpr std::size_t kCapacity = 32U;
+  std::vector<TopScreenNativeLabelRecord> mRecords;
+};
+
 // Replaces the labels in `hud` (final canvas coordinates: the HUD, the pause
 // hints, the ocarina song box) and draws the A glyph over the native ring and
 // the staff's note glyphs over the native notes. `pixelsPerCanvasUnit` picks

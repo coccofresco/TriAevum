@@ -138,6 +138,32 @@ void TestApply() {
   Require(frames == 3U && letters == 1U, "keycaps from the 64-texel atlas with their labels");
 }
 
+void TestNativeLabelFrames() {
+  // One record per guest update with draws; a frame's glyphs come from the
+  // update before the one that decoded its last draw (the update that built
+  // it), never from the latest one.
+  TopScreenNativeLabelFrames frames;
+  Require(frames.ForFrame(10U) == nullptr, "no record, no glyphs");
+  for (std::uint64_t update = 1U; update <= 4U; ++update) {
+    TopScreenNativeLabelRecord record;
+    record.ThroughDraw = update * 100U;
+    TopScreenHudLabelSlot note;
+    note.CenterX = static_cast<float>(update);
+    record.StaffNotes.push_back(note);
+    frames.Record(record);
+  }
+  const auto *frame = frames.ForFrame(250U);
+  Require(frame != nullptr && frame->ThroughDraw == 200U && frame->StaffNotes.front().CenterX == 2.0F,
+          "the frame decoded in update 3 shows update 2's letters");
+  Require(frames.ForFrame(80U) == nullptr, "a frame older than the history shows none");
+  Require(frames.ForFrame(900U) == nullptr, "a frame not decoded yet shows none");
+  // Draw ids restart (a savestate load): the history restarts with them.
+  TopScreenNativeLabelRecord restart;
+  restart.ThroughDraw = 5U;
+  frames.Record(restart);
+  Require(frames.Size() == 1U && frames.ForFrame(5U) == nullptr, "a restarted history");
+}
+
 } // namespace
 
 int main() {
@@ -145,6 +171,7 @@ int main() {
   TestDefaults();
   TestRebound();
   TestApply();
+  TestNativeLabelFrames();
   std::cout << "oot3d_hud_button_labels_tests: ok\n";
   return EXIT_SUCCESS;
 }

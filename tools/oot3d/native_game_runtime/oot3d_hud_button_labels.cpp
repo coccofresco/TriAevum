@@ -45,6 +45,30 @@ Menu::ButtonGlyphColors TopScreenHudButtonGlyphColors(const oot3d::ui::UiColor &
   return colors;
 }
 
+void TopScreenNativeLabelFrames::Record(TopScreenNativeLabelRecord record) {
+  if (!mRecords.empty() && record.ThroughDraw <= mRecords.back().ThroughDraw) {
+    if (record.ThroughDraw == mRecords.back().ThroughDraw) {
+      // No new draw since the last read: the same frame, read again.
+      mRecords.back() = std::move(record);
+      return;
+    }
+    mRecords.clear();
+  }
+  if (mRecords.size() == kCapacity) mRecords.erase(mRecords.begin());
+  mRecords.push_back(std::move(record));
+}
+
+const TopScreenNativeLabelRecord *TopScreenNativeLabelFrames::ForFrame(std::uint64_t lastDraw) const noexcept {
+  // The guest submits a frame's command list on the update after the one
+  // that built it, so the drain that decodes a frame's last draw reads the
+  // next update's state: the frame's own state is the drain before it
+  // (measured: a staff note's glyph then fades in with the native note).
+  for (std::size_t index = 0; index < mRecords.size(); ++index) {
+    if (mRecords[index].ThroughDraw >= lastDraw) return index == 0U ? nullptr : &mRecords[index - 1U];
+  }
+  return nullptr;
+}
+
 TopScreenHudLabelStats ApplyTopScreenHudButtonGlyphs(std::vector<oot3d::ui::UiPrimitive> &hud,
                                                     const std::optional<TopScreenHudLabelSlot> &actionLetter,
                                                     const TopScreenHudButtonGlyphs &glyphs,

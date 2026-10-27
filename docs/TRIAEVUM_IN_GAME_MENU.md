@@ -272,14 +272,30 @@ of this runs (no list is touched, no guest memory is read for it).
 | Pause L / R tab hints | `0x005D4A0C` glyph quads 2 ("<-L", custom_ui01 rect 20) and 3 ("R->", rect 21) | the key and its arrow stay; the glyph follows the hint in the list, centred on the letter's ink (crop x 20..28.5 or 9..17.5, y 7..19.7), as tall as the ink box's diagonal so the disc covers the letter; the held hint's dimming |
 | The item hint's SELECT | `0x005E0E6C` quad 0, custom_ui01 (277, 222, 64, 16); the "?" stays | replaces the word; ends where the word's ink ends, beside the "?"; the hint's pulse and fade |
 | Legend discs (View Model, its controls line, the D-pad picker, the Items shortcut hold) | any custom_ui01 crop that is one of the mod's button discs: (46 / 81 / 116 / 151 / 186, 89, 32, 32) = A / B / X / Y / ZL (records `0x0060A2D4`, `0x0060A728`) | replaces the disc in place, 26/32 of the crop |
-| Items page X / Y slot labels | native Items page state `0x005066F8`: its label model (`+0x30`, drawn by `0x00434C80`), quads whose UVs are the X (67, 51) or Y (83, 51) 11 x 11 letters of the pause parts atlas, at the positions drawn this frame (the model's position lane, as the Items cursor reads it), + 80 / 84 on the upper screen | over the native letter (layer 14), 1.35 x the letter, only with the page at rest (state 2, `+0x60` clear) |
+| Items page slot labels X, Y, I (ZR), II (ZL) | native Items page state `0x005066F8`: its label model (`+0x30`, drawn by `0x00434C80`), quads whose UVs are the X (67, 51) / Y (83, 51) 11 x 11 or I (63, 34) / II (80, 34) 18 x 13 letters of the pause parts atlas (the Vanilla UI pack draws "ZR" / "ZL" in the I / II crops), at the positions drawn (the model's position lane, as the Items cursor reads it), + 80 / 84 on the upper screen | over the native letter (layer 14), as tall as the crop's diagonal, only with the page at rest (state 2, `+0x60` clear) |
 
 The note types are the N64 ones; the 3DS plays them with L (A), R (C-down),
 Y (C-right), X (C-left) and A (C-up), so each note shows the glyph of the
 input bound to that 3DS button (the native song tables `0x004D541C` give
-Zelda's Lullaby 3 4 2 = X A Y). I and II on the Items page are touch slots
-without a button and keep their letters; the D-pad in the legends is not a
-letter and stays.
+Zelda's Lullaby 3 4 2 = X A Y). I and II on the Items page are SingleScreen's
+ZR and ZL item slots (`ResolveTopScreenItemQuery`: ZR uses Item I, ZL Item
+II; the HUD shows the same items on ZR / ZL), so they show the glyphs of the
+inputs bound to ZR and ZL. The D-pad in the legends is not a letter and
+stays.
+
+**Frame alignment.** The glyphs drawn over native art (the staff notes, the
+Items labels, the A ring) are not read from the latest guest state at
+composition: the guest submits a frame's command list on the update after
+the one that built it, so the native frame presented lags the guest. At the
+end of every guest update with native draws the window records what those
+letters are (`TopScreenNativeLabelFrames`, keyed by the last draw submission
+decoded), and when a top-screen transfer is selected for presentation the
+record of the update that built that frame (the record before the first one
+through the frame's last draw) becomes the presented one; the composition
+draws those glyphs. Measured on the staff: a note dropping in now fades in
+as a glyph on the same presented frames, at the same place and alpha, as
+the native note (before: four presented frames earlier). With Original 3DS
+nothing is recorded.
 
 All of these are identified by native owner, quad, model or atlas crop, so
 the Vanilla UI/HUD pack and the HD atlas change nothing, and they carry no
@@ -295,15 +311,28 @@ build before this change (native art and Italian state runs; with the pack,
 identical to a baseline run whose pack had loaded, since the pack's own load
 timing varies between runs of either build).
 
-Limits: a glyph drawn over native art (the staff notes, the Items labels,
-the A ring) reads the guest state of the latest update, while the presented
-native frame lags it (measured: a staff note dropping in shows about two
-updates, four presented frames, earlier as a glyph than natively), so on a
-change (a note appearing, the Items page settling) the glyph can lead the
-native art; at rest they match. The Items labels show their native
-letters while the page slides in or out (its transform is not in the
-positions read). The SingleScreen Items page's native "BACK" key (with its
-B) is not drawn on the pages TopScreen shows and is not covered.
+Transitions, frame by frame (every presented frame, stone state: pause open,
+page R and L, pause close, ocarina out, the song played, notes dropping on
+the staff; `compare_ocarina_pause.jpg` has a strip): the staff's notes are
+covered on every frame (an automated check finds no frame among 106 where a
+native note's pixels are left unchanged under the glyph run). Not yet
+covered:
+
+- **Page slides.** When R / L changes page the Items page slides out after
+  its controller has already closed (state 0): what slides is not drawn by
+  `0x00434C80` with the label positions read, so for about four presented
+  frames the native I / X / Y / II letters show in the sliding page, and on
+  the first moving frame the glyphs stay at the rest position (pause open, where the labels appear only with the page at rest, shows none).
+  Covering them needs
+  the slide's transform (owned by the pause shell, not the Items state, which
+  does not change during the slide) or suppressing the four label quads in
+  the native draw with a restore, so that a page in motion shows neither.
+- The glyphs over native art are drawn over it, not substituted: the native
+  letter is still drawn under an opaque glyph, so the glyph must stay at
+  least as large as the letter's ink.
+
+The SingleScreen Items page's native "BACK" key (with its B) is not drawn on
+the pages TopScreen shows and is not covered.
 
 ## Pause
 

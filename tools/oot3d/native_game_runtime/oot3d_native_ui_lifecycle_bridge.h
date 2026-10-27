@@ -134,6 +134,11 @@ public:
   const std::optional<TopScreenHudLabelSlot> &TopScreenComposedActionLetter() const noexcept {
     return mTopScreenComposedActionLetter;
   }
+  // The letter as read at the latest Quest materialization (the draws that
+  // follow it), whether or not a HUD was composed since.
+  const std::optional<TopScreenHudLabelSlot> &TopScreenActionLetter() const noexcept {
+    return mTopScreenActionLetter;
+  }
   bool ReadOcarinaGeometry(TopScreenOcarinaGeometry &geometry, std::string *error) {
     return ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, error);
   }

@@ -439,14 +439,19 @@ void TestItemsPageLabels() {
   std::vector<std::uint8_t> before(0x10000U), after(0x10000U);
   Require(memory.ReadBytes(0x08000000U, before), "snapshot");
   std::vector<TopScreenHudLabelSlot> labels;
-  Require(ReadTopScreenItemsPageButtonLabels(memory, &labels, &error) && labels.size() == 2U, "X and Y only");
+  Require(ReadTopScreenItemsPageButtonLabels(memory, &labels, &error) && labels.size() == 4U, "X, Y, I, II");
   Require(labels[0].Button == TopScreenHudButton::X && Near(labels[0].CenterX, 355.5F) &&
-              Near(labels[0].CenterY, 72.5F) && Near(labels[0].Height, 11.0F * 1.35F) &&
+              Near(labels[0].CenterY, 72.5F) && Near(labels[0].Height, std::hypot(11.0F, 11.0F)) &&
               labels[0].Owner == 0x005066F8U && labels[0].Descriptor == model,
           "the X label on the upper screen");
   Require(labels[1].Button == TopScreenHudButton::Y && Near(labels[1].CenterX, 345.5F) &&
               Near(labels[1].CenterY, 124.5F),
           "the Y label");
+  // SingleScreen's I and II slots hold the ZR and ZL items.
+  Require(labels[2].Button == TopScreenHudButton::Zr && Near(labels[2].CenterX, 356.0F) &&
+              Near(labels[2].CenterY, 14.5F) && Near(labels[2].Height, std::hypot(18.0F, 13.0F)),
+          "the I label is ZR's");
+  Require(labels[3].Button == TopScreenHudButton::Zl && Near(labels[3].CenterY, 198.5F), "the II label is ZL's");
   Require(memory.ReadBytes(0x08000000U, after) && before == after, "reading the labels changed guest memory");
   // Opening, closed, or drawing none of its models: the native letters stay.
   for (const std::uint32_t state : {1U, 13U, 0U}) {

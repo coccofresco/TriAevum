@@ -30,6 +30,7 @@
 #include "oot3d_demo_host_io.h"
 #include "oot3d_demo_host_screenshot.h"
 #include "oot3d_demo_host_window_timing.h"
+#include "oot3d_hud_button_labels.h"
 #include "oot3d_legacy_ui_adapters.h"
 #include "oot3d_n64_ui_renderer.h"
 #include "oot3d_native_a32_ctr_host.h"
@@ -279,6 +280,9 @@ private:
       bool &topScreenStartRoutingEligible,
       Oot3dNativeGame::NativeA32InputFrame &inputFrame);
   void RunGuestRefresh();
+  // With the button labels on: the native letters the draws just drained
+  // show (staff notes, Items labels, A ring), kept for their frame.
+  void RecordNativeButtonLabels();
   void PresentVisualFrame(const double &presentationElapsedSeconds, const float &visualInterpolationAlpha);
   void Finish();
   // The setup's former lambdas.
@@ -536,6 +540,11 @@ private:
   uint64_t visualContinuityEpoch = 1U;
   std::map<uint32_t, Oot3dNativeGame::Oot3dPicaDisplayTransferSubmission> displayTransfersByOutput;
   uint64_t lastSubmittedDrawId = 0;
+  // Button labels over native letters (HudButtonLabels Controller): what each
+  // drain of native draws drew, and the record of the frame presented now.
+  Oot3dNativeGame::TopScreenNativeLabelFrames nativeLabelFrames;
+  std::optional<Oot3dNativeGame::TopScreenNativeLabelRecord> presentedNativeLabels;
+  uint64_t nativeLabelQuestHookCalls = 0U;
   // Diagnostic: raw TextureCopy destinations watched for guest access while
   // extended diagnostics are on. Empty otherwise, so normal runs are untouched.
   std::vector<std::pair<uint32_t, uint32_t>> rawCopyWatchRanges;

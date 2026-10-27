@@ -112,11 +112,12 @@ bool ReadTopScreenOcarinaStaffNotes(NativeA32Memory &memory, std::vector<TopScre
                                     std::string *error = nullptr,
                                     std::uint32_t messageContext = kTopScreenMessageContext);
 
-// The native Items page's X and Y slot labels as drawn this frame (read
-// only): the label model of its state (0x005066F8 + 0x30), quads whose UVs
-// are the X / Y letters of the pause parts atlas, at their drawn positions on
-// the upper screen. Only with the page at rest (state 2): while it slides in
-// or out, the native letters show. I and II are touch slots and stay.
+// The native Items page's slot labels as drawn (read only): the label model
+// of its state (0x005066F8 + 0x30), quads whose UVs are the X / Y / I / II
+// letters of the pause parts atlas, at their drawn positions on the upper
+// screen, with the page at rest (state 2). I and II are SingleScreen's ZR and
+// ZL item slots (ResolveTopScreenItemQuery: ZR is Item I, ZL Item II; the
+// Vanilla UI pack draws "ZR" / "ZL" there), so they take ZR's and ZL's glyphs.
 bool ReadTopScreenItemsPageButtonLabels(NativeA32Memory &memory, std::vector<TopScreenHudLabelSlot> *labels,
                                         std::string *error = nullptr);
 
