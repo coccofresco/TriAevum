@@ -256,7 +256,54 @@ button, in the prompt family of the device in use (UX decision 7):
   list is not touched): frames are byte-identical to a build without
   the feature (measured on the Epona and Kokiri states, with and without the
   Vanilla UI pack, at HUD 100 % and 70 %).
-- MM3D's HUD and the pause pages' L / R / SELECT hints keep their letters.
+- MM3D's HUD keeps its letters.
+
+### Ocarina notes and pause hints
+
+The same setting and the same binding-to-glyph rules cover the other 3DS
+button letters TopScreen shows (owner request, 2026-10-27): the ocarina's
+notes and the pause pages' hints. With Original 3DS, or with touch, nothing
+of this runs (no list is touched, no guest memory is read for it).
+
+| Letters | Identity (never a screen position) | How the glyph is drawn |
+| --- | --- | --- |
+| Ocarina song box notes (the songs browsed and the reference notes while the ocarina is out) | SingleScreen 3.0 `0x005D2078` quads 6..13; each carries its native note type as its entry in the note atlas table (`descriptor_address` = `0x0050A1E0` + 4 x type) | replaces the note in place (layer 20), 15/16 of the quad, the note's alpha |
+| Native message staff notes (the notes played, a song taught or played back, "You played ...") | the message context's draw elements (`0x005C1878` + `0x568`, drawn by `0x0042CBCC` through `0x002F1280`) whose model is one of the five note models (`0x96` + type) of that window's model table (`+0x168`), with the draw's own gates (window state, element and model visibility) | over the native note, after the list (layer 24), centred on the element renderer's world matrix (`+0x0C`), 15.5 model units scaled by it, the renderer's colour and alpha (`+0xF0`); the native shadow stays beside it |
+| Pause L / R tab hints | `0x005D4A0C` glyph quads 2 ("<-L", custom_ui01 rect 20) and 3 ("R->", rect 21) | the key and its arrow stay; the glyph follows the hint in the list, centred on the letter's ink (crop x 20..28.5 or 9..17.5, y 7..19.7), as tall as the ink box's diagonal so the disc covers the letter; the held hint's dimming |
+| The item hint's SELECT | `0x005E0E6C` quad 0, custom_ui01 (277, 222, 64, 16); the "?" stays | replaces the word; ends where the word's ink ends, beside the "?"; the hint's pulse and fade |
+| Legend discs (View Model, its controls line, the D-pad picker, the Items shortcut hold) | any custom_ui01 crop that is one of the mod's button discs: (46 / 81 / 116 / 151 / 186, 89, 32, 32) = A / B / X / Y / ZL (records `0x0060A2D4`, `0x0060A728`) | replaces the disc in place, 26/32 of the crop |
+| Items page X / Y slot labels | native Items page state `0x005066F8`: its label model (`+0x30`, drawn by `0x00434C80`), quads whose UVs are the X (67, 51) or Y (83, 51) 11 x 11 letters of the pause parts atlas, at the positions drawn this frame (the model's position lane, as the Items cursor reads it), + 80 / 84 on the upper screen | over the native letter (layer 14), 1.35 x the letter, only with the page at rest (state 2, `+0x60` clear) |
+
+The note types are the N64 ones; the 3DS plays them with L (A), R (C-down),
+Y (C-right), X (C-left) and A (C-up), so each note shows the glyph of the
+input bound to that 3DS button (the native song tables `0x004D541C` give
+Zelda's Lullaby 3 4 2 = X A Y). I and II on the Items page are touch slots
+without a button and keep their letters; the D-pad in the legends is not a
+letter and stays.
+
+All of these are identified by native owner, quad, model or atlas crop, so
+the Vanilla UI/HUD pack and the HD atlas change nothing, and they carry no
+language: the pause pages' words (ITEMS / OGGETTI ...) are not touched.
+
+Verification: deterministic rgb8 captures from the stone state (pause Items
+with the SELECT hint, then the ocarina: the song box with Zelda's Lullaby and
+the six notes played on the staff), without and with the Vanilla UI pack,
+and an Italian boot to the Temple of Time (Equip. / Mappa / Oggetti, "Ninna
+nanna di Zelda"): Xbox, PlayStation, Nintendo and Keyboard each show their
+glyphs on every family above. Original 3DS frames are byte-identical to the
+build before this change (native art and Italian state runs; with the pack,
+identical to a baseline run whose pack had loaded, since the pack's own load
+timing varies between runs of either build).
+
+Limits: a glyph drawn over native art (the staff notes, the Items labels,
+the A ring) reads the guest state of the latest update, while the presented
+native frame lags it (measured: a staff note dropping in shows about two
+updates, four presented frames, earlier as a glyph than natively), so on a
+change (a note appearing, the Items page settling) the glyph can lead the
+native art; at rest they match. The Items labels show their native
+letters while the page slides in or out (its transform is not in the
+positions read). The SingleScreen Items page's native "BACK" key (with its
+B) is not drawn on the pages TopScreen shows and is not covered.
 
 ## Pause
 

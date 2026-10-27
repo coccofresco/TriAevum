@@ -216,6 +216,7 @@ bool ReadTopScreenOcarinaGeometry(NativeA32Memory &memory,
     quad.AtlasSize = {16.0F, 16.0F};
     quad.Color = {1, 1, 1, 0.85F};
     quad.Visible = visible;
+    geometry->NoteTypes[note] = static_cast<std::uint8_t>(noteType);
   }
 
   for (std::uint32_t index = 14U; index < 16U; ++index) {
@@ -251,6 +252,10 @@ std::size_t AppendTopScreenOcarinaPresentation(
     primitive.role = oot3d::ui::UiPrimitiveRole::TouchControl;
     primitive.owner_address = 0x005D2078U;
     primitive.source_quad = static_cast<std::uint32_t>(index);
+    // A note names its native type by its entry in the note atlas table
+    // (0x0050A1E0), for the button labels (oot3d_top_screen_button_labels).
+    if (index >= 6U && index < 14U)
+      primitive.descriptor_address = 0x0050A1E0U + 4U * geometry.NoteTypes[index - 6U];
     primitive.texture = ocarinaPage;
     primitive.destination = {quad.Position.X, quad.Position.Y, quad.Size.X,
                              quad.Size.Y};

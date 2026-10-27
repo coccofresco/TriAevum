@@ -49,9 +49,10 @@ public:
         config.HudScale != kTopScreenHudScaleOptimized) {
       ImGui::TextDisabled("Configuration file size: %.2fx", config.HudScale);
     }
-    // The letters on the HUD's buttons: the glyphs of the inputs bound to
-    // them (Controls > Bindings, in Controls > Devices > Button prompts'
-    // family) or the 3DS letters.
+    // The letters of the 3DS buttons on the HUD, on the ocarina's notes and
+    // in the pause pages' hints: the glyphs of the inputs bound to them
+    // (Controls > Bindings, in Controls > Devices > Button prompts' family)
+    // or the 3DS letters.
     const auto labels = [&](const char *label, TopScreenHudButtonLabels value) {
       if (ImGui::RadioButton(label, config.HudButtonLabels == value) &&
           config.HudButtonLabels != value) {
@@ -62,13 +63,14 @@ public:
     ImGui::TextUnformatted("HUD button labels");
     labels("Controller##hud_button_labels", TopScreenHudButtonLabels::Controller);
     if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("The buttons and keys you bound to A, B, X, Y, ZL and ZR,\n"
-                        "drawn for the device in use (Controls > Devices > Button prompts).\n"
-                        "With touch controls the HUD keeps its letters.");
+      ImGui::SetTooltip("The buttons and keys you bound to the 3DS buttons, drawn for the\n"
+                        "device in use (Controls > Devices > Button prompts): on the HUD,\n"
+                        "on the ocarina's notes and in the pause pages' hints (L, R, SELECT).\n"
+                        "With touch controls the letters stay.");
     ImGui::SameLine();
     labels("Original 3DS##hud_button_labels", TopScreenHudButtonLabels::Original);
     if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("The 3DS letters A, B, X, Y, ZL and ZR.");
+      ImGui::SetTooltip("The 3DS letters: A, B, X, Y, L, R, ZL, ZR and SELECT.");
     if (!mRuntime->Persistent()) {
       ImGui::TextDisabled("TopScreen: session only");
     } else if (!mStatus.empty()) {

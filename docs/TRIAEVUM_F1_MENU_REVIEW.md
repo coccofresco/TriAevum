@@ -190,6 +190,12 @@ mirrors it. The bindings and the family stay Controls' (Bindings, Devices >
 Button prompts); the HUD reads them, it has no control of its own for them.
 Design, rules and captures: [In-game menu, HUD button labels](TRIAEVUM_IN_GAME_MENU.md#hud-button-labels).
 
+The same control also covers the ocarina's note letters (the song box and the
+message staff) and the pause pages' hints (L / R tabs, SELECT, the legends'
+A / B / X / Y discs, the Items page's X / Y slot labels) since 2026-10-27:
+one owner, one control; only its tooltips name the wider scope. Actual-widget
+smoke after that change: 11,956 assertions (full run, unchanged control).
+
 Actual-widget smoke: **11,956 assertions** (full run), including the control
 below the HUD size, Controller as the default, Original 3DS applied alone (the
 size and an external margin kept) and Controller again.

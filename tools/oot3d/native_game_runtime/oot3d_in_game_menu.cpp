@@ -548,8 +548,9 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     Row labels;
     labels.Key = "Button labels";
     labels.Kind = RowKind::Choice;
-    labels.Help = "Controller shows the buttons and keys you bound to A, B, X, Y, ZL and ZR, for the device in use; "
-                  "Original 3DS shows the 3DS letters. With touch controls the HUD keeps its letters.";
+    labels.Help = "Controller shows the buttons and keys you bound to the 3DS buttons, for the device in use: on "
+                  "the HUD, on the ocarina's notes and in the pause pages' hints (L, R, SELECT). Original 3DS shows "
+                  "the 3DS letters. With touch controls the letters stay.";
     labels.Choices = {"Controller", "Original 3DS"};
     labels.Read = [this] { return mTopScreen.HudButtonLabels == TopScreenHudButtonLabels::Original ? 1 : 0; };
     labels.Write = [this](int value) {

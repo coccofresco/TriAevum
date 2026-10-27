@@ -12,6 +12,9 @@ NativeControlAction TopScreenHudButtonAction(TopScreenHudButton button) noexcept
   case TopScreenHudButton::Y: return NativeControlAction::Y;
   case TopScreenHudButton::Zl: return NativeControlAction::Zl;
   case TopScreenHudButton::Zr: return NativeControlAction::Zr;
+  case TopScreenHudButton::L: return NativeControlAction::L;
+  case TopScreenHudButton::R: return NativeControlAction::R;
+  case TopScreenHudButton::Select: return NativeControlAction::Select;
   case TopScreenHudButton::Count: break;
   }
   return NativeControlAction::Count;
@@ -45,16 +48,22 @@ Menu::ButtonGlyphColors TopScreenHudButtonGlyphColors(const oot3d::ui::UiColor &
 TopScreenHudLabelStats ApplyTopScreenHudButtonGlyphs(std::vector<oot3d::ui::UiPrimitive> &hud,
                                                     const std::optional<TopScreenHudLabelSlot> &actionLetter,
                                                     const TopScreenHudButtonGlyphs &glyphs,
-                                                    float pixelsPerCanvasUnit) {
+                                                    float pixelsPerCanvasUnit,
+                                                    const std::vector<TopScreenHudLabelSlot> &nativeOverlays) {
   return ReplaceTopScreenHudButtonLabels(
-      hud, actionLetter, [&](const TopScreenHudLabelSlot &slot, std::vector<oot3d::ui::UiPrimitive> &output) {
+      hud, actionLetter,
+      [&](const TopScreenHudLabelSlot &slot, std::vector<oot3d::ui::UiPrimitive> &output) {
         const auto index = static_cast<std::size_t>(slot.Button);
         if (index >= glyphs.size() || !glyphs[index]) return false;
         const auto cell = Menu::ButtonGlyphCellForPixels(slot.Height * pixelsPerCanvasUnit);
-        Menu::AppendButtonGlyph(output, *glyphs[index], slot.CenterX, slot.CenterY, slot.Height, slot.Color.alpha,
+        const float centerX =
+            slot.AlignRight ? slot.CenterX - Menu::ButtonGlyphWidth(*glyphs[index], slot.Height) * 0.5F
+                            : slot.CenterX;
+        Menu::AppendButtonGlyph(output, *glyphs[index], centerX, slot.CenterY, slot.Height, slot.Color.alpha,
                                 slot.Layer, cell, TopScreenHudButtonGlyphColors(slot.Color));
         return true;
-      });
+      },
+      nativeOverlays);
 }
 
 } // namespace Oot3dNativeGame

@@ -42,6 +42,8 @@ struct TopScreenOcarinaGeometry {
   bool SongLearned = false;
   std::uint8_t Song = 0;
   std::array<TopScreenTexturedQuad, 16> Quads{};
+  // The native note type (0..4) of note quads 6..13.
+  std::array<std::uint8_t, 8> NoteTypes{};
   TopScreenTexturedQuad UnknownSong{};
 };
 

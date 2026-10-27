@@ -717,17 +717,40 @@ bool NativeA32WindowSession::RunFrame() {
       if (controlConfigRuntime) {
         const auto prompts = controlConfigRuntime->ActivePromptSet();
         if (Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels, prompts)) {
+          // The Items page's X / Y slot labels are native art: covered (read
+          // only) while the page is redrawn on the upper screen.
+          std::vector<Oot3dNativeGame::TopScreenHudLabelSlot> itemsLabels;
+          if (widescreenProjection.TopScreenPausePageRedrawActive &&
+              !Oot3dNativeGame::ReadTopScreenItemsPageButtonLabels(process.Memory(), &itemsLabels))
+            itemsLabels.clear();
           const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
               std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 400.0F, 240.0F);
           (void)Oot3dNativeGame::ApplyTopScreenHudButtonGlyphs(
               primitives, uiLifecycleBridge.TopScreenComposedActionLetter(),
               Oot3dNativeGame::ResolveTopScreenHudButtonGlyphs(prompts, controlConfigRuntime->Snapshot().Config),
-              static_cast<float>(std::max<uint32_t>(1U, canvas.Height)) / 240.0F);
+              static_cast<float>(std::max<uint32_t>(1U, canvas.Height)) / 240.0F, itemsLabels);
         }
       }
     }
     if (topScreenPresentation && subsystem == oot3d::ui::UiSubsystem::TouchControls) {
       ocarinaText.Append(primitives);
+      // The ocarina's notes as the glyphs of the bound inputs: the song box's
+      // notes in place, the native message staff's notes covered (read only).
+      // Off (Original) or with touch, nothing is read and nothing changes.
+      if (controlConfigRuntime) {
+        const auto prompts = controlConfigRuntime->ActivePromptSet();
+        if (Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels, prompts)) {
+          std::vector<Oot3dNativeGame::TopScreenHudLabelSlot> staffNotes;
+          if (!Oot3dNativeGame::ReadTopScreenOcarinaStaffNotes(process.Memory(), &staffNotes))
+            staffNotes.clear();
+          const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
+              std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 400.0F, 240.0F);
+          (void)Oot3dNativeGame::ApplyTopScreenHudButtonGlyphs(
+              primitives, std::nullopt,
+              Oot3dNativeGame::ResolveTopScreenHudButtonGlyphs(prompts, controlConfigRuntime->Snapshot().Config),
+              static_cast<float>(std::max<uint32_t>(1U, canvas.Height)) / 240.0F, staffNotes);
+        }
+      }
     }
     if (topScreenPresentation) {
       lastTopScreenPrimitivesBySubsystem[subsystemIndex] = primitives;

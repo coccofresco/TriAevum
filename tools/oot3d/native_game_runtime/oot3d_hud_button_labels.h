@@ -35,11 +35,14 @@ using TopScreenHudButtonGlyphs = std::array<std::optional<Menu::ButtonGlyph>, kT
 // Black and white: a white body (dimmed as the label is) and black ink.
 [[nodiscard]] Menu::ButtonGlyphColors TopScreenHudButtonGlyphColors(const oot3d::ui::UiColor &label) noexcept;
 
-// Replaces the labels in `hud` (final HUD canvas coordinates) and draws the
-// A glyph over the native ring. `pixelsPerCanvasUnit` picks the atlas size.
+// Replaces the labels in `hud` (final canvas coordinates: the HUD, the pause
+// hints, the ocarina song box) and draws the A glyph over the native ring and
+// the staff's note glyphs over the native notes. `pixelsPerCanvasUnit` picks
+// the atlas size.
 TopScreenHudLabelStats ApplyTopScreenHudButtonGlyphs(std::vector<oot3d::ui::UiPrimitive> &hud,
                                                     const std::optional<TopScreenHudLabelSlot> &actionLetter,
                                                     const TopScreenHudButtonGlyphs &glyphs,
-                                                    float pixelsPerCanvasUnit);
+                                                    float pixelsPerCanvasUnit,
+                                                    const std::vector<TopScreenHudLabelSlot> &nativeOverlays = {});
 
 } // namespace Oot3dNativeGame
