@@ -1,4 +1,5 @@
 #include "oot3d_top_screen_wide_items_runtime.h"
+#include "oot3d_top_screen_button_labels.h"
 #include "oot3d_top_screen_items_layout.h"
 #include "oot3d_native_trigonometry.h"
 
@@ -146,6 +147,9 @@ bool TopScreenWideItemsRuntime::Restore(Sequence &sequence) noexcept {
 }
 
 void TopScreenWideItemsRuntime::Reset() noexcept {
+  // After a state load the memory is the loaded state's: the colours kept
+  // for the previous memory are not written into it.
+  mHiddenLabelColors.clear();
   (void)Restore(mItems);
   (void)Restore(mGear);
   (void)Restore(mUpdate);
@@ -1168,10 +1172,83 @@ bool TopScreenWideItemsRuntime::ExecutePageProjection(oot3d::recomp::a32::GuestS
   return false;
 }
 
+void TopScreenWideItemsRuntime::RestoreHiddenItemsLabels() noexcept {
+  for (const auto &color : mHiddenLabelColors) {
+    std::array<float, 16> current{};
+    if (!mMemory.ReadBytes(color.Address, std::span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(current.data()),
+                                                                  sizeof(current))))
+      continue;
+    // Only where the native code left the cleared colours in place.
+    if (current == color.Hidden)
+      (void)mMemory.WriteBytes(color.Address, std::span<const std::uint8_t>(
+                                                  reinterpret_cast<const std::uint8_t *>(color.Native.data()),
+                                                  sizeof(color.Native)));
+  }
+  mHiddenLabelColors.clear();
+}
+
+void TopScreenWideItemsRuntime::HideItemsLabels() {
+  TopScreenItemsLabelModel streams;
+  if (!ResolveTopScreenItemsLabelModel(mMemory, ReadWord(kTopScreenItemsLabelModel), &streams) ||
+      streams.Quads == 0U)
+    return;
+  const auto colorBytes = [](std::array<float, 16> &values) {
+    return std::span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(values.data()), sizeof(values));
+  };
+  bool any = false;
+  for (std::uint32_t quad = 0U; quad < streams.Quads; ++quad) {
+    std::array<float, 8> uvs{};
+    if (!mMemory.ReadBytes(streams.Uvs + quad * 0x20U,
+                           std::span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(uvs.data()), sizeof(uvs))))
+      continue;
+    const auto button = TopScreenItemsLabelButton(uvs);
+    if (!button) continue;
+    std::size_t slot = 4U;
+    switch (*button) {
+    case TopScreenHudButton::X: slot = 0U; break;
+    case TopScreenHudButton::Y: slot = 1U; break;
+    case TopScreenHudButton::Zr: slot = 2U; break;
+    case TopScreenHudButton::Zl: slot = 3U; break;
+    default: break;
+    }
+    if (slot >= mHiddenItemsLabels.size() || !mHiddenItemsLabels[slot]) continue;
+    HiddenLabelColor color;
+    color.Address = streams.Colors + quad * 0x40U;
+    if (!mMemory.ReadBytes(color.Address, colorBytes(color.Native))) continue;
+    color.Hidden = color.Native;
+    for (std::size_t vertex = 0U; vertex < 4U; ++vertex) color.Hidden[vertex * 4U + 3U] = 0.0F;
+    if (color.Hidden != color.Native &&
+        mMemory.WriteBytes(color.Address, std::span<const std::uint8_t>(
+                                              reinterpret_cast<const std::uint8_t *>(color.Hidden.data()),
+                                              sizeof(color.Hidden)))) {
+      mHiddenLabelColors.push_back(color);
+      ++mLabelHideStats.QuadsHidden;
+    }
+    std::array<float, 16> check{};
+    if (mMemory.ReadBytes(color.Address, colorBytes(check)) &&
+        (check[3] != 0.0F || check[7] != 0.0F || check[11] != 0.0F || check[15] != 0.0F))
+      ++mLabelHideStats.QuadsLeftVisible;
+    any = true;
+  }
+  if (any) ++mLabelHideStats.Draws;
+  if (const char *trace = std::getenv("TRIAEVUM_BUTTON_LABEL_TRACE"); trace != nullptr && trace[0] == '1')
+    std::fprintf(stderr, "BUTTON_LABELS items_draw draws=%llu hidden_total=%llu left_visible_total=%llu\n",
+                 static_cast<unsigned long long>(mLabelHideStats.Draws),
+                 static_cast<unsigned long long>(mLabelHideStats.QuadsHidden),
+                 static_cast<unsigned long long>(mLabelHideStats.QuadsLeftVisible));
+}
+
 bool TopScreenWideItemsRuntime::ExecuteItemsDraw(oot3d::recomp::a32::GuestState &state,
                                                  oot3d::recomp::a32::ExecutionResult *result,
                                                  std::uint32_t *blocksConsumed) {
   if (mItems.Pending()) return Step(mItems, state, result, blocksConsumed);
+  // HUD button labels: the label quads a glyph replaces are hidden for this
+  // native draw (the previous draw's are written back first). Nothing is
+  // read or written with every label shown (Original 3DS, touch).
+  RestoreHiddenItemsLabels();
+  if ((mHiddenItemsLabels[0] || mHiddenItemsLabels[1] || mHiddenItemsLabels[2] || mHiddenItemsLabels[3]) &&
+      ReadWord(kItemsPageState) != 0U)
+    HideItemsLabels();
   if (!mItemsWide) return false;
   mPageWide = false;
   mItemsWide = false;

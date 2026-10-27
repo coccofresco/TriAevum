@@ -155,6 +155,8 @@ void TestNativeLabelFrames() {
   const auto *frame = frames.ForFrame(250U);
   Require(frame != nullptr && frame->ThroughDraw == 200U && frame->StaffNotes.front().CenterX == 2.0F,
           "the frame decoded in update 3 shows update 2's letters");
+  Require(frames.Decoding(250U) != nullptr && frames.Decoding(250U)->ThroughDraw == 300U,
+          "the update that decoded the frame");
   Require(frames.ForFrame(80U) == nullptr, "a frame older than the history shows none");
   Require(frames.ForFrame(900U) == nullptr, "a frame not decoded yet shows none");
   // Draw ids restart (a savestate load): the history restarts with them.

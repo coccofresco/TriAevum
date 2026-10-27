@@ -121,6 +121,23 @@ bool ReadTopScreenOcarinaStaffNotes(NativeA32Memory &memory, std::vector<TopScre
 bool ReadTopScreenItemsPageButtonLabels(NativeA32Memory &memory, std::vector<TopScreenHudLabelSlot> *labels,
                                         std::string *error = nullptr);
 
+// The Items label model's state address (0x005066F8 + 0x30).
+inline constexpr std::uint32_t kTopScreenItemsLabelModel = 0x00506728U;
+// The button a label quad names, by its UV crop of the pause parts atlas (X,
+// Y, ZR for I, ZL for II); nothing for any other quad.
+[[nodiscard]] std::optional<TopScreenHudButton> TopScreenItemsLabelButton(const std::array<float, 8> &picaUvs) noexcept;
+// The label model's streams: source UVs (0x20 a quad) and colours (0x40 a
+// quad, RGBA floats per vertex, read when its draw is decoded) and the
+// positions drawn this frame (0x30 a quad). Quads 0 when there is no model.
+struct TopScreenItemsLabelModel {
+  std::uint32_t Uvs = 0U;
+  std::uint32_t Colors = 0U;
+  std::uint32_t Positions = 0U;
+  std::uint32_t Quads = 0U;
+};
+bool ResolveTopScreenItemsLabelModel(NativeA32Memory &memory, std::uint32_t model, TopScreenItemsLabelModel *streams,
+                                     std::string *error = nullptr);
+
 // Appends the glyph for a slot; false keeps the label (no binding).
 using TopScreenHudGlyphAppender =
     std::function<bool(const TopScreenHudLabelSlot &, std::vector<oot3d::ui::UiPrimitive> &)>;

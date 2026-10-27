@@ -272,7 +272,7 @@ of this runs (no list is touched, no guest memory is read for it).
 | Pause L / R tab hints | `0x005D4A0C` glyph quads 2 ("<-L", custom_ui01 rect 20) and 3 ("R->", rect 21) | the key and its arrow stay; the glyph follows the hint in the list, centred on the letter's ink (crop x 20..28.5 or 9..17.5, y 7..19.7), as tall as the ink box's diagonal so the disc covers the letter; the held hint's dimming |
 | The item hint's SELECT | `0x005E0E6C` quad 0, custom_ui01 (277, 222, 64, 16); the "?" stays | replaces the word; ends where the word's ink ends, beside the "?"; the hint's pulse and fade |
 | Legend discs (View Model, its controls line, the D-pad picker, the Items shortcut hold) | any custom_ui01 crop that is one of the mod's button discs: (46 / 81 / 116 / 151 / 186, 89, 32, 32) = A / B / X / Y / ZL (records `0x0060A2D4`, `0x0060A728`) | replaces the disc in place, 26/32 of the crop |
-| Items page slot labels X, Y, I (ZR), II (ZL) | native Items page state `0x005066F8`: its label model (`+0x30`, drawn by `0x00434C80`), quads whose UVs are the X (67, 51) / Y (83, 51) 11 x 11 or I (63, 34) / II (80, 34) 18 x 13 letters of the pause parts atlas (the Vanilla UI pack draws "ZR" / "ZL" in the I / II crops), at the positions drawn (the model's position lane, as the Items cursor reads it), + 80 / 84 on the upper screen | over the native letter (layer 14), as tall as the crop's diagonal, only with the page at rest (state 2, `+0x60` clear) |
+| Items page slot labels X, Y, I (ZR), II (ZL) | native Items page state `0x005066F8`: its label model (`+0x30`, drawn by `0x00434C80`), quads whose UVs are the X (67, 51) / Y (83, 51) 11 x 11 or I (63, 34) / II (80, 34) 18 x 13 letters of the pause parts atlas (the Vanilla UI pack draws "ZR" / "ZL" in the I / II crops), at the positions drawn (the model's position lane, as the Items cursor reads it), + 80 / 84 on the upper screen | the native label quad hidden for the draw (see below); the glyph at its place (layer 14), as tall as the crop's diagonal, with the page at rest (state 2, `+0x60` clear) |
 
 The note types are the N64 ones; the 3DS plays them with L (A), R (C-down),
 Y (C-right), X (C-left) and A (C-up), so each note shows the glyph of the
@@ -315,21 +315,41 @@ Transitions, frame by frame (every presented frame, stone state: pause open,
 page R and L, pause close, ocarina out, the song played, notes dropping on
 the staff; `compare_ocarina_pause.jpg` has a strip): the staff's notes are
 covered on every frame (an automated check finds no frame among 106 where a
-native note's pixels are left unchanged under the glyph run). Not yet
-covered:
+native note's pixels are left unchanged under the glyph run).
 
-- **Page slides.** When R / L changes page the Items page slides out after
-  its controller has already closed (state 0): what slides is not drawn by
-  `0x00434C80` with the label positions read, so for about four presented
-  frames the native I / X / Y / II letters show in the sliding page, and on
-  the first moving frame the glyphs stay at the rest position (pause open, where the labels appear only with the page at rest, shows none).
-  Covering them needs
-  the slide's transform (owned by the pause shell, not the Items state, which
-  does not change during the slide) or suppressing the four label quads in
-  the native draw with a restore, so that a page in motion shows neither.
-- The glyphs over native art are drawn over it, not substituted: the native
-  letter is still drawn under an opaque glyph, so the glyph must stay at
-  least as large as the letter's ink.
+**Hide what is replaced (Items slot labels).** The Items page's labels are
+separate quads, so the native letter is not only covered but hidden: at the
+Items page draw call (`0x0041EE74`, a catalogued product site, SingleScreen's
+Items sequence), `TopScreenWideItemsRuntime` clears the vertex alpha of the
+label quads that get a glyph (X, Y, I = ZR, II = ZL, by their UV crops;
+`SetHiddenItemsLabels` from the window, from the bindings of the device in
+use) and writes the native colours back at the next draw call, before a
+save state is written, or as soon as no label is replaced (Original 3DS,
+touch, an unbound button). Nothing native rebuilds those colours, so the
+draws decoded in between never see the letters. A label without a glyph
+keeps its letter. The native letter therefore never shows: not at rest
+(the glyph takes its place), not while the page slides in or out on pause
+open / close or on an R / L page change (the page's labels are hidden then
+too). Hook counter (`TRIAEVUM_BUTTON_LABEL_TRACE=1`, one line per Items
+draw): over every transition of the capture run, 122 Items draws hid 488
+label quads and left 0 with alpha.
+
+Where a glyph only covers native art, the letter is part of a larger
+element and hiding it would remove more than the letter: the A ring (its
+letter is baked into the ring's texture), the staff notes (letter and disc
+are one note model) and the L / R tab hints (one crop holds the key, the
+arrow and the letter). The SELECT word and the legend discs are TopScreen's
+own primitives and are replaced in place, so no native copy exists.
+
+A frame whose submitting update already finds the page away from rest
+(the slide starts there) draws no label glyph either, so a glyph never
+stays at the rest position over a moving page.
+
+Open: while a page slides, the label spots show neither letter nor glyph:
+the glyph is drawn only with the page at rest, because the label positions
+read do not carry the slide (the slide is drawn by the pause shell's page
+transition; the Items state is already closed when the page slides out).
+A glyph that follows the slide needs that transition's transform.
 
 The SingleScreen Items page's native "BACK" key (with its B) is not drawn on
 the pages TopScreen shows and is not covered.

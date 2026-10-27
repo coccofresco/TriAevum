@@ -163,11 +163,35 @@ public:
   bool PageWide() const noexcept { return mPageWide; }
   std::uint64_t WidePages() const noexcept { return mWidePages; }
   std::uint64_t WideItemsDraws() const noexcept { return mWideItemsDraws; }
+  // HUD button labels: the Items page's slot labels a glyph replaces (X, Y,
+  // ZR = I, ZL = II), set by the window from the bindings of the device in
+  // use; all false with Original 3DS or touch. At the Items draw call the
+  // quads of those labels are hidden (vertex alpha cleared) for the native
+  // draw, and written back at the next draw call, before a save state, or
+  // when no label is hidden any more (nothing native rebuilds the colours).
+  void SetHiddenItemsLabels(const std::array<bool, 4> &hidden) noexcept { mHiddenItemsLabels = hidden; }
+  void RestoreHiddenItemsLabels() noexcept;
+  void ForgetHiddenItemsLabels() noexcept { mHiddenLabelColors.clear(); }
+  struct ItemsLabelHideStats {
+    std::uint64_t Draws = 0U;            // Items draws with a label to hide
+    std::uint64_t QuadsHidden = 0U;      // label quads hidden for a native draw
+    std::uint64_t QuadsLeftVisible = 0U; // a label with a glyph left with alpha
+  };
+  const ItemsLabelHideStats &LabelHideStats() const noexcept { return mLabelHideStats; }
   std::uint64_t CursorDraws() const noexcept { return mCursorDraws; }
   std::uint64_t GearModelDraws() const noexcept { return mGearModelDraws; }
   std::uint64_t ItemsInsetUpdates() const noexcept { return mItemsInsetUpdates; }
 
 private:
+  struct HiddenLabelColor {
+    std::uint32_t Address = 0U;
+    std::array<float, 16> Native{};
+    std::array<float, 16> Hidden{};
+  };
+  void HideItemsLabels();
+  std::array<bool, 4> mHiddenItemsLabels{};
+  std::vector<HiddenLabelColor> mHiddenLabelColors;
+  ItemsLabelHideStats mLabelHideStats;
   struct Call {
     std::uint32_t Entry = 0;
     std::uint32_t R0 = 0, R1 = 0, R2 = 0, R3 = 0;

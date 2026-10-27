@@ -2075,7 +2075,21 @@ void NativeA32WindowSession::RecordNativeButtonLabels() {
       !Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels,
                                                        controlConfigRuntime->ActivePromptSet())) {
     nativeLabelFrames.Reset();
+    if (wideItemsStorage) wideItemsStorage->SetHiddenItemsLabels({});
     return;
+  }
+  // The Items labels a glyph replaces are hidden in the native draw (the
+  // ones without a binding keep their letter).
+  if (wideItemsStorage) {
+    const auto glyphs = Oot3dNativeGame::ResolveTopScreenHudButtonGlyphs(controlConfigRuntime->ActivePromptSet(),
+                                                                        controlConfigRuntime->Snapshot().Config);
+    const auto has = [&](Oot3dNativeGame::TopScreenHudButton button) {
+      return glyphs[static_cast<std::size_t>(button)].has_value();
+    };
+    wideItemsStorage->SetHiddenItemsLabels({has(Oot3dNativeGame::TopScreenHudButton::X),
+                                            has(Oot3dNativeGame::TopScreenHudButton::Y),
+                                            has(Oot3dNativeGame::TopScreenHudButton::Zr),
+                                            has(Oot3dNativeGame::TopScreenHudButton::Zl)});
   }
   auto &process = *processStorage;
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
@@ -2195,8 +2209,15 @@ void NativeA32WindowSession::PresentVisualFrame(
             // The native letters of the frame now presented (button labels).
             presentedNativeLabels.reset();
             if (nativeLabelFrames.Size() != 0U && !finished->Draws.empty()) {
-              if (const auto *labels = nativeLabelFrames.ForFrame(finished->Draws.back().SubmissionId))
+              const auto lastDraw = finished->Draws.back().SubmissionId;
+              if (const auto *labels = nativeLabelFrames.ForFrame(lastDraw)) {
                 presentedNativeLabels = *labels;
+                // The Items page leaves its rest (slides) in the update that
+                // submits this frame: no glyph on a moving page.
+                const auto *decoding = nativeLabelFrames.Decoding(lastDraw);
+                if (decoding != nullptr && decoding->ItemsLabels.empty())
+                  presentedNativeLabels->ItemsLabels.clear();
+              }
             }
             frameActors = Oot3dNativeGame::CollectNativeActorInteractions(
                 process.Memory(),

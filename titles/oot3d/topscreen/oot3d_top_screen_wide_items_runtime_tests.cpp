@@ -1357,8 +1357,67 @@ void TestShortcutRuntime(Oot3dNativeGame::NativeA32Memory &memory) {
   WriteWord(memory, 0x0050AF30U, 0);
 }
 
+// HUD button labels: the Items label quads a glyph replaces are hidden for
+// the native draw and written back at the next draw; the others and every
+// other quad are never touched, and with nothing to hide nothing is read.
+void TestHiddenItemsLabels() {
+  using namespace Oot3dNativeGame;
+  NativeA32Memory memory;
+  std::string error;
+  Require(memory.MapRegion({"labels-state", 0x00500000U, 0x10000U, true, false, {}}, &error) &&
+              memory.MapRegion({"labels-heap", 0x08000000U, 0x10000U, true, false, {}}, &error),
+          "cannot map the label fixture");
+  constexpr std::uint32_t model = 0x08000100U, first = 0x08000200U, owner = 0x08000300U, sources = 0x08000304U,
+                          uvs = 0x08001000U, colors = 0x08003000U, lane = 0x08002000U;
+  WriteWord(memory, 0x0050672CU, 2U);
+  WriteWord(memory, 0x00506728U, model);
+  WriteWord(memory, model + 4U, first);
+  WriteWord(memory, first + 4U, owner);
+  WriteWord(memory, owner, sources);
+  WriteWord(memory, sources + 4U, uvs);
+  WriteWord(memory, sources + 8U, colors);
+  WriteWord(memory, owner + 0x10U, 12U);
+  WriteWord(memory, owner + 0x124U, 0U);
+  WriteWord(memory, owner + 0x1A0U, lane);
+  // Quads: X (67,51,11,11), I (63,34,18,13), a frame elsewhere in the atlas.
+  const std::array<std::array<float, 4>, 3> crops{{{67, 51, 11, 11}, {63, 34, 18, 13}, {0, 0, 16, 16}}};
+  for (std::uint32_t quad = 0; quad < crops.size(); ++quad) {
+    const auto &c = crops[quad];
+    const float u0 = c[0] / 128.0F, u1 = (c[0] + c[2]) / 128.0F;
+    const float vTop = 1.0F - c[1] / 128.0F, vBottom = 1.0F - (c[1] + c[3]) / 128.0F;
+    const std::array<float, 8> uv{u0, vTop, u1, vTop, u0, vBottom, u1, vBottom};
+    for (std::size_t i = 0; i < uv.size(); ++i) WriteFloat(memory, uvs + quad * 0x20U + i * 4U, uv[i]);
+    for (std::size_t i = 0; i < 16U; ++i) WriteFloat(memory, colors + quad * 0x40U + i * 4U, 1.0F);
+  }
+  const auto alpha = [&](std::uint32_t quad) { return ReadFloat(memory, colors + quad * 0x40U + 12U); };
+  TopScreenWideItemsRuntime runtime(memory);
+  oot3d::recomp::a32::ExecutionResult result;
+  std::uint32_t blocks = 0U;
+  auto state = CallerState(kTopScreenItemsPageDrawCall);
+  std::vector<std::uint8_t> before(0x10000U), after(0x10000U);
+  Require(memory.ReadBytes(0x08000000U, before), "snapshot labels");
+  Require(!runtime.ExecuteItemsDraw(state, &result, &blocks) && memory.ReadBytes(0x08000000U, after) &&
+              before == after,
+          "with no glyph the labels were touched");
+  runtime.SetHiddenItemsLabels({true, false, false, false});
+  Require(!runtime.ExecuteItemsDraw(state, &result, &blocks), "the native draw call was taken");
+  Require(alpha(0U) == 0.0F && alpha(1U) == 1.0F && alpha(2U) == 1.0F &&
+              runtime.LabelHideStats().QuadsHidden == 1U && runtime.LabelHideStats().QuadsLeftVisible == 0U,
+          "only the X label quad is hidden");
+  runtime.SetHiddenItemsLabels({true, false, true, false});
+  Require(!runtime.ExecuteItemsDraw(state, &result, &blocks) && alpha(0U) == 0.0F && alpha(1U) == 0.0F,
+          "ZR's I label hidden with X");
+  runtime.RestoreHiddenItemsLabels();
+  Require(alpha(0U) == 1.0F && alpha(1U) == 1.0F, "a save state sees the native colours");
+  runtime.SetHiddenItemsLabels({});
+  Require(!runtime.ExecuteItemsDraw(state, &result, &blocks) && memory.ReadBytes(0x08000000U, after) &&
+              before == after,
+          "labels not written back when the glyphs go");
+}
+
 int main() {
   using namespace Oot3dNativeGame;
+  TestHiddenItemsLabels();
   NativeA32Memory memory;
   std::string error;
   Require(memory.MapRegion({"wide-items-test", 0x004F0000, 0x00310000, true, false, {}}, &error),

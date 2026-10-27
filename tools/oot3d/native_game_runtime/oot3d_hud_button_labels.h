@@ -58,6 +58,10 @@ public:
   // so it is the record before the first one through that draw. Nothing
   // when none was kept.
   [[nodiscard]] const TopScreenNativeLabelRecord *ForFrame(std::uint64_t lastDraw) const noexcept;
+  // The record of the update that decoded that frame's last draw (the one
+  // after the frame's own). A page that leaves its rest in that update is
+  // already moving in the frame presented: its labels are not drawn there.
+  [[nodiscard]] const TopScreenNativeLabelRecord *Decoding(std::uint64_t lastDraw) const noexcept;
   void Reset() noexcept { mRecords.clear(); }
   [[nodiscard]] std::size_t Size() const noexcept { return mRecords.size(); }
 

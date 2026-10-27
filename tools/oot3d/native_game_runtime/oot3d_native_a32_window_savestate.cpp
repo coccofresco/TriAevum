@@ -269,6 +269,9 @@ NativeA32WindowSession::SaveState(const std::filesystem::path &path, bool withSe
   auto &presentationScheduler = *presentationSchedulerStorage;
   // Barrier: the savestate captures renderer-owned replay state.
   renderStream.Drain();
+  // A state holds the native Items labels' own colours, never the ones the
+  // HUD button labels cleared for a draw (the next draw clears them again).
+  if (wideItemsStorage) wideItemsStorage->RestoreHiddenItemsLabels();
   // Host-owned continuation registers must never escape into a standalone savestate.
   if (ocarinaText.Pending()) return SaveStateOutcome::Deferred;
   if (pauseTransactionStorage->NeedsExecution()) return SaveStateOutcome::Deferred;

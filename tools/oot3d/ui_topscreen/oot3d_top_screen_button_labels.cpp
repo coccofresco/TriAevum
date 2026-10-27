@@ -373,6 +373,51 @@ bool ReadTopScreenOcarinaStaffNotes(NativeA32Memory &memory, std::vector<TopScre
   return true;
 }
 
+std::optional<TopScreenHudButton> TopScreenItemsLabelButton(const std::array<float, 8> &picaUvs) noexcept {
+  const auto uv = NativePicaQuadUvToHost(picaUvs);
+  for (const auto &crop : kItemsLabelCrops) {
+    if (std::abs(std::min(uv.x, uv.x + uv.width) * kPausePartsAtlasSize - crop.X) < 0.25F &&
+        std::abs(std::min(uv.y, uv.y + uv.height) * kPausePartsAtlasSize - crop.Y) < 0.25F &&
+        std::abs(std::abs(uv.width) * kPausePartsAtlasSize - crop.Width) < 0.25F &&
+        std::abs(std::abs(uv.height) * kPausePartsAtlasSize - crop.Height) < 0.25F)
+      return crop.Button;
+  }
+  return std::nullopt;
+}
+
+bool ResolveTopScreenItemsLabelModel(NativeA32Memory &memory, std::uint32_t model, TopScreenItemsLabelModel *streams,
+                                     std::string *error) {
+  if (streams == nullptr) {
+    SetError(error, "missing TopScreen Items label streams output");
+    return false;
+  }
+  *streams = {};
+  if (model == 0U || (model & 3U) != 0U) return true;
+  // The model's stream owner (model +4, +4): its source streams (+0:
+  // positions, UVs, colours), its vertex count (+0x10) and the positions it
+  // drew this frame (lane +0x124 of +0x1A0), as the Items cursor reads them.
+  std::uint32_t first = 0U, owner = 0U, sources = 0U, vertices = 0U, lane = 0U;
+  if (!memory.Read32(model + 4U, &first) || first == 0U || (first & 3U) != 0U) return true;
+  if (!memory.Read32(first + 4U, &owner) || owner == 0U || (owner & 3U) != 0U) return true;
+  if (!memory.Read32(owner, &sources) || !memory.Read32(owner + 0x10U, &vertices) ||
+      !memory.Read32(owner + 0x124U, &lane)) {
+    SetError(error, "cannot read the native Items label model");
+    return false;
+  }
+  if (sources == 0U || vertices == 0U || vertices > 64U || vertices % 4U != 0U || lane >= 4U) return true;
+  if (!memory.Read32(sources + 4U, &streams->Uvs) || !memory.Read32(sources + 8U, &streams->Colors) ||
+      !memory.Read32(owner + 0x1A0U + lane * 4U, &streams->Positions)) {
+    SetError(error, "cannot read the native Items label streams");
+    return false;
+  }
+  if (streams->Uvs == 0U || streams->Colors == 0U) {
+    *streams = {};
+    return true;
+  }
+  streams->Quads = vertices / 4U;
+  return true;
+}
+
 bool ReadTopScreenItemsPageButtonLabels(NativeA32Memory &memory, std::vector<TopScreenHudLabelSlot> *labels,
                                         std::string *error) {
   if (labels == nullptr) {
@@ -393,27 +438,15 @@ bool ReadTopScreenItemsPageButtonLabels(NativeA32Memory &memory, std::vector<Top
   // rest (state 2); a transition shows the native letters.
   // +0x60 set: 0x00434C80 draws none of the page's models.
   if (controller != kPauseItemsAtRest || suppressed != 0U || model == 0U || (model & 3U) != 0U) return true;
-  // The model's stream owner (model +4, +4): its source streams (+0:
-  // positions, UVs, colours), its vertex count (+0x10) and the positions it
-  // drew this frame (lane +0x124 of +0x1A0), as the Items cursor reads them.
-  std::uint32_t first = 0U, owner = 0U, sources = 0U, uvs = 0U, vertices = 0U, lane = 0U, positions = 0U;
-  if (!memory.Read32(model + 4U, &first) || first == 0U || (first & 3U) != 0U) return true;
-  if (!memory.Read32(first + 4U, &owner) || owner == 0U || (owner & 3U) != 0U) return true;
-  if (!memory.Read32(owner, &sources) || !memory.Read32(owner + 0x10U, &vertices) ||
-      !memory.Read32(owner + 0x124U, &lane)) {
-    SetError(error, "cannot read the native Items label model");
-    return false;
-  }
-  if (sources == 0U || vertices == 0U || vertices > 64U || vertices % 4U != 0U || lane >= 4U) return true;
-  if (!memory.Read32(sources + 4U, &uvs) || !memory.Read32(owner + 0x1A0U + lane * 4U, &positions)) {
-    SetError(error, "cannot read the native Items label streams");
-    return false;
-  }
-  if (uvs == 0U || positions == 0U) return true;
+  TopScreenItemsLabelModel streams;
+  if (!ResolveTopScreenItemsLabelModel(memory, model, &streams, error)) return false;
+  if (streams.Quads == 0U || streams.Positions == 0U) return true;
+  const auto uvs = streams.Uvs;
+  const auto positions = streams.Positions;
   const auto bytes = [](auto &values) {
     return std::span<std::uint8_t>(reinterpret_cast<std::uint8_t *>(values.data()), sizeof(values));
   };
-  for (std::uint32_t quad = 0U; quad < vertices / 4U; ++quad) {
+  for (std::uint32_t quad = 0U; quad < streams.Quads; ++quad) {
     std::array<float, 8> quadUvs{};
     std::array<float, 12> quadPositions{};
     if (!memory.ReadBytes(uvs + quad * 0x20U, bytes(quadUvs)) ||
@@ -421,16 +454,9 @@ bool ReadTopScreenItemsPageButtonLabels(NativeA32Memory &memory, std::vector<Top
       SetError(error, "cannot read a native Items label quad");
       return false;
     }
-    const auto uv = NativePicaQuadUvToHost(quadUvs);
-    TopScreenHudButton button = TopScreenHudButton::Count;
-    for (const auto &crop : kItemsLabelCrops) {
-      if (std::abs(std::min(uv.x, uv.x + uv.width) * kPausePartsAtlasSize - crop.X) < 0.25F &&
-          std::abs(std::min(uv.y, uv.y + uv.height) * kPausePartsAtlasSize - crop.Y) < 0.25F &&
-          std::abs(std::abs(uv.width) * kPausePartsAtlasSize - crop.Width) < 0.25F &&
-          std::abs(std::abs(uv.height) * kPausePartsAtlasSize - crop.Height) < 0.25F)
-        button = crop.Button;
-    }
-    if (button == TopScreenHudButton::Count) continue;
+    const auto labelButton = TopScreenItemsLabelButton(quadUvs);
+    if (!labelButton) continue;
+    const TopScreenHudButton button = *labelButton;
     if (!std::all_of(quadPositions.begin(), quadPositions.end(), [](float value) { return std::isfinite(value); }))
       continue;
     const float minimumX = std::min({quadPositions[0], quadPositions[3], quadPositions[6], quadPositions[9]});

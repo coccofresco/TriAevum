@@ -69,6 +69,12 @@ const TopScreenNativeLabelRecord *TopScreenNativeLabelFrames::ForFrame(std::uint
   return nullptr;
 }
 
+const TopScreenNativeLabelRecord *TopScreenNativeLabelFrames::Decoding(std::uint64_t lastDraw) const noexcept {
+  for (const auto &record : mRecords)
+    if (record.ThroughDraw >= lastDraw) return &record;
+  return nullptr;
+}
+
 TopScreenHudLabelStats ApplyTopScreenHudButtonGlyphs(std::vector<oot3d::ui::UiPrimitive> &hud,
                                                     const std::optional<TopScreenHudLabelSlot> &actionLetter,
                                                     const TopScreenHudButtonGlyphs &glyphs,

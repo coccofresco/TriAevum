@@ -413,6 +413,7 @@ void TestItemsPageLabels() {
   Require(memory.Write32(0x005066F8U + 0x34U, 2U) && memory.Write32(0x005066F8U + 0x30U, model) &&
               memory.Write32(model + 4U, first) && memory.Write32(first + 4U, owner) &&
               memory.Write32(owner, sources) && memory.Write32(sources + 4U, uvs) &&
+              memory.Write32(sources + 8U, 0x08003000U) &&
               memory.Write32(owner + 0x10U, 16U) && memory.Write32(owner + 0x124U, 1U) &&
               memory.Write32(owner + 0x1A0U + 4U, lane1),
           "seed the label model");
