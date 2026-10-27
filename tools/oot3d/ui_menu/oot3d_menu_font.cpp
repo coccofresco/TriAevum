@@ -1,5 +1,6 @@
 #include "oot3d_menu_font.h"
 
+#include "oot3d_menu_button_glyphs.h"
 #include "oot3d_menu_glyphs.h"
 #include "oot3d_ui/ui_contract_types.h"
 
@@ -273,7 +274,8 @@ std::string ElideText(FontStyle font, float size, std::string_view utf8, float m
 }
 
 bool MenuFontTextureProvider::IsMenuTexture(std::string_view semanticName) noexcept {
-    return semanticName == kBodyFontTexture || semanticName == kHeadingFontTexture || semanticName == kGlyphTexture;
+    return semanticName == kBodyFontTexture || semanticName == kHeadingFontTexture ||
+           ButtonGlyphCellFromTextureName(semanticName).has_value();
 }
 
 bool MenuFontTextureProvider::Resolve(const oot3d::ui::UiTextureIdentity& identity,
@@ -298,15 +300,14 @@ bool MenuFontTextureProvider::Resolve(const oot3d::ui::UiTextureIdentity& identi
         }
         return built;
     };
-    std::scoped_lock lock(mMutex);
-    if (identity.semantic_name == kGlyphTexture) {
-        if (mGlyphs.rgba8.empty()) {
-            const auto& atlas = MenuGlyphAtlas();
-            mGlyphs = whiteWithCoverage(atlas.Coverage.data(), atlas.Width, atlas.Height);
-        }
-        pixels = mGlyphs;
+    if (const auto cell = ButtonGlyphCellFromTextureName(identity.semantic_name)) {
+        const auto& atlas = ButtonGlyphAtlasForCell(*cell);
+        pixels.width = atlas.Width;
+        pixels.height = atlas.Height;
+        pixels.rgba8 = atlas.Rgba8;
         return true;
     }
+    std::scoped_lock lock(mMutex);
     const bool heading = identity.semantic_name == kHeadingFontTexture;
     auto& cached = heading ? mHeading : mBody;
     if (cached.rgba8.empty()) {

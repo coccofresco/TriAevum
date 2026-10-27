@@ -6,7 +6,7 @@
 // renderer through a texture provider that answers the menu's own texture
 // names and hands every other name on. Text may carry button prompts
 // (oot3d_menu_glyphs.h): they are measured, wrapped, elided and drawn with
-// the letters, from the menu's own glyph atlas.
+// the letters, from the button glyph atlas (oot3d_menu_button_glyphs.h).
 
 #include "oot3d_menu_font_atlas_data.h"
 #include "oot3d_n64_ui_renderer.h"
@@ -75,7 +75,7 @@ class MenuFontTextureProvider final : public oot3d::ui::UiTextureProvider {
   private:
     const oot3d::ui::UiTextureProvider* mNext = nullptr;
     mutable std::mutex mMutex;
-    mutable oot3d::ui::UiTexturePixels mBody, mHeading, mGlyphs;
+    mutable oot3d::ui::UiTexturePixels mBody, mHeading;
 };
 
 } // namespace Oot3dNativeGame::Menu

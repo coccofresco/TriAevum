@@ -2,6 +2,7 @@
 // fonts, the button prompts and their glyphs, and the presentation's
 // primitives.
 #include "oot3d_menu_audio.h"
+#include "oot3d_menu_button_glyphs.h"
 #include "oot3d_menu_font.h"
 #include "oot3d_menu_font_atlas_data.h"
 #include "oot3d_menu_glyphs.h"
@@ -14,6 +15,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 
@@ -686,34 +688,16 @@ std::size_t CountTexture(const std::vector<oot3d::ui::UiPrimitive>& output, std:
 // The glyph atlas and the prompts inside text: measured, wrapped, elided and
 // drawn with the letters.
 void TestGlyphText() {
-    const auto& atlas = MenuGlyphAtlas();
-    Expect(atlas.Width == 512 && atlas.Height == 256 && atlas.Coverage.size() == 512U * 256U, "glyph atlas size");
-    Expect(&MenuGlyphAtlas() == &atlas, "the atlas is built once");
-    // Every icon and frame cell holds a shape, and its border stays clear so
-    // a filtered sample never bleeds into the next cell.
-    const auto cellCoverage = [&](int left, int top, int width) {
-        std::size_t covered = 0, border = 0;
-        for (int y = 0; y < 64; ++y) {
-            for (int x = 0; x < width; ++x) {
-                const auto value = atlas.Coverage[static_cast<std::size_t>(top + y) * 512U + static_cast<std::size_t>(left + x)];
-                covered += value > 127 ? 1U : 0U;
-                if (x == 0 || y == 0 || x == width - 1 || y == 63) border += value;
-            }
-        }
-        return std::pair{covered, border};
+    // The menu draws from the 64-texel button glyph atlas (its cells are
+    // checked in TestButtonGlyphs); the PlayStation cross is a black mark
+    // on a white disc.
+    const auto& atlas = ButtonGlyphAtlasForCell(kGlyphCell);
+    Expect(ButtonGlyphTextureName(kGlyphCell) == kGlyphTexture, "the menu's glyph texture");
+    const auto at = [&](int x, int y) {
+        return &atlas.Rgba8[(static_cast<std::size_t>(y) * atlas.Width + static_cast<std::size_t>(x)) * 4U];
     };
-    for (int icon = 0; icon < static_cast<int>(GlyphIcon::Count); ++icon) {
-        const auto [covered, border] = cellCoverage((icon % 8) * 64, (icon / 8) * 64, 64);
-        Expect(covered > 150 && border == 0, "each icon has a shape inside its cell");
-    }
-    for (int frame = 0; frame < static_cast<int>(GlyphFrame::Count); ++frame) {
-        const auto [covered, border] = cellCoverage(frame * 128, 128, 128);
-        Expect(covered > 400 && border == 0, "each frame has a shape inside its cell");
-    }
-    // A knocked-out symbol: the PlayStation cross shows the background
-    // through the middle of its disc, the disc itself is solid.
-    const auto at = [&](int x, int y) { return atlas.Coverage[static_cast<std::size_t>(y) * 512U + static_cast<std::size_t>(x)]; };
-    Expect(at(32, 32) == 0 && at(32, 12) == 255, "the cross is cut out of its disc");
+    Expect(at(32, 32)[3] == 255 && at(32, 32)[0] == 0 && at(32, 14)[0] == 255 && at(32, 14)[3] == 255,
+           "the cross is black on its white disc");
 
     // Codepoints.
     const auto codes = DecodeUtf8(GlyphFrameText(GlyphFrame::Solid, "LB"));
@@ -728,7 +712,7 @@ void TestGlyphText() {
     const float size = 4.0F;
     const float a = MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Solid, "A"));
     const float lb = MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Solid, "LB"));
-    const float backspace = MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Key, "Backspace"));
+    const float backspace = MeasureText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Key, "Ctrl+Alt+Del"));
     const float icon = MeasureText(FontStyle::Body, size, GlyphIconText(GlyphIcon::PsCross));
     Expect(a > 0.9F * size && icon > 0.9F * size && lb > a && backspace > 2.0F * lb, "prompt widths");
     const std::string sentence = GlyphFrameText(GlyphFrame::Key, "Esc") + ": game menu.";
@@ -744,9 +728,9 @@ void TestGlyphText() {
     const float drawn = AppendText(output, style, 10.0F, 50.0F, GlyphFrameText(GlyphFrame::Solid, "LB"));
     Expect(std::abs(drawn - lb) < 0.001F, "drawn width is the measured width");
     Expect(CountTexture(output, kGlyphTexture) == 3 && CountTexture(output, kHeadingFontTexture) == 2, "slices and label");
-    Expect(output[0].texture_alpha_only && output[0].color.red == 0.8F && output.back().color.red < 0.2F &&
-               output.back().layer == 5,
-           "the button takes the text colour, its label is dark");
+    Expect(!output[0].texture_alpha_only && output[0].color.red == 1.0F && output[0].color.blue == 1.0F &&
+               output.back().color.red == 0.0F && output.back().color.green == 0.0F && output.back().layer == 5,
+           "the button is white whatever the text colour, its label black");
     for (const auto& primitive : output) {
         Expect(primitive.uv.x >= 0.0F && primitive.uv.y >= 0.0F && primitive.uv.x + primitive.uv.width <= 1.0F &&
                    primitive.uv.y + primitive.uv.height <= 1.0F && primitive.destination.x >= 10.0F &&
@@ -771,7 +755,7 @@ void TestGlyphText() {
     for (const auto& line : WrapText(FontStyle::Body, size, longLine, 40.0F)) {
         Expect(MeasureText(FontStyle::Body, size, line) <= 40.0F + 0.001F, "wrapped prompt lines fit");
     }
-    const auto elided = ElideText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Key, "Backspace") + " back", backspace * 0.8F);
+    const auto elided = ElideText(FontStyle::Body, size, GlyphFrameText(GlyphFrame::Key, "Ctrl+Alt+Del") + " back", backspace * 0.8F);
     const auto elidedCodes = DecodeUtf8(elided);
     Expect(std::none_of(elidedCodes.begin(), elidedCodes.end(),
                         [](std::uint32_t code) { return GlyphFrameOpenFromCodepoint(code).has_value(); }),
@@ -782,9 +766,8 @@ void TestGlyphText() {
     std::string error;
     Expect(MenuFontTextureProvider::IsMenuTexture(kGlyphTexture), "the glyph atlas is a menu texture");
     Expect(provider.Resolve({0, 0, std::string(kGlyphTexture)}, pixels, &error), error.c_str());
-    Expect(pixels.width == 512 && pixels.height == 256 && pixels.rgba8[0] == 0xFF &&
-               pixels.rgba8[(12U * 512U + 32U) * 4U + 3U] == 255,
-           "the provider serves the atlas as white coverage");
+    Expect(pixels.width == atlas.Width && pixels.height == atlas.Height && pixels.rgba8 == atlas.Rgba8,
+           "the provider serves the button glyph atlas");
 }
 
 // Each prompt family's footer: the controls a pad, the keyboard or touch has.
@@ -807,11 +790,12 @@ void TestPromptSets() {
     Expect(deck.Confirm == solid("A") && deck.TabPrevious == solid("L1") && deck.TabNext == solid("R1"),
            "Steam Deck prompts");
     const auto generic = HintsFor(PromptSet::Generic);
-    Expect(generic.Confirm == GlyphIconText(GlyphIcon::FaceSouth) && generic.Back == GlyphIconText(GlyphIcon::FaceEast),
-           "generic prompts name the buttons by position");
+    Expect(generic.Confirm == solid("A") && generic.Back == solid("B"),
+           "generic prompts name the positions with SDL's letters");
     const auto keyboard = HintsFor(PromptSet::Keyboard);
-    Expect(keyboard.Confirm == GlyphFrameText(GlyphFrame::Key, "Enter") &&
-               keyboard.Back == GlyphFrameText(GlyphFrame::Key, "Backspace") &&
+    Expect(keyboard.Confirm == GlyphIconText(GlyphIcon::KeyEnter) &&
+               keyboard.Back == GlyphIconText(GlyphIcon::KeyBackspace) &&
+               keyboard.Change == GlyphIconText(GlyphIcon::KeyLeft) + " " + GlyphIconText(GlyphIcon::KeyRight) &&
                keyboard.TabPrevious == GlyphFrameText(GlyphFrame::Key, "Q") &&
                keyboard.Close == GlyphFrameText(GlyphFrame::Key, "Esc"),
            "keyboard prompts");
@@ -1055,7 +1039,206 @@ void TestTextureRows() {
            "a failed Custom textures write reaches the status line");
 }
 
-int main() {
+// The HUD's button glyphs: each family's look for a pad button, keycaps for
+// keys, a mouse for its buttons, nothing for an unbound device or touch, and
+// the three atlas sizes the provider serves.
+void TestButtonGlyphs() {
+    using ThreeDsRecomp::Input::GamepadButton;
+    using ThreeDsRecomp::Input::HostBinding;
+    using ThreeDsRecomp::Input::KeyboardKey;
+    using ThreeDsRecomp::Input::MouseButton;
+    using ThreeDsRecomp::Input::PromptSet;
+    const auto framed = [](ButtonGlyphFrame frame, const char* label) { return ButtonGlyph::Framed(frame, label); };
+    const auto icon = [](ButtonGlyphIcon value) { return ButtonGlyph::Symbol(value); };
+    const auto button = [&](const char* label) { return framed(ButtonGlyphFrame::Button, label); };
+
+    struct Case {
+        PromptSet Set;
+        GamepadButton Pad;
+        ButtonGlyph Expected;
+    };
+    const std::vector<Case> pads{
+        {PromptSet::Xbox, GamepadButton::A, button("A")},
+        {PromptSet::Xbox, GamepadButton::Y, button("Y")},
+        {PromptSet::Xbox, GamepadButton::LeftShoulder, button("LB")},
+        {PromptSet::Xbox, GamepadButton::RightTrigger, button("RT")},
+        {PromptSet::Xbox, GamepadButton::LeftStick, framed(ButtonGlyphFrame::Stick, "LS")},
+        {PromptSet::PlayStation, GamepadButton::A, icon(ButtonGlyphIcon::PsCross)},
+        {PromptSet::PlayStation, GamepadButton::B, icon(ButtonGlyphIcon::PsCircle)},
+        {PromptSet::PlayStation, GamepadButton::X, icon(ButtonGlyphIcon::PsSquare)},
+        {PromptSet::PlayStation, GamepadButton::Y, icon(ButtonGlyphIcon::PsTriangle)},
+        {PromptSet::PlayStation, GamepadButton::RightShoulder, button("R1")},
+        {PromptSet::PlayStation, GamepadButton::LeftTrigger, button("L2")},
+        {PromptSet::PlayStation, GamepadButton::RightStick, framed(ButtonGlyphFrame::Stick, "R3")},
+        // SDL maps a Nintendo pad by its printed labels.
+        {PromptSet::Nintendo, GamepadButton::B, button("B")},
+        {PromptSet::Nintendo, GamepadButton::LeftShoulder, button("L")},
+        {PromptSet::Nintendo, GamepadButton::RightTrigger, button("ZR")},
+        {PromptSet::SteamDeck, GamepadButton::X, button("X")},
+        {PromptSet::SteamDeck, GamepadButton::LeftShoulder, button("L1")},
+        {PromptSet::SteamDeck, GamepadButton::RightTrigger, button("R2")},
+        {PromptSet::Generic, GamepadButton::A, button("A")},
+        {PromptSet::Generic, GamepadButton::Y, button("Y")},
+        {PromptSet::SteamDeck, GamepadButton::B, button("B")},
+        {PromptSet::Generic, GamepadButton::RightShoulder, button("R")},
+        {PromptSet::Generic, GamepadButton::LeftTrigger, button("L2")},
+        {PromptSet::Xbox, GamepadButton::DpadLeft, icon(ButtonGlyphIcon::DpadLeft)},
+        {PromptSet::PlayStation, GamepadButton::DpadUp, icon(ButtonGlyphIcon::DpadUp)},
+    };
+    for (const auto& item : pads) {
+        HostBinding binding;
+        binding.Gamepad = item.Pad;
+        binding.KeyboardPrimary = KeyboardKey::Space;
+        const auto glyph = ResolveButtonGlyph(item.Set, binding);
+        Expect(glyph.has_value() && *glyph == item.Expected, "a pad binding's glyph in its family");
+    }
+
+    HostBinding keys;
+    keys.KeyboardPrimary = KeyboardKey::Space;
+    keys.KeyboardSecondary = KeyboardKey::Z;
+    keys.Mouse = MouseButton::Left;
+    keys.Gamepad = GamepadButton::A;
+    Expect(ResolveButtonGlyph(PromptSet::Keyboard, keys) == icon(ButtonGlyphIcon::KeySpace),
+           "the keyboard shows the first key, as its symbol");
+    keys.KeyboardPrimary = KeyboardKey::None;
+    Expect(ResolveButtonGlyph(PromptSet::Keyboard, keys) == framed(ButtonGlyphFrame::Key, "Z"),
+           "the keyboard shows the second key without a first");
+    keys.KeyboardSecondary = KeyboardKey::None;
+    Expect(ResolveButtonGlyph(PromptSet::Keyboard, keys) == icon(ButtonGlyphIcon::MouseLeft),
+           "the keyboard family shows the mouse button without keys");
+    keys.Mouse = MouseButton::Back;
+    Expect(ResolveButtonGlyph(PromptSet::Keyboard, keys) == icon(ButtonGlyphIcon::MouseBack), "mouse back");
+    keys.Mouse = MouseButton::None;
+    Expect(!ResolveButtonGlyph(PromptSet::Keyboard, keys).has_value(), "no key: the label stays");
+    HostBinding padless;
+    padless.KeyboardPrimary = KeyboardKey::C;
+    for (const auto set : {PromptSet::Xbox, PromptSet::PlayStation, PromptSet::Nintendo, PromptSet::SteamDeck,
+                           PromptSet::Generic})
+        Expect(!ResolveButtonGlyph(set, padless).has_value(), "no pad button: the label stays");
+    Expect(!ResolveButtonGlyph(PromptSet::Touch, keys).has_value() &&
+               !ResolveButtonGlyph(PromptSet::Touch, padless).has_value(),
+           "touch keeps the labels");
+
+    struct KeyCase {
+        KeyboardKey Key;
+        const char* Label;
+    };
+    for (const auto& item : {KeyCase{KeyboardKey::Q, "Q"}, KeyCase{KeyboardKey::Num1, "1"},
+                             KeyCase{KeyboardKey::Escape, "Esc"}, KeyCase{KeyboardKey::Numpad8, "Num8"},
+                             KeyCase{KeyboardKey::Comma, ","}, KeyCase{KeyboardKey::Control, "Ctrl"}})
+        Expect(KeyboardKeyGlyph(item.Key) == framed(ButtonGlyphFrame::Key, item.Label), "a key's printed name");
+    struct SymbolCase {
+        KeyboardKey Key;
+        ButtonGlyphIcon Icon;
+    };
+    // Keys with a conventional symbol draw it, never their name.
+    for (const auto& item : {SymbolCase{KeyboardKey::Space, ButtonGlyphIcon::KeySpace},
+                             SymbolCase{KeyboardKey::Shift, ButtonGlyphIcon::KeyShift},
+                             SymbolCase{KeyboardKey::RightShift, ButtonGlyphIcon::KeyShift},
+                             SymbolCase{KeyboardKey::Enter, ButtonGlyphIcon::KeyEnter},
+                             SymbolCase{KeyboardKey::Backspace, ButtonGlyphIcon::KeyBackspace},
+                             SymbolCase{KeyboardKey::Tab, ButtonGlyphIcon::KeyTab},
+                             SymbolCase{KeyboardKey::ArrowUp, ButtonGlyphIcon::KeyUp},
+                             SymbolCase{KeyboardKey::ArrowDown, ButtonGlyphIcon::KeyDown},
+                             SymbolCase{KeyboardKey::ArrowLeft, ButtonGlyphIcon::KeyLeft},
+                             SymbolCase{KeyboardKey::ArrowRight, ButtonGlyphIcon::KeyRight}})
+        Expect(KeyboardKeyGlyph(item.Key) == icon(item.Icon), "a key's conventional symbol");
+    // Every bindable key has a symbol or a short label in the heading font.
+    for (int value = 0; value <= 336; ++value) {
+        const auto key = static_cast<KeyboardKey>(value);
+        const std::string name = ThreeDsRecomp::Input::KeyboardKeyName(key);
+        if (key == KeyboardKey::None || name == "unknown") continue;
+        const auto glyph = KeyboardKeyGlyph(key);
+        Expect(!glyph.Labelled || (glyph.Label != "?" && glyph.Label.size() <= 4U &&
+                                   MeasureText(FontStyle::Heading, 10.0F, glyph.Label) > 0.0F),
+               "a key without a compact label");
+    }
+
+    // A glyph is at least as wide as high; a one-letter button is a disc.
+    Expect(ButtonGlyphWidth(button("A"), 12.0F) == 12.0F, "one letter: a disc");
+    Expect(ButtonGlyphWidth(framed(ButtonGlyphFrame::Key, "Ctrl"), 12.0F) > 12.5F, "a word widens its key");
+    Expect(ButtonGlyphCellForPixels(20.0F) == 32U && ButtonGlyphCellForPixels(33.0F) == 64U &&
+               ButtonGlyphCellForPixels(99.0F) == 128U && ButtonGlyphCellForPixels(400.0F) == 128U,
+           "the atlas size follows the drawn size");
+
+    const ButtonGlyphColors colors;
+    std::vector<oot3d::ui::UiPrimitive> output;
+    AppendButtonGlyph(output, icon(ButtonGlyphIcon::PsCross), 100.0F, 50.0F, 11.0F, 0.9F, 13U, 64U, colors);
+    Expect(output.size() == 1U && output[0].texture.semantic_name == ButtonGlyphTextureName(64U) &&
+               !output[0].texture_alpha_only && output[0].layer == 13U && output[0].color.alpha == 0.9F &&
+               std::abs(output[0].destination.x - 94.5F) < 1e-4F && output[0].destination.width == 11.0F,
+           "an icon is one quad centred on its place, with the label's alpha");
+    output.clear();
+    AppendButtonGlyph(output, framed(ButtonGlyphFrame::Key, "Ctrl"), 100.0F, 50.0F, 11.0F, 1.0F, 13U, 32U, colors);
+    Expect(CountTexture(output, ButtonGlyphTextureName(32U)) == 3U && CountTexture(output, kHeadingFontTexture) == 4U,
+           "a keycap is three slices and its label");
+    output.clear();
+    AppendButtonGlyph(output, button("A"), 100.0F, 50.0F, 11.0F, 0.0F, 13U, 32U, colors);
+    Expect(output.empty(), "a hidden label draws nothing");
+
+    // The atlases: built once, every cell holds a shape with clear borders,
+    // dark edges and a light body; served by the menu's provider.
+    for (const std::uint32_t cell : {32U, 64U, 128U}) {
+        const auto& atlas = ButtonGlyphAtlasForCell(cell);
+        Expect(&ButtonGlyphAtlasForCell(cell) == &atlas && atlas.Cell == cell && atlas.Width == 8U * cell &&
+                   atlas.Height == static_cast<std::uint32_t>(kButtonGlyphIconRows + 1) * cell && atlas.Rgba8.size() == static_cast<std::size_t>(atlas.Width) * atlas.Height * 4U,
+               "button glyph atlas size");
+        const auto texel = [&](std::uint32_t x, std::uint32_t y) { return &atlas.Rgba8[(y * atlas.Width + x) * 4U]; };
+        const auto inspect = [&](std::uint32_t left, std::uint32_t top, std::uint32_t width) {
+            std::size_t dark = 0, light = 0, border = 0;
+            for (std::uint32_t y = 0; y < cell; ++y)
+                for (std::uint32_t x = 0; x < width; ++x) {
+                    const auto* value = texel(left + x, top + y);
+                    if (value[3] > 200 && value[0] < 40) ++dark;
+                    if (value[3] > 200 && value[0] > 215) ++light;
+                    if (x == 0 || y == 0 || x == width - 1 || y == cell - 1) border += value[3];
+                }
+            Expect(dark > cell / 2U && light > cell && border == 0,
+                   "a glyph cell with an edge, a body and a clear border");
+            // Black and white only: every texel is a grey (no tint).
+            for (std::uint32_t y = 0; y < cell; ++y)
+                for (std::uint32_t x = 0; x < width; ++x) {
+                    const auto* value = texel(left + x, top + y);
+                    Expect(value[0] == value[1] && value[1] == value[2], "a tinted glyph texel");
+                }
+        };
+        for (std::uint32_t index = 0; index < static_cast<std::uint32_t>(ButtonGlyphIcon::Count); ++index)
+            inspect((index % 8U) * cell, (index / 8U) * cell, cell);
+        for (std::uint32_t index = 0; index < static_cast<std::uint32_t>(ButtonGlyphFrame::Count); ++index)
+            inspect(index * 2U * cell, static_cast<std::uint32_t>(kButtonGlyphIconRows) * cell, 2U * cell);
+        MenuFontTextureProvider provider(nullptr);
+        oot3d::ui::UiTexturePixels pixels;
+        std::string error;
+        Expect(MenuFontTextureProvider::IsMenuTexture(ButtonGlyphTextureName(cell)) &&
+                   provider.Resolve({0, 0, ButtonGlyphTextureName(cell)}, pixels, &error) && pixels.rgba8 == atlas.Rgba8,
+               "the provider serves the button glyph atlas");
+    }
+    Expect(!ButtonGlyphCellFromTextureName("triaevum/button_glyphs/48").has_value() &&
+               !ButtonGlyphCellFromTextureName("triaevum/menu/glyphs").has_value(),
+           "only the three atlas sizes are button glyph textures");
+}
+
+// `--dump-button-glyphs DIR`: writes each button glyph atlas as a PAM image
+// (DIR/button_glyphs_<cell>.pam) for reviewing the art.
+int DumpButtonGlyphs(const std::string& directory) {
+    for (const std::uint32_t cell : {32U, 64U, 128U}) {
+        const auto& atlas = ButtonGlyphAtlasForCell(cell);
+        const auto path = directory + "/button_glyphs_" + std::to_string(cell) + ".pam";
+        std::ofstream stream(path, std::ios::binary);
+        stream << "P7\nWIDTH " << atlas.Width << "\nHEIGHT " << atlas.Height
+               << "\nDEPTH 4\nMAXVAL 255\nTUPLTYPE RGB_ALPHA\nENDHDR\n";
+        stream.write(reinterpret_cast<const char*>(atlas.Rgba8.data()), static_cast<std::streamsize>(atlas.Rgba8.size()));
+        if (!stream) {
+            std::cerr << "cannot write " << path << '\n';
+            return EXIT_FAILURE;
+        }
+        std::cout << path << '\n';
+    }
+    return EXIT_SUCCESS;
+}
+
+int main(int argc, char** argv) {
+    if (argc == 3 && std::string_view(argv[1]) == "--dump-button-glyphs") return DumpButtonGlyphs(argv[2]);
     try {
         TestAudioRows();
         TestTextureRows();
@@ -1071,6 +1254,7 @@ int main() {
         TestGlyphText();
         TestPromptSets();
         TestPromptsMidMenu();
+        TestButtonGlyphs();
     } catch (const std::exception& exception) {
         std::cerr << "oot3d_menu_tests: " << exception.what() << '\n';
         return EXIT_FAILURE;

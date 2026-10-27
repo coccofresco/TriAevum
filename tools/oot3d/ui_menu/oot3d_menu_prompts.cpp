@@ -31,7 +31,6 @@ PadLabels LabelsFor(PromptSet set) noexcept {
 std::string Face(PromptSet set, bool south) {
     switch (set) {
     case PromptSet::PlayStation: return Icon(south ? GlyphIcon::PsCross : GlyphIcon::PsCircle);
-    case PromptSet::Generic: return Icon(south ? GlyphIcon::FaceSouth : GlyphIcon::FaceEast);
     default: return Solid(south ? "A" : "B");
     }
 }
@@ -43,11 +42,11 @@ bool IsPadPromptSet(PromptSet set) noexcept { return set != PromptSet::Keyboard 
 std::string PromptText(PromptSet set, PromptAction action) {
     if (set == PromptSet::Keyboard) {
         switch (action) {
-        case PromptAction::Confirm: return Key("Enter");
-        case PromptAction::Back: return Key("Backspace");
+        case PromptAction::Confirm: return Icon(GlyphIcon::KeyEnter);
+        case PromptAction::Back: return Icon(GlyphIcon::KeyBackspace);
         case PromptAction::TabPrevious: return Key("Q");
         case PromptAction::TabNext: return Key("E");
-        case PromptAction::Change: return Key("\xE2\x86\x90") + " " + Key("\xE2\x86\x92"); // ← →
+        case PromptAction::Change: return Icon(GlyphIcon::KeyLeft) + " " + Icon(GlyphIcon::KeyRight);
         case PromptAction::Menu: return Key("Esc");
         case PromptAction::AllSettings: return Key("F1");
         case PromptAction::SaveState: return Key("F5");

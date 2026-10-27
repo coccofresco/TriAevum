@@ -9,6 +9,7 @@ add_library(oot3d_ui_menu STATIC EXCLUDE_FROM_ALL
     tools/oot3d/ui_menu/oot3d_menu_font.cpp
     tools/oot3d/ui_menu/oot3d_menu_font_atlas_data.cpp
     tools/oot3d/ui_menu/oot3d_menu_glyphs.cpp
+    tools/oot3d/ui_menu/oot3d_menu_button_glyphs.cpp
     tools/oot3d/ui_menu/oot3d_menu_prompts.cpp
     tools/oot3d/ui_menu/oot3d_menu_presentation.cpp
     tools/oot3d/ui_menu/oot3d_menu_help.cpp
