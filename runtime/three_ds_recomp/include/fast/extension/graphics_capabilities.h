@@ -53,11 +53,13 @@ enum class GraphicsCapability : uint8_t {
     // Window host: the user chooses the window mode and the output size. Not
     // where the device's screen sets both (Android).
     HostWindowOutput,
+    // The device filters textures anisotropically (samplerAnisotropy).
+    AnisotropicFiltering,
 };
 
 // Last enumerator, for code that visits every capability.
 inline constexpr GraphicsCapability kLastGraphicsCapability =
-    GraphicsCapability::HostWindowOutput;
+    GraphicsCapability::AnisotropicFiltering;
 
 struct GraphicsCapabilityState {
     bool Available = false;

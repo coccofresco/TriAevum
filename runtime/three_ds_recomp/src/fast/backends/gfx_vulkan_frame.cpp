@@ -437,6 +437,16 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mFrameGraphicsSettings = std::move(graphicsSnapshot.Value);
     mFrameGraphicsSettingsRevision = graphicsSnapshot.Revision;
     const auto& graphicsSettings = mFrameGraphicsSettings;
+    if (const float anisotropy = std::min(static_cast<float>(std::max<uint8_t>(graphicsSettings.Anisotropy, 1U)),
+                                          mMaxSamplerAnisotropy);
+        anisotropy != mTextureAnisotropy) {
+        // Every texture sampler takes the new filtering; the replaced
+        // samplers retire after the frames that may still use them.
+        mTextureAnisotropy = anisotropy;
+        for (auto& [key, texture] : mNativePicaTextures) {
+            if (texture.Sampler != VK_NULL_HANDLE) RecreateSampler(texture);
+        }
+    }
     mPicaShaderPipelineCache.BeginFrame(
         mFrameGraphicsSettingsRevision);
     auto& azaharTexturePacks =

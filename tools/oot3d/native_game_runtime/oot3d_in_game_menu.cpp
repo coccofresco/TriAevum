@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -518,6 +519,13 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     quality.UnavailableReason = "Choose NRI Upscaler as anti-aliasing first.";
     tab.Rows.push_back(std::move(quality));
   }
+  tab.Rows.push_back(graphicsChoice(
+      "Anisotropic filtering",
+      "Keeps textures sharp on surfaces seen at a slant (floors, roads, distant ground), the game's own textures "
+      "and texture packs alike.",
+      {"Off", "2x", "4x", "8x", "16x"},
+      [](const auto &s) { return std::countr_zero(static_cast<unsigned>(s.Anisotropy)); },
+      [](auto &s, int value) { s.Anisotropy = static_cast<uint8_t>(1U << value); }));
   {
     Row row;
     row.Key = "Scene FOV";

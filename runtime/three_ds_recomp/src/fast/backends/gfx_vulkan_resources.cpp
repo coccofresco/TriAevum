@@ -753,6 +753,12 @@ void GfxRenderingAPIVulkan::RecreateSampler(TextureRecord& texture) {
         std::min(texture.SamplerState.MinMipLevel, highestUploadedMip));
     samplerInfo.maxLod = static_cast<float>(
         std::min(texture.SamplerState.MaxMipLevel, highestUploadedMip));
+    // Graphics.Textures.Anisotropy, for linearly minified textures only:
+    // a texture the title samples nearest keeps its sharp texels.
+    if (mTextureAnisotropy > 1.0F && samplerInfo.minFilter == VK_FILTER_LINEAR) {
+        samplerInfo.anisotropyEnable = VK_TRUE;
+        samplerInfo.maxAnisotropy = mTextureAnisotropy;
+    }
     CheckVk(vkCreateSampler(mDevice, &samplerInfo, nullptr, &texture.Sampler),
             "vkCreateSampler");
     texture.AppliedSamplerState = texture.SamplerState;

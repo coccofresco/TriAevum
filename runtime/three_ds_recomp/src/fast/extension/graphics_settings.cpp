@@ -924,6 +924,15 @@ GraphicsSettingsValidation GraphicsSettingsService::Validate(
     } else {
         value.MsaaSamples = 1;
     }
+    if (value.Anisotropy != 1U && value.Anisotropy != 2U && value.Anisotropy != 4U && value.Anisotropy != 8U &&
+        value.Anisotropy != 16U) {
+        value.Anisotropy = 1U;
+        Correct(result.Issues, "Graphics.Textures.Anisotropy", "unsupported anisotropy reset to off");
+    } else if (value.Anisotropy > 1U && !capabilities.Has(GraphicsCapability::AnisotropicFiltering)) {
+        value.Anisotropy = 1U;
+        Correct(result.Issues, "Graphics.Textures.Anisotropy",
+                "anisotropic texture filtering is unavailable on this GPU");
+    }
 
     if (value.Window == WindowMode::ExclusiveFullscreen &&
         !capabilities.Has(GraphicsCapability::ExclusiveFullscreen)) {

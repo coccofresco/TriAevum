@@ -1803,6 +1803,10 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     uint32_t mSpatialAaMode = 0;
     VkSampleCountFlags mNativePicaSupportedSampleCounts = VK_SAMPLE_COUNT_1_BIT;
     VkSampleCountFlagBits mNativePicaSampleCount = VK_SAMPLE_COUNT_1_BIT;
+    // The device's anisotropy limit (1: the feature is off) and the samples
+    // the texture samplers were last built with (Graphics.Textures.Anisotropy).
+    float mMaxSamplerAnisotropy = 1.0F;
+    float mTextureAnisotropy = 1.0F;
     VkResolveModeFlagBits mNativePicaDepthResolveMode = VK_RESOLVE_MODE_NONE;
     bool mFrameSubmitted = false;
     std::atomic<bool> mImGuiInitialized{false};

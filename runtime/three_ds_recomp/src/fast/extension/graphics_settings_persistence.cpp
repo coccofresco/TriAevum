@@ -1521,7 +1521,10 @@ std::string_view EnhancedPresetDocument() noexcept {
   },
   "Preset": "Enhanced",
   "RenderScale": 1.0,
-  "SchemaVersion": 15
+  "SchemaVersion": 15,
+  "Textures": {
+    "Anisotropy": 4
+  }
 })json";
 }
 
@@ -1592,6 +1595,7 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
         {"Camera",
          {{"FovMultiplier", settings.FovMultiplier},
           {"ExtendedDrawDistance", settings.ExtendedDrawDistance}}},
+        {"Textures", {{"Anisotropy", settings.Anisotropy}}},
         {"TexturePacks",
          {
              {"Azahar",
@@ -1899,6 +1903,13 @@ GraphicsSettingsLoadResult DecodeGraphicsSettings(
             ReadScalar(*camera, "ExtendedDrawDistance",
                        result.Value.ExtendedDrawDistance,
                        "Graphics.Camera.ExtendedDrawDistance", result);
+    }
+    // Optional: a document from before anisotropic filtering takes its
+    // preset's value (Enhanced 4x, otherwise off).
+    if (const Json* textures = FindMember(document, "Textures"); textures != nullptr && textures->is_object()) {
+        ReadScalar(*textures, "Anisotropy", result.Value.Anisotropy, "Graphics.Textures.Anisotropy", result);
+    } else {
+        result.Value.Anisotropy = result.Value.Preset == GraphicsPreset::Enhanced ? 4U : 1U;
     }
     if (version >= 8U) {
         if (const Json* texturePacks =

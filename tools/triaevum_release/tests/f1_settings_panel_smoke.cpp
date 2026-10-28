@@ -2481,6 +2481,15 @@ int main(int argc, char** argv) try {
     Select("DLSS model", "Default");
     Check(std::none_of(items.begin(), items.end(), [](const auto& pair) { return pair.second.Label == "Sharpness"; }),
           "unused DLSS sharpness exposed");
+    // Anisotropic filtering (issue #122): applied through its owner, and Off
+    // stays available when the device lacks the feature.
+    Select("Anisotropic filtering", "8x");
+    Check(runtime.Snapshot().Anisotropy == 8U, "anisotropic filtering not applied");
+    runtime.SetCapability(GraphicsCapability::AnisotropicFiltering, false, "test unavailable");
+    Frame();
+    Select("Anisotropic filtering", "Off");
+    Check(runtime.Snapshot().Anisotropy == 1U, "cannot turn anisotropic filtering off without the feature");
+    AllCapabilities(true);
 
     Click("Grass");
     Click("Generation");

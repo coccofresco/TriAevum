@@ -2931,7 +2931,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             nriDraw.VertexOrIndexCount =
                 draw.Indexed ? indexCount : draw.VertexCount;
             nriDraw.BaseVertex = draw.BaseVertex;
-            const auto bindTexture = [](Extension::NriPicaTextureBindingDesc& destination,
+            const auto bindTexture = [anisotropy = mTextureAnisotropy](Extension::NriPicaTextureBindingDesc& destination,
                                         const TextureRecord& texture, const TextureRecord& sampler,
                                         VkFormat format, bool integer) {
                 destination.Image = texture.NriImage;
@@ -2952,6 +2952,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 destination.MaxLod = static_cast<float>(std::min(sampler.SamplerState.MaxMipLevel, highestMip));
                 destination.MinLod = static_cast<float>(std::min(sampler.SamplerState.MinMipLevel, highestMip));
                 destination.Integer = integer;
+                // Graphics.Textures.Anisotropy, as RecreateSampler applies it.
+                destination.Anisotropy = !integer && destination.MinFilter == VK_FILTER_LINEAR
+                    ? static_cast<uint8_t>(anisotropy) : uint8_t{1};
             };
             for (size_t slot = 0; slot < nriDraw.Textures.size(); ++slot)
                 bindTexture(nriDraw.Textures[slot], *textures[slot], *nativeTextures[slot],

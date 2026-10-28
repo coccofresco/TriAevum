@@ -213,6 +213,7 @@ struct NriPicaSamplerKey {
     float MinLod = 0.0F;
     float MaxLod = 0.0F;
     bool Integer = false;
+    uint8_t Anisotropy = 1;
 
     auto operator<=>(const NriPicaSamplerKey&) const = default;
 };
@@ -1145,7 +1146,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         const NriPicaSamplerKey key{
             source.MinFilter, source.MagFilter, source.MipmapMode,
             source.AddressU, source.AddressV, source.MipBias,
-            source.MinLod, source.MaxLod, source.Integer};
+            source.MinLod, source.MaxLod, source.Integer, source.Anisotropy};
         // Consecutive draws mostly repeat each slot's sampler. Equal keys are
         // equivalent under the map's ordering, and map entries live until
         // Shutdown resets the whole Impl, so the remembered descriptor is the
@@ -1165,6 +1166,7 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
                 source.MipmapMode == VK_SAMPLER_MIPMAP_MODE_LINEAR
                     ? nri::Filter::LINEAR
                     : nri::Filter::NEAREST};
+            samplerDesc.anisotropy = source.Anisotropy;
             samplerDesc.mipBias = source.MipBias;
             samplerDesc.mipMin = source.MinLod;
             samplerDesc.mipMax = source.MaxLod;

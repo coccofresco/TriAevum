@@ -462,6 +462,8 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     }
     const auto features = Renderer3ds::PicaVulkanCoreFeatures(
         supportedFeatures.features, driverProperties.driverID);
+    mMaxSamplerAnisotropy = features.samplerAnisotropy == VK_TRUE
+        ? deviceProperties.limits.maxSamplerAnisotropy : 1.0F;
     // NRI's Vulkan helper and NIS implementation create timeline fences,
     // FP16 shader permutations and update-after-bind image descriptors.
     // Advertise to NRI only features that are also enabled on the wrapped

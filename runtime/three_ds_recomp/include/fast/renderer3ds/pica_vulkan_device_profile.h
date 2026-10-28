@@ -47,6 +47,9 @@ inline VkPhysicalDeviceFeatures PicaVulkanCoreFeatures(const VkPhysicalDeviceFea
     // The grass GPU selection writes indirect draws whose firstInstance is
     // the slot's first root; without the feature it must be zero.
     enabled.drawIndirectFirstInstance = supported.drawIndirectFirstInstance;
+    // Anisotropic texture filtering (Graphics.Textures.Anisotropy); a sampler
+    // property only, so prepared pipelines are unaffected.
+    enabled.samplerAnisotropy = supported.samplerAnisotropy;
     return enabled;
 }
 

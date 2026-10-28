@@ -406,6 +406,42 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsExtendedDrawDistanceAndDefaults
     EXPECT_FALSE(corrected.Issues.empty());
 }
 
+// Issue #122: anisotropic filtering, 4x in Enhanced; a file from before it
+// takes its preset's value; unsupported counts and devices without the
+// feature fall back to off.
+TEST(Oot3dGraphicsSettingsPersistence, RoundTripsAnisotropyAndDefaultsOlderFilesByPreset) {
+    using namespace Fast::Extension;
+    EXPECT_EQ(EnhancedPresetSettings().Anisotropy, 4U);
+    EXPECT_EQ(GraphicsSettingsService::Preset(GraphicsPreset::Authentic).Anisotropy, 1U);
+    auto settings = CompleteSettings();
+    settings.Anisotropy = 8U;
+    const auto saved = SerializeGraphicsSettings(settings);
+    EXPECT_EQ(saved["Textures"]["Anisotropy"], 8);
+    const auto loaded = DeserializeGraphicsSettings(saved);
+    EXPECT_TRUE(loaded.Issues.empty());
+    EXPECT_EQ(loaded.Value.Anisotropy, 8U);
+    auto older = saved;
+    older.erase("Textures");
+    older["Preset"] = "Enhanced";
+    EXPECT_EQ(DeserializeGraphicsSettings(older).Value.Anisotropy, 4U);
+    older["Preset"] = "Custom";
+    EXPECT_EQ(DeserializeGraphicsSettings(older).Value.Anisotropy, 1U);
+
+    GraphicsCapabilities capabilities;
+    capabilities.Set(GraphicsCapability::AnisotropicFiltering, true);
+    auto candidate = settings;
+    candidate.Anisotropy = 3U;
+    auto validation = GraphicsSettingsService::Validate(candidate, capabilities);
+    EXPECT_EQ(validation.Value.Anisotropy, 1U);
+    candidate.Anisotropy = 16U;
+    EXPECT_EQ(GraphicsSettingsService::Validate(candidate, capabilities).Value.Anisotropy, 16U);
+    // It is honoured in Authentic too (the owner's choice).
+    candidate.Preset = GraphicsPreset::Authentic;
+    EXPECT_EQ(GraphicsSettingsService::Validate(candidate, capabilities).Value.Anisotropy, 16U);
+    capabilities.Set(GraphicsCapability::AnisotropicFiltering, false, "test");
+    EXPECT_EQ(GraphicsSettingsService::Validate(candidate, capabilities).Value.Anisotropy, 1U);
+}
+
 TEST(Oot3dGraphicsSettingsPersistence, MigratesSingleCascadeWithoutLosingTheOffChoiceOrLightResponse) {
     using namespace Fast::Extension;
     auto document = SerializeGraphicsSettings(CompleteSettings());

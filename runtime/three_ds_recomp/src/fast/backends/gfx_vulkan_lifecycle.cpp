@@ -573,6 +573,9 @@ void GfxRenderingAPIVulkan::Init() {
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_8_BIT) != 0U,
         "8x color/depth sampling is unavailable");
     settingsRuntime.SetCapability(
+        Extension::GraphicsCapability::AnisotropicFiltering, mMaxSamplerAnisotropy >= 2.0F,
+        "anisotropic texture filtering is unavailable on this GPU");
+    settingsRuntime.SetCapability(
         Extension::GraphicsCapability::MultisampledDepthResolve,
         mNativePicaDepthResolveMode != VK_RESOLVE_MODE_NONE,
         "multisampled depth resolve is unavailable");

@@ -1,5 +1,26 @@
 # F1 settings rationalization
 
+## Anisotropic filtering (2026-10-28, issue #122)
+
+Display > Antialiasing and upscaling gains **Anisotropic filtering** (Off,
+2x, 4x, 8x, 16x), mirrored by the in-game menu's Video > Anisotropic
+filtering row. It is the graphics owner's setting
+(`GraphicsSettings::Anisotropy`, `Graphics.Textures.Anisotropy`), part of the
+presets: Enhanced 4x, Authentic, Toon and the struct defaults Off. By the
+owner's decision it applies to the game's own textures as well as to texture
+packs, and Authentic validation does not reset it; a file from before the
+setting takes its preset's value. The device feature `samplerAnisotropy` is
+enabled by the shared device profile (`PicaVulkanCoreFeatures`, so Forge's
+device preparation enables it too; it does not change pipelines) and
+published as `GraphicsCapability::AnisotropicFiltering`; without it every
+count but Off is refused and Off stays selectable. The renderer clamps the
+count to the device's maximum and applies it only to linearly minified
+textures, both on the textures' own samplers (rebuilt when the setting
+changes) and on the NRI draw samplers (part of their cache key); Off leaves
+every sampler as before: the Hyrule Field frames of a deterministic run were
+byte-identical with Off. Actual-widget smoke: **12,116 assertions** (8x
+applied; Off selectable with the capability withdrawn).
+
 ## Rumble (2026-10-28)
 
 Controls > Devices > Controller gains **Rumble** (Off, Light, Strong; Off by

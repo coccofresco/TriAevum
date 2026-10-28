@@ -392,6 +392,10 @@ struct GraphicsSettings {
     // Actors at 5x the native distance, native foliage groups spawned
     // farther and the Kokiri fade removed. Off keeps the title's ranges.
     bool ExtendedDrawDistance = false;
+    // Anisotropic texture filtering, native and custom textures alike: 1
+    // (off), 2, 4, 8 or 16 samples, clamped to the device's maximum. Only
+    // linearly minified textures use it; 1 leaves every sampler as before.
+    uint8_t Anisotropy = 1;
     InteractiveGrassSettings Grass;
     InteractiveGrassSettings GrassSavedPreset;
     EffectsSettings Effects;

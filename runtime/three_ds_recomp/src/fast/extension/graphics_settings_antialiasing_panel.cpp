@@ -2,6 +2,8 @@
 #include "fast/extension/dlss_module_loader.h"
 #include "fast/extension/settings_panel_widgets.h"
 
+#include <bit>
+
 namespace Fast::Extension {
 bool GraphicsSettingsPanel::DrawAntialiasingSettings(
     GraphicsSettings& settings, const GraphicsCapabilities& capabilities) {
@@ -73,6 +75,14 @@ bool GraphicsSettingsPanel::DrawAntialiasingSettings(
         if (settings.Upscaler == UpscalerProvider::Nis || settings.Upscaler == UpscalerProvider::Fsr)
             changed |= ImGui::SliderFloat("Sharpness", &settings.UpscalerSharpness, 0.0F, 1.0F, "%.2f");
     }
+    const char* const anisotropy[] = {"Off", "2x", "4x", "8x", "16x"};
+    changed |= SettingsUi::ValidatedCombo<int>(
+        "Anisotropic filtering", settings, capabilities, anisotropy,
+        [](auto& value, int index) { value.Anisotropy = static_cast<uint8_t>(1U << index); },
+        [](const auto& value) { return std::countr_zero(static_cast<unsigned>(value.Anisotropy)); });
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Keeps textures sharp on surfaces seen at a slant (floors, roads, distant ground), "
+                          "the game's own textures and texture packs alike.");
     return changed;
 }
 } // namespace Fast::Extension

@@ -103,6 +103,8 @@ struct NriPicaTextureBindingDesc {
     float MinLod = 0.0F;
     float MaxLod = 0.0F;
     bool Integer = false;
+    // Anisotropic samples (1: off; Graphics.Textures.Anisotropy).
+    uint8_t Anisotropy = 1;
 };
 
 inline constexpr size_t kNriPicaUniformBindingCount = 7U;
