@@ -11,6 +11,7 @@
 #include <array>
 #include <bit>
 #include <cctype>
+#include <cmath>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -497,6 +498,12 @@ std::shared_ptr<const AzaharTextureReplacement> DecodeReplacement(
     replacement->NativeHash = hash;
     replacement->PixelContentHash = AzaharCityHash64(*pixels);
     replacement->Generation = generation;
+    uint32_t levels = 1U;
+    auto mips = BuildAzaharReplacementMipChain(*pixels, replacement->Width, replacement->Height, levels);
+    if (levels > 1U) {
+        replacement->MipsRgba8 = std::make_shared<const std::vector<uint8_t>>(std::move(mips));
+        replacement->MipLevels = levels;
+    }
     replacement->Rgba8 = std::move(pixels);
     replacement->SourcePath = indexed.Path;
     return replacement;
@@ -520,6 +527,110 @@ struct LoadJob {
 };
 
 } // namespace
+
+std::vector<uint8_t> BuildAzaharReplacementMipChain(
+    std::span<const uint8_t> rgba8, uint32_t width, uint32_t height, uint32_t& levels) {
+    levels = 1U;
+    if (width == 0U || height == 0U || rgba8.size() != static_cast<size_t>(width) * height * 4U) return {};
+    // sRGB-encoded texels average in linear light; alpha weights the colour
+    // so transparent texels add no fringe.
+    static const auto toLinear = [] {
+        std::array<float, 256> table{};
+        for (size_t value = 0; value < table.size(); ++value) {
+            const float encoded = static_cast<float>(value) / 255.0F;
+            table[value] = encoded <= 0.04045F ? encoded / 12.92F
+                                               : std::pow((encoded + 0.055F) / 1.055F, 2.4F);
+        }
+        return table;
+    }();
+    static const auto toEncoded = [] {
+        std::array<uint8_t, 4096> table{};
+        for (size_t index = 0; index < table.size(); ++index) {
+            const float linear = static_cast<float>(index) / static_cast<float>(table.size() - 1U);
+            const float encoded = linear <= 0.0031308F ? linear * 12.92F
+                                                       : 1.055F * std::pow(linear, 1.0F / 2.4F) - 0.055F;
+            table[index] = static_cast<uint8_t>(std::clamp(encoded * 255.0F + 0.5F, 0.0F, 255.0F));
+        }
+        return table;
+    }();
+    const auto encode = [&](float linear) {
+        return toEncoded[static_cast<size_t>(std::clamp(linear, 0.0F, 1.0F) * 4095.0F + 0.5F)];
+    };
+    // A cut-out (alpha-tested) image: nearly every texel fully transparent or
+    // opaque, with some of each. Averaging thins its coverage level by level
+    // (distant grass vanishes), so each level's alpha is scaled to keep the
+    // base's share of texels at or above one half.
+    const size_t texels = static_cast<size_t>(width) * height;
+    size_t clear = 0U, solid = 0U;
+    for (size_t index = 0; index < texels; ++index) {
+        const uint8_t alpha = rgba8[index * 4U + 3U];
+        clear += alpha < 16U ? 1U : 0U;
+        solid += alpha > 239U ? 1U : 0U;
+    }
+    const bool cutout = clear * 100U >= texels && solid * 100U >= texels && (clear + solid) * 10U >= texels * 9U;
+    size_t covered = 0U;
+    for (size_t index = 0; cutout && index < texels; ++index) covered += rgba8[index * 4U + 3U] >= 128U ? 1U : 0U;
+    const double coverage = static_cast<double>(covered) / static_cast<double>(texels);
+
+    std::vector<uint8_t> chain;
+    std::vector<uint8_t> previous(rgba8.begin(), rgba8.end());
+    uint32_t previousWidth = width, previousHeight = height;
+    std::vector<float> alphas;
+    while (previousWidth > 1U || previousHeight > 1U) {
+        const uint32_t levelWidth = std::max(1U, previousWidth / 2U);
+        const uint32_t levelHeight = std::max(1U, previousHeight / 2U);
+        std::vector<uint8_t> level(static_cast<size_t>(levelWidth) * levelHeight * 4U);
+        alphas.assign(static_cast<size_t>(levelWidth) * levelHeight, 0.0F);
+        for (uint32_t y = 0; y < levelHeight; ++y) {
+            for (uint32_t x = 0; x < levelWidth; ++x) {
+                float colour[3]{}, plain[3]{}, alpha = 0.0F;
+                for (uint32_t dy = 0; dy < 2U; ++dy) {
+                    for (uint32_t dx = 0; dx < 2U; ++dx) {
+                        const uint32_t sx = std::min(previousWidth - 1U, x * 2U + dx);
+                        const uint32_t sy = std::min(previousHeight - 1U, y * 2U + dy);
+                        const uint8_t* texel = &previous[(static_cast<size_t>(sy) * previousWidth + sx) * 4U];
+                        const float weight = static_cast<float>(texel[3]) / 255.0F;
+                        for (int channel = 0; channel < 3; ++channel) {
+                            const float linear = toLinear[texel[channel]];
+                            colour[channel] += linear * weight;
+                            plain[channel] += linear;
+                        }
+                        alpha += weight;
+                    }
+                }
+                uint8_t* out = &level[(static_cast<size_t>(y) * levelWidth + x) * 4U];
+                for (int channel = 0; channel < 3; ++channel)
+                    out[channel] = encode(alpha > 0.0F ? colour[channel] / alpha : plain[channel] * 0.25F);
+                alphas[static_cast<size_t>(y) * levelWidth + x] = alpha * 0.25F;
+            }
+        }
+        float scale = 1.0F;
+        if (cutout) {
+            // The smallest scale whose share of texels at or above one half
+            // reaches the base's coverage (the share grows with the scale).
+            const auto share = [&](float candidate) {
+                size_t count = 0U;
+                for (const float value : alphas) count += value * candidate >= 0.5F ? 1U : 0U;
+                return static_cast<double>(count) / static_cast<double>(alphas.size());
+            };
+            float low = 0.0F, high = 4.0F;
+            for (int step = 0; step < 16; ++step) {
+                const float middle = (low + high) * 0.5F;
+                (share(middle) >= coverage ? high : low) = middle;
+            }
+            scale = high;
+        }
+        for (size_t index = 0; index < alphas.size(); ++index)
+            level[index * 4U + 3U] =
+                static_cast<uint8_t>(std::clamp(alphas[index] * scale * 255.0F + 0.5F, 0.0F, 255.0F));
+        chain.insert(chain.end(), level.begin(), level.end());
+        previous = std::move(level);
+        previousWidth = levelWidth;
+        previousHeight = levelHeight;
+        ++levels;
+    }
+    return chain;
+}
 
 uint64_t AzaharCityHash64(std::span<const uint8_t> bytes) noexcept {
     return ::Fast::Renderer::ContentHash64(bytes);

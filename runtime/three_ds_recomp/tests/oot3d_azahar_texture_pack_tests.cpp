@@ -58,6 +58,51 @@ TEST(Oot3dAzaharTexturePack, UsesExactDumpFilenameContract) {
               "tex1_128x128_083287DDE382AE8F_13_mip0.png");
 }
 
+// Issue #122: a replacement carries its own mip chain, gamma-correct and
+// alpha-weighted, and a cut-out keeps its alpha-tested coverage per level.
+TEST(Oot3dAzaharTexturePack, BuildsReplacementMipChain) {
+    using Oot3d::Renderer::BuildAzaharReplacementMipChain;
+    // 8x4: levels 4x2, 2x1, 1x1. Black and white halves average to the
+    // linear midpoint (sRGB 188), not 128.
+    std::vector<uint8_t> stripes(8U * 4U * 4U, 255U);
+    for (uint32_t y = 0; y < 4U; ++y)
+        for (uint32_t x = 0; x < 8U; x += 2U)
+            for (int channel = 0; channel < 3; ++channel) stripes[(y * 8U + x) * 4U + channel] = 0U;
+    uint32_t levels = 0U;
+    const auto chain = BuildAzaharReplacementMipChain(stripes, 8U, 4U, levels);
+    EXPECT_EQ(levels, 4U);
+    ASSERT_EQ(chain.size(), (4U * 2U + 2U * 1U + 1U) * 4U);
+    EXPECT_NEAR(chain[0], 188, 1);
+    EXPECT_EQ(chain[3], 255U);
+    EXPECT_NEAR(chain[chain.size() - 4U], 188, 1);
+
+    // A fully transparent texel adds no colour: red beside invisible blue.
+    std::vector<uint8_t> fringe{255U, 0U, 0U, 255U, 0U, 0U, 255U, 0U};
+    const auto fringeChain = BuildAzaharReplacementMipChain(fringe, 2U, 1U, levels);
+    ASSERT_EQ(levels, 2U);
+    EXPECT_EQ(fringeChain[0], 255U);
+    EXPECT_EQ(fringeChain[2], 0U);
+
+    // A 64x64 cut-out with sparse one-texel blades (a quarter covered): plain
+    // averaging would leave every coarse texel below one half (the blades
+    // vanish); the scaled alpha keeps about a quarter of each level covered.
+    std::vector<uint8_t> blades(64U * 64U * 4U, 0U);
+    for (uint32_t y = 0; y < 64U; ++y)
+        for (uint32_t x = 0; x < 64U; ++x)
+            if ((x % 2U) == 0U && (y % 2U) == 0U) blades[(y * 64U + x) * 4U + 3U] = 255U;
+    const auto bladeChain = BuildAzaharReplacementMipChain(blades, 64U, 64U, levels);
+    ASSERT_EQ(levels, 7U);
+    size_t offset = 0U;
+    for (uint32_t level = 1U; level < 4U; ++level) {
+        const uint32_t size = 64U >> level;
+        size_t covered = 0U;
+        for (size_t texel = 0; texel < size_t{size} * size; ++texel)
+            covered += bladeChain[offset + texel * 4U + 3U] >= 128U ? 1U : 0U;
+        EXPECT_GT(covered, 0U) << "level " << level;
+        offset += size_t{size} * size * 4U;
+    }
+}
+
 TEST(Oot3dAzaharTexturePack, RepeatedWorkerStartupAndShutdownIsStable) {
     for (size_t iteration = 0; iteration < 256U; ++iteration) {
         Oot3d::Renderer::AzaharTexturePackRuntime runtime;

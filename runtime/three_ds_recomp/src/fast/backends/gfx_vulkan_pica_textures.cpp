@@ -323,7 +323,8 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                 uint32_t mipLevels,
                 VkFormat format, uint64_t replacementHash,
                 bool replacement, bool* insertedResult = nullptr,
-                uint64_t replacementPixelHash = 0U) {
+                uint64_t replacementPixelHash = 0U,
+                std::span<const uint8_t> lowerLevels = {}) {
                 auto [inserted, wasInserted] =
                     mNativePicaTextures.emplace(
                         textureKey, TextureRecord{});
@@ -351,12 +352,22 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     ? texture.MinMipLevel : 0U;
                 record.SamplerState.MaxMipLevel = !shadow2d
                     ? texture.MaxMipLevel : 0U;
+                if (replacement && mipLevels > 1U) {
+                    // A replacement samples its own chain, whatever levels
+                    // the native texture had: blended between levels, with
+                    // the native minification filter inside each.
+                    record.SamplerState.MinFilter = NativePicaMinFilter(
+                        texture.MinLinear, /*mipLinear=*/true, mipLevels);
+                    record.SamplerState.MinMipLevel = 0U;
+                    record.SamplerState.MaxMipLevel = static_cast<uint8_t>(mipLevels - 1U);
+                }
                 record.CustomReplacementHash = replacementHash;
                 record.CustomReplacementPixelHash = replacementPixelHash;
                 record.CustomReplacementApplied = replacement;
                 record.CustomReplacementReady = replacement;
                 CreateNativePicaTextureImage(
-                    record, pixels, width, height, mipLevels, format);
+                    record, pixels, width, height, mipLevels, format,
+                    /*storageView=*/false, lowerLevels);
                 return &record;
             };
 
@@ -444,8 +455,9 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     record.CustomReplacementPending = false;
                     record.CustomReplacementReady = true;
                     replacementKey.ReplacementGeneration = resolved.Replacement->Generation;
-                    const uint64_t replacementBytes =
-                        resolved.Replacement->Rgba8->size();
+                    const auto& picture = *resolved.Replacement;
+                    const uint64_t replacementBytes = picture.Rgba8->size() +
+                        (picture.MipsRgba8 != nullptr ? picture.MipsRgba8->size() : 0U);
                     const bool budgetAvailable =
                         mCustomTextureUploadBytesThisFrame == 0U ||
                         (mCustomTextureUploadBytesThisFrame <
@@ -459,12 +471,14 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     bool inserted = false;
                     TextureRecord* promoted = createTexture(
                         replacementKey,
-                        *resolved.Replacement->Rgba8,
-                        resolved.Replacement->Width,
-                        resolved.Replacement->Height,
-                        1U,
+                        *picture.Rgba8,
+                        picture.Width,
+                        picture.Height,
+                        picture.MipsRgba8 != nullptr ? picture.MipLevels : 1U,
                         VK_FORMAT_R8G8B8A8_UNORM,
-                        resolved.NativeHash, true, &inserted, resolved.Replacement->PixelContentHash);
+                        resolved.NativeHash, true, &inserted, picture.PixelContentHash,
+                        picture.MipsRgba8 != nullptr ? std::span<const uint8_t>(*picture.MipsRgba8)
+                                                     : std::span<const uint8_t>{});
                     if (inserted) {
                         mCustomTextureUploadBytesThisFrame +=
                             replacementBytes;
@@ -624,8 +638,9 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                 replacementResult.Replacement != nullptr &&
                 replacementResult.Replacement->Rgba8 != nullptr) {
                 replacementKey.ReplacementGeneration = replacementResult.Replacement->Generation;
-                const uint64_t replacementBytes =
-                    replacementResult.Replacement->Rgba8->size();
+                const auto& picture = *replacementResult.Replacement;
+                const uint64_t replacementBytes = picture.Rgba8->size() +
+                    (picture.MipsRgba8 != nullptr ? picture.MipsRgba8->size() : 0U);
                 const bool budgetAvailable =
                     mCustomTextureUploadBytesThisFrame == 0U ||
                     (mCustomTextureUploadBytesThisFrame <
@@ -637,13 +652,15 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     bool inserted = false;
                     TextureRecord* promoted = createTexture(
                         replacementKey,
-                        *replacementResult.Replacement->Rgba8,
-                        replacementResult.Replacement->Width,
-                        replacementResult.Replacement->Height,
-                        1U,
+                        *picture.Rgba8,
+                        picture.Width,
+                        picture.Height,
+                        picture.MipsRgba8 != nullptr ? picture.MipLevels : 1U,
                         VK_FORMAT_R8G8B8A8_UNORM,
                         replacementResult.NativeHash, true,
-                        &inserted, replacementResult.Replacement->PixelContentHash);
+                        &inserted, picture.PixelContentHash,
+                        picture.MipsRgba8 != nullptr ? std::span<const uint8_t>(*picture.MipsRgba8)
+                                                     : std::span<const uint8_t>{});
                     if (inserted) {
                         mCustomTextureUploadBytesThisFrame +=
                             replacementBytes;
@@ -797,9 +814,13 @@ void GfxRenderingAPIVulkan::CreateNativePicaTextureStorage(
 
 void GfxRenderingAPIVulkan::CreateNativePicaTextureImage(
     TextureRecord& texture, std::span<const uint8_t> pixels, uint32_t width,
-    uint32_t height, uint32_t mipLevels, VkFormat format, bool storageView) {
+    uint32_t height, uint32_t mipLevels, VkFormat format, bool storageView,
+    std::span<const uint8_t> lowerLevels) {
     const auto expectedBytes = NativePicaDecodedMipChainSize(width, height, mipLevels);
-    if (!expectedBytes.has_value() || pixels.size() != *expectedBytes || pixels.empty())
+    const size_t baseBytes = static_cast<size_t>(width) * height * 4U;
+    const size_t suppliedBytes = pixels.size() + lowerLevels.size();
+    if (!expectedBytes.has_value() || suppliedBytes != *expectedBytes || pixels.empty() ||
+        (!lowerLevels.empty() && pixels.size() != baseBytes))
         throw std::runtime_error("native PICA texture upload size is invalid");
     CreateNativePicaTextureStorage(texture, width, height, mipLevels, format, storageView);
     size_t offset = 0U;
@@ -807,7 +828,9 @@ void GfxRenderingAPIVulkan::CreateNativePicaTextureImage(
         const uint32_t mipWidth = std::max(1U, width >> level);
         const uint32_t mipHeight = std::max(1U, height >> level);
         const size_t bytes = static_cast<size_t>(mipWidth) * mipHeight * 4U;
-        UploadNativePicaTextureRows(texture, pixels.subspan(offset, bytes),
+        const bool separate = !lowerLevels.empty() && level != 0U;
+        const auto source = separate ? lowerLevels.subspan(offset - baseBytes, bytes) : pixels.subspan(offset, bytes);
+        UploadNativePicaTextureRows(texture, source,
             mipWidth, mipHeight, level, mipLevels, format, 0U, mipHeight);
         offset += bytes;
     }

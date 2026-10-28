@@ -71,8 +71,22 @@ struct AzaharTextureReplacement {
     uint64_t PixelContentHash = 0;
     uint64_t Generation = 0;
     std::shared_ptr<const std::vector<uint8_t>> Rgba8;
+    // Levels 1.. of the replacement's mip chain, tightly packed (each half
+    // the previous, at least 1x1), built on the loader thread: a picture
+    // larger than the native texture it replaces is sampled minified, and
+    // without levels it shimmers and its cut-out edges (grass) break up
+    // (issue #122). MipLevels counts the base level; 1 means none.
+    std::shared_ptr<const std::vector<uint8_t>> MipsRgba8;
+    uint32_t MipLevels = 1;
     std::filesystem::path SourcePath;
 };
+
+// The levels below a w x h RGBA8 image (gamma-correct, alpha-weighted 2x2
+// box filter). A cut-out image (alpha nearly all 0 or 255) keeps its
+// alpha-tested coverage on every level. `levels` receives the level count
+// including the base.
+[[nodiscard]] std::vector<uint8_t> BuildAzaharReplacementMipChain(
+    std::span<const uint8_t> rgba8, uint32_t width, uint32_t height, uint32_t& levels);
 
 enum class AzaharTextureResolveState : uint8_t {
     Disabled = 0,

@@ -1095,11 +1095,14 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         bool requireVulkan = false,
         NativePicaPipelineAcquisition acquisition = NativePicaPipelineAcquisition::Blocking,
         bool* pending = nullptr);
+    // `pixels` holds every level, or only the base when `lowerLevels` holds
+    // the others (a custom replacement's chain, built apart from its base).
     void CreateNativePicaTextureImage(TextureRecord& texture,
                                       std::span<const uint8_t> pixels,
                                       uint32_t width, uint32_t height,
                                       uint32_t mipLevels, VkFormat format,
-                                      bool storageView = false);
+                                      bool storageView = false,
+                                      std::span<const uint8_t> lowerLevels = {});
     void UploadNativePicaTextureRows(TextureRecord& texture,
                                     std::span<const uint8_t> pixels,
                                     uint32_t width, uint32_t height,

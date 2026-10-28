@@ -713,8 +713,12 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
             texture.MipLevels = snapshot.MipLevels;
             texture.Rgba8 = snapshot.PixelBytes;
             texture.CustomReplacementApplied = snapshot.CustomReplacement;
+            // The replacement's identity is its base picture; its levels
+            // were built from it (issue #122).
             if (snapshot.CustomReplacement)
-                texture.CustomReplacementPixelHash = ::Oot3d::Renderer::AzaharCityHash64(texture.Rgba8);
+                texture.CustomReplacementPixelHash = ::Oot3d::Renderer::AzaharCityHash64(
+                    std::span<const uint8_t>(texture.Rgba8).first(std::min(
+                        texture.Rgba8.size(), static_cast<size_t>(texture.Width) * texture.Height * 4U)));
             texture.SamplerState.MinFilter = snapshot.NativeType != 2U
                 ? NativePicaMinFilter(snapshot.MinLinear,
                                       snapshot.MipLinear,
@@ -733,6 +737,13 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
                 ? snapshot.MinMipLevel : 0U;
             texture.SamplerState.MaxMipLevel = snapshot.NativeType != 2U
                 ? snapshot.MaxMipLevel : 0U;
+            if (snapshot.CustomReplacement && snapshot.MipLevels > 1U) {
+                // As uploaded: the replacement's own chain, blended.
+                texture.SamplerState.MinFilter = NativePicaMinFilter(
+                    snapshot.MinLinear, /*mipLinear=*/true, snapshot.MipLevels);
+                texture.SamplerState.MinMipLevel = 0U;
+                texture.SamplerState.MaxMipLevel = static_cast<uint8_t>(snapshot.MipLevels - 1U);
+            }
             texture.CustomReplacementHash =
                 snapshot.CustomReplacementHash;
             texture.CustomReplacementPending =
