@@ -952,6 +952,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
             const bool arenaConfigured =
                 mNriEffectGraphTransientImageArena.Configure(allocationPlan);
+            slowSteps.Mark("transient_arena");
             const auto& arenaStats =
                 mNriEffectGraphTransientImageArena.Stats();
             mDiagnostics.RecordEffectTransientImageArena(
@@ -1524,6 +1525,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 mCurrentFrame,
                 Extension::GpuProfileScope::MotionVectors,
                 command);
+            slowSteps.Mark("motion_vectors");
             if (motionForDisplay) {
                 const VkImage motionImage = mMotionVectorPass.OutputImage();
                 mSceneSurfaces.Publish({*motionKey,
@@ -1641,6 +1643,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             mGpuProfiler.EndScope(
                 mCurrentFrame, Extension::GpuProfileScope::AmbientOcclusion,
                 command);
+            slowSteps.Mark("ambient_occlusion");
             aoExecutedNow = mAmbientOcclusionOutputValid;
             if (mAmbientOcclusionOutputValid) {
                 recordEffectPassTransitions(
@@ -1888,6 +1891,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 mCurrentFrame,
                 Extension::GpuProfileScope::DepthPreparation,
                 command);
+            slowSteps.Mark("depth_preparation");
             if (mHiZOutputValid) {
                 hiZExecutedNow = true;
                 mHiZRenderTargetNamespace = transfer.RenderTargetNamespace;
@@ -2488,6 +2492,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 mCurrentFrame,
                 Extension::GpuProfileScope::Reflection,
                 command);
+            slowSteps.Mark("reflections");
             if (reflectionsForDisplay) {
                 mSceneSurfaces.Publish({*reflectionKey,
                     reinterpret_cast<uintptr_t>(activeReflectionImage),
