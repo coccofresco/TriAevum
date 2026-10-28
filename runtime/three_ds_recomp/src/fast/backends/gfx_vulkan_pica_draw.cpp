@@ -952,8 +952,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // added optics: the title's water is ambient-only geometry, and relit
         // like ground its top faced the key light at full Lambert. Its
         // fragments are found in the surface shader (AssignPicaSurfaceWater).
-        // Filter-blended water (a moat drawn colour x itself) is resolved too:
-        // a whole-water draw keeps its native colour on the water path anyway.
+        // Filter-blended water (a moat or channel drawn colour x itself) is
+        // resolved too: the water path keeps its native colour anyway.
         NativePicaWaterSurface waterSurface;
         if (!nativeMemoryOnly && !mNativeFidelityProfile &&
             Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
@@ -962,10 +962,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             draw.CompositionDomain == Renderer3ds::PicaCompositionDomain::Scene &&
             Renderer3ds::PicaCompositionReceivesSurfaceLighting(draw.Composition.Layer) && grassPerspectiveProjection)
             waterSurface = ResolveNativePicaWaterSurface(draw);
-        // A filter-composed draw is relit nowhere, except catalogued whole
-        // water, whose every fragment keeps native colour with water optics.
+        // A filter-composed draw is relit nowhere, except water: a draw on a
+        // water body or catalogued whole water, whose water fragments keep
+        // native colour with water optics (the water blend is colour x itself).
         const bool filterWaterDraw =
-            surfaceAppearance == Renderer3ds::PicaSurfaceAppearance::FilterComposition && waterSurface.WholeDraw;
+            surfaceAppearance == Renderer3ds::PicaSurfaceAppearance::FilterComposition &&
+            (waterSurface.WholeDraw || waterSurface.ReachesWater);
         if (surfaceAppearance == Renderer3ds::PicaSurfaceAppearance::FilterComposition && !filterWaterDraw)
             waterSurface = {};
         const bool authoredAppearance = Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&

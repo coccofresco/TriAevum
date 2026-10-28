@@ -352,9 +352,13 @@ fourth class, `FilterComposition`: an enabled blend whose source or
 destination RGB factor reads the source colour, or whose source factor reads
 the destination colour (multiplicative tints). These draws keep their native
 appearance, like additive light: no per-pixel/PBR replacement and no
-received shadows. One exception is catalogued whole-water draws (the
-courtyard moat is drawn `SourceColor` / `ConstantAlpha`): they stay on the
-water path, which already keeps native colour and adds optics. The rule
+received shadows. One exception is water: a filter draw that is
+catalogued whole water or that reaches a water body (the courtyard moat is
+drawn `SourceColor` / `ConstantAlpha`) stays on the water path, which
+already keeps native colour and adds optics. The guard courtyard's channel
+surfaces (same blend; not catalogued and reaching no body) now keep their
+native colour where they used to be relit, so they look slightly less
+bright. That is the expected effect of the rule. The rule
 reads only the typed native blend state. No scene, texture or material keys
 are used.
 
