@@ -85,7 +85,7 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
       SPDLOG_WARN("{}", line);
   }
   // TRIAEVUM_INPUT_TRACE=1: the SDL key events since the last poll (and,
-  // below, each bound key's edges).
+  // below, each bound key's edges and each rumble played).
   if (!pollingState.KeyTraceChecked) {
     pollingState.KeyTraceChecked = true;
     if (ThreeDsRecomp::Input::SdlKeyTrace::Requested()) {
@@ -96,6 +96,21 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   }
   if (pollingState.KeyTrace)
     for (const auto &line : pollingState.KeyTrace->Drain()) SPDLOG_WARN("{}", line);
+  // Rumble: what the title adapter published since the last poll, at the
+  // user's strength, on the active pad. Off plays nothing (and the adapter
+  // reads nothing); host menus hold it.
+  pollingState.RumbleStrength = config.Rumble;
+  if (pollingState.Rumble.Pending()) {
+    const auto pulse = pollingState.Rumble.Take();
+    const auto command = ThreeDsRecomp::Input::ResolveRumble(pulse, config.Rumble);
+    const bool played = config.ControllerEnabled && !hostGuiVisible &&
+                        ThreeDsRecomp::Input::PlaySdlRumble(selectedController.Controller, command);
+    if (pollingState.KeyTrace)
+      SPDLOG_WARN("TRIAEVUM_INPUT_TRACE rumble strength={} intensity={:.3f} ms={} low={} high={} pad={} played={}",
+                  ThreeDsRecomp::Input::RumbleStrengthName(config.Rumble), pulse.Intensity,
+                  command.DurationMilliseconds, command.LowFrequency, command.HighFrequency,
+                  selectedController.InstanceId, played ? 1 : 0);
+  }
   controls.ObserveDevices(std::move(selectedController.Devices));
 
   const int16_t triggerThreshold = static_cast<int16_t>(

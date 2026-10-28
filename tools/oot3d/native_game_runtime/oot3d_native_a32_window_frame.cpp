@@ -1421,6 +1421,19 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     devSurfaceTraceFrame = 0U;
   }
 #endif
+  // Rumble (Controls > Rumble): the OoT3D adapter's events from the native
+  // game state, handed to Input, which plays them on the active pad at the
+  // next poll. Off reads nothing; reading never writes the guest.
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
+      nativeControlPollingState.RumbleStrength != ThreeDsRecomp::Input::RumbleStrength::Off) {
+    Oot3dNativeGame::Oot3dRumbleSample rumbleSample;
+    (void)Oot3dNativeGame::ReadOot3dRumbleSample(process.Memory(), sceneViewProbe.Stats().LastPlayStateAddress,
+                                                 &rumbleSample);
+    for (const auto &event : oot3dRumbleEvents.Observe(rumbleSample))
+      nativeControlPollingState.Rumble.Request(Oot3dNativeGame::Oot3dRumblePulse(event));
+  } else {
+    oot3dRumbleEvents.Reset();
+  }
   refreshTickRemainder += kCtrArm11TicksPerSecond;
   nextVblankTick += refreshTickRemainder / kGuestDisplayRefreshRate;
   refreshTickRemainder %= kGuestDisplayRefreshRate;

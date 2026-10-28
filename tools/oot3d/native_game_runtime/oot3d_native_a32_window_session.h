@@ -506,6 +506,9 @@ private:
   Oot3dNativeGame::NativeA32InputDiagnostics inputDiagnostics;
   NativeInputConsumerDiagnostics inputConsumerDiagnostics;
   NativeControlPollingState nativeControlPollingState;
+  // OoT3D's rumble events (damage, hard landings), read per guest refresh
+  // only while Controls > Rumble is not Off.
+  Oot3dNativeGame::Oot3dRumbleEventTracker oot3dRumbleEvents;
   Oot3dNativeGame::Oot3dPicaVulkanShaderSourceCache shaderSourceCache;
   std::optional<Oot3dNativeGame::Oot3dPicaSemanticTraceWriter> picaSemanticTraceStorage;
   // OOT3D_PICA_RAW_DRAWS: the raw PICA state of each canonical pipeline, for

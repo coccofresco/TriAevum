@@ -1353,4 +1353,60 @@ std::vector<std::string> InputDeviceLog::Observe(std::span<const DeviceDescripto
     return DescribeInputDevices(first ? "startup" : "change", pads, keyboard, userName);
 }
 
+const char* RumbleStrengthName(RumbleStrength strength) noexcept {
+    switch (strength) {
+    case RumbleStrength::Off: return "off";
+    case RumbleStrength::Light: return "light";
+    case RumbleStrength::Strong: return "strong";
+    }
+    return "unknown";
+}
+
+const char* RumbleStrengthLabel(RumbleStrength strength) noexcept {
+    switch (strength) {
+    case RumbleStrength::Off: return "Off";
+    case RumbleStrength::Light: return "Light";
+    case RumbleStrength::Strong: return "Strong";
+    }
+    return "Unknown";
+}
+
+bool ParseRumbleStrength(std::string_view value, RumbleStrength* strength) noexcept {
+    if (strength == nullptr) return false;
+    for (std::size_t index = 0; index < kRumbleStrengthCount; ++index) {
+        const auto candidate = static_cast<RumbleStrength>(index);
+        if (value == RumbleStrengthName(candidate)) {
+            *strength = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+RumbleCommand ResolveRumble(RumblePulse pulse, RumbleStrength strength) noexcept {
+    RumbleCommand command;
+    const float intensity = std::isfinite(pulse.Intensity) ? std::clamp(pulse.Intensity, 0.0F, 1.0F) : 0.0F;
+    const float scale = strength == RumbleStrength::Strong ? 1.0F : strength == RumbleStrength::Light ? 0.45F : 0.0F;
+    const float low = intensity * scale;
+    if (low <= 0.0F || pulse.DurationMilliseconds == 0) return command;
+    command.Play = true;
+    command.LowFrequency = static_cast<std::uint16_t>(std::lround(low * 65535.0F));
+    command.HighFrequency = static_cast<std::uint16_t>(std::lround(low * 0.5F * 65535.0F));
+    command.DurationMilliseconds = std::min<std::uint32_t>(pulse.DurationMilliseconds, 1000U);
+    return command;
+}
+
+void RumbleRequests::Request(RumblePulse pulse) noexcept {
+    if (!std::isfinite(pulse.Intensity) || pulse.Intensity <= 0.0F || pulse.DurationMilliseconds == 0) return;
+    if (!Pending() || pulse.Intensity > mPending.Intensity ||
+        (pulse.Intensity == mPending.Intensity && pulse.DurationMilliseconds > mPending.DurationMilliseconds))
+        mPending = pulse;
+}
+
+RumblePulse RumbleRequests::Take() noexcept {
+    const auto pulse = mPending;
+    mPending = {};
+    return pulse;
+}
+
 } // namespace ThreeDsRecomp::Input

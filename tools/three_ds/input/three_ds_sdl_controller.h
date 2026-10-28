@@ -101,6 +101,14 @@ inline SdlControllerSelection ResolveSdlController(
     return result;
 }
 
+// Plays a resolved rumble on the borrowed pad; false when nothing played (no
+// pad, nothing to play, or a pad without motors).
+inline bool PlaySdlRumble(SDL_GameController* controller, const RumbleCommand& command) {
+    if (!command.Play || !controller || SDL_GameControllerGetAttached(controller) != SDL_TRUE) return false;
+    return SDL_GameControllerRumble(controller, command.LowFrequency, command.HighFrequency,
+                                    command.DurationMilliseconds) == 0;
+}
+
 inline bool IsSdlControllerButtonHeld(SDL_GameController* controller,
                                       GamepadButton button, std::int16_t triggerThreshold) {
     if (!controller || SDL_GameControllerGetAttached(controller) != SDL_TRUE) return false;

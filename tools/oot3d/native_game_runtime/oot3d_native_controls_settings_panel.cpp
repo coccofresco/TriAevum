@@ -336,6 +336,7 @@ class NativeControlsSettingsPanel final
         mControlDraft.ControllerTouchpadEnabled = previous.ControllerTouchpadEnabled;
         mControlDraft.ControllerTouchpadIndex = previous.ControllerTouchpadIndex;
         mControlDraft.ButtonPrompts = previous.ButtonPrompts;
+        mControlDraft.Rumble = previous.Rumble;
         mControlDirty = true;
         ImGui::CloseCurrentPopup();
       }
@@ -441,16 +442,37 @@ class NativeControlsSettingsPanel final
       }
       ImGui::EndCombo();
     }
+    // Rumble (the in-game menu's Controls > Rumble row mirrors this). Not a
+    // binding: the preset stays as it is. Off is always available; with no
+    // motor on the active pad the choice is kept and nothing plays.
+    std::array<const char*, ThreeDsRecomp::Input::kRumbleStrengthCount> rumbleLabels{};
+    for (std::size_t index = 0; index < rumbleLabels.size(); ++index)
+      rumbleLabels[index] = ThreeDsRecomp::Input::RumbleStrengthLabel(static_cast<NativeRumbleStrength>(index));
+    int rumble = static_cast<int>(mControlDraft.Rumble);
+    if (ControlWidgets::Combo("Rumble", &rumble, rumbleLabels.data(), static_cast<int>(rumbleLabels.size()))) {
+      mControlDraft.Rumble = static_cast<NativeRumbleStrength>(rumble);
+      mControlDirty = true;
+    }
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The active controller rumbles when Link takes damage or lands hard. The 3DS has no rumble.");
+    if (mControlDraft.Rumble != NativeRumbleStrength::Off) {
+      const auto active = std::find_if(devices.begin(), devices.end(), [](const auto& device) { return device.Selected; });
+      if (active == devices.end())
+        ImGui::TextDisabled("No controller is active.");
+      else if (!active->HasRumble)
+        ImGui::TextDisabled("The active controller reports no rumble motor.");
+    }
     if (devices.empty()) {
       ImGui::TextDisabled("No SDL controller connected");
     } else {
       for (const auto& device : devices) {
         ImGui::TextWrapped(
-            "%s%s%s%s%s", device.Name.c_str(),
+            "%s%s%s%s%s%s", device.Name.c_str(),
             device.Selected && mControlDraft.ControllerEnabled ? " | active" : "",
             device.HasGyroscope ? " | gyro" : "",
             device.HasAccelerometer ? " | accelerometer" : "",
-            device.TouchpadCount > 0 ? " | touchpad" : "");
+            device.TouchpadCount > 0 ? " | touchpad" : "",
+            device.HasRumble ? " | rumble" : "");
         if (device.InstanceId == draftInstance && device.Serial.empty()) {
           ImGui::TextDisabled("No serial available: preference identifies the controller model.");
         }

@@ -244,6 +244,11 @@ void CheckControlPersistence() {
     const auto profileBeforePrompts = controls->Snapshot().Config.Profile;
     Select("##Button prompts", "Steam Deck");
     Check(controls->Snapshot().Config.Profile == profileBeforePrompts, "button prompts made the preset custom");
+    // Rumble (Controller section) is the controls owner's too, not a binding.
+    Select("##Rumble", "Light");
+    Check(controls->Snapshot().Config.Rumble == NativeRumbleStrength::Light &&
+              controls->Snapshot().Config.Profile == profileBeforePrompts,
+          "rumble choice not connected, or it made the preset custom");
     Click("Keyboard");
     Click("Camera");
     // The previous panel may have saved this section collapsed in ImGui.
@@ -258,6 +263,7 @@ void CheckControlPersistence() {
     Check(LoadNativeControlConfig(root / "controls.json", &saved) && !saved.KeyboardEnabled,
           "Save controls did not persist live input");
     Check(saved.ButtonPrompts == NativeButtonPrompts::SteamDeck, "Save controls did not persist the button prompts");
+    Check(saved.Rumble == NativeRumbleStrength::Light, "Save controls did not persist the rumble choice");
     Check(LoadTopScreenUiConfig(root / "topscreen.json", &savedTop) && savedTop.FreeCameraEnabled,
           "Save controls did not persist camera settings");
     // SingleScreen 3.0 gameplay options: the standard profile's values (all
@@ -2677,6 +2683,14 @@ int main(int argc, char** argv) try {
     Check(controls->Snapshot().Config.ButtonPrompts == Oot3dNativeGame::NativeButtonPrompts::PlayStation &&
               controls->ActivePromptSet() == Oot3dNativeGame::NativePromptSet::PlayStation,
           "button prompts choice not connected");
+    // Rumble (WP ports-oct28): one control in Devices > Controller; Off is
+    // always offered, Strong and Off reach the controls owner.
+    Select("##Rumble", "Strong");
+    Check(controls->Snapshot().Config.Rumble == Oot3dNativeGame::NativeRumbleStrength::Strong,
+          "rumble Strong not connected");
+    Select("##Rumble", "Off");
+    Check(controls->Snapshot().Config.Rumble == Oot3dNativeGame::NativeRumbleStrength::Off,
+          "rumble Off not connected");
     Select("##Button prompts", "Automatic");
     controls->ObserveInputActivity(ThreeDsRecomp::Input::InputActivity::Keyboard, 1.0);
     Check(controls->Snapshot().Config.ButtonPrompts == Oot3dNativeGame::NativeButtonPrompts::Automatic &&

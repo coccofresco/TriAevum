@@ -10,6 +10,7 @@
 #include "three_ds_sdl_controller.h"
 #include "three_ds_sdl_host_presses.h"
 #include "three_ds_sdl_key_trace.h"
+#include "oot3d_rumble_events.h"
 #include "three_ds_touch_anchors.h"
 #include "three_ds_touch_camera.h"
 #include "three_ds_virtual_pad.h"
@@ -777,6 +778,11 @@ struct NativeControlPollingState {
   // Presses between polls (quick taps, the Android Back gesture) for the 3DS
   // touch screen and the in-game menu; created by the first poll.
   std::unique_ptr<ThreeDsRecomp::Input::SdlHostPressWatch> HostPresses;
+  // Rumble (Input owns it): the strength the last poll read, and the pulses
+  // the title adapter published since, which the next poll plays on the
+  // active pad.
+  ThreeDsRecomp::Input::RumbleStrength RumbleStrength = ThreeDsRecomp::Input::RumbleStrength::Off;
+  ThreeDsRecomp::Input::RumbleRequests Rumble;
   // The input device log (game log, at startup and on hot-plug) and, with
   // TRIAEVUM_INPUT_TRACE=1, the SDL key events and each bound key's edges.
   ThreeDsRecomp::Input::InputDeviceLog DeviceLog;

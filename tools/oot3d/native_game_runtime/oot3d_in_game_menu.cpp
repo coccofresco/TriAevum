@@ -752,6 +752,25 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
   tab.Rows.push_back(controlToggle("Capture mouse", "Hides and locks the pointer while the mouse is used in gameplay.",
                                    &NativeControlConfig::CaptureMouseInGameplay));
   {
+    // The same choice as F1 > Controls > Devices > Controller > Rumble (the
+    // controls owner keeps it).
+    Row row;
+    row.Key = "Rumble";
+    row.Kind = RowKind::Choice;
+    row.Help = "The active controller rumbles when Link takes damage or lands hard. The 3DS has no rumble, so it "
+               "is Off unless you choose it; a controller without a rumble motor stays still.";
+    for (std::size_t index = 0; index < ThreeDsRecomp::Input::kRumbleStrengthCount; ++index)
+      row.Choices.emplace_back(ThreeDsRecomp::Input::RumbleStrengthLabel(static_cast<NativeRumbleStrength>(index)));
+    row.Read = [this] { return static_cast<int>(mControls.Rumble); };
+    row.Write = [this](int value) {
+      auto config = mControls;
+      config.Rumble = static_cast<NativeRumbleStrength>(value);
+      return ApplyControls(config);
+    };
+    row.Modified = [this] { return mControls.Rumble != NativeRumbleStrength::Off; };
+    tab.Rows.push_back(std::move(row));
+  }
+  {
     // The same choice as F1 > Controls > Devices > Button prompts (the
     // controls owner keeps it).
     Row row;
@@ -789,6 +808,7 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
       config.GyroscopeBiasDegreesPerSecond = previous.GyroscopeBiasDegreesPerSecond;
       config.AccelerometerNeutral = previous.AccelerometerNeutral;
       config.ButtonPrompts = previous.ButtonPrompts;
+      config.Rumble = previous.Rumble;
       return ApplyControls(config);
     };
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(NativeControlProfile::Custom); };

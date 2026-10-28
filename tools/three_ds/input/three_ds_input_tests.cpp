@@ -579,10 +579,53 @@ void TestInputDeviceLog() {
             "controller type names");
 }
 
+// Rumble: the strength choice and the motor values Input plays; Off is inert.
+void TestRumble() {
+    using namespace ThreeDsRecomp::Input;
+    RumbleStrength strength = RumbleStrength::Off;
+    for (std::size_t index = 0; index < kRumbleStrengthCount; ++index) {
+        const auto value = static_cast<RumbleStrength>(index);
+        Require(ParseRumbleStrength(RumbleStrengthName(value), &strength) && strength == value,
+                "rumble strength name round trip");
+    }
+    Require(!ParseRumbleStrength("max", &strength) && !ParseRumbleStrength("Light", &strength),
+            "an unknown rumble strength was accepted");
+    const RumblePulse full{1.0F, 300};
+    Require(!ResolveRumble(full, RumbleStrength::Off).Play, "Off played");
+    Require(!ResolveRumble({0.0F, 300}, RumbleStrength::Strong).Play &&
+                !ResolveRumble({1.0F, 0}, RumbleStrength::Strong).Play &&
+                !ResolveRumble({std::numeric_limits<float>::quiet_NaN(), 300}, RumbleStrength::Strong).Play,
+            "an empty pulse played");
+    const auto strong = ResolveRumble(full, RumbleStrength::Strong);
+    const auto light = ResolveRumble(full, RumbleStrength::Light);
+    Require(strong.Play && strong.LowFrequency == 65535U && strong.HighFrequency == 32768U &&
+                strong.DurationMilliseconds == 300U,
+            "Strong at full force");
+    Require(light.Play && light.LowFrequency == 29491U && light.HighFrequency == 14745U, "Light is 45% of Strong");
+    Require(ResolveRumble({5.0F, 60000}, RumbleStrength::Strong).DurationMilliseconds == 1000U &&
+                ResolveRumble({5.0F, 60000}, RumbleStrength::Strong).LowFrequency == 65535U,
+            "force and duration are bounded");
+
+    RumbleRequests requests;
+    Require(!requests.Pending(), "requests start empty");
+    requests.Request({0.0F, 100});
+    Require(!requests.Pending(), "an empty pulse was queued");
+    requests.Request({0.3F, 120});
+    requests.Request({0.8F, 200});
+    requests.Request({0.5F, 400});
+    Require(requests.Pending(), "a pulse was dropped");
+    const auto taken = requests.Take();
+    Require(taken.Intensity == 0.8F && taken.DurationMilliseconds == 200U && !requests.Pending(),
+            "the strongest pulse wins and is taken once");
+    requests.Request({0.8F, 100});
+    requests.Clear();
+    Require(!requests.Pending(), "clear kept a pulse");
+}
 
 int main() try {
     TestButtonPrompts();
     TestInputDeviceLog();
+    TestRumble();
     TestAutomaticMotionComposition();
     TestPointerPressLatch();
     TestVirtualPad();

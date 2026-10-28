@@ -112,6 +112,34 @@ void EmitMouseAimTimeline(const std::filesystem::path& path, std::string_view ax
         {"frame_origin", "run"}, {"segments", segments}}.dump(2));
 }
 
+// Rumble belongs to the controls owner: Off by default and not written, a
+// chosen strength survives save and reload, an unknown one is refused, and a
+// preset never chooses it.
+void TestRumbleSetting() {
+    auto config = NativeControlDefaults();
+    std::string json, error;
+    NativeControlConfig loaded;
+    Require(config.Rumble == NativeRumbleStrength::Off, "rumble starts Off");
+    Require(SerializeNativeControlConfigText(config, &json, &error) && json.find("rumble") == std::string::npos,
+            "Off is not written (older builds still read the file)");
+    config.Rumble = NativeRumbleStrength::Strong;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("\"rumble\": \"strong\"") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
+            "a rumble strength survives save and reload");
+    auto document = nlohmann::json::parse(json);
+    document["rumble"] = "earthquake";
+    Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
+                error.find("rumble") != std::string::npos,
+            "an unknown rumble strength is refused");
+    config.Rumble = static_cast<NativeRumbleStrength>(9);
+    Require(!ValidateNativeControlConfig(config, &error), "an out-of-range rumble is invalid");
+    for (const auto profile : {NativeControlProfile::Keyboard, NativeControlProfile::KeyboardMouse,
+                               NativeControlProfile::Controller})
+        Require(NativeControlPreset(profile).Rumble == NativeRumbleStrength::Off, "a preset chose rumble");
+}
+
+
 // The controls owner keeps the "Button prompts" choice and resolves the
 // prompts from the device activity the host poll reports.
 void TestButtonPromptsOwner() {
@@ -201,6 +229,7 @@ int main(int argc, char** argv) {
     Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw]");
     TestShoulderMappings();
     TestButtonPromptsOwner();
+    TestRumbleSetting();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);
     const auto controllerPreset = NativeControlPreset(NativeControlProfile::Controller);
     Require(mousePreset.NativeAimSource == NativeMotionSource::Mouse &&

@@ -1,5 +1,33 @@
 # F1 settings rationalization
 
+## Rumble (2026-10-28)
+
+Controls > Devices > Controller gains **Rumble** (Off, Light, Strong; Off by
+default, since the 3DS has no rumble motor and the game never asks for one).
+The active controller rumbles when Link loses health or lands after a fast
+fall. It is the controls owner's setting (`NativeControlConfig::Rumble`,
+`rumble` in `oot3d_controls.json`, written only when not Off), saved by Save
+controls and mirrored by the in-game menu's Controls > Rumble row. It is not a
+binding: choosing it never makes the preset Custom, and applying a preset
+keeps it. With a strength chosen and no motor on the active pad, the panel
+says so and nothing plays; the pad list marks pads with a motor ("| rumble").
+
+Ownership: the OoT3D adapter (`titles/oot3d/gameplay/oot3d_rumble_events.*`)
+reads the events from the native game state once per guest refresh, only
+while Rumble is not Off, and never writes the guest; Input
+(`ThreeDsRecomp::Input::ResolveRumble`, `PlaySdlRumble`) scales them and
+plays them on the borrowed SDL handle of the active pad. Deterministic runs
+are unchanged: Off and Strong runs of the same timeline gave identical
+framebuffers and guest memory fingerprints.
+
+Verification: the actual-widget smoke selects Light in the persistence
+fixture (the preset stays, Save controls writes it) and Strong, then Off, on
+the live owner. Actual-widget smoke: **11,438 assertions**. Unit tests:
+`RunOot3dRumbleEventTests` (events, pulses, the guest reads),
+`three_ds_recomp_input_tests` (strengths, motor values, requests),
+`oot3d_native_a32_input_tests` (persistence), `three_ds_sdl_controller_tests`
+(a virtual pad with motors receives the values; one without plays nothing).
+
 ## Folders inside a moved installation (2026-10-28, issue #124)
 
 Materials > Texture packs: a folder chosen with **Browse...** inside the

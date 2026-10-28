@@ -58,6 +58,7 @@ using NativeMotionSource = ThreeDsRecomp::Input::MotionSource;
 using NativeControlBinding = ThreeDsRecomp::Input::HostBinding;
 using NativeButtonPrompts = ThreeDsRecomp::Input::ButtonPrompts;
 using NativePromptSet = ThreeDsRecomp::Input::PromptSet;
+using NativeRumbleStrength = ThreeDsRecomp::Input::RumbleStrength;
 
 struct NativeControlConfig {
   NativeControlProfile Profile = NativeControlProfile::KeyboardMouse;
@@ -90,6 +91,10 @@ struct NativeControlConfig {
   // The menu's button prompts: Automatic follows the device used last.
   // Not part of a preset ("button_prompts", written only when fixed).
   NativeButtonPrompts ButtonPrompts = NativeButtonPrompts::Automatic;
+  // The selected pad's rumble for the events the title publishes (damage,
+  // hard landings). Off by default: the 3DS has none. Not part of a preset
+  // ("rumble", written only when not Off).
+  NativeRumbleStrength Rumble = NativeRumbleStrength::Off;
 
   bool operator==(const NativeControlConfig&) const = default;
 };

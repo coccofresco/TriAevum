@@ -228,18 +228,50 @@ int main(int argc, char** argv) try {
     detach(again);
     for (auto* pad : {xboxPad, dualSense, oddPad, again}) SDL_GameControllerClose(pad);
     {
-        // The device log of real SDL descriptors (a second pad, no serial).
-        auto* logPad = attach(kUsbVendorMicrosoft, 0x0B13, "Xbox Series X Controller");
-        const std::unordered_map<std::int32_t, SDL_GameController*> logPads{
-            {SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(logPad)), logPad}};
-        const auto described = ResolveSdlController(logPads, "", "", -1);
-        const auto lines = DescribeInputDevices("startup", described.Devices, KeyboardDescription{true, "dummy", false});
-        Require(lines.size() == 3 && lines[1].find("type=xbox_one") != std::string::npos &&
-                    lines[1].find("serial=none") != std::string::npos,
-                "device log of an SDL pad");
-        for (const auto& line : lines) std::cout << line << '\n';
-        detach(logPad);
-        SDL_GameControllerClose(logPad);
+        // Rumble on the borrowed pad: a pad with motors reports them and
+        // receives the resolved values; one without reports none and plays
+        // nothing; Off never reaches the pad.
+        struct Motors { Uint16 Low = 0, High = 0; int Calls = 0; } motors;
+        SDL_VirtualJoystickDesc desc{};
+        desc.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+        desc.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+        desc.naxes = SDL_CONTROLLER_AXIS_MAX;
+        desc.nbuttons = SDL_CONTROLLER_BUTTON_MAX;
+        desc.vendor_id = kUsbVendorMicrosoft;
+        desc.product_id = 0x0B13;
+        desc.name = "Xbox Series X Controller";
+        desc.userdata = &motors;
+        desc.Rumble = [](void* userdata, Uint16 low, Uint16 high) -> int {
+            auto* state = static_cast<Motors*>(userdata);
+            state->Low = low;
+            state->High = high;
+            ++state->Calls;
+            return 0;
+        };
+        const int rumbleIndex = SDL_JoystickAttachVirtualEx(&desc);
+        Require(rumbleIndex >= 0, "rumble pad attachment");
+        auto* rumblePad = SDL_GameControllerOpen(rumbleIndex);
+        auto* stillPad = attach(kUsbVendorSony, 0x0CE6, "DualSense Wireless Controller");
+        Require(rumblePad != nullptr, "rumble pad open");
+        const std::unordered_map<std::int32_t, SDL_GameController*> rumblePads{
+            {SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(rumblePad)), rumblePad},
+            {SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(stillPad)), stillPad}};
+        const auto described = ResolveSdlController(rumblePads, "", "", -1);
+        for (const auto& device : described.Devices)
+            Require(device.HasRumble == (device.Name == "Xbox Series X Controller"), "rumble capability per pad");
+        for (const auto& line : DescribeInputDevices("startup", described.Devices, KeyboardDescription{true, "dummy", false}))
+            std::cout << line << '\n';
+        const auto command = ResolveRumble({0.625F, 190}, RumbleStrength::Strong);
+        Require(PlaySdlRumble(rumblePad, command) && motors.Calls == 1 && motors.Low == command.LowFrequency &&
+                    motors.High == command.HighFrequency,
+                "rumble values reach the pad");
+        Require(!PlaySdlRumble(rumblePad, ResolveRumble({0.625F, 190}, RumbleStrength::Off)) && motors.Calls == 1,
+                "Off reached the pad");
+        Require(!PlaySdlRumble(stillPad, command) && !PlaySdlRumble(nullptr, command), "a pad without motors played");
+        detach(rumblePad);
+        detach(stillPad);
+        SDL_GameControllerClose(rumblePad);
+        SDL_GameControllerClose(stillPad);
     }
     {
         // TRIAEVUM_INPUT_TRACE=1: each SDL key event as SDL delivered it.
@@ -275,7 +307,7 @@ int main(int argc, char** argv) try {
     }
     SDL_Quit();
     std::cout << "PASS: SDL selection, buttons, triggers, axes, UI capture, absent sensors, disconnect, "
-                 "prompt families, two pads, reconnect, device log, key trace\n";
+                 "prompt families, two pads, reconnect, rumble, key trace\n";
     return 0;
 } catch (const std::exception& e) {
     std::cerr << e.what() << ": " << SDL_GetError() << '\n';

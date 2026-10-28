@@ -130,8 +130,8 @@ keycode=0x61 (A) repeat=0 mod=0x0000 window=2 focus_window=2`), keyboard focus
 changes (`sdl_focus gained|lost`), each bound key's edges
 (`action=A 3ds=A keys=X/None raw=1 effective=0 keyboard_enabled=1
 captured=1`: `raw` is the key state the window keeps, `effective` what the
-game reads after the Keyboard switch and a host menu's capture). It reads
-events only.
+game reads after the Keyboard switch and a host menu's capture) and each
+rumble played. It reads events only.
 
 ## Checks before a preparation
 
@@ -155,7 +155,7 @@ Before the import writes anything (`forge-core/src/preflight.rs`):
 | `TRIAEVUM_TEST_FATAL=crash` | the runtime faults right after creating its window: exercises the crash handlers (crash dialog, dump in `savedata/crashes` on Windows product builds) and Forge's card for a crash exit code |
 | `TRIAEVUM_NO_FATAL_DIALOG=1` | no fatal dialog (automation) |
 | `TRIAEVUM_CONSOLE=1` | as `--console` |
-| `TRIAEVUM_INPUT_TRACE=1` | key events, focus changes and bound-key edges in the game log (see "Input devices in the game log") |
+| `TRIAEVUM_INPUT_TRACE=1` | key events, focus changes, bound-key edges and rumble in the game log (see "Input devices in the game log") |
 | `TRIAEVUM_GUI_RUNTIME=<TriAevum.exe>` | runs `forge-native/tests/gui_runtime_launch.rs`: Forge's product query and a failed run's captured error output against a built runtime |
 
 A display recovery can be reproduced by creating `<config>.launching`

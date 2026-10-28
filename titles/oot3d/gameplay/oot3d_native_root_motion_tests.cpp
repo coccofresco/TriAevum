@@ -14,6 +14,7 @@ void RunNativeTemporalEventLedgerTests();
 void RunNativePlayerTemporalBridgeTests();
 void RunNativeInputLatencyTraceTests();
 void RunNativeInputAdmissionTests();
+void RunOot3dRumbleEventTests();
 
 namespace {
 
@@ -123,6 +124,7 @@ int main() {
         RunNativePlayerTemporalBridgeTests();
         RunNativeInputLatencyTraceTests();
         RunNativeInputAdmissionTests();
+        RunOot3dRumbleEventTests();
         TestPlanarDeltaAndBaseRestore();
         TestWorldRotationAndActorScale();
         TestPreviousRotationAndOneShotSuppression();

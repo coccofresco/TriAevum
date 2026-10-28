@@ -448,6 +448,46 @@ class InputDeviceLog {
     std::string mSignature;
 };
 
+// The "Rumble" choice (Controls). The 3DS has no rumble motor: a pad rumbles
+// only for the events a title adapter publishes, and never when Off.
+enum class RumbleStrength : std::uint8_t { Off, Light, Strong };
+inline constexpr std::size_t kRumbleStrengthCount = 3;
+const char* RumbleStrengthName(RumbleStrength strength) noexcept;
+const char* RumbleStrengthLabel(RumbleStrength strength) noexcept;
+bool ParseRumbleStrength(std::string_view value, RumbleStrength* strength) noexcept;
+
+// What a title adapter asks for: the force of a physical event (0..1) and
+// how long it lasts. The adapter decides which events these are.
+struct RumblePulse {
+    float Intensity = 0.0F;
+    std::uint16_t DurationMilliseconds = 0;
+};
+
+// The pad's motors (SDL_GameControllerRumble); nothing when Play is false.
+struct RumbleCommand {
+    bool Play = false;
+    std::uint16_t LowFrequency = 0;
+    std::uint16_t HighFrequency = 0;
+    std::uint32_t DurationMilliseconds = 0;
+};
+
+// Light is a little below half of Strong; the high-frequency motor runs at
+// half the low one. Off, an empty pulse or no duration play nothing.
+[[nodiscard]] RumbleCommand ResolveRumble(RumblePulse pulse, RumbleStrength strength) noexcept;
+
+// Pulses published since the pad last played one: the strongest wins (a
+// fall that hurts is one rumble, not two).
+class RumbleRequests {
+  public:
+    void Request(RumblePulse pulse) noexcept;
+    [[nodiscard]] bool Pending() const noexcept { return mPending.DurationMilliseconds != 0; }
+    [[nodiscard]] RumblePulse Take() noexcept;
+    void Clear() noexcept { mPending = {}; }
+
+  private:
+    RumblePulse mPending;
+};
+
 // Activity on a host device this poll, for the prompts.
 enum class InputActivity : std::uint8_t { None, Keyboard, Mouse, Controller, Touch };
 

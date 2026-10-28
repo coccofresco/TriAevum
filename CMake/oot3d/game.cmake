@@ -15,6 +15,7 @@ add_library(oot3d_native_game_runtime STATIC EXCLUDE_FROM_ALL
     titles/oot3d/gameplay/oot3d_native_player_temporal_bridge.cpp
     titles/oot3d/gameplay/oot3d_native_root_motion.cpp
     titles/oot3d/gameplay/oot3d_native_skel_anime.cpp
+    titles/oot3d/gameplay/oot3d_rumble_events.cpp
 )
 target_include_directories(oot3d_native_game_runtime PUBLIC
     tools/oot3d/decomp_support/include
@@ -28,6 +29,7 @@ target_compile_options(oot3d_native_game_runtime PRIVATE "${WARNING_OVERRIDE}")
 target_link_libraries(oot3d_native_game_runtime PUBLIC
     oot3d_native_audio
     oot3d_native_a32_process
+    three_ds_recomp_input
 )
 if (TARGET oot3d_native_a32_aot)
     target_link_libraries(oot3d_native_game_runtime PUBLIC oot3d_native_a32_aot)
@@ -46,6 +48,7 @@ add_executable(oot3d_native_game_runtime_tests EXCLUDE_FROM_ALL
     titles/oot3d/gameplay/oot3d_native_skel_anime_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_latency_trace_tests.cpp
     tools/oot3d/native_game_runtime/oot3d_native_input_admission_tests.cpp
+    titles/oot3d/gameplay/oot3d_rumble_events_tests.cpp
 )
 target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_runtime)
 oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)

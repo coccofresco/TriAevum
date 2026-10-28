@@ -157,10 +157,10 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     SetError(error, "native control config root/output is invalid");
     return false;
   }
-  constexpr std::array<std::string_view, 13> kAllowedFields{
+  constexpr std::array<std::string_view, 14> kAllowedFields{
       "schema", "profile", "devices", "bindings", "analog", "aim",
       "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse", "controller_touchpad",
-      "button_prompts"};
+      "button_prompts", "rumble"};
   const std::set<std::string_view> allowed(kAllowedFields.begin(),
                                            kAllowedFields.end());
   for (const auto& [key, value] : document.items()) {
@@ -240,6 +240,11 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
 
   if (!ReadNamedField(document, "button_prompts", &parsed.ButtonPrompts,
                       ThreeDsRecomp::Input::ParseButtonPrompts, error)) {
+    return false;
+  }
+
+  if (!ReadNamedField(document, "rumble", &parsed.Rumble,
+                      ThreeDsRecomp::Input::ParseRumbleStrength, error)) {
     return false;
   }
 
@@ -597,6 +602,10 @@ bool ValidateNativeControlConfig(const NativeControlConfig& config,
     SetError(error, "button prompts value is unknown");
     return false;
   }
+  if (static_cast<std::size_t>(config.Rumble) >= ThreeDsRecomp::Input::kRumbleStrengthCount) {
+    SetError(error, "rumble value is unknown");
+    return false;
+  }
   if (config.MovementStickDeadZonePercent < 0 ||
       config.MovementStickDeadZonePercent > 95 ||
       config.LookStickDeadZonePercent < 0 ||
@@ -722,6 +731,8 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
   // build that does not know the field.
   if (config.ButtonPrompts != NativeButtonPrompts::Automatic)
     document["button_prompts"] = ThreeDsRecomp::Input::ButtonPromptsName(config.ButtonPrompts);
+  if (config.Rumble != NativeRumbleStrength::Off)
+    document["rumble"] = ThreeDsRecomp::Input::RumbleStrengthName(config.Rumble);
   NativeControlConfig validated;
   if (!DecodeNativeControlConfig(document, &validated, error)) {
     return false;
