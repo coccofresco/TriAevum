@@ -76,6 +76,9 @@ struct Pointer {
     float Y = 0.0F;
     bool Pressed = false; // the primary button held
     float Wheel = 0.0F;   // notches since the previous update, positive up
+    // A finger rather than a mouse: a tap acts when it lifts without having
+    // moved, and a drag scrolls the rows or the values under it.
+    bool Touch = false;
 };
 
 struct Rect {
@@ -122,6 +125,12 @@ struct HitRegion {
 
 struct Layout {
     std::vector<HitRegion> Regions; // first match wins: the modal's come first
+    // Where a finger drags the rows, and the values of a list longer than
+    // its room, with the distance of one step (zero: nothing to drag).
+    Rect RowsArea;
+    float RowStride = 0.0F;
+    Rect ChoicesArea;
+    float ChoiceStride = 0.0F;
 };
 
 struct Modal {
@@ -227,6 +236,9 @@ class Model {
     void ResolveModal(bool confirm);
     // True when the pointer consumed this update (a modal click, for instance).
     bool UpdatePointer(const Pointer& pointer, double elapsedSeconds);
+    // A finger's drag: scrolls the rows, or moves through an open list's
+    // values, by whole steps. Returns true when the gesture is a drag.
+    bool DragTouch(const Pointer& pointer);
 
     Document mDocument;
     bool mOpen = false;
@@ -235,6 +247,9 @@ class Model {
     std::size_t mRow = 0;
     std::size_t mScroll = 0;
     std::size_t mVisibleRows = 12;
+    // A finger scrolled the rows: the window stays where it was left instead
+    // of following the focus, until the keys or a pad move the focus again.
+    bool mFreeScroll = false;
     bool mInChoices = false;
     std::size_t mChoice = 0;
     std::optional<Modal> mModal;
@@ -248,6 +263,17 @@ class Model {
     float mPointerX = -1.0F, mPointerY = -1.0F;
     bool mPointerHeld = false;
     Repeat mPointerArrow; // the number arrows repeat while the button is held
+    // A finger's gesture from its press: where it started, what was under
+    // it, and the steps a drag has already scrolled (a drag never taps).
+    struct TouchGesture {
+        bool Active = false;
+        bool Dragging = false;
+        float StartY = 0.0F;
+        HitRegion Start;
+        bool OverRows = false;
+        bool OverChoices = false;
+        int Steps = 0;
+    } mTouch;
 };
 
 } // namespace Oot3dNativeGame::Menu

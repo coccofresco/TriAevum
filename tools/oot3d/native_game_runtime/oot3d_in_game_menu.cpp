@@ -15,7 +15,9 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
+#include <optional>
 #include <utility>
 
 namespace Oot3dNativeGame {
@@ -27,9 +29,21 @@ using Menu::RowKind;
 using Menu::WriteResult;
 
 constexpr double kLiveRefreshSeconds = 0.5;
-// The widescreen canvas the menu is drawn on (oot3d_native_a32_window_frame).
-constexpr float kMenuCanvasWidth = 1280.0F / 3.0F;
-constexpr float kMenuCanvasHeight = 240.0F;
+
+// TRIAEVUM_MENU_SCALE=<factor> (developer runs): replaces the dp scale the
+// display's physical size gives, to see a phone's or a handheld's menu on a
+// desktop window.
+std::optional<float> MenuScaleOverride() {
+  static const std::optional<float> value = []() -> std::optional<float> {
+    const char *text = std::getenv("TRIAEVUM_MENU_SCALE");
+    if (text == nullptr || *text == '\0') return std::nullopt;
+    char *end = nullptr;
+    const float scale = std::strtof(text, &end);
+    if (end == text || !std::isfinite(scale) || scale < 0.5F || scale > 4.0F) return std::nullopt;
+    return scale;
+  }();
+  return value;
+}
 
 std::string Percent(int value) { return std::to_string(value) + "%"; }
 
@@ -1326,6 +1340,13 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
     return;
   }
   UpdatePrompts();
+  // The canvas takes the picture's shape, and the dp grows on a small screen
+  // held close (a phone, a handheld): the display's physical size decides.
+  if (input.PictureWidth != 0U && input.PictureHeight != 0U) {
+    mCanvasWidth = kCanvasHeight * static_cast<float>(input.PictureWidth) / static_cast<float>(input.PictureHeight);
+  }
+  mMetrics.Dp = Menu::kDp * MenuScaleOverride().value_or(Menu::MenuDensityScale(input.PictureHeightMillimetres));
+  mMetrics.Touch = mPrompts == Menu::PromptSet::Touch;
   Menu::Input held;
   held.Up = input.Up;
   held.Down = input.Down;
@@ -1335,19 +1356,20 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
   held.Back = input.Back;
   held.TabPrevious = input.TabPrevious;
   held.TabNext = input.TabNext;
-  // The mouse, on the widescreen canvas the menu is drawn on: the same fit
+  // The mouse or a finger, on the canvas the menu is drawn on: the same fit
   // the UI renderer applies to the presentation picture, so the mapping is
   // the picture's and not the window's.
   Menu::Pointer pointer;
   if (input.PointerPresent) {
     const auto point = Oot3d::Renderer::MapUiPresentationPoint(
-        input.PictureWidth, input.PictureHeight, kMenuCanvasWidth, kMenuCanvasHeight,
+        input.PictureWidth, input.PictureHeight, mCanvasWidth, kCanvasHeight,
         input.PointerX - static_cast<float>(input.PictureX), input.PointerY - static_cast<float>(input.PictureY));
     pointer.Present = point.Inside;
     pointer.X = point.X;
     pointer.Y = point.Y;
     pointer.Pressed = input.PointerPressed;
     pointer.Wheel = input.PointerWheel;
+    pointer.Touch = mMetrics.Touch;
   }
   mModel.Update(held, pointer, elapsedSeconds);
   if (!mModel.IsOpen()) {
@@ -1363,9 +1385,10 @@ void InGameMenu::Update(const InGameMenuHostInput &input, bool hostGuiOwnsInput,
   }
 }
 
-std::vector<oot3d::ui::UiPrimitive> InGameMenu::BuildPresentation(float canvasWidth, float canvasHeight) {
+std::vector<oot3d::ui::UiPrimitive> InGameMenu::BuildPresentation() {
   std::vector<oot3d::ui::UiPrimitive> primitives;
-  Menu::AppendMenuPresentation(mModel, canvasWidth, canvasHeight, primitives, {}, Menu::HintsFor(mPrompts));
+  Menu::AppendMenuPresentation(mModel, mCanvasWidth, kCanvasHeight, primitives, {}, Menu::HintsFor(mPrompts),
+                               mMetrics);
   return primitives;
 }
 

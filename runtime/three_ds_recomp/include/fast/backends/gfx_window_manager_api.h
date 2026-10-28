@@ -17,6 +17,9 @@ class GfxWindowBackend {
     virtual void SetFullscreenChangedCallback(void (*mOnFullscreenChanged)(bool is_now_fullscreen)) = 0;
     virtual void SetFullscreen(bool fullscreen) = 0;
     virtual void GetActiveWindowRefreshRate(uint32_t* refreshRate) = 0;
+    // The window's height on its display in millimetres, from the display's
+    // physical pixel density; false where the platform does not report one.
+    virtual bool GetWindowHeightMillimetres(float* /*millimetres*/) { return false; }
     virtual void SetCursorVisibility(bool visability) = 0;
     virtual void SetMousePos(int32_t posX, int32_t posY) = 0;
     virtual void GetMousePos(int32_t* x, int32_t* y) = 0;

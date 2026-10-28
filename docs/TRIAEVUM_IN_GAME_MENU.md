@@ -490,6 +490,29 @@ combos.
   against the previous frame's layout. Only a pointer that moved
   refocuses a row, and where the mouse rests when the menu opens is not a
   move, so an idle mouse never fights the keys or the pad.
+- Size on small screens: the menu is laid out in dp, one dp being a pixel
+  of a 1080-line picture (`Menu::kDp`), so on its own it takes the same share
+  of any screen and becomes physically tiny on a phone or a handheld. The
+  window backend reports the window's physical height
+  (`GfxWindowBackend::GetWindowHeightMillimetres`: SDL's display DPI;
+  Android's system density, which follows the user's display size setting;
+  on Windows the monitor's raw DPI, since SDL reports the scaled one), the
+  host gives the menu the picture's height in millimetres, and
+  `Menu::MenuDensityScale` keeps a dp near 0.15 mm: a picture shorter than
+  162 mm scales up (a 7-inch 16:10 handheld about 1.7x, a 6.2-inch phone
+  about 2.45x, at most 2.6x); laptops, monitors and unknown displays keep 1.
+  Below 700 dp of canvas height the window fills the canvas and its margins
+  tighten. The canvas is 240 units high and as wide as the picture
+  (`N64UiCanvasMode::RegionShape`), so a phone's long screen is used whole.
+  The tab strip slides to keep the current and the next tab in view when the
+  titles do not fit; footer hints that would reach the Resume button are left
+  out; a long help text gives way to up to three values of a list. With touch
+  prompts the rows are 48 dp, list values 44 dp, the footer and the modal's
+  buttons taller; a tap acts when the finger lifts on what it pressed, and a
+  drag over the rows (or over a list longer than its room) scrolls by whole
+  steps without tapping, the rows' window staying where the finger left it
+  until the keys or a pad move the focus. `TRIAEVUM_MENU_SCALE=<factor>`
+  replaces the scale in developer runs.
 
 ## Verification
 

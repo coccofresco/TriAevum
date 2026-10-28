@@ -14,6 +14,7 @@
 #include "oot3d_menu_font.h"
 #include "oot3d_menu_help.h"
 #include "oot3d_menu_model.h"
+#include "oot3d_menu_presentation.h"
 #include "oot3d_native_control_config.h"
 #include "oot3d_photo_mode_panel.h"
 #include "oot3d_savestate_library.h"
@@ -54,6 +55,9 @@ struct InGameMenuHostInput {
   std::uint32_t PictureY = 0U;
   std::uint32_t PictureWidth = 0U;
   std::uint32_t PictureHeight = 0U;
+  // The picture's physical height on the display (0: unknown); the menu
+  // grows on a small screen held close (Menu::MenuDensityScale).
+  float PictureHeightMillimetres = 0.0F;
   bool PointerPressed = false;
   float PointerWheel = 0.0F;
 };
@@ -121,8 +125,12 @@ public:
   // The first-play card unless the runtime configuration records it was
   // already shown (Help.Shown); true when it is shown now.
   bool ShowFirstPlayHelpCard();
-  // The frame's primitives on the given canvas (canvas units).
-  [[nodiscard]] std::vector<oot3d::ui::UiPrimitive> BuildPresentation(float canvasWidth, float canvasHeight);
+  // The frame's primitives on the menu's canvas (canvas units): 240 units
+  // high and as wide as the presentation picture's shape, so a phone's long
+  // screen is used whole (oot3d::ui::N64UiCanvasMode::RegionShape).
+  [[nodiscard]] std::vector<oot3d::ui::UiPrimitive> BuildPresentation();
+  [[nodiscard]] float CanvasWidth() const noexcept { return mCanvasWidth; }
+  static constexpr float kCanvasHeight = 240.0F;
 
   [[nodiscard]] Menu::Model &Model() noexcept { return mModel; }
   [[nodiscard]] const Menu::Model &Model() const noexcept { return mModel; }
@@ -168,6 +176,10 @@ private:
   NativeControlConfig mControls;
   TopScreenUiConfig mTopScreen;
   Menu::Model mModel;
+  // The canvas and the dp scale of the last update's picture, and whether a
+  // finger drives the menu (larger targets, tap on release, drag to scroll).
+  float mCanvasWidth = 1280.0F / 3.0F;
+  Menu::Metrics mMetrics;
   bool mToggleHeld = false;
   bool mConfirmationModal = false;
   double mRefreshTimer = 0.0;

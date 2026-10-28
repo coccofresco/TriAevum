@@ -7,6 +7,7 @@
 #include "fast/debug/GfxDebugger.h"
 #include "fast/WindowIcon.h"
 
+#include <optional>
 #include <unordered_set>
 
 union Gfx;
@@ -61,6 +62,9 @@ class Fast3dWindow : public Ship::Window {
     bool IsMouseCaptureReleased() const;
     void ReleaseMouseCapture();
     uint32_t GetCurrentRefreshRate() override;
+    // The window's physical height in millimetres; empty when the display's
+    // density is unknown (GfxWindowBackend::GetWindowHeightMillimetres).
+    std::optional<float> GetWindowHeightMillimetres();
     bool SupportsWindowedFullscreen() override;
     bool CanDisableVerticalSync() override;
     void SetResolutionMultiplier(float multiplier) override;

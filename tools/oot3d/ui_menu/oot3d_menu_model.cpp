@@ -71,6 +71,7 @@ void Model::Open() {
     mPointerX = mPointerY = -1.0F;
     mPointerHeld = true;
     mPointerArrow = {};
+    mTouch = {};
     Refresh();
 }
 
@@ -176,6 +177,7 @@ void Model::ReplaceTab(std::size_t index, Tab tab) {
 void Model::FocusFirstRow() {
     mRow = 0;
     mScroll = 0;
+    mFreeScroll = false;
     auto* tab = CurrentTab();
     if (tab == nullptr) return;
     for (std::size_t index = 0; index < tab->Rows.size(); ++index) {
@@ -196,6 +198,10 @@ void Model::ClampScroll() noexcept {
     const std::size_t count = tab->Rows.size();
     if (count <= mVisibleRows) {
         mScroll = 0;
+        return;
+    }
+    if (mFreeScroll) {
+        mScroll = std::min(mScroll, count - mVisibleRows);
         return;
     }
     // Keep a heading just above the focused row visible when there is one.
@@ -237,6 +243,7 @@ void Model::MoveRow(int direction) {
             break;
         }
     }
+    mFreeScroll = false;
     ClampScroll();
 }
 
@@ -345,6 +352,37 @@ HitRegion Model::HitTest(float x, float y) const noexcept {
     return {};
 }
 
+bool Model::DragTouch(const Pointer& pointer) {
+    if (!mTouch.Active) return false;
+    const float stride = mTouch.OverChoices ? mLayout.ChoiceStride : mLayout.RowStride;
+    if (stride <= 0.0F || (!mTouch.OverChoices && !mTouch.OverRows)) return false;
+    const float travel = pointer.Y - mTouch.StartY;
+    // A third of a step tells a drag from a tap that wobbled.
+    if (!mTouch.Dragging && std::abs(travel) > stride / 3.0F) mTouch.Dragging = true;
+    if (!mTouch.Dragging) return false;
+    // The content follows the finger: lifting it shows the later rows.
+    const int steps = -static_cast<int>(std::trunc(travel / stride));
+    auto* tab = CurrentTab();
+    auto* row = CurrentRow();
+    for (; mTouch.Steps != steps; mTouch.Steps += steps > mTouch.Steps ? 1 : -1) {
+        const int direction = steps > mTouch.Steps ? 1 : -1;
+        if (mTouch.OverChoices) {
+            if (row == nullptr || row->Kind != RowKind::Choice || row->Choices.empty()) break;
+            if (!mInChoices) {
+                mInChoices = true;
+                mChoice = static_cast<std::size_t>(std::max(row->Value, 0));
+            }
+            if (direction > 0 && mChoice + 1 < row->Choices.size()) ++mChoice;
+            if (direction < 0 && mChoice > 0) --mChoice;
+        } else if (tab != nullptr && tab->Rows.size() > mVisibleRows) {
+            mFreeScroll = true;
+            if (direction > 0 && mScroll + mVisibleRows < tab->Rows.size()) ++mScroll;
+            if (direction < 0 && mScroll > 0) --mScroll;
+        }
+    }
+    return true;
+}
+
 bool Model::UpdatePointer(const Pointer& pointer, double elapsedSeconds) {
     if (!pointer.Present) {
         mHover = {};
@@ -355,12 +393,32 @@ bool Model::UpdatePointer(const Pointer& pointer, double elapsedSeconds) {
     // The first sample after the opening is where the mouse already rests,
     // not a move: a pad or keyboard user's idle mouse must not steal the
     // first row.
-    const bool moved = mPointerX >= 0.0F && (pointer.X != mPointerX || pointer.Y != mPointerY);
+    bool moved = mPointerX >= 0.0F && (pointer.X != mPointerX || pointer.Y != mPointerY);
     mPointerX = pointer.X;
     mPointerY = pointer.Y;
-    const bool click = pointer.Pressed && !mPointerHeld;
+    const bool pressed = pointer.Pressed && !mPointerHeld;
+    const bool lifted = !pointer.Pressed && mPointerHeld;
+    bool click = pressed;
     mPointerHeld = pointer.Pressed;
     mHover = HitTest(pointer.X, pointer.Y);
+    if (pointer.Touch) {
+        // A finger acts when it lifts on what it pressed, unless it dragged;
+        // passing over a row never focuses it.
+        if (pressed) {
+            mTouch = {};
+            mTouch.Active = true;
+            mTouch.StartY = pointer.Y;
+            mTouch.Start = mHover;
+            mTouch.OverRows = mLayout.RowStride > 0.0F && mLayout.RowsArea.Contains(pointer.X, pointer.Y);
+            mTouch.OverChoices = mLayout.ChoiceStride > 0.0F && mLayout.ChoicesArea.Contains(pointer.X, pointer.Y);
+        }
+        const bool dragging = !mModal.has_value() && DragTouch(pointer);
+        click = lifted && mTouch.Active && !dragging && mHover.Kind == mTouch.Start.Kind &&
+                mHover.Index == mTouch.Start.Index;
+        if (lifted) mTouch.Active = false;
+        moved = false;
+        if (dragging) mHover = {};
+    }
     // The modal takes every pointer action: its buttons highlight under the
     // pointer and a click decides; nothing behind it reacts.
     if (mModal.has_value()) {
@@ -408,7 +466,7 @@ bool Model::UpdatePointer(const Pointer& pointer, double elapsedSeconds) {
     case HitKind::NumberDown:
     case HitKind::NumberUp:
         overArrow = true;
-        if (click) mPointerArrow = {};
+        if (pressed) mPointerArrow = {};
         if (mPointerArrow.Fire(pointer.Pressed, elapsedSeconds)) Adjust(mHover.Kind == HitKind::NumberUp ? 1 : -1);
         break;
     case HitKind::Close:

@@ -47,10 +47,24 @@ struct Hints {
     std::string Close = "Esc / R3";
 };
 
+// How large the menu is drawn. `Dp` is canvas units per dp: kDp keeps the
+// proportions of a 1080-line window (a desktop monitor); a small screen held
+// close draws every dp larger. `Touch` sizes the targets for a finger.
+struct Metrics {
+    float Dp = kDp;
+    bool Touch = false;
+};
+
+// The dp scale for a presentation picture `heightMillimetres` tall, from the
+// display's physical size: a dp stays about 0.15 mm, so a phone or a handheld
+// gets a larger menu and a monitor or a laptop keeps kDp (scale 1). Unknown
+// or implausible sizes keep 1.
+[[nodiscard]] float MenuDensityScale(float heightMillimetres) noexcept;
+
 // Appends the menu for one frame; tells the model how many rows are visible.
 // Returns the number of primitives appended.
 std::size_t AppendMenuPresentation(Model& model, float canvasWidth, float canvasHeight,
                                    std::vector<oot3d::ui::UiPrimitive>& output, const Palette& palette = {},
-                                   const Hints& hints = {});
+                                   const Hints& hints = {}, const Metrics& metrics = {});
 
 } // namespace Oot3dNativeGame::Menu

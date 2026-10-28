@@ -1237,6 +1237,113 @@ int DumpButtonGlyphs(const std::string& directory) {
     return EXIT_SUCCESS;
 }
 
+// A phone (a 6.2-inch 2340x1080 screen, 66 mm tall in landscape) and a
+// handheld: the menu grows by the display's physical size, uses the whole
+// long screen, keeps finger-sized targets inside the canvas, slides the tabs
+// and lets a finger tap on release and drag the rows.
+void TestSmallScreens() {
+    Expect(MenuDensityScale(0.0F) == 1.0F && MenuDensityScale(330.0F) == 1.0F && MenuDensityScale(170.0F) == 1.0F,
+           "monitors, laptops and unknown sizes keep the desktop scale");
+    Expect(std::abs(MenuDensityScale(66.0F) - 2.4545F) < 0.01F, "a phone's picture scales by its height");
+    Expect(std::abs(MenuDensityScale(94.0F) - 1.7234F) < 0.01F, "a 7-inch 16:10 handheld scales less");
+    Expect(MenuDensityScale(30.0F) == 2.6F, "the scale is bounded");
+
+    Store store;
+    Document document = BuildDocument(store);
+    // A long tab and titles wider than a phone's tab bar.
+    Tab longTab;
+    longTab.Title = "Many settings here";
+    for (int index = 0; index < 20; ++index) {
+        Row row;
+        row.Key = "Setting " + std::to_string(index);
+        row.Kind = RowKind::Action;
+        row.Activate = [&store] {
+            ++store.Actions;
+            return WriteResult{};
+        };
+        longTab.Rows.push_back(row);
+    }
+    for (const char* title : {"Graphics and lighting", "Controls and touch", "Photo mode", "Accessibility options",
+                              "Audio and music"}) {
+        Tab tab;
+        tab.Title = title;
+        tab.Rows.push_back(longTab.Rows.front());
+        document.Tabs.push_back(tab);
+    }
+    document.Tabs.push_back(longTab);
+    Model model(std::move(document));
+    model.Open();
+    const float canvasWidth = 240.0F * 2340.0F / 1080.0F;
+    const Metrics phone{kDp * MenuDensityScale(66.0F), true};
+    std::vector<oot3d::ui::UiPrimitive> output;
+    const auto draw = [&] {
+        output.clear();
+        AppendMenuPresentation(model, canvasWidth, 240.0F, output, {}, HintsFor(PromptSet::Touch), phone);
+    };
+    const auto inside = [&] {
+        for (const auto& region : model.CurrentLayout().Regions) {
+            if (region.Area.X < -0.01F || region.Area.Y < -0.01F || region.Area.X + region.Area.Width > canvasWidth + 0.01F ||
+                region.Area.Y + region.Area.Height > 240.01F)
+                return false;
+        }
+        return true;
+    };
+    const auto find = [&](HitKind kind, std::size_t index) -> const HitRegion* {
+        for (const auto& region : model.CurrentLayout().Regions) {
+            if (region.Kind == kind && region.Index == index) return &region;
+        }
+        return nullptr;
+    };
+    draw();
+    Expect(inside(), "every phone target lies on the canvas");
+    const auto* row = find(HitKind::Row, 1);
+    Expect(row != nullptr && std::abs(row->Area.Height - 48.0F * phone.Dp) < 0.01F, "rows are finger-sized");
+    Expect(row->Area.Width > 1088.0F * kDp * 0.5F, "the window uses the long screen");
+    // The last tab: the strip slides so it is laid out, inside the window.
+    model.SelectTab(model.Doc().Tabs.size() - 1);
+    draw();
+    Expect(inside() && find(HitKind::Tab, model.Doc().Tabs.size() - 1) != nullptr &&
+               find(HitKind::Tab, 0) == nullptr,
+           "the tab strip keeps the current tab in view and leaves out the ones that do not fit");
+    const auto& layout = model.CurrentLayout();
+    Expect(layout.RowStride > 0.0F, "the rows can be dragged");
+    std::size_t visible = 0;
+    for (const auto& region : layout.Regions) visible += region.Kind == HitKind::Row ? 1U : 0U;
+    Expect(visible >= 4U && visible < 20U, "a phone shows a few rows of a long tab");
+
+    // A finger: nothing on the press, the action on the release.
+    const auto finger = [&](float x, float y, bool pressed) {
+        Pointer pointer;
+        pointer.Present = true;
+        pointer.Touch = true;
+        pointer.X = x;
+        pointer.Y = y;
+        pointer.Pressed = pressed;
+        model.Update(Input{}, pointer, 0.016);
+    };
+    const auto first = *find(HitKind::Row, 0);
+    const float x = first.Area.X + first.Area.Width * 0.5F;
+    const float y = first.Area.Y + first.Area.Height * 0.5F;
+    const int actions = store.Actions;
+    finger(x, y, false);
+    finger(x, y, true);
+    Expect(store.Actions == actions, "a finger does not act on the press");
+    finger(x, y, false);
+    Expect(store.Actions == actions + 1, "a tap acts when the finger lifts");
+    draw();
+    // A drag of two and a half rows upwards shows two later rows and taps nothing.
+    finger(x, y, true);
+    finger(x, y - layout.RowStride * 1.2F, true);
+    finger(x, y - layout.RowStride * 2.5F, true);
+    finger(x, y - layout.RowStride * 2.5F, false);
+    Expect(model.ScrollOffset() == 2U && store.Actions == actions + 1, "a drag scrolls the rows without tapping");
+    draw();
+    // The focus row (0) is now above the window: the window stays put.
+    Expect(model.ScrollOffset() == 2U && find(HitKind::Row, 0) == nullptr, "a dragged window is not pulled back");
+    Tap(model, &Input::Down);
+    Expect(model.RowIndex() == 1U && model.ScrollOffset() <= 1U, "the keys bring the focus back into view");
+}
+
 int main(int argc, char** argv) {
     if (argc == 3 && std::string_view(argv[1]) == "--dump-button-glyphs") return DumpButtonGlyphs(argv[2]);
     try {
@@ -1255,6 +1362,7 @@ int main(int argc, char** argv) {
         TestPromptSets();
         TestPromptsMidMenu();
         TestButtonGlyphs();
+        TestSmallScreens();
     } catch (const std::exception& exception) {
         std::cerr << "oot3d_menu_tests: " << exception.what() << '\n';
         return EXIT_FAILURE;

@@ -19,6 +19,7 @@ class GfxWindowBackendSDL2 final : public GfxWindowBackend {
     void SetFullscreenChangedCallback(void (*onFullscreenChanged)(bool is_now_fullscreen)) override;
     void SetFullscreen(bool fullscreen) override;
     void GetActiveWindowRefreshRate(uint32_t* refreshRate) override;
+    bool GetWindowHeightMillimetres(float* millimetres) override;
     void SetCursorVisibility(bool visability) override;
     void SetMousePos(int32_t posX, int32_t posY) override;
     void GetMousePos(int32_t* x, int32_t* y) override;

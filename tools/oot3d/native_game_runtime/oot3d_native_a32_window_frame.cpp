@@ -841,9 +841,10 @@ bool NativeA32WindowSession::RunFrame() {
     });
   }
   // The in-game menu draws last in the UI domain, over the HUD and the
-  // native text, on the widescreen canvas so its dim covers the window.
+  // native text, on a canvas of the picture's own shape so its dim covers
+  // the picture and a phone's long screen is used whole.
   if (inGameMenu.IsOpen()) {
-    auto menuPrimitives = inGameMenu.BuildPresentation(1280.0F / 3.0F, 240.0F);
+    auto menuPrimitives = inGameMenu.BuildPresentation();
     auto menuTextures = n64UiRenderer.PrepareTextures(menuPrimitives);
     renderStream.Submit([&, primitives = std::move(menuPrimitives), uiRegion,
                          prepared = std::move(menuTextures)]() mutable {
@@ -851,7 +852,7 @@ bool NativeA32WindowSession::RunFrame() {
         n64UiRenderer.Stage(std::move(prepared));
         return;
       }
-      if (!n64UiRenderer.Render(primitives, uiRegion, oot3d::ui::N64UiCanvasMode::Widescreen16x9,
+      if (!n64UiRenderer.Render(primitives, uiRegion, oot3d::ui::N64UiCanvasMode::RegionShape,
                                 std::move(prepared), &renderError)) {
         throw std::runtime_error("in-game menu presentation failed: " + renderError);
       }
@@ -2935,6 +2936,7 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
         pointerOnly.PictureY = devLabMenuInput.PictureY;
         pointerOnly.PictureWidth = devLabMenuInput.PictureWidth;
         pointerOnly.PictureHeight = devLabMenuInput.PictureHeight;
+        pointerOnly.PictureHeightMillimetres = devLabMenuInput.PictureHeightMillimetres;
         devLabMenuInput = pointerOnly;
         devLabMenuMissingTarget.clear();
         devLabMenuDriving = true;
@@ -2996,6 +2998,15 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
     input.PictureY = devLabMenuInput.PictureY;
     input.PictureWidth = devLabMenuInput.PictureWidth;
     input.PictureHeight = devLabMenuInput.PictureHeight;
+    if (input.PictureWidth == 0U || input.PictureHeight == 0U) {
+      // The menu's canvas follows the picture the host poll reported.
+      const auto &hostMenu = nativeControlPollingState.Menu;
+      input.PictureX = hostMenu.PictureX;
+      input.PictureY = hostMenu.PictureY;
+      input.PictureWidth = hostMenu.PictureWidth;
+      input.PictureHeight = hostMenu.PictureHeight;
+    }
+    input.PictureHeightMillimetres = nativeControlPollingState.Menu.PictureHeightMillimetres;
     if (step < devLabMenuSteps.size()) {
       if (elapsed % period == 0U) {
         const std::string &name = devLabMenuSteps[step];
@@ -3023,17 +3034,19 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
             // Canvas units to window pixels through the same fit the menu
             // uses, in the presentation picture the host poll last reported.
             const auto &hostMenu = nativeControlPollingState.Menu;
+            const float canvasWidth = inGameMenuStorage->CanvasWidth();
+            const float canvasHeight = Oot3dNativeGame::InGameMenu::kCanvasHeight;
             const auto fit = Oot3d::Renderer::FitUiPresentation(hostMenu.PictureWidth, hostMenu.PictureHeight,
-                                                                1280.0F / 3.0F, 240.0F);
+                                                                canvasWidth, canvasHeight);
             input.PointerPresent = true;
             input.PictureX = hostMenu.PictureX;
             input.PictureY = hostMenu.PictureY;
             input.PictureWidth = hostMenu.PictureWidth;
             input.PictureHeight = hostMenu.PictureHeight;
             input.PointerX = static_cast<float>(hostMenu.PictureX) + fit.X +
-                             (region.Area.X + region.Area.Width * 0.5F) * fit.Width / (1280.0F / 3.0F);
+                             (region.Area.X + region.Area.Width * 0.5F) * fit.Width / canvasWidth;
             input.PointerY = static_cast<float>(hostMenu.PictureY) + fit.Y +
-                             (region.Area.Y + region.Area.Height * 0.5F) * fit.Height / 240.0F;
+                             (region.Area.Y + region.Area.Height * 0.5F) * fit.Height / canvasHeight;
             found = true;
             break;
           }

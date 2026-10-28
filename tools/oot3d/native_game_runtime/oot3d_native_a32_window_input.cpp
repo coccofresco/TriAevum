@@ -400,6 +400,21 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
     menu.PictureY = picture.Y;
     menu.PictureWidth = picture.Width;
     menu.PictureHeight = picture.Height;
+    {
+      // The picture's physical height, for the menu's size on a small screen.
+      // The display's density is read again only when the window's height
+      // changes (a resize, a rotation, another display).
+      static uint32_t densityWindowHeight = 0U;
+      static std::optional<float> windowMillimetres;
+      if (const uint32_t height = window.GetHeight(); height != densityWindowHeight) {
+        densityWindowHeight = height;
+        windowMillimetres = window.GetWindowHeightMillimetres();
+      }
+      menu.PictureHeightMillimetres = windowMillimetres && densityWindowHeight != 0U
+                                          ? *windowMillimetres * static_cast<float>(picture.Height) /
+                                                static_cast<float>(densityWindowHeight)
+                                          : 0.0F;
+    }
     menu.PointerPressed = hostPresses.HostMenu.Resolve(window.GetMouseState(Ship::LUS_MOUSE_BTN_LEFT), true);
     menu.PointerWheel = 0.0F;
     if (hostGuiVisible) {

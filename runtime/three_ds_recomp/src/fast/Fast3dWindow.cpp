@@ -380,6 +380,14 @@ uint32_t Fast3dWindow::GetCurrentRefreshRate() {
     return refreshRate;
 }
 
+std::optional<float> Fast3dWindow::GetWindowHeightMillimetres() {
+    float millimetres = 0.0f;
+    if (mWindowManagerApi == nullptr || !mWindowManagerApi->GetWindowHeightMillimetres(&millimetres)) {
+        return std::nullopt;
+    }
+    return millimetres;
+}
+
 bool Fast3dWindow::SupportsWindowedFullscreen() {
 #ifdef __APPLE__
     return false;

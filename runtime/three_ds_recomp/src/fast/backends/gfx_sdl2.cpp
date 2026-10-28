@@ -301,6 +301,53 @@ void GfxWindowBackendSDL2::GetActiveWindowRefreshRate(uint32_t* refresh_rate) {
     *refresh_rate = mode.refresh_rate != 0 ? mode.refresh_rate : 60;
 }
 
+bool GfxWindowBackendSDL2::GetWindowHeightMillimetres(float* millimetres) {
+    const int display = SDL_GetWindowDisplayIndex(mWnd);
+    float diagonal = 0.0f, horizontal = 0.0f, vertical = 0.0f;
+    if (display < 0 || SDL_GetDisplayDPI(display, &diagonal, &horizontal, &vertical) != 0) {
+        return false;
+    }
+#if defined(__ANDROID__)
+    // The system density (densityDpi), which follows the user's display size
+    // setting; the panel's xdpi/ydpi are less reliable across devices.
+    float dpi = diagonal;
+#else
+    float dpi = vertical;
+#endif
+#if defined(_WIN32)
+    // SDL reports the scaled (effective) DPI on Windows; the panel's own
+    // comes from the monitor's EDID (MDT_RAW_DPI, Windows 8.1 and later).
+    SDL_SysWMinfo info;
+    SDL_VERSION(&info.version);
+    if (SDL_GetWindowWMInfo(mWnd, &info)) {
+        using GetDpiForMonitorFunction = HRESULT(WINAPI*)(HMONITOR, int, UINT*, UINT*);
+        static const auto getDpiForMonitor = [] {
+            const HMODULE shcore = LoadLibraryW(L"Shcore.dll");
+            return shcore != nullptr ? reinterpret_cast<GetDpiForMonitorFunction>(
+                                           GetProcAddress(shcore, "GetDpiForMonitor"))
+                                     : nullptr;
+        }();
+        UINT rawX = 0, rawY = 0;
+        constexpr int kRawDpi = 2; // MDT_RAW_DPI
+        if (getDpiForMonitor == nullptr ||
+            getDpiForMonitor(MonitorFromWindow(info.info.win.window, MONITOR_DEFAULTTONEAREST), kRawDpi, &rawX,
+                             &rawY) != S_OK) {
+            return false;
+        }
+        dpi = static_cast<float>(rawY);
+    } else {
+        return false;
+    }
+#endif
+    int width = 0, height = 0;
+    SDL_GetWindowSizeInPixels(mWnd, &width, &height);
+    if (!(dpi >= 50.0f && dpi <= 1200.0f) || height <= 0) {
+        return false;
+    }
+    *millimetres = static_cast<float>(height) * 25.4f / dpi;
+    return true;
+}
+
 static uint64_t previous_time;
 #ifdef _WIN32
 static HANDLE mTimer;
