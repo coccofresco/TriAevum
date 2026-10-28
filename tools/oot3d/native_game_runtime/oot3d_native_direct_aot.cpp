@@ -75,6 +75,9 @@ HMODULE TitleModule() noexcept {
 #else
 void* TitleModule() noexcept {
   // ABI tables contain function pointers used for the entire process lifetime.
+#if defined(__ANDROID__)
+  if (SelectedPlugin.empty()) return nullptr; // see WholeAotProgram
+#endif
   static void* module = []() noexcept -> void* {
     PluginQueried = true;
     try {
@@ -118,6 +121,14 @@ const Result* QueryTitle(const char* name, uint32_t abi) noexcept {
 #endif
 
 const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
+#if defined(__ANDROID__)
+  // Android names its title library explicitly (--title-plugin, or the
+  // Forge's --verify-title-plugin): there is no executable folder to search.
+  // The Forge runs these tool modes inside its own process, so a query made
+  // before a selection (--product-info) must not latch "no title" for the
+  // process's life.
+  if (SelectedPlugin.empty()) return nullptr;
+#endif
   static const Oot3dWholeAotProgramV2 *program = []() noexcept {
     const Oot3dWholeAotProgramV2 *candidate =
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
@@ -145,6 +156,14 @@ const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
 }
 
 const Oot3dDirectAotProgramV1 *DirectAotProgram() noexcept {
+#if defined(__ANDROID__)
+  // Android names its title library explicitly (--title-plugin, or the
+  // Forge's --verify-title-plugin): there is no executable folder to search.
+  // The Forge runs these tool modes inside its own process, so a query made
+  // before a selection (--product-info) must not latch "no title" for the
+  // process's life.
+  if (SelectedPlugin.empty()) return nullptr;
+#endif
   static const Oot3dDirectAotProgramV1 *program = []() noexcept {
     const Oot3dDirectAotProgramV1 *candidate =
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
@@ -245,8 +264,17 @@ bool DispatchDirectAot(const Oot3dDirectAotProgramV1 &program, uint32_t pc,
 
 void ConfigureTitlePlugin(const std::filesystem::path& path) {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
-  if (PluginQueried) throw std::runtime_error("Title plugin was already queried");
-  SelectedPlugin = std::filesystem::absolute(path).lexically_normal();
+  const auto requested = std::filesystem::absolute(path).lexically_normal();
+  if (PluginQueried) {
+    // The Android Forge runs the tool modes inside its own process
+    // (triaevum_forge_tool), so an install verifies the same title library
+    // twice (activation, then the runtime preflight) after the first query
+    // loaded it for the process's life. The same library is the same answer;
+    // any other one stays refused.
+    if (!SelectedPlugin.empty() && requested == SelectedPlugin) return;
+    throw std::runtime_error("Title plugin was already queried");
+  }
+  SelectedPlugin = requested;
   if (!std::filesystem::is_regular_file(SelectedPlugin))
     throw std::runtime_error("Selected title plugin is missing: " + SelectedPlugin.string());
 #else
