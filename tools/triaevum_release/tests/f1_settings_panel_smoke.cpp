@@ -1596,6 +1596,27 @@ void CheckTexturePackBrowseAndImport() {
     waitFor([&] { return logged("No folder chosen"); }, "a cancelled Browse... was not reported");
     Check(runtime.Snapshot().TexturePacks.Azahar.LoadDirectory == chosen, "a cancelled Browse... changed the folder");
 
+    // Issue #124: a folder inside the portable installation (<A>/data/config
+    // holds the settings) is stored relative, so it follows a moved
+    // installation; the pack still loads from it.
+    const auto installation = root / "Tri Aevum";
+    std::filesystem::create_directories(installation / "data" / "config");
+    std::filesystem::create_directories(installation / "packs" / "HD");
+    packs.SetHostDefaults({.SettingsDirectory = installation / "data" / "config"});
+    *nextFolder = PathToUtf8(installation / "packs" / "HD");
+    Click("Browse...##load");
+    waitFor([&] { return runtime.Snapshot().TexturePacks.Azahar.LoadDirectory == "../../packs/HD"; },
+            "Browse... inside the installation did not store a relative folder");
+    // As the renderer passes the settings on (gfx_vulkan_frame.cpp).
+    packs.Configure({.LoadCustomTextures = true, .LoadDirectory = runtime.Snapshot().TexturePacks.Azahar.LoadDirectory});
+    Check(std::filesystem::equivalent(packs.Snapshot().LoadDirectory, installation / "packs" / "HD"),
+          "the relative folder is not read from the settings folder");
+    packs.Configure({});
+    *nextFolder = chosen;
+    Click("Browse...##load");
+    waitFor([&] { return runtime.Snapshot().TexturePacks.Azahar.LoadDirectory == chosen; },
+            "Browse... outside the installation did not keep the folder as chosen");
+
     const auto managed = root / "data" / "textures" / "load" / "0004000000033500";
     packs.SetHostDefaults({.TitleId = 0x0004000000033500ULL, .LoadDirectory = managed, .DumpDirectory = root / "dump"});
     constexpr const char* texture = "tex1_32x32_0123456789ABCDEF_13_mip0.png";

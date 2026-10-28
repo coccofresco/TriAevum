@@ -12,6 +12,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "fast/extension/portable_path_setting.h"
+
 namespace Oot3dNativeGame {
 namespace {
 
@@ -25,10 +27,6 @@ std::string Utf8(const fs::path &path) {
 std::string GenericUtf8(const fs::path &path) {
     const auto text = path.generic_u8string();
     return {text.begin(), text.end()};
-}
-
-fs::path FromUtf8(const std::string &text) {
-    return fs::path(std::u8string(text.begin(), text.end()));
 }
 
 bool SameFolder(const fs::path &left, const fs::path &right) {
@@ -248,11 +246,16 @@ SavestateMigrationResult MigrateLegacySavestates(const SavestateMigrationRequest
     if (migrations.has_value()) {
         if (migrations->contains("migrations") && (*migrations)["migrations"].is_array())
             records = (*migrations)["migrations"];
+        // The record's folders are relative to its file inside the
+        // installation, so a moved installation still recognises it.
+        const auto recordFolder = request.MigrationsPath.parent_path();
         for (const auto &record : records) {
             if (record.is_object() && record.value("id", std::string{}) == kSavestateMigrationId &&
                 record.value("status", std::string{}) == "completed" &&
-                SameFolder(FromUtf8(record.value("source", std::string{})), request.LegacyDirectory) &&
-                SameFolder(FromUtf8(record.value("destination", std::string{})), request.ManagedDirectory))
+                SameFolder(Fast::Extension::LoadPathSetting(record.value("source", std::string{}), recordFolder),
+                           request.LegacyDirectory) &&
+                SameFolder(Fast::Extension::LoadPathSetting(record.value("destination", std::string{}), recordFolder),
+                           request.ManagedDirectory))
                 return notNeeded("save states were already moved");
         }
     }
@@ -306,9 +309,12 @@ SavestateMigrationResult MigrateLegacySavestates(const SavestateMigrationRequest
     if (preferences.has_value()) {
         const auto last = preferences->find("LastState");
         if (last != preferences->end() && last->is_string()) {
-            const auto relative = Inside(FromUtf8(last->get<std::string>()), request.LegacyDirectory);
+            const auto preferencesFolder = request.PreferencesPath.parent_path();
+            const auto relative = Inside(
+                Fast::Extension::LoadPathSetting(last->get<std::string>(), preferencesFolder), request.LegacyDirectory);
             if (!relative.empty() && verified.contains(relative.lexically_normal())) {
-                (*preferences)["LastState"] = Utf8(request.ManagedDirectory / relative);
+                (*preferences)["LastState"] =
+                    Fast::Extension::StorePathSetting(request.ManagedDirectory / relative, preferencesFolder);
                 if (!WriteAtomically(request.PreferencesPath, *preferences, &error))
                     return Fail(result, request, error);
                 result.LastStateRewritten = true;
@@ -322,8 +328,9 @@ SavestateMigrationResult MigrateLegacySavestates(const SavestateMigrationRequest
     nlohmann::json record{
         {"id", kSavestateMigrationId},
         {"status", "completed"},
-        {"source", Utf8(request.LegacyDirectory)},
-        {"destination", Utf8(request.ManagedDirectory)},
+        {"source", Fast::Extension::StorePathSetting(request.LegacyDirectory, request.MigrationsPath.parent_path())},
+        {"destination",
+         Fast::Extension::StorePathSetting(request.ManagedDirectory, request.MigrationsPath.parent_path())},
         {"copied_files", result.CopiedFiles},
         {"present_files", result.PresentFiles},
         {"copied_bytes", result.CopiedBytes},

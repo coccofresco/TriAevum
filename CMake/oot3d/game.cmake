@@ -213,9 +213,10 @@ add_executable(triaevum_data_routing_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/triaevum_data_routing.cpp
     tools/oot3d/native_game_runtime/triaevum_early_log.cpp
     tools/oot3d/native_game_runtime/oot3d_savestate_migration.cpp
+    tools/oot3d/native_game_runtime/oot3d_savestate_library.cpp
     tools/oot3d/native_game_runtime/triaevum_data_routing_tests.cpp
 )
-target_link_libraries(triaevum_data_routing_tests PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(triaevum_data_routing_tests PRIVATE nlohmann_json::nlohmann_json oot3d_renderer_contracts)
 oot3d_target_defaults(triaevum_data_routing_tests FOLDER Tests)
 
 # The error reports and display-recovery record (UX plan WP-03); no window.

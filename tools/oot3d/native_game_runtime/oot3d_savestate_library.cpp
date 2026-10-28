@@ -8,6 +8,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "fast/extension/portable_path_setting.h"
+
 namespace Oot3dNativeGame {
 namespace {
 
@@ -16,10 +18,6 @@ constexpr const char* kSettingsSuffix = "+settings";
 std::string PathToUtf8(const std::filesystem::path& path) {
   const auto text = path.u8string();
   return {text.begin(), text.end()};
-}
-
-std::filesystem::path PathFromUtf8(const std::string& text) {
-  return std::filesystem::path(std::u8string(text.begin(), text.end()));
 }
 
 std::string TimestampName(std::chrono::system_clock::time_point now) {
@@ -67,15 +65,23 @@ void SavestateLibrary::LoadPreferencesLocked() {
     mPreferencesError = "the save-state preferences are unreadable; using defaults";
     return;
   }
-  mChosenDirectory = PathFromUtf8(document.value("Directory", std::string{}));
-  mLastState = PathFromUtf8(document.value("LastState", std::string{}));
+  // Paths inside the installation are stored relative to this file's folder
+  // (issue #124); older files hold absolute paths, read as they are.
+  const auto settings = mPreferencesPath.parent_path();
+  const auto text = [&](const char* key) {
+    const auto value = document.find(key);
+    return value != document.end() && value->is_string() ? value->get<std::string>() : std::string{};
+  };
+  mChosenDirectory = Fast::Extension::LoadPathSetting(text("Directory"), settings);
+  mLastState = Fast::Extension::LoadPathSetting(text("LastState"), settings);
 }
 
 void SavestateLibrary::SavePreferencesLocked() {
   if (mPreferencesPath.empty()) return;
+  const auto settings = mPreferencesPath.parent_path();
   const nlohmann::json document{
-      {"Directory", PathToUtf8(mChosenDirectory)},
-      {"LastState", PathToUtf8(mLastState)},
+      {"Directory", Fast::Extension::StorePathSetting(mChosenDirectory, settings)},
+      {"LastState", Fast::Extension::StorePathSetting(mLastState, settings)},
   };
   std::error_code error;
   std::filesystem::create_directories(mPreferencesPath.parent_path(), error);
@@ -152,6 +158,13 @@ std::optional<std::filesystem::path> SavestateLibrary::LastState() const {
   std::scoped_lock lock(mMutex);
   if (!mFixedSlot.empty()) return mFixedSlot;
   if (mLastState.empty()) return std::nullopt;
+  // An absolute path written before the installation was moved names a file
+  // that is gone: the state of the same name in the current folder is it.
+  std::error_code error;
+  if (!std::filesystem::exists(mLastState, error) && mLastState.has_filename()) {
+    const auto here = DirectoryLocked() / mLastState.filename();
+    if (std::filesystem::is_regular_file(here, error)) return here;
+  }
   return mLastState;
 }
 

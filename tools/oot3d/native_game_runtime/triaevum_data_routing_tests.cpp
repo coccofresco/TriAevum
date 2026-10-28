@@ -2,6 +2,7 @@
 // parser, the save-state move with its migration record, and the early log
 // spool. No window, no game.
 
+#include "oot3d_savestate_library.h"
 #include "oot3d_savestate_migration.h"
 #include "triaevum_data_routing.h"
 #include "triaevum_early_log.h"
@@ -163,9 +164,8 @@ void TestMigration(const fs::path &root) {
         Expect(!fs::exists(fixture.Managed / "README-moved.txt"), "the README is not copied");
         const auto preferences = ReadJson(fixture.Config / "savestates.json");
         Expect(result.LastStateRewritten, "LastState is rewritten");
-        Expect(preferences["LastState"] ==
-                   Utf8(fixture.Managed / "state-2026-10-02_10-00-00+settings.oot3dsav"),
-               "LastState names the verified copy (F8 loads it)");
+        Expect(preferences["LastState"] == "../savestates/state-2026-10-02_10-00-00+settings.oot3dsav",
+               "LastState names the verified copy (F8 loads it), relative inside the installation");
         Expect(preferences["Directory"] == "", "the default Directory stays the default");
         const auto record = ReadJson(fixture.Config / "migrations.json");
         Expect(record["format"] == Oot3dNativeGame::kMigrationsFormat, "the record's format");
@@ -174,8 +174,8 @@ void TestMigration(const fs::path &root) {
         const auto &moved = record["migrations"][1];
         Expect(moved["id"] == Oot3dNativeGame::kSavestateMigrationId && moved["status"] == "completed",
                "the completion record");
-        Expect(moved["source"] == Utf8(fixture.Legacy) && moved["destination"] == Utf8(fixture.Managed),
-               "the record names both folders");
+        Expect(moved["source"] == "../../savestates" && moved["destination"] == "../savestates",
+               "the record names both folders, relative inside the installation");
         Expect(moved["copied_files"] == 3 && moved["files"].size() == 3, "the record lists the copies");
         Expect(moved["files"][0]["fnv1a64"].get<std::string>().size() == 16, "each copy's hash");
 
@@ -274,7 +274,7 @@ void TestMigration(const fs::path &root) {
         Expect(retried.Status == SavestateMigrationStatus::Completed && retried.CopiedFiles == 0 &&
                    retried.PresentFiles == 1,
                "the retry completes without copying again");
-        Expect(ReadJson(failing.Config / "savestates.json")["LastState"] == Utf8(failing.Managed / "a.oot3dsav"),
+        Expect(ReadJson(failing.Config / "savestates.json")["LastState"] == "../savestates/a.oot3dsav",
                "and rewrites LastState");
         // Unreadable preferences: nothing is moved, the earlier folder stays.
         MigrationFixture unreadable(root / "unreadable");
@@ -284,6 +284,30 @@ void TestMigration(const fs::path &root) {
         Expect(refused.Status == SavestateMigrationStatus::Failed && refused.DefaultDirectory == unreadable.Legacy &&
                    !fs::exists(unreadable.Managed),
                "unreadable preferences move nothing");
+    }
+    {
+        // Issue #124: the whole installation moved after the save states did.
+        // The record still matches (nothing is copied again, a state the
+        // player deleted from the new folder does not come back) and the
+        // last state follows the installation.
+        MigrationFixture before(root / "relocate-before");
+        Write(before.Legacy / "a.oot3dsav", "a");
+        Write(before.Legacy / "b.oot3dsav", "b");
+        before.Preferences({{"Directory", ""}, {"LastState", Utf8(before.Legacy / "b.oot3dsav")}});
+        Expect(MigrateLegacySavestates(before.Request()).Status == SavestateMigrationStatus::Completed,
+               "the move completes before the relocation");
+        fs::remove(before.Managed / "a.oot3dsav");
+        const auto moved = root / "relocate after" / "My Games";
+        fs::create_directories(moved);
+        fs::rename(before.Root / "package", moved / "package");
+        MigrationFixture after(moved);
+        const auto again = MigrateLegacySavestates(after.Request());
+        Expect(again.Status == SavestateMigrationStatus::NotNeeded && again.CopiedFiles == 0,
+               "a moved installation recognises its completed move: " + again.Message);
+        Expect(!fs::exists(after.Managed / "a.oot3dsav"), "a deleted state does not come back");
+        const Oot3dNativeGame::SavestateLibrary library(after.Config / "savestates.json", after.Managed);
+        Expect(library.LastState() == (after.Managed / "b.oot3dsav").lexically_normal(),
+               "the last state is the moved installation's copy");
     }
 }
 

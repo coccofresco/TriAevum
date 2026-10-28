@@ -1,6 +1,7 @@
 #include "fast/extension/azahar_texture_pack_panel.h"
 
 #include "fast/extension/azahar_texture_pack_import.h"
+#include "fast/extension/portable_path_setting.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 
 #include <imgui.h>
@@ -139,7 +140,10 @@ bool PollFolderOperation(AzaharTexturePackSettings& settings, AzaharTexturePackP
     }
     if (target == AzaharTextureFolderTarget::LoadFolder || target == AzaharTextureFolderTarget::DumpFolder) {
         auto& input = target == AzaharTextureFolderTarget::LoadFolder ? state.LoadDirectoryInput : state.DumpDirectoryInput;
-        input = *outcome.Folder;
+        // A folder inside the portable installation is stored relative to the
+        // settings file, so it follows a moved installation (issue #124).
+        input = StorePathSetting(PortablePathDetail::FromUtf8(*outcome.Folder),
+                                 ::Oot3d::Renderer::AzaharTexturePackRuntime::Instance().HostDefaults().SettingsDirectory);
         ApplyDirectoryInputs(settings, state);
         state.FolderStatus = std::string(target == AzaharTextureFolderTarget::LoadFolder ? "Custom texture folder: "
                                                                                           : "Texture dump folder: ") +

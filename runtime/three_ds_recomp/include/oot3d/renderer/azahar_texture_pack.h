@@ -30,6 +30,11 @@ struct AzaharTextureHostDefaults {
     std::optional<uint64_t> TitleId;
     std::filesystem::path LoadDirectory;
     std::filesystem::path DumpDirectory;
+    // The game settings file's folder (issue #124). A relative F1 folder is
+    // read from it, and F1's Browse... stores a folder inside the portable
+    // installation relative to it (fast/extension/portable_path_setting.h).
+    // Empty: a relative F1 folder is read from the working folder, as before.
+    std::filesystem::path SettingsDirectory;
 
     bool operator==(const AzaharTextureHostDefaults&) const = default;
 };

@@ -213,13 +213,20 @@ void NativeA32WindowSession::Setup() {
   // The installed game's program ID and the managed custom texture folders
   // (UX plan WP-05C), kept across every settings reconfigure; the
   // environment and the F1 folders keep their precedence. Without them (an
-  // older launch profile) the folders resolve as before.
-  if (launch.Routing.TitleId.has_value() || !launch.Routing.TextureLoadDirectory.empty() ||
-      !launch.Routing.TextureDumpDirectory.empty()) {
+  // older launch profile) the folders resolve as before. The settings file's
+  // folder is always named: F1 folders inside the installation are stored
+  // relative to it, so a moved installation keeps them (issue #124).
+  {
+    std::error_code settingsError;
+    const auto settingsPath = std::filesystem::path(launch.Host.ConfigurationPath);
+    const auto settingsDirectory = settingsPath.empty()
+                                       ? std::filesystem::path{}
+                                       : std::filesystem::absolute(settingsPath, settingsError).parent_path();
     Oot3d::Renderer::AzaharTexturePackRuntime::Instance().SetHostDefaults({
         .TitleId = launch.Routing.TitleId,
         .LoadDirectory = launch.Routing.TextureLoadDirectory,
         .DumpDirectory = launch.Routing.TextureDumpDirectory,
+        .SettingsDirectory = settingsError ? std::filesystem::path{} : settingsDirectory,
     });
   }
   hostConfig.ResourceLimitValues = manifest->ResourceLimitValues;

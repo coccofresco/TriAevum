@@ -1,5 +1,6 @@
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "fast/extension/azahar_texture_pack_import.h"
+#include "fast/extension/portable_path_setting.h"
 #include "../src/fast/extension/azahar_pbr_materials.h"
 
 #include <gtest/gtest.h>
@@ -370,6 +371,42 @@ TEST_F(Oot3dAzaharTexturePackTest, HostDefaultsRankBelowEveryChoiceAndKeepAnInst
     EXPECT_EQ(fresh.Snapshot().LoadDirectory, chosen);
     runtime.WaitForPendingLoads();
     fresh.WaitForPendingLoads();
+}
+
+// Issue #124: F1 folders follow a moved portable installation (<A>/data/config).
+// A relative folder is read from the settings file's folder, never from the
+// working folder; an absolute folder an earlier version stored inside the
+// earlier location is found again; a missing folder outside stays as chosen.
+TEST_F(Oot3dAzaharTexturePackTest, FolderSettingsFollowAMovedInstallation) {
+    ScopedEnvironment noUser("OOT3D_AZAHAR_USER_DIRECTORY", "");
+    ScopedEnvironment noLoad("OOT3D_AZAHAR_LOAD_DIRECTORY", "");
+    ScopedEnvironment noDump("OOT3D_AZAHAR_DUMP_DIRECTORY", "");
+    const auto installation = Root / "moved here" / "Tri Aevum";
+    const auto settings = installation / "data" / "config";
+    std::filesystem::create_directories(settings);
+    std::filesystem::create_directories(installation / "packs" / "HD");
+
+    EXPECT_TRUE(std::filesystem::equivalent(Fast::Extension::PortableInstallationRoot(settings), installation));
+    EXPECT_TRUE(Fast::Extension::PortableInstallationRoot(Root / "elsewhere").empty())
+        << "a developer settings folder has no installation folder";
+    EXPECT_EQ(Fast::Extension::StorePathSetting(installation / "packs" / "HD", settings), "../../packs/HD");
+    const auto outside = Root / "outside pack";
+    EXPECT_EQ(Fast::Extension::StorePathSetting(outside, settings), outside.string());
+
+    Oot3d::Renderer::AzaharTexturePackRuntime runtime;
+    runtime.SetHostDefaults({.SettingsDirectory = settings});
+    runtime.Configure({.LoadCustomTextures = true, .LoadDirectory = "../../packs/HD", .DumpDirectory = "../dumps"});
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, (installation / "packs" / "HD").lexically_normal());
+    EXPECT_EQ(runtime.Snapshot().DumpDirectory, (installation / "data" / "dumps").lexically_normal());
+
+    // Written by an earlier version at the earlier location (now gone).
+    const auto earlier = Root / "Games" / "TriAevum";
+    runtime.Configure({.LoadCustomTextures = true, .LoadDirectory = earlier / "packs" / "HD"});
+    EXPECT_TRUE(std::filesystem::equivalent(runtime.Snapshot().LoadDirectory, installation / "packs" / "HD"));
+    const auto unplugged = Root / "unplugged" / "packs" / "SD";
+    runtime.Configure({.LoadCustomTextures = true, .LoadDirectory = unplugged});
+    EXPECT_EQ(runtime.Snapshot().LoadDirectory, unplugged.lexically_normal());
+    runtime.WaitForPendingLoads();
 }
 
 TEST_F(Oot3dAzaharTexturePackTest,

@@ -53,6 +53,8 @@ struct SavestateOutcome {
 class SavestateLibrary final {
  public:
   // preferencesPath: small JSON with the chosen folder and the last state.
+  // Paths inside the installation are stored relative to its folder, so a
+  // moved installation keeps them (fast/extension/portable_path_setting.h).
   // fixedSlot: a launch-time quick-state path; when set, every save writes it
   // and the last state is always it (scripted runs keep one known file).
   SavestateLibrary(std::filesystem::path preferencesPath,
@@ -79,6 +81,8 @@ class SavestateLibrary final {
   [[nodiscard]] static bool NameCarriesSettings(
       const std::filesystem::path& path);
 
+  // A stored absolute path that no longer exists (written before the
+  // installation moved) resolves to the file of that name in Directory().
   [[nodiscard]] std::optional<std::filesystem::path> LastState() const;
   void SetLastState(const std::filesystem::path& path);
 

@@ -18,11 +18,17 @@
 #include <string_view>
 #include <vector>
 
+#include <nlohmann/json.hpp>
 #include <zstd.h>
 
 namespace {
 
 using namespace Oot3dNativeGame;
+
+std::string PathToUtf8ForTest(const std::filesystem::path& path) {
+    const auto text = path.u8string();
+    return {text.begin(), text.end()};
+}
 
 [[noreturn]] void Fail(std::string_view message) {
     std::cerr << "oot3d_native_a32_savestate_tests: " << message << '\n';
@@ -638,6 +644,72 @@ int main() {
         Require(fixed.NewStatePath(true) == slot && fixed.LastState() == slot &&
                     !fixed.SetDirectory(chosen, &error),
                 "--quick-state does not pin one file");
+    }
+
+    // Issue #124: a portable installation (<A>/data/config) moved as a whole
+    // keeps its last state and a folder chosen inside it; a folder chosen
+    // outside it stays as chosen; an absolute path an older version wrote
+    // finds the state of the same name in the moved folder.
+    {
+        const auto readText = [](const std::filesystem::path& path) {
+            std::ifstream input(path, std::ios::binary);
+            return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+        };
+        const auto before = root / "portable" / "TriAevum";
+        const auto states = before / "data" / "savestates";
+        std::filesystem::create_directories(states);
+        { std::ofstream(states / "state-a.oot3dsav", std::ios::binary) << "a"; }
+        {
+            SavestateLibrary library(before / "data" / "config" / "savestates.json", states);
+            library.SetLastState(states / "state-a.oot3dsav");
+            Require(library.SetDirectory(before / "my states", &error), error);
+        }
+        const auto stored = readText(before / "data" / "config" / "savestates.json");
+        Require(stored.find("\"../../my states\"") != std::string::npos &&
+                    stored.find("\"../savestates/state-a.oot3dsav\"") != std::string::npos,
+                "paths inside the installation are not stored relative: " + stored);
+        const auto after = root / "portable" / "moved here" / "Tri Aevum";
+        std::filesystem::create_directories(after.parent_path());
+        std::filesystem::rename(before, after);
+        {
+            SavestateLibrary moved(after / "data" / "config" / "savestates.json", after / "data" / "savestates");
+            Require(moved.Directory() == (after / "my states").lexically_normal() &&
+                        moved.LastState() == (after / "data" / "savestates" / "state-a.oot3dsav").lexically_normal(),
+                    "a moved installation lost its save-state folder or last state");
+            Require(moved.SetDirectory(root / "portable" / "elsewhere", &error), error);
+        }
+        Require(nlohmann::json::parse(readText(after / "data" / "config" / "savestates.json"))["Directory"] ==
+                    PathToUtf8ForTest(root / "portable" / "elsewhere"),
+                "a folder outside the installation is not kept as chosen");
+        // An older version's absolute path into the earlier location.
+        {
+            std::ofstream(after / "data" / "config" / "savestates.json", std::ios::binary | std::ios::trunc)
+                << nlohmann::json{{"Directory", ""},
+                                  {"LastState", PathToUtf8ForTest(states / "state-a.oot3dsav")}}
+                       .dump();
+        }
+        SavestateLibrary older(after / "data" / "config" / "savestates.json", after / "data" / "savestates");
+        const auto rebound = older.LastState();
+        Require(rebound && std::filesystem::equivalent(*rebound, after / "data" / "savestates" / "state-a.oot3dsav"),
+                "an earlier location's last state is not found in the moved folder");
+        // A chosen folder inside the earlier location is found again; one
+        // outside the installation that is gone stays as chosen.
+        std::filesystem::create_directories(after / "saves" / "mine");
+        {
+            std::ofstream(after / "data" / "config" / "savestates.json", std::ios::binary | std::ios::trunc)
+                << nlohmann::json{{"Directory", PathToUtf8ForTest(before / "saves" / "mine")}, {"LastState", ""}}
+                       .dump();
+        }
+        SavestateLibrary chosenBefore(after / "data" / "config" / "savestates.json", after / "data" / "savestates");
+        Require(std::filesystem::equivalent(chosenBefore.Directory(), after / "saves" / "mine"),
+                "an earlier location's chosen folder is not found in the moved installation");
+        const auto gone = root / "portable" / "unplugged drive" / "states";
+        {
+            std::ofstream(after / "data" / "config" / "savestates.json", std::ios::binary | std::ios::trunc)
+                << nlohmann::json{{"Directory", PathToUtf8ForTest(gone)}, {"LastState", ""}}.dump();
+        }
+        SavestateLibrary external(after / "data" / "config" / "savestates.json", after / "data" / "savestates");
+        Require(external.Directory() == gone, "a missing folder outside the installation was replaced");
     }
 
     std::filesystem::remove_all(root, cleanupError);

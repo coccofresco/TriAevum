@@ -1,4 +1,5 @@
 #include "oot3d/renderer/azahar_texture_pack.h"
+#include "fast/extension/portable_path_setting.h"
 #include "fast/renderer/content_hash.h"
 #include "azahar_pbr_materials.h"
 
@@ -144,6 +145,18 @@ AzaharTexturePackConfiguration NormalizeConfiguration(AzaharTexturePackConfigura
     }
     if (configuration.HostDefaults.TitleId.has_value()) {
         configuration.TitleId = *configuration.HostDefaults.TitleId;
+    }
+    // A relative F1 folder names a folder inside the installation, from the
+    // settings file's folder, not from the working folder; an absolute one an
+    // earlier version stored inside the installation follows it when it moved
+    // (issue #124, fast/extension/portable_path_setting.h).
+    const auto& settingsDirectory = configuration.HostDefaults.SettingsDirectory;
+    for (auto* folder : {&configuration.LoadDirectory, &configuration.DumpDirectory}) {
+        if (folder->empty() || settingsDirectory.empty()) continue;
+        *folder = folder->has_root_path()
+                      ? Fast::Extension::RelocatedPathSetting(
+                            *folder, Fast::Extension::PortableInstallationRoot(settingsDirectory))
+                      : settingsDirectory / *folder;
     }
     if (const char* loadDirectory = std::getenv("OOT3D_AZAHAR_LOAD_DIRECTORY");
         loadDirectory != nullptr && *loadDirectory != '\0') {
