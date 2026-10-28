@@ -798,6 +798,7 @@ fn uninstall_help(texts: &Texts, ui: &mut egui::Ui, record: &mut Recorder, help:
         }),
         Platform::Flatpak => texts.get(Msg::UninstallFlatpak { id: &text("flatpak_id"), path: &text("activation") }),
         Platform::Android => texts.get(Msg::UninstallAndroid { path: &text("activation") }),
+        Platform::MacOsApp => texts.get(Msg::UninstallMacApp { path: &text("activation") }),
     };
     line(ui, record, "data_panel_body", steps);
     let list = |key: &str| -> Vec<String> {

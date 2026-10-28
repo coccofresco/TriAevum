@@ -479,6 +479,11 @@ pub fn text(msg: &Msg) -> Option<String> {
                  archivos se quedan en {path}; borra esa carpeta tú mismo si quieres."
             ))
         }
+        UninstallMacApp { path } => {
+            return Some(format!(
+                "Primero haz una copia de tus archivos. Luego mueve TriAevum.app a la Papelera y, si ya no quieres \n                 tus partidas, borra esta carpeta: {path}"
+            ))
+        }
         UninstallAndroid { path } => {
             return Some(format!(
                 "Primero exporta tus archivos. Al desinstalar la aplicación se elimina su almacenamiento propio, \

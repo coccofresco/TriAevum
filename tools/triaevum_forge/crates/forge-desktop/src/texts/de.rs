@@ -483,6 +483,11 @@ pub fn text(msg: &Msg) -> Option<String> {
                  {path}; lösche diesen Ordner selbst, wenn du willst."
             ))
         }
+        UninstallMacApp { path } => {
+            return Some(format!(
+                "Sichere zuerst deine Dateien. Lege dann TriAevum.app in den Papierkorb und lösche, wenn du deine \n                 Spielstände nicht mehr brauchst, diesen Ordner: {path}"
+            ))
+        }
         UninstallAndroid { path } => {
             return Some(format!(
                 "Exportiere zuerst deine Dateien. Beim Deinstallieren der App wird ihr App-Speicher entfernt, \

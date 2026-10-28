@@ -162,6 +162,7 @@ codes! {
         AppImage = "appimage",
         Flatpak = "flatpak",
         Android = "android",
+        MacOsApp = "macos_app",
     }
 }
 
@@ -289,6 +290,7 @@ fn os_of(platform: Platform) -> HostOs {
     match platform {
         Platform::WindowsPortable => HostOs::Windows,
         Platform::Android => HostOs::Android,
+        Platform::MacOsApp => HostOs::MacOs,
         _ => HostOs::Linux,
     }
 }
@@ -541,6 +543,7 @@ pub fn resolve_inventory(installation: &Installation) -> Result<Inventory> {
     let platform = match os {
         HostOs::Windows => Platform::WindowsPortable,
         HostOs::Android => Platform::Android,
+        HostOs::MacOs => Platform::MacOsApp,
         _ if installation.layout.use_file_portal => Platform::Flatpak,
         _ if same_path(&activation, &resolve(&installation.layout.package)?) => Platform::LinuxPortable,
         _ => Platform::AppImage,

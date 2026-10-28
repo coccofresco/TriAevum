@@ -83,6 +83,9 @@ pub fn for_package(package: &Path, env: &dyn Fn(&str) -> Option<String>, os: Hos
     let package = resolve(package)?;
     let get = |name: &str| env(name).unwrap_or_default();
     let plain = HostLayout { package: package.clone(), activation: package.clone(), use_file_portal: false };
+    if os == HostOs::MacOs {
+        return macos_layout(package, &get);
+    }
     if os != HostOs::Linux {
         return Ok(plain);
     }
@@ -115,6 +118,47 @@ pub fn for_package(package: &Path, env: &dyn Fn(&str) -> Option<String>, os: Hos
             .because(forge_base::Reason::ReadOnlyDestination));
     }
     Ok(HostLayout { package, activation, use_file_portal: true })
+}
+
+/// Environment override of the macOS data root (an absolute folder), used by
+/// tests and developer runs that must not write to ~/Library.
+pub const MACOS_DATA_ROOT_ENV: &str = "TRIAEVUM_MACOS_DATA_ROOT";
+
+/// The `.app` bundle containing `package`, if any. A bundle is signed and may
+/// run translocated from a read-only path, so nothing is written inside it.
+pub fn macos_bundle_root(package: &Path) -> Option<PathBuf> {
+    package
+        .ancestors()
+        .find(|ancestor| ancestor.extension().is_some_and(|extension| extension == "app"))
+        .map(Path::to_path_buf)
+}
+
+/// macOS: a package inside `TriAevum.app` activates in
+/// `~/Library/Application Support/TriAevum` (or [`MACOS_DATA_ROOT_ENV`]); a
+/// plain developer folder activates in place, like a portable Linux package.
+fn macos_layout(package: PathBuf, get: &dyn Fn(&str) -> String) -> Result<HostLayout> {
+    let Some(bundle) = macos_bundle_root(&package) else {
+        return Ok(HostLayout { package: package.clone(), activation: package, use_file_portal: false });
+    };
+    let explicit = get(MACOS_DATA_ROOT_ENV);
+    let activation = if !explicit.is_empty() {
+        if !Path::new(&explicit).is_absolute() {
+            return Err(ForgeError::invalid("TRIAEVUM_MACOS_DATA_ROOT must be an absolute folder"));
+        }
+        PathBuf::from(explicit)
+    } else {
+        let home = get("HOME");
+        if home.is_empty() || !Path::new(&home).is_absolute() {
+            return Err(ForgeError::invalid("the macOS app requires an absolute HOME"));
+        }
+        Path::new(&home).join("Library/Application Support/TriAevum")
+    };
+    let activation = resolve(&activation)?;
+    if activation.starts_with(&bundle) {
+        return Err(ForgeError::invalid("macOS activation must be outside the signed app bundle")
+            .because(forge_base::Reason::ReadOnlyDestination));
+    }
+    Ok(HostLayout { package, activation, use_file_portal: false })
 }
 
 pub fn process_env(name: &str) -> Option<String> {
@@ -311,7 +355,8 @@ mod tests {
         let layout =
             for_package(Path::new("/tmp/.mount_x/usr/lib/triaevum"), &env_of(&[("HOME", "/home/u")]), HostOs::Linux)
                 .unwrap();
-        assert_eq!(layout.activation, Path::new("/home/u/.local/share/TriAevum"));
+        // resolve(): /home is a firmlink to /System/Volumes/Data/home on macOS.
+        assert_eq!(layout.activation, resolve(Path::new("/home/u/.local/share/TriAevum")).unwrap());
         let flatpak = for_package(
             Path::new("/app/lib/triaevum"),
             &env_of(&[("FLATPAK_ID", FLATPAK_ID), ("XDG_DATA_HOME", "/home/u/.var/app/x/data")]),
@@ -322,6 +367,34 @@ mod tests {
         assert!(
             for_package(Path::new("/app/lib/triaevum"), &env_of(&[("FLATPAK_ID", FLATPAK_ID)]), HostOs::Linux).is_err()
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn macos_app_activates_in_application_support_or_the_override() {
+        let package = Path::new("/Applications/TriAevum.app/Contents/Resources");
+        assert_eq!(macos_bundle_root(package), Some(PathBuf::from("/Applications/TriAevum.app")));
+        let layout = for_package(package, &env_of(&[("HOME", "/Users/u")]), HostOs::MacOs).unwrap();
+        assert_eq!(layout.activation, Path::new("/Users/u/Library/Application Support/TriAevum"));
+        assert!(!layout.use_file_portal);
+        let redirected = for_package(
+            package,
+            &env_of(&[("HOME", "/Users/u"), (MACOS_DATA_ROOT_ENV, "/Users/u/dev/data-root")]),
+            HostOs::MacOs,
+        )
+        .unwrap();
+        assert_eq!(redirected.activation, Path::new("/Users/u/dev/data-root"));
+        assert!(for_package(package, &env_of(&[(MACOS_DATA_ROOT_ENV, "relative")]), HostOs::MacOs).is_err());
+        assert!(for_package(package, &env_of(&[]), HostOs::MacOs).is_err());
+        assert!(for_package(
+            package,
+            &env_of(&[(MACOS_DATA_ROOT_ENV, "/Applications/TriAevum.app/Contents/data")]),
+            HostOs::MacOs
+        )
+        .is_err());
+        let directory = tempfile::tempdir().unwrap();
+        let plain = for_package(directory.path(), &env_of(&[]), HostOs::MacOs).unwrap();
+        assert_eq!(plain.activation, plain.package);
     }
 
     #[test]

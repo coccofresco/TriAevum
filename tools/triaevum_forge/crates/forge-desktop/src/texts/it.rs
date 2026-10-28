@@ -468,6 +468,11 @@ pub fn text(msg: &Msg) -> Option<String> {
                  {path}; elimina tu quella cartella, se vuoi."
             ))
         }
+        UninstallMacApp { path } => {
+            return Some(format!(
+                "Prima fai una copia dei tuoi file. Poi sposta TriAevum.app nel Cestino e, se non vuoi più i tuoi \n                 salvataggi, elimina questa cartella: {path}"
+            ))
+        }
         UninstallAndroid { path } => {
             return Some(format!(
                 "Prima esporta i tuoi file. La disinstallazione dell'app rimuove la sua memoria riservata, compresa \

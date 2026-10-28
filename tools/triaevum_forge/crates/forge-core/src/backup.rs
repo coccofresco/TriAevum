@@ -81,7 +81,14 @@ impl UnitKind {
 }
 
 pub(crate) fn platform_from_code(code: &str) -> Option<Platform> {
-    [Platform::WindowsPortable, Platform::LinuxPortable, Platform::AppImage, Platform::Flatpak, Platform::Android]
+    [
+        Platform::WindowsPortable,
+        Platform::LinuxPortable,
+        Platform::AppImage,
+        Platform::Flatpak,
+        Platform::Android,
+        Platform::MacOsApp,
+    ]
         .into_iter()
         .find(|platform| platform.code() == code)
 }
@@ -91,6 +98,7 @@ pub fn os_of(platform: Platform) -> HostOs {
     match platform {
         Platform::WindowsPortable => HostOs::Windows,
         Platform::Android => HostOs::Android,
+        Platform::MacOsApp => HostOs::MacOs,
         _ => HostOs::Linux,
     }
 }

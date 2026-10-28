@@ -484,6 +484,11 @@ pub fn text(msg: &Msg) -> Option<String> {
                  Vos fichiers restent dans {path} ; supprimez vous-même ce dossier si vous le souhaitez."
             ))
         }
+        UninstallMacApp { path } => {
+            return Some(format!(
+                "Sauvegardez d'abord vos fichiers. Placez ensuite TriAevum.app dans la Corbeille et, si vous ne voulez \n                 plus vos sauvegardes, supprimez ce dossier : {path}"
+            ))
+        }
         UninstallAndroid { path } => {
             return Some(format!(
                 "Exportez d'abord vos fichiers. La désinstallation de l'application supprime son stockage propre, y \

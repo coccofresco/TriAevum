@@ -430,6 +430,11 @@ pub fn text(msg: &Msg) -> String {
                  folder yourself if you want."
             )
         }
+        UninstallMacApp { path } => {
+            return format!(
+                "Back up your files first. Then move TriAevum.app to the Bin and, if you do not want your saves any \n                 more, delete this folder: {path}"
+            )
+        }
         UninstallAndroid { path } => {
             return format!(
                 "Export your files first. Uninstalling the app removes its app-specific storage, including {path}."
