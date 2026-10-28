@@ -84,6 +84,7 @@ object StartupReport {
         installState: String?,
         logTail: List<String>,
         generatedAt: Long,
+        nativeCrash: String? = null,
     ): String {
         val out = StringBuilder()
         out.append("TriAevum Android diagnostics report\n")
@@ -124,6 +125,10 @@ object StartupReport {
         }
 
         javaFailure?.takeIf { it.isNotBlank() }?.let { out.append("\n== Java failure ==\n").append(it.trimEnd()).append('\n') }
+        nativeCrash?.takeIf { it.isNotBlank() }?.let { crash ->
+            out.append("\n== Last native crash ==\n")
+            crash.trimEnd().lines().forEach { out.append(line(it)).append('\n') }
+        }
 
         out.append("\n== Log tail ==\n")
         if (logTail.isEmpty()) out.append("Unavailable.\n")

@@ -2,6 +2,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
 #include "fast/extension/grass_texture_source_cache.h"
+#include "fast/backends/startup_checkpoints.h"
 
 namespace Fast {
 
@@ -148,9 +149,34 @@ void GfxRenderingAPIVulkan::Init() {
     }
 
     CreateInstance();
+    StartupCheckpoint("vulkan_instance");
     CreateSurface();
+    StartupCheckpoint("vulkan_surface");
     PickPhysicalDevice();
+    {
+        // The device and driver of a startup report (a driver crash during
+        // device creation then still names them).
+        VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+        VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties.properties);
+        const auto getProperties2 = reinterpret_cast<PFN_vkGetPhysicalDeviceProperties2>(
+            vkGetInstanceProcAddr(mInstance, "vkGetPhysicalDeviceProperties2"));
+        const bool driverKnown =
+            getProperties2 != nullptr && properties.properties.apiVersion >= VK_API_VERSION_1_2;
+        if (driverKnown) {
+            properties.pNext = &driver;
+            getProperties2(mPhysicalDevice, &properties);
+        }
+        const auto& device = properties.properties;
+        StartupCheckpointf("vulkan_physical_device '%s' api %u.%u.%u vendor 0x%04X driver 0x%08X",
+                           device.deviceName, VK_VERSION_MAJOR(device.apiVersion),
+                           VK_VERSION_MINOR(device.apiVersion), VK_VERSION_PATCH(device.apiVersion),
+                           device.vendorID, device.driverVersion);
+        if (driverKnown)
+            StartupCheckpointf("vulkan_driver '%s' '%s'", driver.driverName, driver.driverInfo);
+    }
     CreateLogicalDevice();
+    StartupCheckpoint("vulkan_device");
     CreatePipelineCache();
     CreateCommandResources();
     if (mNriInterop.Initialize(mInstance, mPhysicalDevice, mDevice, mGraphicsQueueFamily,
@@ -562,6 +588,7 @@ void GfxRenderingAPIVulkan::Init() {
     mVsyncEnabled = settingsRuntime.Snapshot().VSync;
     CreateSyncObjects();
     CreateSwapchainResources();
+    StartupCheckpointf("vulkan_swapchain %ux%u", mSwapchainExtent.width, mSwapchainExtent.height);
     if (!mNriPicaScanoutPass.Initialize(mDevice, mNriInterop) ||
         !mNriPicaScanoutPass.Configure(mSwapchainFormat)) {
         SPDLOG_INFO("OOT3D Vulkan NRI PICA scanout unavailable: {}",
@@ -647,6 +674,7 @@ void GfxRenderingAPIVulkan::Init() {
     CreateFallbackTexture();
     StartPresentWorker();
     mInitialized = true;
+    StartupCheckpoint("renderer_ready");
     // Emit the compatibility contract as soon as the opted-in backend is live;
     // subsequent frames replace it with bounded measurements.
     mDiagnostics.Flush();

@@ -4,6 +4,8 @@
 #include "fast/extension/grass_stage_profile.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/renderer3ds/pica_surface_emission.h"
+#include "fast/backends/startup_checkpoints.h"
+#include <atomic>
 
 namespace Fast {
 
@@ -999,6 +1001,12 @@ void GfxRenderingAPIVulkan::FinishRender() {
         } else if (present != VK_SUCCESS) {
             CheckVk(present, "vkQueuePresentKHR");
         }
+    }
+    {
+        // The startup report's last renderer step: the first frame was queued.
+        static std::atomic<bool> firstPresentReported{false};
+        if (!firstPresentReported.exchange(true, std::memory_order_relaxed))
+            StartupCheckpointf("first_frame_presented %ux%u", mSwapchainExtent.width, mSwapchainExtent.height);
     }
     mDiagnostics.RecordNriSwapchainPresent(nriPresented);
     mDiagnostics.RecordEffectGeometryProvider(

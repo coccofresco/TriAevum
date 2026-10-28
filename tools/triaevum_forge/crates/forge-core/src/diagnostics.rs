@@ -720,7 +720,17 @@ fn allowlist(sources: &Sources) -> Vec<(String, PathBuf, bool)> {
         push(("state/runtime-state.json".to_string(), path.clone()), true);
     }
     if let Some(directory) = &sources.android_diagnostics {
-        for name in ["game-stages.txt", "java-failure-game.txt", "java-failure-forge.txt"] {
+        // The game's startup stages (Java and native checkpoints) of this and the
+        // previous session, Java failure structures and the redacted summary of
+        // the last native crash (signal and module-relative frames), all written
+        // by the app's StartupDiagnostics.
+        for name in [
+            "game-stages.txt",
+            "game-stages.txt.previous",
+            "java-failure-game.txt",
+            "java-failure-forge.txt",
+            "native-crash.txt",
+        ] {
             push((format!("android/{name}"), directory.join(name)), false);
         }
     }

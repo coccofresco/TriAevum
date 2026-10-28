@@ -7,6 +7,7 @@ import android.opengl.EGL14
 import android.opengl.EGLConfig
 import android.opengl.GLES20
 import android.os.Build
+import android.os.Debug
 import android.os.Process
 import java.io.File
 import java.io.IOException
@@ -26,6 +27,7 @@ object StartupDiagnostics {
     /** On the first check, older exits than this are history, not news. */
     private const val FIRST_CHECK_WINDOW_MS = 24L * 60 * 60 * 1000
     private const val MAX_EXITS = 16
+    private const val NATIVE_CRASH_FILE = "native-crash.txt"
     private var handlerInstalled = false
 
     private fun directory(context: Context) = File(context.filesDir, "diagnostics")
@@ -47,6 +49,19 @@ object StartupDiagnostics {
     /** Records a stage of the game process; cheap enough for any thread. */
     @JvmStatic
     fun stage(context: Context, stage: String) = gameLog(context).record(stage)
+
+    /**
+     * A native startup checkpoint (libTriAevum.so, ports/android/runtime/android_host.cpp: the
+     * Vulkan instance, surface, device and its driver version, swapchain, first presented frame),
+     * with the native heap in use at that point. Called through JNI from any native thread, after
+     * [beginGameSession]; ignored before it.
+     */
+    @JvmStatic
+    fun nativeStage(stage: String) {
+        val log = game ?: return
+        // The heap first: a long stage (the driver's build string) is cut at the line limit.
+        log.record("native [heap ${Debug.getNativeHeapAllocatedSize() shr 20} MiB] $stage")
+    }
 
     /**
      * Stores the structure of an uncaught Java failure (classes and frames, no messages) for the
@@ -114,6 +129,47 @@ object StartupDiagnostics {
     /** The game's recorded stage sessions, newest first. */
     fun sessions(context: Context): List<StageSession> = stageLog(context).sessions()
 
+    /**
+     * The redacted summary of the newest native crash Android recorded for this app (API 31+:
+     * the tombstone of `ApplicationExitInfo.getTraceInputStream`, see [NativeCrashSummary]), also
+     * written as diagnostics/native-crash.txt for the support bundle; null when there is none.
+     */
+    fun lastNativeCrash(context: Context): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return null
+        val summary = try {
+            val exit = context.getSystemService(ActivityManager::class.java)
+                .getHistoricalProcessExitReasons(context.packageName, 0, MAX_EXITS)
+                .filter { it.reason == android.app.ApplicationExitInfo.REASON_CRASH_NATIVE }
+                .maxByOrNull { it.timestamp } ?: return null
+            val bytes = exit.traceInputStream?.use { stream ->
+                val buffer = java.io.ByteArrayOutputStream()
+                val chunk = ByteArray(64 * 1024)
+                while (buffer.size() < NativeCrashSummary.MAX_TOMBSTONE_BYTES) {
+                    val read = stream.read(chunk)
+                    if (read < 0) break
+                    buffer.write(chunk, 0, read)
+                }
+                buffer.toByteArray()
+            }
+            val libraries = File(context.applicationInfo.nativeLibraryDir).list().orEmpty()
+                .filter { it.endsWith(".so") }.toSet()
+            val header = "Native crash of ${exit.processName} pid ${exit.pid} at " +
+                java.time.Instant.ofEpochMilli(exit.timestamp)
+            bytes?.let { NativeCrashSummary.parse(it, libraries) }?.format(header)
+                ?: "$header\nNo tombstone is available for this crash.\n"
+        } catch (_: Exception) {
+            return null
+        }
+        try {
+            val file = File(directory(context), NATIVE_CRASH_FILE)
+            file.parentFile?.mkdirs()
+            file.writeText(summary)
+        } catch (_: IOException) {
+            // The report still shows it.
+        }
+        return summary
+    }
+
     /** Builds the full report (GPU query and log tail included); call it off the UI thread. */
     fun buildReport(context: Context): String {
         val failures = listOf("game", "forge").mapNotNull { process ->
@@ -129,6 +185,7 @@ object StartupDiagnostics {
             exits = exits(context),
             sessions = sessions(context),
             javaFailure = failures.joinToString("\n").ifBlank { null },
+            nativeCrash = lastNativeCrash(context),
             installState = InstallService.checkpointSummary(context),
             logTail = logTail(),
             generatedAt = System.currentTimeMillis(),

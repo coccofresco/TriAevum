@@ -7,12 +7,45 @@
 #include <mutex>
 #include <stdexcept>
 
+#include "fast/backends/startup_checkpoints.h"
 #include "ship/Context.h"
 
 namespace {
 
 std::mutex installerPageMutex;
 std::string installerPage;
+
+// org.triaevum.android.diagnostics.StartupDiagnostics.nativeStage(String):
+// resolved once on SDL's main thread (a Java thread, so the app's class
+// loader finds the class), then called from any thread SDL attaches.
+jclass diagnosticsClass = nullptr;
+jmethodID nativeStageMethod = nullptr;
+
+void ReportStartupStage(const char* stage) noexcept {
+    if (diagnosticsClass == nullptr || nativeStageMethod == nullptr) return;
+    auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+    if (env == nullptr) return;
+    if (jstring text = env->NewStringUTF(stage)) {
+        env->CallStaticVoidMethod(diagnosticsClass, nativeStageMethod, text);
+        env->DeleteLocalRef(text);
+    }
+    // Diagnostics never stop the game.
+    if (env->ExceptionCheck()) env->ExceptionClear();
+}
+
+void InstallStartupCheckpoints() {
+    auto* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+    if (env == nullptr) return;
+    jclass local = env->FindClass("org/triaevum/android/diagnostics/StartupDiagnostics");
+    if (local != nullptr) {
+        nativeStageMethod = env->GetStaticMethodID(local, "nativeStage", "(Ljava/lang/String;)V");
+        if (nativeStageMethod != nullptr)
+            diagnosticsClass = static_cast<jclass>(env->NewGlobalRef(local));
+        env->DeleteLocalRef(local);
+    }
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (diagnosticsClass != nullptr) Fast::SetStartupCheckpointSink(ReportStartupStage);
+}
 
 } // namespace
 
@@ -43,6 +76,8 @@ JNIEXPORT jstring JNICALL Java_org_triaevum_android_NativeHostBridge_takeInstall
 } // extern "C"
 
 void InitializeAndroidGameHost() {
+    InstallStartupCheckpoints();
+    Fast::StartupCheckpoint("native_host_started");
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
     const char* root = SDL_AndroidGetExternalStoragePath();
     if (!root || !*root) {

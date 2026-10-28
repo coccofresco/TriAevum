@@ -94,6 +94,11 @@ class StartupReportTest {
         assertTrue(report.contains("No exit records"))
         assertTrue(report.contains("No game session recorded."))
         assertTrue(report.contains("== Log tail ==\nUnavailable.\n"))
+        assertFalse(report.contains("== Last native crash =="))
+        val crash = StartupReport.format(device, emptyList(), emptyList(), null, null, emptyList(), 0,
+            nativeCrash = "Native crash of org.triaevum.android pid 7\n  #00 libTriAevum.so +0x10\u0001\n")
+        assertTrue(crash, crash.contains("== Last native crash ==\nNative crash of org.triaevum.android pid 7\n" +
+            "  #00 libTriAevum.so +0x10 \n"))
     }
 
     @Test fun reportIsBounded() {

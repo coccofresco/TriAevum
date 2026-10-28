@@ -279,6 +279,8 @@ fn an_android_installation_bundles_its_native_error_output() {
         format!("{}no Vulkan device\n", diagnostics::FATAL_PREFIX).as_bytes(),
     );
     write(&app_data.join("files/diagnostics/game-stages.txt"), b"session 1\nstage window\n");
+    write(&app_data.join("files/diagnostics/game-stages.txt.previous"), b"session 0\nstage vulkan_instance\n");
+    write(&app_data.join("files/diagnostics/native-crash.txt"), b"signal 11 (SIGSEGV)\n#00 libTriAevum.so +0x10\n");
     write(&app_data.join("files/diagnostics/other.txt"), b"not allowlisted");
     let destination = profile.parent().unwrap().join("cache").join("share").join("TriAevum-diagnostics.zip");
     let request = json!({"format": "triaevum_forge_diagnostics_v1", "package_root": text(&fixture.package),
@@ -291,6 +293,8 @@ fn an_android_installation_bundles_its_native_error_output() {
     let names: Vec<String> = members(&destination).into_iter().map(|(name, _)| name).collect();
     assert!(names.contains(&"game-logs/native-stderr.log".to_string()), "{names:?}");
     assert!(names.contains(&"android/game-stages.txt".to_string()), "{names:?}");
+    assert!(names.contains(&"android/game-stages.txt.previous".to_string()), "{names:?}");
+    assert!(names.contains(&"android/native-crash.txt".to_string()), "{names:?}");
     assert!(!names.iter().any(|name| name.contains("other.txt")));
 }
 
