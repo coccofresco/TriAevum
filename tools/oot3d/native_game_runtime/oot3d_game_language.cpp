@@ -8,6 +8,12 @@
 #include <set>
 #include <stdexcept>
 #include <string_view>
+#if !defined(_WIN32)
+#include <cerrno>
+#include <charconv>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 namespace Oot3dNativeGame {
 namespace {
@@ -83,8 +89,10 @@ struct RomFsFile {
 class RomFsImage {
 public:
   RomFsImage(const std::filesystem::path &path, uint64_t offset, uint64_t size)
-      : mStream(path, std::ios::binary), mOffset(offset), mSize(size) {
-    const auto fileSize = std::filesystem::file_size(path);
+      : mDescriptor(InheritedDescriptor(path)), mOffset(offset), mSize(size) {
+    if (mDescriptor < 0)
+      mStream.open(path, std::ios::binary);
+    const auto fileSize = FileSize(path);
     if (mOffset > fileSize)
       throw std::runtime_error("RomFS offset outside file");
     if (!mSize)
@@ -129,6 +137,20 @@ public:
     if (at > mSize || count > mSize - at || count > 16 * 1024 * 1024)
       throw std::runtime_error("RomFS language metadata outside image");
     Bytes result(static_cast<size_t>(count));
+#if !defined(_WIN32)
+    if (mDescriptor >= 0) {
+      for (size_t done = 0; done < result.size();) {
+        const auto read = ::pread(mDescriptor, result.data() + done, result.size() - done,
+                                  static_cast<off_t>(mOffset + at + done));
+        if (read < 0 && errno == EINTR)
+          continue;
+        if (read <= 0)
+          throw std::runtime_error("Cannot read RomFS language metadata");
+        done += static_cast<size_t>(read);
+      }
+      return result;
+    }
+#endif
     mStream.seekg(static_cast<std::streamoff>(mOffset + at));
     if (!mStream.read(reinterpret_cast<char *>(result.data()), result.size()))
       throw std::runtime_error("Cannot read RomFS language metadata");
@@ -137,6 +159,42 @@ public:
   const std::vector<RomFsFile> &Files() const { return mFiles; }
 
 private:
+  // An open document handed over as /proc/self/fd/N (the Android Forge reads
+  // a ROM picked through the document picker in this process): read through
+  // that descriptor. Reopening the path would ask the provider's file system
+  // again, which refuses an app without storage permission.
+  static int InheritedDescriptor(const std::filesystem::path &path) {
+#if !defined(_WIN32)
+    constexpr std::string_view prefix = "/proc/self/fd/";
+    const auto text = path.string();
+    if (!std::string_view(text).starts_with(prefix))
+      return -1;
+    int descriptor = -1;
+    const auto *first = text.data() + prefix.size();
+    const auto *last = text.data() + text.size();
+    const auto parsed = std::from_chars(first, last, descriptor);
+    if (parsed.ec != std::errc{} || parsed.ptr != last || descriptor < 0)
+      return -1;
+    struct stat status {};
+    return ::fstat(descriptor, &status) == 0 && S_ISREG(status.st_mode) ? descriptor : -1;
+#else
+    (void)path;
+    return -1;
+#endif
+  }
+  uint64_t FileSize(const std::filesystem::path &path) const {
+#if !defined(_WIN32)
+    if (mDescriptor >= 0) {
+      struct stat status {};
+      if (::fstat(mDescriptor, &status) != 0)
+        throw std::runtime_error("Cannot read RomFS language metadata");
+      return static_cast<uint64_t>(status.st_size);
+    }
+#endif
+    return std::filesystem::file_size(path);
+  }
+
+  int mDescriptor = -1; // borrowed, never closed here
   std::ifstream mStream;
   uint64_t mOffset, mSize;
   std::vector<RomFsFile> mFiles;
