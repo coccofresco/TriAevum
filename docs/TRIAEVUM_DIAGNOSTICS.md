@@ -106,6 +106,33 @@ user name becomes `<user>`. Logs keep their last 2 MB, a JSON record above
 is built in memory and renamed into place, so an interrupted save never
 leaves a partial bundle.
 
+## Input devices in the game log
+
+At startup and whenever a pad is connected, removed or selected, the runtime
+writes the input devices to its log (`game-logs/oot3d_native_game.log` in the
+support bundle), at warning level so release builds keep it:
+
+```
+TRIAEVUM_INPUT_DEVICES reason=startup pads=2 selected=5 video_driver=windows
+TRIAEVUM_INPUT_PAD id=5 selected=1 name="Xbox Series X Controller" type=xbox_one guid=0300... prompts=xbox gyro=0 accel=0 touchpads=0 rumble=1 serial=present
+TRIAEVUM_INPUT_KEYBOARD enabled=1 focus=1 prompts=keyboard
+```
+
+A serial number is never written (only `serial=present` or `none`); a device
+name loses control characters and quotes, and the account name (`USERNAME`,
+`USER`, `LOGNAME`) becomes `<user>`. SDL 2 does not list keyboards, so the
+keyboard line gives the Keyboard switch, the window's keyboard focus and the
+video driver.
+
+`TRIAEVUM_INPUT_TRACE=1` (for keyboard reports such as #123) adds, in the
+same log, every key event SDL delivers (`sdl_key down scancode=4 (A)
+keycode=0x61 (A) repeat=0 mod=0x0000 window=2 focus_window=2`), keyboard focus
+changes (`sdl_focus gained|lost`), each bound key's edges
+(`action=A 3ds=A keys=X/None raw=1 effective=0 keyboard_enabled=1
+captured=1`: `raw` is the key state the window keeps, `effective` what the
+game reads after the Keyboard switch and a host menu's capture). It reads
+events only.
+
 ## Checks before a preparation
 
 Before the import writes anything (`forge-core/src/preflight.rs`):
@@ -128,6 +155,7 @@ Before the import writes anything (`forge-core/src/preflight.rs`):
 | `TRIAEVUM_TEST_FATAL=crash` | the runtime faults right after creating its window: exercises the crash handlers (crash dialog, dump in `savedata/crashes` on Windows product builds) and Forge's card for a crash exit code |
 | `TRIAEVUM_NO_FATAL_DIALOG=1` | no fatal dialog (automation) |
 | `TRIAEVUM_CONSOLE=1` | as `--console` |
+| `TRIAEVUM_INPUT_TRACE=1` | key events, focus changes and bound-key edges in the game log (see "Input devices in the game log") |
 | `TRIAEVUM_GUI_RUNTIME=<TriAevum.exe>` | runs `forge-native/tests/gui_runtime_launch.rs`: Forge's product query and a failed run's captured error output against a built runtime |
 
 A display recovery can be reproduced by creating `<config>.launching`

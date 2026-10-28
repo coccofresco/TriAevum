@@ -8,6 +8,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace ThreeDsRecomp::Input {
 
@@ -409,6 +410,42 @@ struct DeviceDescriptor {
     std::int32_t TouchpadCount = 0;
     ControllerType Type = ControllerType::Unknown;
     PromptSet Prompts = PromptSet::Generic;
+    // SDL reports a rumble motor on the pad.
+    bool HasRumble = false;
+};
+
+// SDL's name of the type ("xbox_one", "ps5", ...), for logs.
+const char* ControllerTypeName(ControllerType type) noexcept;
+
+// The keyboard as the input device log describes it. SDL 2 does not list
+// keyboards: there is one system keyboard, its video driver and the window's
+// keyboard focus.
+struct KeyboardDescription {
+    bool Enabled = true;
+    std::string VideoDriver;
+    bool WindowFocused = false;
+};
+
+// The input device log for support reports (the game log): one summary line
+// and one line per pad and for the keyboard. A pad's serial number is never
+// written (only whether SDL reports one); `userName`, when given, is replaced
+// by "<user>" wherever a device name contains it, and names lose control
+// characters and quotes.
+[[nodiscard]] std::vector<std::string> DescribeInputDevices(std::string_view reason,
+    std::span<const DeviceDescriptor> pads, const KeyboardDescription& keyboard,
+    std::string_view userName = {});
+
+// Writes the device log at the first observation ("startup") and whenever
+// the connected pads or the selected one change ("change"); not on focus.
+class InputDeviceLog {
+  public:
+    [[nodiscard]] std::vector<std::string> Observe(std::span<const DeviceDescriptor> pads,
+                                                   const KeyboardDescription& keyboard,
+                                                   std::string_view userName = {});
+
+  private:
+    bool mLogged = false;
+    std::string mSignature;
 };
 
 // Activity on a host device this poll, for the prompts.

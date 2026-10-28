@@ -1284,4 +1284,73 @@ bool ResolveGameplayPointerOwnership(bool nativeTouchOwned,
            mappingUsesMouse;
 }
 
+const char* ControllerTypeName(ControllerType type) noexcept {
+    constexpr std::array<const char*, 14> names{
+        "unknown", "xbox_360", "xbox_one", "ps3", "ps4", "switch_pro", "virtual", "ps5",
+        "amazon_luna", "google_stadia", "nvidia_shield", "joycon_left", "joycon_right", "joycon_pair"};
+    const auto index = static_cast<std::size_t>(type);
+    return index < names.size() ? names[index] : "unknown";
+}
+
+namespace {
+
+// A device name fit for one log line: printable, no quotes, at most 64
+// bytes, the user's name replaced.
+std::string LogDeviceName(std::string_view name, std::string_view userName) {
+    std::string text;
+    for (std::size_t index = 0; index < name.size() && text.size() < 64;) {
+        if (userName.size() >= 2 && index + userName.size() <= name.size() &&
+            ContainsNoCase(name.substr(index, userName.size()), userName)) {
+            text += "<user>";
+            index += userName.size();
+            continue;
+        }
+        const auto c = static_cast<unsigned char>(name[index++]);
+        text += c < 0x20 || c == 0x7F || c == '"' || c == '\\' ? '?' : static_cast<char>(c);
+    }
+    return text;
+}
+
+} // namespace
+
+std::vector<std::string> DescribeInputDevices(std::string_view reason, std::span<const DeviceDescriptor> pads,
+                                              const KeyboardDescription& keyboard, std::string_view userName) {
+    std::vector<std::string> lines;
+    std::int32_t selected = -1;
+    for (const auto& pad : pads) if (pad.Selected) selected = pad.InstanceId;
+    lines.push_back("TRIAEVUM_INPUT_DEVICES reason=" + std::string(reason) + " pads=" + std::to_string(pads.size()) +
+                    " selected=" + std::to_string(selected) + " video_driver=" +
+                    (keyboard.VideoDriver.empty() ? std::string("unknown") : LogDeviceName(keyboard.VideoDriver, {})));
+    for (const auto& pad : pads) {
+        lines.push_back("TRIAEVUM_INPUT_PAD id=" + std::to_string(pad.InstanceId) +
+                        " selected=" + (pad.Selected ? "1" : "0") +
+                        " name=\"" + LogDeviceName(pad.Name, userName) + "\"" +
+                        " type=" + ControllerTypeName(pad.Type) +
+                        " guid=" + LogDeviceName(pad.Guid, {}) +
+                        " prompts=" + PromptSetName(pad.Prompts) +
+                        " gyro=" + (pad.HasGyroscope ? "1" : "0") +
+                        " accel=" + (pad.HasAccelerometer ? "1" : "0") +
+                        " touchpads=" + std::to_string(pad.TouchpadCount) +
+                        " rumble=" + (pad.HasRumble ? "1" : "0") +
+                        " serial=" + (pad.Serial.empty() ? "none" : "present"));
+    }
+    lines.push_back(std::string("TRIAEVUM_INPUT_KEYBOARD enabled=") + (keyboard.Enabled ? "1" : "0") +
+                    " focus=" + (keyboard.WindowFocused ? "1" : "0") + " prompts=" +
+                    PromptSetName(PromptSet::Keyboard));
+    return lines;
+}
+
+std::vector<std::string> InputDeviceLog::Observe(std::span<const DeviceDescriptor> pads,
+                                                 const KeyboardDescription& keyboard, std::string_view userName) {
+    std::string signature = keyboard.Enabled ? "k1" : "k0";
+    for (const auto& pad : pads) {
+        signature += '|' + std::to_string(pad.InstanceId) + (pad.Selected ? "*" : "") + pad.Guid + pad.Name;
+    }
+    if (mLogged && signature == mSignature) return {};
+    const bool first = !mLogged;
+    mLogged = true;
+    mSignature = std::move(signature);
+    return DescribeInputDevices(first ? "startup" : "change", pads, keyboard, userName);
+}
+
 } // namespace ThreeDsRecomp::Input

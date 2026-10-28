@@ -1,6 +1,8 @@
 #define SDL_MAIN_HANDLED
 #include "three_ds_sdl_controller.h"
+#include "three_ds_sdl_key_trace.h"
 #include "../../../runtime/three_ds_recomp/include/ship/controller/physicaldevice/SDLControllerSetup.h"
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string_view>
@@ -225,9 +227,55 @@ int main(int argc, char** argv) try {
     Require(prompts("", -1, tracker).first == PromptSet::PlayStation, "the pad reconnected");
     detach(again);
     for (auto* pad : {xboxPad, dualSense, oddPad, again}) SDL_GameControllerClose(pad);
+    {
+        // The device log of real SDL descriptors (a second pad, no serial).
+        auto* logPad = attach(kUsbVendorMicrosoft, 0x0B13, "Xbox Series X Controller");
+        const std::unordered_map<std::int32_t, SDL_GameController*> logPads{
+            {SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(logPad)), logPad}};
+        const auto described = ResolveSdlController(logPads, "", "", -1);
+        const auto lines = DescribeInputDevices("startup", described.Devices, KeyboardDescription{true, "dummy", false});
+        Require(lines.size() == 3 && lines[1].find("type=xbox_one") != std::string::npos &&
+                    lines[1].find("serial=none") != std::string::npos,
+                "device log of an SDL pad");
+        for (const auto& line : lines) std::cout << line << '\n';
+        detach(logPad);
+        SDL_GameControllerClose(logPad);
+    }
+    {
+        // TRIAEVUM_INPUT_TRACE=1: each SDL key event as SDL delivered it.
+        // The CRT's environment (what std::getenv reads), not SDL's copy.
+        const auto setTrace = [](const char* value) {
+#ifdef _WIN32
+            _putenv_s("TRIAEVUM_INPUT_TRACE", value);
+#else
+            setenv("TRIAEVUM_INPUT_TRACE", value, 1);
+#endif
+        };
+        setTrace("0");
+        Require(!SdlKeyTrace::Requested(), "key trace without the switch");
+        setTrace("1");
+        Require(SdlKeyTrace::Requested(), "key trace switch");
+        SdlKeyTrace trace;
+        SDL_Event key{};
+        key.type = SDL_KEYDOWN;
+        key.key.keysym.scancode = SDL_SCANCODE_A;
+        key.key.keysym.sym = SDLK_a;
+        key.key.windowID = 7;
+        Require(SDL_PushEvent(&key) == 1, "push key event");
+        key.type = SDL_KEYUP;
+        Require(SDL_PushEvent(&key) == 1, "push key release");
+        const auto lines = trace.Drain();
+        Require(lines.size() == 2 &&
+                    lines[0].find("sdl_key down scancode=4 (A) keycode=0x61 (A) repeat=0") != std::string::npos &&
+                    lines[0].find("window=7") != std::string::npos &&
+                    lines[1].find("sdl_key up scancode=4") != std::string::npos,
+                "key trace lines");
+        Require(trace.Drain().empty(), "key trace drained twice");
+        SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
+    }
     SDL_Quit();
     std::cout << "PASS: SDL selection, buttons, triggers, axes, UI capture, absent sensors, disconnect, "
-                 "prompt families, two pads, reconnect\n";
+                 "prompt families, two pads, reconnect, device log, key trace\n";
     return 0;
 } catch (const std::exception& e) {
     std::cerr << e.what() << ": " << SDL_GetError() << '\n';

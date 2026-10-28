@@ -87,6 +87,9 @@ inline SdlControllerSelection ResolveSdlController(
         device.HasAccelerometer = SDL_GameControllerHasSensor(controller, SDL_SENSOR_ACCEL) == SDL_TRUE;
         device.TouchpadCount = std::max(0, SDL_GameControllerGetNumTouchpads(controller));
 #endif
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+        device.HasRumble = SDL_GameControllerHasRumble(controller) == SDL_TRUE;
+#endif
         result.Devices.push_back(std::move(device));
     }
     std::sort(result.Devices.begin(), result.Devices.end(), [](const auto& a, const auto& b) {

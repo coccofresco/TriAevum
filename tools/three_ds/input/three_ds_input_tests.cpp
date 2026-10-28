@@ -11,6 +11,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <string>
 #include <string_view>
 #include <vector>
 #include <stdexcept>
@@ -525,8 +526,63 @@ void TestButtonPrompts() {
     }
 }
 
+
+// The input device log for support reports: no serial number, no user name,
+// one summary line, a line per pad and the keyboard; written at startup and
+// when the pads or the selection change.
+void TestInputDeviceLog() {
+    using namespace ThreeDsRecomp::Input;
+    DeviceDescriptor pad;
+    pad.InstanceId = 3;
+    pad.Guid = "030000005e040000130b000011050000";
+    pad.Name = "Xander's \"Xbox\" Controller\n";
+    pad.Serial = "SN-123456";
+    pad.Selected = true;
+    pad.Type = ControllerType::XboxOne;
+    pad.Prompts = PromptSet::Xbox;
+    pad.HasRumble = true;
+    pad.HasGyroscope = false;
+    KeyboardDescription keyboard;
+    keyboard.VideoDriver = "wayland";
+    keyboard.WindowFocused = true;
+    const std::vector<DeviceDescriptor> pads{pad};
+    const auto lines = DescribeInputDevices("startup", pads, keyboard, "xander");
+    Require(lines.size() == 3U, "summary, pad and keyboard lines");
+    Require(lines[0] == "TRIAEVUM_INPUT_DEVICES reason=startup pads=1 selected=3 video_driver=wayland",
+            "summary line");
+    Require(lines[1] == "TRIAEVUM_INPUT_PAD id=3 selected=1 name=\"<user>'s ?Xbox? Controller?\" type=xbox_one "
+                        "guid=030000005e040000130b000011050000 prompts=xbox gyro=0 accel=0 touchpads=0 rumble=1 "
+                        "serial=present",
+            "pad line");
+    Require(lines[2] == "TRIAEVUM_INPUT_KEYBOARD enabled=1 focus=1 prompts=keyboard", "keyboard line");
+    for (const auto& line : lines)
+        Require(line.find("SN-123456") == std::string::npos && line.find("Xander") == std::string::npos,
+                "a serial number or the user name was logged");
+
+    InputDeviceLog log;
+    Require(log.Observe(pads, keyboard).front().find("reason=startup") != std::string::npos, "first log is startup");
+    Require(log.Observe(pads, keyboard).empty(), "an unchanged device list was logged again");
+    keyboard.WindowFocused = false;
+    Require(log.Observe(pads, keyboard).empty(), "a focus change was logged as a device change");
+    auto second = pads;
+    second.push_back(pad);
+    second[1].InstanceId = 4;
+    second[1].Selected = false;
+    const auto plugged = log.Observe(second, keyboard);
+    Require(!plugged.empty() && plugged.front().find("reason=change pads=2") != std::string::npos, "hot-plug");
+    second[0].Selected = false;
+    second[1].Selected = true;
+    Require(!log.Observe(second, keyboard).empty(), "a selection change was not logged");
+    Require(log.Observe({}, keyboard).front().find("pads=0 selected=-1") != std::string::npos, "unplug");
+    Require(std::string_view(ControllerTypeName(ControllerType::PS5)) == "ps5" &&
+                std::string_view(ControllerTypeName(static_cast<ControllerType>(200))) == "unknown",
+            "controller type names");
+}
+
+
 int main() try {
     TestButtonPrompts();
+    TestInputDeviceLog();
     TestAutomaticMotionComposition();
     TestPointerPressLatch();
     TestVirtualPad();

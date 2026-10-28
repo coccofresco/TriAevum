@@ -9,6 +9,7 @@
 #include "three_ds_pad_menu_chord.h"
 #include "three_ds_sdl_controller.h"
 #include "three_ds_sdl_host_presses.h"
+#include "three_ds_sdl_key_trace.h"
 #include "three_ds_touch_anchors.h"
 #include "three_ds_touch_camera.h"
 #include "three_ds_virtual_pad.h"
@@ -776,6 +777,12 @@ struct NativeControlPollingState {
   // Presses between polls (quick taps, the Android Back gesture) for the 3DS
   // touch screen and the in-game menu; created by the first poll.
   std::unique_ptr<ThreeDsRecomp::Input::SdlHostPressWatch> HostPresses;
+  // The input device log (game log, at startup and on hot-plug) and, with
+  // TRIAEVUM_INPUT_TRACE=1, the SDL key events and each bound key's edges.
+  ThreeDsRecomp::Input::InputDeviceLog DeviceLog;
+  bool KeyTraceChecked = false;
+  std::unique_ptr<ThreeDsRecomp::Input::SdlKeyTrace> KeyTrace;
+  std::array<uint8_t, Oot3dNativeGame::kNativeControlActionCount> TraceKeyState{};
 };
 
 bool ExecuteProductTopScreenHook(uint32_t pc, oot3d::recomp::a32::GuestState &state,

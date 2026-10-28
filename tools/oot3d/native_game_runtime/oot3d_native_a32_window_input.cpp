@@ -1,11 +1,29 @@
 // Host input polling of the A32 window and the TopScreen pause transitions it drives.
 #include "oot3d_native_a32_window_shared.h"
 
+#include <spdlog/spdlog.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
+#include <string>
 
 namespace Oot3dA32Window {
+
+namespace {
+
+// The user's account name, removed from device names in the device log.
+const std::string &AccountName() {
+  static const std::string name = [] {
+    for (const char *variable : {"USERNAME", "USER", "LOGNAME"})
+      if (const char *value = std::getenv(variable); value != nullptr && value[0] != '\0') return std::string(value);
+    return std::string();
+  }();
+  return name;
+}
+
+} // namespace
 
 Oot3dNativeGame::NativeA32InputFrame
 PollNativeA32Input(Fast::Fast3dWindow &window,
@@ -54,6 +72,30 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   const auto selectedDevice = std::find_if(selectedController.Devices.begin(), selectedController.Devices.end(),
       [](const auto& device) { return device.Selected; });
   config = ControlsForDevice(config, selectedDevice != selectedController.Devices.end() ? &*selectedDevice : nullptr);
+  // The input device log for support reports: the pads and the keyboard at
+  // startup and whenever a pad comes, goes or is selected (no serials). At
+  // warning level, the level a release build's game log keeps (as the Vulkan
+  // device line), so it reaches the support bundle.
+  {
+    ThreeDsRecomp::Input::KeyboardDescription keyboard;
+    keyboard.Enabled = config.KeyboardEnabled;
+    if (const char *driver = SDL_GetCurrentVideoDriver()) keyboard.VideoDriver = driver;
+    keyboard.WindowFocused = SDL_GetKeyboardFocus() != nullptr;
+    for (const auto &line : pollingState.DeviceLog.Observe(selectedController.Devices, keyboard, AccountName()))
+      SPDLOG_WARN("{}", line);
+  }
+  // TRIAEVUM_INPUT_TRACE=1: the SDL key events since the last poll (and,
+  // below, each bound key's edges).
+  if (!pollingState.KeyTraceChecked) {
+    pollingState.KeyTraceChecked = true;
+    if (ThreeDsRecomp::Input::SdlKeyTrace::Requested()) {
+      pollingState.KeyTrace = std::make_unique<ThreeDsRecomp::Input::SdlKeyTrace>();
+      SPDLOG_WARN("TRIAEVUM_INPUT_TRACE enabled video_driver={}",
+                  SDL_GetCurrentVideoDriver() != nullptr ? SDL_GetCurrentVideoDriver() : "none");
+    }
+  }
+  if (pollingState.KeyTrace)
+    for (const auto &line : pollingState.KeyTrace->Drain()) SPDLOG_WARN("{}", line);
   controls.ObserveDevices(std::move(selectedController.Devices));
 
   const int16_t triggerThreshold = static_cast<int16_t>(
@@ -152,6 +194,27 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
             : 0U;
     const bool physicalHeld = ThreeDsRecomp::Input::IsHostBindingHeld(
         binding, enabledDevices, buttonSource) || (touchControls.Held & touchBit) != 0U;
+    if (pollingState.KeyTrace) {
+      // Each bound key's edges: the key state the window keeps from SDL
+      // (raw), and what gameplay reads from it after the keyboard switch and
+      // a host menu's capture (effective).
+      const auto keyDown = [&](NativeKeyboardKey key) {
+        return key != NativeKeyboardKey::None && window.IsKeyDown(static_cast<int32_t>(key));
+      };
+      const bool raw = keyDown(binding.KeyboardPrimary) || keyDown(binding.KeyboardSecondary);
+      const bool effective = config.KeyboardEnabled && (buttonSource.IsKeyboardKeyHeld(binding.KeyboardPrimary) ||
+                                                        buttonSource.IsKeyboardKeyHeld(binding.KeyboardSecondary));
+      const uint8_t state = static_cast<uint8_t>((raw ? 1U : 0U) | (effective ? 2U : 0U));
+      if (state != pollingState.TraceKeyState[index]) {
+        pollingState.TraceKeyState[index] = state;
+        SPDLOG_WARN("TRIAEVUM_INPUT_TRACE action={} 3ds={} keys={}/{} raw={} effective={} keyboard_enabled={} "
+                    "captured={}",
+                    NativeControlActionName(static_cast<NativeControlAction>(index)),
+                    touchBit != 0U ? ThreeDsRecomp::Input::DigitalControlName(control) : "none",
+                    NativeKeyboardKeyName(binding.KeyboardPrimary), NativeKeyboardKeyName(binding.KeyboardSecondary),
+                    raw ? 1 : 0, effective ? 1 : 0, config.KeyboardEnabled ? 1 : 0, keyboardCaptured ? 1 : 0);
+      }
+    }
     if (((physicalHeld && !pollingState.PhysicalActions[index]) || (touchControls.Pressed & touchBit) != 0U) &&
         static_cast<NativeControlAction>(index) !=
             NativeControlAction::Start) {
