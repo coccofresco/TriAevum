@@ -18,6 +18,12 @@ namespace Fast::Renderer3ds {
 //   no light produced (effects, smoke, particles); replacing that colour with
 //   reconstructed illumination discards it. World surfaces, rooms included,
 //   are vertex-lit in the titles measured.
+// - Filter composition (a blend factor that is the draw's own colour, or a
+//   source factor that is the destination colour) uses the colour as a
+//   transmission/modulation coefficient of what is behind it: tinted glass
+//   (Hyrule Castle's window onto the throne room: source colour x itself,
+//   destination x (1 - alpha)), multiplicative tints. That colour is not
+//   radiance: relit near a point light it saturates and whites out the view.
 //
 // Kept appearance means native colour, alpha, blending, fog and order: no
 // per-pixel/PBR replacement and no received directional or point shadows.
@@ -25,12 +31,25 @@ enum class PicaSurfaceAppearance : uint8_t {
     Relightable = 0,
     AdditiveComposition = 1,
     Unlit = 2,
+    FilterComposition = 3,
 };
+
+[[nodiscard]] constexpr bool PicaBlendFactorReadsSourceColor(NativeBlendFactor factor) noexcept {
+    return factor == NativeBlendFactor::SourceColor || factor == NativeBlendFactor::OneMinusSourceColor;
+}
+
+[[nodiscard]] constexpr bool PicaBlendFactorReadsDestinationColor(NativeBlendFactor factor) noexcept {
+    return factor == NativeBlendFactor::DestColor || factor == NativeBlendFactor::OneMinusDestColor;
+}
 
 [[nodiscard]] constexpr PicaSurfaceAppearance ClassifyPicaSurfaceAppearance(
     const NativeBlendState& blend, bool vertexLit, bool fragmentLit) noexcept {
     if (blend.Enabled && blend.EquationRgb == NativeBlendEquation::Add && blend.DestRgb == NativeBlendFactor::One)
         return PicaSurfaceAppearance::AdditiveComposition;
+    if (blend.Enabled && (PicaBlendFactorReadsSourceColor(blend.SourceRgb) ||
+                          PicaBlendFactorReadsSourceColor(blend.DestRgb) ||
+                          PicaBlendFactorReadsDestinationColor(blend.SourceRgb)))
+        return PicaSurfaceAppearance::FilterComposition;
     if (!vertexLit && !fragmentLit) return PicaSurfaceAppearance::Unlit;
     return PicaSurfaceAppearance::Relightable;
 }

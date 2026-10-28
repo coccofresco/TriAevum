@@ -330,3 +330,43 @@ Private evidence is retained under
 per-capture receipts/configurations/framebuffers/diagnostics, and the final
 CPU-ambient parity and qualification reports. Temporary analysis sources are
 removed after verification; captures and recovery baselines remain private.
+
+### Filter composition (2026-10-28)
+
+Owner report: in Hyrule Castle's courtyard, the cutscene where Link and Zelda
+look through the window at Ganondorf rendered almost entirely white under
+Enhanced, with only MXAO visible. Authentic and Native surface lighting were
+correct; PerPixel and PerPixelPBR were both white, with AO on or off.
+
+Cause, from a `TRIAEVUM_SURFACE_TRACE` of the frame: the window glass is a
+vertex-lit transparent room draw (12 vertices, one 64x64 texture) blended
+`SourceColor` / `OneMinusSourceAlpha`. The glass's colour is the filter
+applied to the throne room behind it (colour x itself + destination x
+(1 - alpha)), not radiance. The per-pixel model relit it as a surface; with
+Navi's point light right at the glass the colour saturated, and the filter
+turned the whole view white. AO composited afterwards still darkened the
+geometry behind it.
+
+`ClassifyPicaSurfaceAppearance` (`pica_surface_appearance.h`) now has a
+fourth class, `FilterComposition`: an enabled blend whose source or
+destination RGB factor reads the source colour, or whose source factor reads
+the destination colour (multiplicative tints). These draws keep their native
+appearance, like additive light: no per-pixel/PBR replacement and no
+received shadows. One exception is catalogued whole-water draws (the
+courtyard moat is drawn `SourceColor` / `ConstantAlpha`): they stay on the
+water path, which already keeps native colour and adds optics. The rule
+reads only the typed native blend state. No scene, texture or material keys
+are used.
+
+Verification (developer launch; owner's play config, Vanilla+ RomFS overlay;
+1920x1080, fixed delta; checkpoint
+`courtyard-oct28/states/state-2026-10-28_14-31-28.oot3dsav`):
+
+- `pica_surface_appearance_tests` 45 checks; `oot3d_pica_shader_pipeline_cache_tests` 64/64.
+- Window view under Enhanced: white before, green-tinted glass over the relit
+  throne room after (`runs/n_owner`, `runs/n_perpixel`).
+- Authentic and Native surface lighting: byte-identical before/after.
+- Enhanced with AO off, before/after byte-identical in Kokiri Forest
+  (2 states), Mido's house (dev warp) and the courtyard with its moat. Hyrule
+  Field by the river varies run to run (the before exe twice gave two hashes:
+  the river's wave phase), so it is not an identity gate.

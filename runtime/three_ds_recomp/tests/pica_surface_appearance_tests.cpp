@@ -54,6 +54,28 @@ int main() {
     expect(ClassifyPicaSurfaceAppearance(Blend(true, E::Max, F::One, F::One), true, false) == A::Relightable,
            "max");
     checks += 3;
+    // Filter composition keeps its appearance, lit or not: the colour weights what is behind it.
+    // Hyrule Castle's throne-room window: source colour x itself, destination x (1 - source alpha).
+    for (const auto& blend : {Blend(true, E::Add, F::SourceColor, F::OneMinusSourceAlpha),
+                              Blend(true, E::Add, F::SourceColor, F::ConstantAlpha),
+                              Blend(true, E::Add, F::Zero, F::SourceColor),
+                              Blend(true, E::Add, F::SourceAlpha, F::OneMinusSourceColor),
+                              Blend(true, E::Add, F::DestColor, F::Zero),
+                              Blend(true, E::Add, F::OneMinusDestColor, F::OneMinusSourceAlpha)})
+        for (bool vertexLit : {false, true}) {
+            expect(ClassifyPicaSurfaceAppearance(blend, vertexLit, false) == A::FilterComposition,
+                   "filter composition");
+            ++checks;
+        }
+    // Disabled blend registers do not filter; additive light stays additive even with a colour factor.
+    expect(ClassifyPicaSurfaceAppearance(Blend(false, E::Add, F::SourceColor, F::OneMinusSourceAlpha), true, false) ==
+               A::Relightable, "disabled filter blend");
+    expect(ClassifyPicaSurfaceAppearance(Blend(true, E::Add, F::SourceColor, F::One), true, false) ==
+               A::AdditiveComposition, "additive colour-weighted light");
+    // Ordinary alpha and constant blends are not filters.
+    expect(ClassifyPicaSurfaceAppearance(Blend(true, E::Add, F::ConstantAlpha, F::OneMinusConstantAlpha), true,
+                                         false) == A::Relightable, "constant alpha blend");
+    checks += 3;
     // Colour no light produced (smoke, particles), opaque or blended.
     for (const auto& blend : {opaque, replace, alpha}) {
         expect(ClassifyPicaSurfaceAppearance(blend, false, false) == A::Unlit, "unlit");
