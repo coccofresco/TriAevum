@@ -31,9 +31,56 @@ static_assert(sizeof(MotionUniforms) == 208U);
 std::vector<uint32_t> Compile(Renderer::CachedPassShaderCompiler& shaders, const std::string& source) {
     return shaders.Resolve(source, Renderer::SpirvStage::Compute, "oot3d_motion_vectors.comp");
 }
+
+// The graph executions of one frame that read motion (a native boundary
+// before its presentation, then the presentation an upscaler reconstructs)
+// each write their own transient outputs. Every such configuration keeps its
+// own descriptor sets and uniforms, so alternating between them rewrites no
+// set that recorded work may still read. Only a configuration beyond these,
+// or one replacing a configuration recorded since the last completed
+// boundary, rewrites a set, and only that completes the recorded work first
+// (it drains the GPU, so doing it per execution serializes CPU and GPU).
+constexpr uint32_t kBindingConfigurations = 4U;
+
+struct MotionBindingKey {
+    VkImage Output = VK_NULL_HANDLE;
+    VkImage Reactive = VK_NULL_HANDLE;
+    VkImage Depth = VK_NULL_HANDLE;
+    VkImage MaterialGuide = VK_NULL_HANDLE;
+    VkImage RigidMotionGuide = VK_NULL_HANDLE;
+    const ResourceStateTracker* MotionStates = nullptr;
+    const ResourceStateTracker* ReactiveStates = nullptr;
+    // The interop's wrap generation of each image above, so a handle that a
+    // destroyed image's replacement reuses never matches a stale set.
+    std::array<uint64_t, 5> Generations{};
+    uint32_t Width = 0;
+    uint32_t Height = 0;
+
+    [[nodiscard]] bool Bound() const { return Width != 0U; }
+    friend bool operator==(const MotionBindingKey&, const MotionBindingKey&) = default;
+};
 } // namespace
 
 struct MotionVectorPass::Impl {
+    struct Binding {
+        MotionBindingKey Key;
+        VkImageView View = VK_NULL_HANDLE;
+        VkImageView StorageView = VK_NULL_HANDLE;
+        VkImageView ReactiveView = VK_NULL_HANDLE;
+        VkImageView ReactiveStorageView = VK_NULL_HANDLE;
+        ResourceStateTracker* MotionOutputStates = nullptr;
+        ResourceStateTracker* ReactiveOutputStates = nullptr;
+        uint64_t LastUse = 0;
+        // Recorded since this pass last completed the recorded work: its sets
+        // may still be read, so rewriting them needs that completion first.
+        bool Recorded = false;
+#ifdef ENABLE_OOT3D_NRI
+        std::array<nri::DescriptorSet*, kFrameSlots> Sets{};
+        std::array<nri::Buffer*, kFrameSlots> UniformBuffers{};
+        std::array<nri::Descriptor*, kFrameSlots> UniformViews{};
+        std::array<void*, kFrameSlots> UniformMapped{};
+#endif
+    };
     VkDevice Device = VK_NULL_HANDLE;
     NriInteropContext* Interop = nullptr;
 #ifdef ENABLE_OOT3D_NRI
@@ -42,28 +89,22 @@ struct MotionVectorPass::Impl {
     nri::Pipeline* Pipeline = nullptr;
     nri::Descriptor* Sampler = nullptr;
     nri::DescriptorPool* DescriptorPool = nullptr;
-    std::array<nri::DescriptorSet*, kFrameSlots> Sets{};
-    std::array<nri::Buffer*, kFrameSlots> UniformBuffers{};
-    std::array<nri::Descriptor*, kFrameSlots> UniformViews{};
-    std::array<void*, kFrameSlots> UniformMapped{};
 #endif
-    VkImage Image = VK_NULL_HANDLE;
-    VkImageView View = VK_NULL_HANDLE;
-    VkImageView StorageView = VK_NULL_HANDLE;
-    VkImage ReactiveImage = VK_NULL_HANDLE;
-    VkImageView ReactiveView = VK_NULL_HANDLE;
-    VkImageView ReactiveStorageView = VK_NULL_HANDLE;
-    VkImage DepthImage = VK_NULL_HANDLE;
-    VkImage MaterialGuideImage = VK_NULL_HANDLE;
-    VkImage RigidMotionGuideImage = VK_NULL_HANDLE;
-    uint32_t Width = 0;
-    uint32_t Height = 0;
+    std::array<Binding, kBindingConfigurations> Bindings{};
+    // The configuration the last Configure selected; Execute records it.
+    uint32_t Active = kBindingConfigurations;
+    uint64_t UseClock = 0;
     bool Initialized = false;
     bool NriBarriersUsed = false;
     EffectPassBarrierExecution LastBarrierExecution;
-    ResourceStateTracker* MotionOutputStates = nullptr;
-    ResourceStateTracker* ReactiveOutputStates = nullptr;
     std::string Reason = "motion vector pass is not initialized";
+
+    [[nodiscard]] const Binding* ActiveBinding() const {
+        return Active < Bindings.size() && Bindings[Active].Key.Bound() ? &Bindings[Active] : nullptr;
+    }
+    [[nodiscard]] Binding* ActiveBinding() {
+        return Active < Bindings.size() && Bindings[Active].Key.Bound() ? &Bindings[Active] : nullptr;
+    }
 };
 
 MotionVectorPass::MotionVectorPass() : mImpl(std::make_unique<Impl>()) {}
@@ -155,49 +196,52 @@ bool MotionVectorPass::Initialize(VkPhysicalDevice physicalDevice,
             nri::Result::SUCCESS)
             throw std::runtime_error("NRI motion sampler creation failed");
 
-        for (uint32_t slot = 0; slot < kFrameSlots; ++slot) {
-            nri::BufferDesc bufferDesc{};
-            bufferDesc.size = sizeof(MotionUniforms);
-            bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
-            if (mImpl->Core->CreateCommittedBuffer(
-                    *nriDevice, nri::MemoryLocation::HOST_UPLOAD, 0.0F,
-                    bufferDesc, mImpl->UniformBuffers[slot]) !=
-                nri::Result::SUCCESS)
-                throw std::runtime_error("NRI motion uniform creation failed");
-            nri::BufferViewDesc viewDesc{};
-            viewDesc.buffer = mImpl->UniformBuffers[slot];
-            viewDesc.type = nri::BufferView::CONSTANT_BUFFER;
-            viewDesc.size = sizeof(MotionUniforms);
-            if (mImpl->Core->CreateBufferView(
-                    viewDesc, mImpl->UniformViews[slot]) !=
-                nri::Result::SUCCESS)
-                throw std::runtime_error("NRI motion uniform view creation failed");
-            mImpl->UniformMapped[slot] = mImpl->Core->MapBuffer(
-                *mImpl->UniformBuffers[slot], 0, sizeof(MotionUniforms));
-            if (mImpl->UniformMapped[slot] == nullptr)
-                throw std::runtime_error("NRI motion uniform mapping failed");
-        }
-
+        constexpr uint32_t setCount = kBindingConfigurations * kFrameSlots;
         nri::DescriptorPoolDesc poolDesc{};
-        poolDesc.descriptorSetMaxNum = kFrameSlots;
-        poolDesc.samplerMaxNum = kFrameSlots;
-        poolDesc.constantBufferMaxNum = kFrameSlots;
-        poolDesc.textureMaxNum = 3U * kFrameSlots;
-        poolDesc.storageTextureMaxNum = 2U * kFrameSlots;
+        poolDesc.descriptorSetMaxNum = setCount;
+        poolDesc.samplerMaxNum = setCount;
+        poolDesc.constantBufferMaxNum = setCount;
+        poolDesc.textureMaxNum = 3U * setCount;
+        poolDesc.storageTextureMaxNum = 2U * setCount;
         if (mImpl->Core->CreateDescriptorPool(
                 *nriDevice, poolDesc, mImpl->DescriptorPool) !=
             nri::Result::SUCCESS)
             throw std::runtime_error("NRI motion descriptor pool creation failed");
-        if (mImpl->Core->AllocateDescriptorSets(
-                *mImpl->DescriptorPool, *mImpl->PipelineLayout, 0,
-                mImpl->Sets.data(), kFrameSlots, 0) != nri::Result::SUCCESS)
-            throw std::runtime_error("NRI motion descriptor allocation failed");
-        for (uint32_t slot = 0; slot < kFrameSlots; ++slot) {
-            const std::array<nri::UpdateDescriptorRangeDesc, 2> updates{{
-                {mImpl->Sets[slot], 3, 0, &mImpl->UniformViews[slot], 1},
-                {mImpl->Sets[slot], 6, 0, &mImpl->Sampler, 1}}};
-            mImpl->Core->UpdateDescriptorRanges(
-                updates.data(), static_cast<uint32_t>(updates.size()));
+
+        for (auto& binding : mImpl->Bindings) {
+            for (uint32_t slot = 0; slot < kFrameSlots; ++slot) {
+                nri::BufferDesc bufferDesc{};
+                bufferDesc.size = sizeof(MotionUniforms);
+                bufferDesc.usage = nri::BufferUsageBits::CONSTANT_BUFFER;
+                if (mImpl->Core->CreateCommittedBuffer(
+                        *nriDevice, nri::MemoryLocation::HOST_UPLOAD, 0.0F,
+                        bufferDesc, binding.UniformBuffers[slot]) !=
+                    nri::Result::SUCCESS)
+                    throw std::runtime_error("NRI motion uniform creation failed");
+                nri::BufferViewDesc viewDesc{};
+                viewDesc.buffer = binding.UniformBuffers[slot];
+                viewDesc.type = nri::BufferView::CONSTANT_BUFFER;
+                viewDesc.size = sizeof(MotionUniforms);
+                if (mImpl->Core->CreateBufferView(
+                        viewDesc, binding.UniformViews[slot]) !=
+                    nri::Result::SUCCESS)
+                    throw std::runtime_error("NRI motion uniform view creation failed");
+                binding.UniformMapped[slot] = mImpl->Core->MapBuffer(
+                    *binding.UniformBuffers[slot], 0, sizeof(MotionUniforms));
+                if (binding.UniformMapped[slot] == nullptr)
+                    throw std::runtime_error("NRI motion uniform mapping failed");
+            }
+            if (mImpl->Core->AllocateDescriptorSets(
+                    *mImpl->DescriptorPool, *mImpl->PipelineLayout, 0,
+                    binding.Sets.data(), kFrameSlots, 0) != nri::Result::SUCCESS)
+                throw std::runtime_error("NRI motion descriptor allocation failed");
+            for (uint32_t slot = 0; slot < kFrameSlots; ++slot) {
+                const std::array<nri::UpdateDescriptorRangeDesc, 2> updates{{
+                    {binding.Sets[slot], 3, 0, &binding.UniformViews[slot], 1},
+                    {binding.Sets[slot], 6, 0, &mImpl->Sampler, 1}}};
+                mImpl->Core->UpdateDescriptorRanges(
+                    updates.data(), static_cast<uint32_t>(updates.size()));
+            }
         }
         mImpl->Initialized = true;
         mImpl->Reason.clear();
@@ -239,81 +283,103 @@ bool MotionVectorPass::Configure(
         rigidMotionGuideImage == VK_NULL_HANDLE) {
         return false;
     }
-    if (mImpl->Width == motionOutput.Width &&
-        mImpl->Height == motionOutput.Height &&
-        mImpl->Image == motionOutput.Texture.Image &&
-        mImpl->ReactiveImage == reactiveOutput.Texture.Image &&
-        mImpl->MotionOutputStates == motionOutput.StateTracker &&
-        mImpl->ReactiveOutputStates == reactiveOutput.StateTracker &&
-        mImpl->DepthImage == depthImage &&
-        mImpl->MaterialGuideImage == materialGuideImage &&
-        mImpl->RigidMotionGuideImage == rigidMotionGuideImage) {
-        return true;
-    }
 #ifndef ENABLE_OOT3D_NRI
     (void)depthFormat; (void)materialGuideFormat; (void)rigidMotionGuideFormat;
     return false;
 #else
-    if (mImpl->Width != 0 && !mImpl->Interop->CompleteRecordedWork())
+    // Wrapping is idempotent; it precedes the key so the key carries every
+    // image's wrap generation.
+    if (!mImpl->Interop->WrapTexture(
+            depthImage, depthFormat, VK_IMAGE_TYPE_2D,
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+            motionOutput.Width, motionOutput.Height) ||
+        !mImpl->Interop->WrapTexture(
+            materialGuideImage, materialGuideFormat, VK_IMAGE_TYPE_2D,
+            VK_IMAGE_USAGE_SAMPLED_BIT,
+            motionOutput.Width, motionOutput.Height) ||
+        !mImpl->Interop->WrapTexture(
+            rigidMotionGuideImage, rigidMotionGuideFormat,
+            VK_IMAGE_TYPE_2D, VK_IMAGE_USAGE_SAMPLED_BIT,
+            motionOutput.Width, motionOutput.Height)) {
+        mImpl->Reason = "NRI motion input wrapping failed";
         return false;
-    InvalidateScreenResources();
-    try {
-        if (!mImpl->Interop->WrapTexture(
-                depthImage, depthFormat, VK_IMAGE_TYPE_2D,
-                VK_IMAGE_USAGE_SAMPLED_BIT,
-                motionOutput.Width, motionOutput.Height) ||
-            !mImpl->Interop->WrapTexture(
-                materialGuideImage, materialGuideFormat, VK_IMAGE_TYPE_2D,
-                VK_IMAGE_USAGE_SAMPLED_BIT,
-                motionOutput.Width, motionOutput.Height) ||
-            !mImpl->Interop->WrapTexture(
-                rigidMotionGuideImage, rigidMotionGuideFormat,
-                VK_IMAGE_TYPE_2D, VK_IMAGE_USAGE_SAMPLED_BIT,
-                motionOutput.Width, motionOutput.Height)) {
-            throw std::runtime_error("NRI motion input wrapping failed");
+    }
+    const auto generation = [this](VkImage image) { return mImpl->Interop->TextureGeneration(image); };
+    const MotionBindingKey key{
+        motionOutput.Texture.Image, reactiveOutput.Texture.Image,
+        depthImage, materialGuideImage, rigidMotionGuideImage,
+        motionOutput.StateTracker, reactiveOutput.StateTracker,
+        {generation(motionOutput.Texture.Image), generation(reactiveOutput.Texture.Image),
+         generation(depthImage), generation(materialGuideImage), generation(rigidMotionGuideImage)},
+        motionOutput.Width, motionOutput.Height};
+    for (uint32_t index = 0; index < kBindingConfigurations; ++index) {
+        if (mImpl->Bindings[index].Key == key) {
+            mImpl->Active = index;
+            return true;
         }
-        mImpl->Image = motionOutput.Texture.Image;
-        mImpl->View = motionOutput.Texture.SampledView;
-        mImpl->StorageView = motionOutput.Texture.StorageView;
-        mImpl->ReactiveImage = reactiveOutput.Texture.Image;
-        mImpl->ReactiveView = reactiveOutput.Texture.SampledView;
-        mImpl->ReactiveStorageView = reactiveOutput.Texture.StorageView;
-        mImpl->MotionOutputStates = motionOutput.StateTracker;
-        mImpl->ReactiveOutputStates = reactiveOutput.StateTracker;
-
+    }
+    // A configuration not recorded since the last completed boundary can be
+    // rewritten in place: an unbound one first, then the least recently used.
+    uint32_t chosen = kBindingConfigurations;
+    const auto better = [&](uint32_t candidate) {
+        if (chosen == kBindingConfigurations) return true;
+        const auto& a = mImpl->Bindings[candidate];
+        const auto& b = mImpl->Bindings[chosen];
+        if (a.Key.Bound() != b.Key.Bound()) return !a.Key.Bound();
+        return a.LastUse < b.LastUse;
+    };
+    for (uint32_t index = 0; index < kBindingConfigurations; ++index) {
+        if (!mImpl->Bindings[index].Recorded && better(index)) chosen = index;
+    }
+    if (chosen == kBindingConfigurations) {
+        // Every configuration may still be read by recorded work.
+        if (!mImpl->Interop->CompleteRecordedWork())
+            return false;
+        for (auto& binding : mImpl->Bindings) binding.Recorded = false;
+        for (uint32_t index = 0; index < kBindingConfigurations; ++index) {
+            if (better(index)) chosen = index;
+        }
+    }
+    auto& binding = mImpl->Bindings[chosen];
+    binding.Key = {};
+    mImpl->Active = kBindingConfigurations;
+    try {
         nri::Descriptor* depth =
             NriInteropAccess::TextureView(*mImpl->Interop, depthImage, false);
         nri::Descriptor* material = NriInteropAccess::TextureView(
             *mImpl->Interop, materialGuideImage, false);
-        nri::Descriptor* output =
-            NriInteropAccess::TextureView(*mImpl->Interop, mImpl->Image, true);
+        nri::Descriptor* output = NriInteropAccess::TextureView(
+            *mImpl->Interop, motionOutput.Texture.Image, true);
         nri::Descriptor* rigid = NriInteropAccess::TextureView(
             *mImpl->Interop, rigidMotionGuideImage, false);
         nri::Descriptor* reactive = NriInteropAccess::TextureView(
-            *mImpl->Interop, mImpl->ReactiveImage, true);
+            *mImpl->Interop, reactiveOutput.Texture.Image, true);
         if (depth == nullptr || material == nullptr || output == nullptr ||
             rigid == nullptr || reactive == nullptr)
             throw std::runtime_error("NRI motion texture views are unavailable");
         for (uint32_t slot = 0; slot < kFrameSlots; ++slot) {
             const std::array<nri::UpdateDescriptorRangeDesc, 5> updates{{
-                {mImpl->Sets[slot], 0, 0, &depth, 1},
-                {mImpl->Sets[slot], 1, 0, &material, 1},
-                {mImpl->Sets[slot], 2, 0, &output, 1},
-                {mImpl->Sets[slot], 4, 0, &rigid, 1},
-                {mImpl->Sets[slot], 5, 0, &reactive, 1}}};
+                {binding.Sets[slot], 0, 0, &depth, 1},
+                {binding.Sets[slot], 1, 0, &material, 1},
+                {binding.Sets[slot], 2, 0, &output, 1},
+                {binding.Sets[slot], 4, 0, &rigid, 1},
+                {binding.Sets[slot], 5, 0, &reactive, 1}}};
             mImpl->Core->UpdateDescriptorRanges(
                 updates.data(), static_cast<uint32_t>(updates.size()));
         }
-        mImpl->Width = motionOutput.Width;
-        mImpl->Height = motionOutput.Height;
-        mImpl->DepthImage = depthImage;
-        mImpl->MaterialGuideImage = materialGuideImage;
-        mImpl->RigidMotionGuideImage = rigidMotionGuideImage;
+        binding.View = motionOutput.Texture.SampledView;
+        binding.StorageView = motionOutput.Texture.StorageView;
+        binding.ReactiveView = reactiveOutput.Texture.SampledView;
+        binding.ReactiveStorageView = reactiveOutput.Texture.StorageView;
+        binding.MotionOutputStates = motionOutput.StateTracker;
+        binding.ReactiveOutputStates = reactiveOutput.StateTracker;
+        binding.Key = key;
+        mImpl->Active = chosen;
         mImpl->Reason.clear();
         return true;
     } catch (const std::exception& exception) {
         mImpl->Reason = exception.what();
-        InvalidateScreenResources();
+        binding.Key = {};
         return false;
     }
 #endif
@@ -329,24 +395,25 @@ bool MotionVectorPass::Execute(VkCommandBuffer commandBuffer,
     const uint32_t slot = frameSlot % kFrameSlots;
 #ifndef ENABLE_OOT3D_NRI
     (void)commandBuffer; (void)temporal; (void)view; (void)convention;
-    (void)barrierPlan;
+    (void)barrierPlan; (void)slot; (void)coordinates;
     return false;
 #else
     const auto* motionBarrier = barrierPlan.Find(
         EffectResource::MotionVectors);
     const auto* reactiveBarrier = barrierPlan.Find(
         EffectResource::ReactiveMask);
+    auto* binding = mImpl->ActiveBinding();
     if (!barrierPlan.Valid() || motionBarrier == nullptr ||
         reactiveBarrier == nullptr || !motionBarrier->Managed() ||
-        !reactiveBarrier->Managed() ||
-        mImpl->MotionOutputStates == nullptr ||
-        mImpl->ReactiveOutputStates == nullptr) {
+        !reactiveBarrier->Managed() || binding == nullptr ||
+        binding->MotionOutputStates == nullptr ||
+        binding->ReactiveOutputStates == nullptr) {
         return false;
     }
     nri::CommandBuffer* nriCommand =
         NriInteropAccess::CommandBuffer(*mImpl->Interop, frameSlot);
-    if (mImpl->Sets[slot] == nullptr ||
-        mImpl->UniformMapped[slot] == nullptr || nriCommand == nullptr)
+    if (binding->Sets[slot] == nullptr ||
+        binding->UniformMapped[slot] == nullptr || nriCommand == nullptr)
         return false;
     std::array<float, 3> forward{view.At[0] - view.Eye[0],
                                  view.At[1] - view.Eye[1],
@@ -356,6 +423,8 @@ bool MotionVectorPass::Execute(VkCommandBuffer commandBuffer,
                                    forward[2] * forward[2]);
     if (length <= 1.0e-6F) return false;
     for (float& value : forward) value /= length;
+    const VkImage image = binding->Key.Output;
+    const VkImage reactiveImage = binding->Key.Reactive;
     MotionUniforms uniforms{};
     uniforms.InverseCurrent = temporal.InverseCurrentWorldToClip;
     uniforms.Previous = temporal.PreviousWorldToClip;
@@ -366,81 +435,85 @@ bool MotionVectorPass::Execute(VkCommandBuffer commandBuffer,
     uniforms.JitterState = {
         temporal.CurrentJitterUv[0], temporal.CurrentJitterUv[1],
         temporal.PreviousJitterUv[0], temporal.PreviousJitterUv[1]};
-    uniforms.Extent = {mImpl->Width, mImpl->Height,
+    uniforms.Extent = {binding->Key.Width, binding->Key.Height,
         coordinates ? coordinates->ShaderFlags() : 0U, 0U};
-    std::memcpy(mImpl->UniformMapped[slot], &uniforms, sizeof(uniforms));
+    std::memcpy(binding->UniformMapped[slot], &uniforms, sizeof(uniforms));
 
     (void)commandBuffer;
     mImpl->NriBarriersUsed = false;
     mImpl->LastBarrierExecution = barrierPlan.BeginExecution();
-    const auto motionWrite = mImpl->MotionOutputStates->PlanTransition(
-        reinterpret_cast<uintptr_t>(mImpl->Image),
+    const auto motionWrite = binding->MotionOutputStates->PlanTransition(
+        reinterpret_cast<uintptr_t>(image),
         {motionBarrier->DispatchAccess, 0});
-    const auto reactiveWrite = mImpl->ReactiveOutputStates->PlanTransition(
-        reinterpret_cast<uintptr_t>(mImpl->ReactiveImage),
+    const auto reactiveWrite = binding->ReactiveOutputStates->PlanTransition(
+        reinterpret_cast<uintptr_t>(reactiveImage),
         {reactiveBarrier->DispatchAccess, 0});
     const std::array<NriTextureTransitionDesc, 2> toCompute{{
-        {mImpl->Image, motionWrite},
-        {mImpl->ReactiveImage, reactiveWrite}}};
+        {image, motionWrite},
+        {reactiveImage, reactiveWrite}}};
     if (!NriInteropAccess::CmdTextureBarriers(
             *mImpl->Interop, frameSlot, toCompute.data(),
             static_cast<uint32_t>(toCompute.size())))
         return false;
     mImpl->LastBarrierExecution.RecordGraphTransition(motionWrite);
     mImpl->LastBarrierExecution.RecordGraphTransition(reactiveWrite);
-    mImpl->MotionOutputStates->Commit(motionWrite);
-    mImpl->ReactiveOutputStates->Commit(reactiveWrite);
+    binding->MotionOutputStates->Commit(motionWrite);
+    binding->ReactiveOutputStates->Commit(reactiveWrite);
 
+    binding->Recorded = true;
+    binding->LastUse = ++mImpl->UseClock;
     mImpl->Core->CmdSetDescriptorPool(*nriCommand, *mImpl->DescriptorPool);
     mImpl->Core->CmdSetPipelineLayout(
         *nriCommand, nri::BindPoint::COMPUTE, *mImpl->PipelineLayout);
     mImpl->Core->CmdSetPipeline(*nriCommand, *mImpl->Pipeline);
-    nri::SetDescriptorSetDesc setDesc{0, mImpl->Sets[slot]};
+    nri::SetDescriptorSetDesc setDesc{0, binding->Sets[slot]};
     mImpl->Core->CmdSetDescriptorSet(*nriCommand, setDesc);
     nri::DispatchDesc dispatch{};
-    dispatch.x = (mImpl->Width + 7U) / 8U;
-    dispatch.y = (mImpl->Height + 7U) / 8U;
+    dispatch.x = (binding->Key.Width + 7U) / 8U;
+    dispatch.y = (binding->Key.Height + 7U) / 8U;
     dispatch.z = 1U;
     mImpl->Core->CmdDispatch(*nriCommand, dispatch);
 
-    const auto motionComplete = mImpl->MotionOutputStates->PlanTransition(
-        reinterpret_cast<uintptr_t>(mImpl->Image),
+    const auto motionComplete = binding->MotionOutputStates->PlanTransition(
+        reinterpret_cast<uintptr_t>(image),
         {motionBarrier->CompletionAccess, 0});
     const auto reactiveComplete =
-        mImpl->ReactiveOutputStates->PlanTransition(
-        reinterpret_cast<uintptr_t>(mImpl->ReactiveImage),
+        binding->ReactiveOutputStates->PlanTransition(
+        reinterpret_cast<uintptr_t>(reactiveImage),
         {reactiveBarrier->CompletionAccess, 0});
     const std::array<NriTextureTransitionDesc, 2> fromCompute{{
-        {mImpl->Image, motionComplete},
-        {mImpl->ReactiveImage, reactiveComplete}}};
+        {image, motionComplete},
+        {reactiveImage, reactiveComplete}}};
     if (!NriInteropAccess::CmdTextureBarriers(
             *mImpl->Interop, frameSlot, fromCompute.data(),
             static_cast<uint32_t>(fromCompute.size())))
         return false;
     mImpl->LastBarrierExecution.RecordGraphTransition(motionComplete);
     mImpl->LastBarrierExecution.RecordGraphTransition(reactiveComplete);
-    mImpl->MotionOutputStates->Commit(motionComplete);
-    mImpl->ReactiveOutputStates->Commit(reactiveComplete);
+    binding->MotionOutputStates->Commit(motionComplete);
+    binding->ReactiveOutputStates->Commit(reactiveComplete);
     mImpl->NriBarriersUsed = true;
     return true;
 #endif
 }
 
 void MotionVectorPass::InvalidateScreenResources() {
-    mImpl->Image = VK_NULL_HANDLE;
-    mImpl->View = VK_NULL_HANDLE;
-    mImpl->StorageView = VK_NULL_HANDLE;
-    mImpl->ReactiveImage = VK_NULL_HANDLE;
-    mImpl->ReactiveView = VK_NULL_HANDLE;
-    mImpl->ReactiveStorageView = VK_NULL_HANDLE;
-    mImpl->DepthImage = VK_NULL_HANDLE;
-    mImpl->MaterialGuideImage = VK_NULL_HANDLE;
-    mImpl->RigidMotionGuideImage = VK_NULL_HANDLE;
-    mImpl->Width = mImpl->Height = 0;
+    // The images may be destroyed and their handles reused: forget every
+    // configuration. Their sets stay allocated; a set recorded since the last
+    // completed boundary is rewritten only after completing it again.
+    for (auto& binding : mImpl->Bindings) {
+        binding.Key = {};
+        binding.View = VK_NULL_HANDLE;
+        binding.StorageView = VK_NULL_HANDLE;
+        binding.ReactiveView = VK_NULL_HANDLE;
+        binding.ReactiveStorageView = VK_NULL_HANDLE;
+        binding.MotionOutputStates = nullptr;
+        binding.ReactiveOutputStates = nullptr;
+        binding.LastUse = 0;
+    }
+    mImpl->Active = kBindingConfigurations;
     mImpl->NriBarriersUsed = false;
     mImpl->LastBarrierExecution = {};
-    mImpl->MotionOutputStates = nullptr;
-    mImpl->ReactiveOutputStates = nullptr;
 }
 
 void MotionVectorPass::Shutdown() {
@@ -449,14 +522,16 @@ void MotionVectorPass::Shutdown() {
     if (mImpl->Core != nullptr) {
         if (mImpl->DescriptorPool != nullptr)
             mImpl->Core->DestroyDescriptorPool(mImpl->DescriptorPool);
-        for (uint32_t slot = 0; slot < kFrameSlots; ++slot) {
-            if (mImpl->UniformMapped[slot] != nullptr &&
-                mImpl->UniformBuffers[slot] != nullptr)
-                mImpl->Core->UnmapBuffer(*mImpl->UniformBuffers[slot]);
-            if (mImpl->UniformViews[slot] != nullptr)
-                mImpl->Core->DestroyDescriptor(mImpl->UniformViews[slot]);
-            if (mImpl->UniformBuffers[slot] != nullptr)
-                mImpl->Core->DestroyBuffer(mImpl->UniformBuffers[slot]);
+        for (auto& binding : mImpl->Bindings) {
+            for (uint32_t slot = 0; slot < kFrameSlots; ++slot) {
+                if (binding.UniformMapped[slot] != nullptr &&
+                    binding.UniformBuffers[slot] != nullptr)
+                    mImpl->Core->UnmapBuffer(*binding.UniformBuffers[slot]);
+                if (binding.UniformViews[slot] != nullptr)
+                    mImpl->Core->DestroyDescriptor(binding.UniformViews[slot]);
+                if (binding.UniformBuffers[slot] != nullptr)
+                    mImpl->Core->DestroyBuffer(binding.UniformBuffers[slot]);
+            }
         }
         if (mImpl->Sampler != nullptr)
             mImpl->Core->DestroyDescriptor(mImpl->Sampler);
@@ -471,19 +546,34 @@ void MotionVectorPass::Shutdown() {
 }
 
 bool MotionVectorPass::Available() const { return mImpl->Initialized; }
-VkImage MotionVectorPass::OutputImage() const { return mImpl->Image; }
-VkImageView MotionVectorPass::OutputView() const { return mImpl->View; }
-VkImage MotionVectorPass::ReactiveImage() const { return mImpl->ReactiveImage; }
-VkImageView MotionVectorPass::ReactiveView() const { return mImpl->ReactiveView; }
+VkImage MotionVectorPass::OutputImage() const {
+    const auto* binding = mImpl->ActiveBinding();
+    return binding != nullptr ? binding->Key.Output : VK_NULL_HANDLE;
+}
+VkImageView MotionVectorPass::OutputView() const {
+    const auto* binding = mImpl->ActiveBinding();
+    return binding != nullptr ? binding->View : VK_NULL_HANDLE;
+}
+VkImage MotionVectorPass::ReactiveImage() const {
+    const auto* binding = mImpl->ActiveBinding();
+    return binding != nullptr ? binding->Key.Reactive : VK_NULL_HANDLE;
+}
+VkImageView MotionVectorPass::ReactiveView() const {
+    const auto* binding = mImpl->ActiveBinding();
+    return binding != nullptr ? binding->ReactiveView : VK_NULL_HANDLE;
+}
 bool MotionVectorPass::OutputsOwnedByNri() const {
+    const VkImage image = OutputImage();
+    const VkImage reactive = ReactiveImage();
     return mImpl->Interop != nullptr &&
-           mImpl->Interop->OwnsTexture(mImpl->Image) &&
-           mImpl->Interop->OwnsTexture(mImpl->ReactiveImage);
+           mImpl->Interop->OwnsTexture(image) &&
+           mImpl->Interop->OwnsTexture(reactive);
 }
 bool MotionVectorPass::ComputeOwnedByNri() const {
 #ifdef ENABLE_OOT3D_NRI
     return mImpl->Initialized && mImpl->Pipeline != nullptr &&
-           mImpl->DescriptorPool != nullptr && mImpl->UniformBuffers[0] != nullptr;
+           mImpl->DescriptorPool != nullptr &&
+           mImpl->Bindings[0].UniformBuffers[0] != nullptr;
 #else
     return false;
 #endif
