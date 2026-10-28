@@ -6,7 +6,9 @@
 //!
 //! Python locks byte 0 with `msvcrt.locking` (Windows `LockFile`) or `flock`
 //! (Unix). `File::try_lock` takes an exclusive `LockFileEx` over the whole
-//! file or an `flock`, which conflicts with both.
+//! file or an `flock`, which conflicts with both. The standard library has
+//! no file locks on Android (`Unsupported`), so there [`platform`] calls
+//! bionic's `flock` itself: the same lock the other Unix targets take.
 
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -52,7 +54,7 @@ pub fn acquire(path: &Path) -> Result<KernelLock> {
         file.write_all(b"\0").map_err(|error| ForgeError::io("Cannot initialize the lock", error))?;
     }
     file.seek(SeekFrom::Start(0)).map_err(|error| ForgeError::io("Cannot rewind the lock", error))?;
-    match file.try_lock() {
+    match platform::try_lock(&file) {
         Ok(()) => Ok(KernelLock { _file: file, path: path.to_path_buf() }),
         Err(TryLockError::WouldBlock) => Err(busy(path)),
         Err(TryLockError::Error(error)) => Err(ForgeError::io(format!("Cannot lock {}", path.display()), error)),
@@ -63,7 +65,7 @@ pub fn acquire(path: &Path) -> Result<KernelLock> {
 /// writing it: installation inspection must not change the installation.
 pub fn is_held(path: &Path) -> bool {
     let Ok(file) = File::open(path) else { return false };
-    matches!(file.try_lock(), Err(TryLockError::WouldBlock))
+    matches!(platform::try_lock(&file), Err(TryLockError::WouldBlock))
 }
 
 /// A shared hold of the lock at `path` (`LockFileEx` without the exclusive
@@ -81,7 +83,7 @@ pub fn acquire_shared(path: &Path) -> Result<KernelLock> {
         // Best effort: a shared holder that created it first locks the range.
         let _ = file.write_all(b"\0");
     }
-    match file.try_lock_shared() {
+    match platform::try_lock_shared(&file) {
         Ok(()) => Ok(KernelLock { _file: file, path: path.to_path_buf() }),
         Err(TryLockError::WouldBlock) => Err(busy(path)),
         Err(TryLockError::Error(error)) => Err(ForgeError::io(format!("Cannot lock {}", path.display()), error)),
@@ -92,7 +94,58 @@ pub fn acquire_shared(path: &Path) -> Result<KernelLock> {
 /// do not count), without creating or writing it.
 pub fn is_held_exclusively(path: &Path) -> bool {
     let Ok(file) = File::open(path) else { return false };
-    matches!(file.try_lock_shared(), Err(TryLockError::WouldBlock))
+    matches!(platform::try_lock_shared(&file), Err(TryLockError::WouldBlock))
+}
+
+#[cfg(not(target_os = "android"))]
+mod platform {
+    use std::fs::{File, TryLockError};
+
+    pub fn try_lock(file: &File) -> Result<(), TryLockError> {
+        file.try_lock()
+    }
+
+    pub fn try_lock_shared(file: &File) -> Result<(), TryLockError> {
+        file.try_lock_shared()
+    }
+}
+
+/// Android: `File::try_lock` and `try_lock_shared` return `Unsupported`
+/// there, which failed every install at the update gate. `flock` is what the
+/// standard library uses on Linux; closing the file releases it.
+#[cfg(target_os = "android")]
+mod platform {
+    use std::fs::{File, TryLockError};
+    use std::os::fd::AsRawFd;
+
+    const LOCK_SH: i32 = 1;
+    const LOCK_EX: i32 = 2;
+    const LOCK_NB: i32 = 4;
+
+    unsafe extern "C" {
+        fn flock(fd: i32, operation: i32) -> i32;
+    }
+
+    fn flock_now(file: &File, operation: i32) -> Result<(), TryLockError> {
+        // SAFETY: a valid open descriptor and flock's documented flags.
+        if unsafe { flock(file.as_raw_fd(), operation | LOCK_NB) } == 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if error.kind() == std::io::ErrorKind::WouldBlock {
+            Err(TryLockError::WouldBlock)
+        } else {
+            Err(TryLockError::Error(error))
+        }
+    }
+
+    pub fn try_lock(file: &File) -> Result<(), TryLockError> {
+        flock_now(file, LOCK_EX)
+    }
+
+    pub fn try_lock_shared(file: &File) -> Result<(), TryLockError> {
+        flock_now(file, LOCK_SH)
+    }
 }
 
 fn busy(path: &Path) -> ForgeError {
