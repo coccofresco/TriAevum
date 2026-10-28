@@ -367,9 +367,11 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
                 : mNativePicaRenderPass;
     }
     VkPipeline pipeline = VK_NULL_HANDLE;
-    CheckNativeVk(vkCreateGraphicsPipelines(mDevice, mPipelineCache, 1,
-                                            &pipelineInfo, nullptr, &pipeline),
-                  "vkCreateGraphicsPipelines(native PICA)");
+    // A device lost earlier surfaces here first: CheckVk prints the fault
+    // report and breadcrumb trail before throwing.
+    CheckVk(vkCreateGraphicsPipelines(mDevice, mPipelineCache, 1,
+                                      &pipelineInfo, nullptr, &pipeline),
+            "vkCreateGraphicsPipelines(native PICA)");
     record.Vulkan = pipeline;
     ++mNativePicaVulkanPipelineCreations;
     return record;

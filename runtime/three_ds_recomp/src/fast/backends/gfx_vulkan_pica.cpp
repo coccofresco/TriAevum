@@ -347,8 +347,7 @@ void GfxRenderingAPIVulkan::CreateNativePicaScanoutPipeline() {
     }
     vkDestroyShaderModule(mDevice, vertexShader, nullptr);
     vkDestroyShaderModule(mDevice, fragmentShader, nullptr);
-    CheckNativeVk(result,
-                  "vkCreateGraphicsPipelines(native PICA scanout)");
+    CheckVk(result, "vkCreateGraphicsPipelines(native PICA scanout)");
 }
 
 void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
