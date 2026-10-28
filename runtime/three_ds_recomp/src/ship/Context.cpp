@@ -572,12 +572,10 @@ std::string Context::GetAppDirectoryPath(const std::string& appName) {
 #endif
 
 #if defined(__APPLE__)
-    FolderManager foldermanager;
     if (char* fpath = std::getenv("SHIP_HOME")) {
-        const char* appBundleID = strrchr(fpath, '/');
-        if (appBundleID != nullptr) {
-            foldermanager.CreateAppSupportDirectory(appBundleID + 1);
-        }
+        // An explicit home is used as given: nothing is created under
+        // ~/Library/Application Support (it used to create a folder named
+        // after the last path component there).
         if (fpath[0] == '~') {
             const char* home = getenv("HOME") ? getenv("HOME") : getpwuid(getuid())->pw_dir;
             return std::string(home) + std::string(fpath).substr(1);
