@@ -331,6 +331,47 @@ fn interior_sun_reuses_and_regenerates() {
     assert!(last.contains(&"--mask-table".into()));
 }
 
+/// Issue #124: a moved installation reuses its interior sun (the cache moved
+/// with it) instead of preparing the rooms again, and keeps one receipt; a
+/// changed shell still prepares again.
+#[test]
+fn interior_sun_follows_a_moved_installation() {
+    let directory = tempfile::tempdir().unwrap();
+    let runtime = FakeRuntime::new();
+    let a = "a".repeat(64);
+    let run = |installation: &Path| {
+        prepare_interior_sun(
+            &runtime,
+            &installation.join("data"),
+            &installation.join("data/sources/romfs.bin"),
+            &a,
+            &installation.join("data/cache/renderer"),
+            None,
+            &mut |_, _| {},
+            &CancelToken::new(),
+        )
+        .unwrap()
+    };
+    let before = directory.path().join("TriAevum");
+    assert_eq!(run(&before)["receipt_reused"], false);
+    let after = directory.path().join("moved here").join("Tri Aevum");
+    std::fs::create_dir_all(after.parent().unwrap()).unwrap();
+    std::fs::rename(&before, &after).unwrap();
+    let moved = run(&after);
+    assert_eq!(moved["receipt_reused"], true);
+    assert_eq!(runtime.calls.borrow().len(), 1, "the rooms were prepared again");
+    assert_eq!(receipts(&after), 1, "the earlier receipt was left behind");
+    assert_eq!(run(&after)["receipt_reused"], true);
+    let again = directory.path().join("again");
+    std::fs::rename(&after, &again).unwrap();
+    let shell = again.join("data/cache/renderer/shadow-shells/0000000000000001.bin");
+    let mut data = std::fs::read(&shell).unwrap();
+    *data.last_mut().unwrap() ^= 1;
+    std::fs::write(&shell, &data).unwrap();
+    assert_eq!(run(&again)["receipt_reused"], false, "a changed shell was adopted");
+    assert_eq!(runtime.calls.borrow().len(), 2);
+}
+
 #[test]
 fn interior_sun_rejects_invalid_results_without_a_receipt() {
     type Mutation = Box<dyn Fn(&mut Value)>;

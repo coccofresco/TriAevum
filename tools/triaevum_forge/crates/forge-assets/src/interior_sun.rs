@@ -240,6 +240,51 @@ fn reusable(receipt_path: &Path, identity: &Value, cache: &Path, cancel: &Cancel
     receipt.get("outputs").is_some_and(|stored| py_eq(stored, &Value::Object(current))).then(|| result.clone())
 }
 
+/// A receipt written before the installation moved (issue #124). Its
+/// identity names the earlier absolute cache folder, so its key no longer
+/// matches. It is adopted when everything else in its identity matches, its
+/// cache folder sits at the same place below its data folder as the current
+/// one (the cache moved with the installation), and every shadow-shell file
+/// it lists is in the current cache with the recorded hash. Returns the
+/// receipt's path and its result, rebased on the current cache folder.
+fn relocated(
+    receipts: &Path,
+    identity: &Value,
+    data_root: &Path,
+    cache: &Path,
+    cancel: &CancelToken,
+) -> Option<(PathBuf, Map<String, Value>)> {
+    let below = cache.strip_prefix(data_root).ok().filter(|below| below.components().next().is_some())?;
+    let mut wanted = identity.as_object()?.clone();
+    wanted.remove("cache_directory");
+    let mut candidates: Vec<PathBuf> = std::fs::read_dir(receipts)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "json"))
+        .collect();
+    candidates.sort();
+    for path in candidates {
+        let Ok(receipt) = load_json_object(&path) else { continue };
+        let Some(mut stored) = receipt.get("identity").and_then(Value::as_object).cloned() else { continue };
+        let Some(Value::String(earlier)) = stored.remove("cache_directory") else { continue };
+        let earlier = PathBuf::from(earlier);
+        if !py_eq(&Value::Object(stored), &Value::Object(wanted.clone()))
+            || path_key(&earlier) == path_key(cache)
+            || !path_key(&earlier).ends_with(path_key(below))
+        {
+            continue;
+        }
+        let Some(mut result) = receipt.get("result").and_then(Value::as_object).cloned() else { continue };
+        result.insert("cache_directory".into(), json!(cache.to_string_lossy()));
+        let Ok(current) = outputs(&result, cache, cancel) else { continue };
+        if receipt.get("outputs").is_some_and(|stored| py_eq(stored, &Value::Object(current))) {
+            return Some((path, result));
+        }
+    }
+    None
+}
+
 /// `prepare_interior_sun`: a release mask table (integrity-checked by the
 /// caller) supplies the masks of the rooms it covers; the runtime builds the
 /// others. Returns the native result plus `receipt_reused`.
@@ -272,6 +317,18 @@ pub fn prepare_interior_sun(
     let receipt_path = receipts.join(format!("{key}.json"));
     if let Some(mut result) = reusable(&receipt_path, &identity, &cache, cancel) {
         report("interior-sun", "Reusing offline interior sun...");
+        result.insert("receipt_reused".into(), json!(true));
+        return Ok(result);
+    }
+    // A moved installation: the earlier receipt takes this identity instead
+    // of the rooms being prepared again and the old receipt left behind.
+    if let Some((earlier, mut result)) = relocated(&receipts, &identity, &resolve(data_root), &cache, cancel) {
+        report("interior-sun", "Reusing offline interior sun...");
+        let hashes = outputs(&result, &cache, cancel)?;
+        atomic_write_json(&receipt_path, &json!({"identity": identity, "outputs": hashes, "result": result}))?;
+        if earlier != receipt_path {
+            let _ = std::fs::remove_file(&earlier);
+        }
         result.insert("receipt_reused".into(), json!(true));
         return Ok(result);
     }
