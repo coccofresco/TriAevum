@@ -660,6 +660,11 @@ nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipeli
         for (auto& color : colors)
             color.colorWriteMask = nri::ColorWriteBits::NONE;
     }
+    // Devices without the logicOp feature (MoltenVK) must not enable one.
+    // COPY is the identity operation, so it is exactly "no logic op" there.
+    if (pipeline.outputMerger.logicOp == nri::LogicOp::COPY &&
+        !mImpl->Interop->Core()->GetDeviceDesc(*mImpl->Interop->Device()).features.logicOp)
+        pipeline.outputMerger.logicOp = nri::LogicOp::NONE;
     pipeline.shaders = shaders.data();
     pipeline.shaderNum = static_cast<uint32_t>(shaders.size());
     const bool libraries = factory == NriPicaPipelineFactory::Libraries

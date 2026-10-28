@@ -137,7 +137,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
 endif()
 
 if(THREE_DS_RECOMP_ENABLE_VULKAN)
-	if(ANDROID)
+	# Android and macOS build shaderc/glslang from pinned sources: neither has
+	# a Vulkan SDK with shaderc on the build host (macOS uses the Khronos
+	# loader with MoltenVK as its ICD).
+	if(ANDROID OR APPLE)
 		include(cmake/dependencies/android-vulkan.cmake)
 	endif()
 	find_package(Vulkan REQUIRED)

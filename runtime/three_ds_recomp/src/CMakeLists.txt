@@ -306,8 +306,14 @@ if (CMAKE_SYSTEM_NAME STREQUAL "iOS")
         )
     endif()
 else()
+    # macOS builds the desktop OpenGL backend only when GLEW is available
+    # (cmake/dependencies/mac.cmake); Vulkan/MoltenVK is the Apple path.
+    set(three_ds_recomp_opengl ON)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND NOT GLEW_FOUND)
+        set(three_ds_recomp_opengl OFF)
+    endif()
     target_compile_definitions(three_ds_recomp_runtime PRIVATE
-        ENABLE_OPENGL
+        $<$<BOOL:${three_ds_recomp_opengl}>:ENABLE_OPENGL>
         $<$<CONFIG:Debug>:_DEBUG>
         $<$<NOT:$<CONFIG:Debug>>:NDEBUG>
         SPDLOG_ACTIVE_LEVEL=${SPDLOG_MIN_CUTOFF}
