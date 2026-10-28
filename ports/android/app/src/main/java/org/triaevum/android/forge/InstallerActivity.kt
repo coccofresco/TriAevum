@@ -37,7 +37,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import org.json.JSONObject
 import org.triaevum.android.R
-import org.triaevum.android.TriAevumActivity
+import org.triaevum.android.GameSession
 import org.triaevum.android.diagnostics.DiagnosticsActivity
 import org.triaevum.android.diagnostics.StartupDiagnostics
 import org.triaevum.android.diagnostics.StartupReport
@@ -1399,7 +1399,7 @@ class InstallerActivity : Activity() {
             text = getString(R.string.forge_play)
             minHeight = dp(48)
             visibility = Button.GONE
-            setOnClickListener { startActivity(Intent(context, TriAevumActivity::class.java)) }
+            setOnClickListener { GameSession.open(this@InstallerActivity) }
         }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
