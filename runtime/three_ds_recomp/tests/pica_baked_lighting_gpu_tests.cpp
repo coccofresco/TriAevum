@@ -31,7 +31,7 @@ float Encode(float c) { return c <= 0.0031308F ? c * 12.92F : 1.055F * std::pow(
 // native ambient and the scene's day/night source all enter at this boundary.
 Case MakeCase(bool profile, bool preserve, bool ambientOnly, bool night = false, bool sky = true,
               float keyIntensity = 1.0F, float nativeAmbient = 0.0F, float authoredAmbient = 0.4F,
-              bool directlyLit = false, bool nonzeroDiffuseCoefficient = false) {
+              bool directlyLit = false, bool nonzeroDiffuseCoefficient = false, bool bakedOutdoorRoom = false) {
     PicaVertexShaderHookLayout hooks;
     hooks.Transform = {PicaVertexTransformOperation::ModelViewProjection3x4, 0, 4, 4, 3, 20, 3, 0, 1};
     auto& s = hooks.Surface;
@@ -57,6 +57,7 @@ Case MakeCase(bool profile, bool preserve, bool ambientOnly, bool night = false,
         scene->Lights[0].DirectionTowardSource = {-0.6F, -0.8F, 0};
         scene->Lights[1].DirectionTowardSource = {0.6F, 0.8F, 0};
     }
+    scene->BakedOutdoorRoom = bakedOutdoorRoom;
     binding.SceneDirectionals = scene;
     PicaEnvironmentLighting environment;
     environment.Enabled = profile;
@@ -69,7 +70,8 @@ Case MakeCase(bool profile, bool preserve, bool ambientOnly, bool night = false,
     const auto uniforms = BuildPicaSurfaceLightingUniforms(hooks, ambientOnly || directlyLit ? 512U : 0U,
         {reinterpret_cast<const uint8_t*>(native.data()), sizeof(native)}, binding, environment, &*view);
     Require(uniforms.has_value(), "surface fixture rejected");
-    Require((uniforms->BakedReferenceUp[3] != 0) == (sky && !directlyLit), "sky/indoor/actor ownership is wrong");
+    Require((uniforms->BakedReferenceUp[3] != 0) == ((sky || bakedOutdoorRoom) && !directlyLit),
+            "sky/indoor/actor ownership is wrong");
     Case c;
     c.Lighting = *uniforms;
     c.Primary = {level, level, level, 0.37F};
@@ -185,6 +187,13 @@ int main() try {
     // when the enabled profile subsequently suppresses its native lights.
     MakeCase(true, false, false, false, true, 1, 0.4F, 0.4F, true);
     MakeCase(false, false, false, false, true, 1, 0.4F, 0.4F, true);
+    // An outdoor room under fixed light settings (no clock-driven sky light)
+    // keeps its native colour as the lit reference; its actors stay direct.
+    for (bool profile : {false, true}) {
+        add(MakeCase(profile, false, false, false, false, 1, 0, 0, false, false, true), Identity);
+        add(MakeCase(profile, false, true, false, false, 1, 0, 0, false, false, true), Identity);
+    }
+    MakeCase(true, false, false, false, false, 1, 0.4F, 0.4F, true, false, true);
     // Nonzero material diffuse alone does not make a directly lit draw. The
     // active native slot has ambient but zero diffuse; it owns baked colour.
     for (bool night : {false, true})

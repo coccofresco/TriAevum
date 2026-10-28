@@ -84,6 +84,11 @@ struct PicaSceneDirectionalLights {
     // decision was published; FindPicaSceneMainDirectional's rule applies.
     uint64_t ShadowCasterIdentity = 0;
     float ShadowStrength = 1.0F;
+    // The title's room geometry outside is drawn with these lights already in
+    // its native colour, whether they follow the clock (sky lights) or the
+    // environment's fixed light settings. The adapter decides it from the
+    // authored room/scene headers; interiors and unknown rooms leave it off.
+    bool BakedOutdoorRoom = false;
     bool operator==(const PicaSceneDirectionalLights&) const = default;
 };
 

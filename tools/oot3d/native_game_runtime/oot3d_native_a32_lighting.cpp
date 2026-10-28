@@ -478,7 +478,26 @@ void NativeA32LightingProbe::CaptureSceneLights(uint32_t playState, oot3d::recom
             }
         }
     }
-    ContinueSceneLights(directionals, playState, ReadNativeEnvironmentState(playState, memory));
+    const auto environment = ReadNativeEnvironmentState(playState, memory);
+    ContinueSceneLights(directionals, playState, environment);
+    {
+        // Outdoor rooms under fixed light settings (lightMode 1 with a sky,
+        // e.g. the castle courtyards) bake the environment's lights into
+        // their colour just like clock-driven ones; the renderer anchors
+        // their brightness to it instead of adding the sun again. The visit
+        // is the native scene, its PlayState and the authored scene/setup
+        // (scene files reuse one load address across scenes).
+        uint64_t authored = 0;
+        const auto group = CaptureNativeEnvironmentGroup(playState, memory, &authored);
+        const OutdoorRoomVisit visit{environment ? environment->Scene : uint16_t(0xFFFFU), playState, authored};
+        if (visit != mOutdoorRoomVisit) {
+            mOutdoorRoomVisit = visit;
+            mOutdoorRoom.reset();
+        }
+        if (!mOutdoorRoom && environment && authored && group)
+            mOutdoorRoom = *group != SceneEnvironmentGroup::Indoor;
+        directionals.BakedOutdoorRoom = mOutdoorRoom.value_or(false);
+    }
     if (directionals.Count == 0)
         mSceneDirectionals.reset();
     else if (!mSceneDirectionals || *mSceneDirectionals != directionals)

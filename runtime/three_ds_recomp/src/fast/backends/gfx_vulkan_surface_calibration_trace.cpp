@@ -107,7 +107,7 @@ void GfxRenderingAPIVulkan::TraceSurfaceCalibrationDraw(const GfxNativePicaDrawV
     else if (draw.FragmentFeatures.FragmentLightingEnabled) reason = "native-fragment-lighting";
     else if (native->DirectSlotMask) reason = "direct-native-response";
     else if (!count) reason = "no-scene-directionals";
-    else if (!skyMask) reason = "no-sky-light";
+    else if (!skyMask && !scene->BakedOutdoorRoom) reason = "no-sky-light";
     else if (!(pbr || perPixel)) reason = "shader-fallback";
     else if (wholeWater) reason = "water-native-appearance";
 

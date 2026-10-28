@@ -111,6 +111,16 @@ class NativeA32LightingProbe {
     uint32_t mContinuityCount = 0;
     uint64_t mContinuityEpoch = 0;
     Fast::Renderer3ds::PicaSceneShadowCasterTracker mShadowCaster;
+    // The authored outdoor/indoor class of the visited scene and setup,
+    // latched on its first readable room so room loads never flip it.
+    struct OutdoorRoomVisit {
+        uint16_t Scene = 0xFFFFU;
+        uint32_t PlayState = 0;
+        uint64_t Authored = 0;
+        bool operator==(const OutdoorRoomVisit&) const = default;
+    };
+    OutdoorRoomVisit mOutdoorRoomVisit;
+    std::optional<bool> mOutdoorRoom;
     // Which added scene lights reach the renderer (distance, budget, fades,
     // brightness ceiling), and the architecture's catalog.
     NativeSceneLightSelector mSelector;

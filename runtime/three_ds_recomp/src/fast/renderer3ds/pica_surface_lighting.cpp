@@ -202,9 +202,12 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
     }
     const bool hasDiffuse = std::any_of(result.MaterialDiffuse.begin(),
         result.MaterialDiffuse.begin() + 3, [](float value) { return value != 0.0F; });
+    const bool bakedOutdoorRoom = !sceneDirectionals.empty() && binding.SceneDirectionals->BakedOutdoorRoom;
     if (native->Classification != PicaNativeSurfaceLightingClass::DirectLit &&
-        std::any_of(sceneDirectionals.begin(), sceneDirectionals.end(), [](const auto& light) { return light.SkyLight; })) {
-        // Native room colour already contains the environment's illumination.
+        (bakedOutdoorRoom || std::any_of(sceneDirectionals.begin(), sceneDirectionals.end(),
+                                         [](const auto& light) { return light.SkyLight; }))) {
+        // Native room colour already contains the environment's illumination:
+        // the clock's sun/moon, or an outdoor room's fixed light settings.
         // Its lit reference is a horizontal face. Transform that normal by
         // inverse transpose, just like the geometry's surface normal.
         const auto& up = binding.SceneDirectionals->WorldUp;

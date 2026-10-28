@@ -9,13 +9,22 @@ already lit image.
 
 `BuildPicaSurfaceLightingUniforms` admits a surface when native vertex lighting
 is disabled or no enabled native light supplies diffuse RGB to a nonzero
-material diffuse channel, and its captured scene has a sky light. A nonzero
+material diffuse channel, and its captured scene has a sky light or is a baked
+outdoor room. A nonzero
 material coefficient with zero light diffuse is still ambient-only. This
 classification reads native inputs before profile gains or source deduplication,
 so suppressing a directly lit actor's native lights cannot turn it into a baked
 surface. Sky lights are the adapter's clock-driven sun/moon
-records. No scene-ID list, image statistics, exposure or fitted multiplier is
-used. The reference normal is world up, transformed by the captured view's
+records. `PicaSceneDirectionalLights::BakedOutdoorRoom` covers outdoor rooms
+whose environment uses fixed light settings instead of the clock (OoT3D
+lightMode 1 with a sky, such as Zelda's castle courtyard): their room colour
+contains those lights just the same. The OoT3D lighting probe sets it from the
+authored room/scene headers (`CaptureNativeEnvironmentGroup`, anything but
+Indoor), latched per native scene, PlayState and authored scene/setup; interiors
+and unreadable headers leave it off. Before this, such rooms fell back to the
+additive path and the courtyard's sunlit stone came out about 26% above Native
+under a profile. No scene-ID list, image statistics, exposure or fitted
+multiplier is used. The reference normal is world up, transformed by the captured view's
 inverse transpose.
 
 Native presentation never enters this path. The backend also clears admission
