@@ -105,6 +105,8 @@ class InstallerActivity : Activity() {
     /** The last `ui_pack_status` result; null while unknown. */
     private var hdStatus: JSONObject? = null
     private var hdChecking = false
+    /** A check was asked for while one ran (an import or download finished meanwhile). */
+    private var hdCheckAgain = false
     /** Re-renders the card under the state in the current language (after a language change). */
     private var cardRenderer: (() -> Unit)? = null
     /** The game languages of the ROM in use (recognized or installed); empty before one is known. */
@@ -269,7 +271,13 @@ class InstallerActivity : Activity() {
 
     /** Reads the HD pack's state off the UI thread ("ui_pack_status"). */
     private fun refreshHdPack() {
-        if (!hasPackage || hdChecking) return
+        if (!hasPackage) return
+        if (hdChecking) {
+            // The running check may have read the pack before the job that asks again changed
+            // it (returning from the picker starts a check while the import starts): repeat it.
+            hdCheckAgain = true
+            return
+        }
         hdChecking = true
         Thread({
             val result = try {
@@ -304,6 +312,10 @@ class InstallerActivity : Activity() {
                 if (closing) return@runOnUiThread
                 hdStatus = result
                 renderHdPack()
+                if (hdCheckAgain) {
+                    hdCheckAgain = false
+                    refreshHdPack()
+                }
             }
         }, "forge-hd-status").start()
     }
