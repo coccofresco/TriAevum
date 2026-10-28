@@ -4,6 +4,7 @@
 
 #include <array>
 #include <string_view>
+#include <vector>
 
 namespace Fast::Renderer3ds {
 
@@ -19,8 +20,20 @@ inline VkApplicationInfo PicaVulkanApplicationInfo() {
     return result;
 }
 
-inline VkPhysicalDeviceFeatures PicaVulkanCoreFeatures(const VkPhysicalDeviceFeatures& supported) {
+// AMD's Windows driver (amdvlk64) faults the GPU within the first frames when
+// monolithic native pipelines run without robust buffer access: a
+// page-aligned read_invalid that robustBufferAccess alone removes (issues
+// #78/#84, measured on an RX 7900 XT, driver 2.0.395). Library-linked
+// pipelines did not fault. The live device and Forge's device preparation
+// enable the same features, so prepared pipelines stay cache hits.
+inline bool PicaRobustBufferAccessRequired(VkDriverId driver) {
+    return driver == VK_DRIVER_ID_AMD_PROPRIETARY;
+}
+
+inline VkPhysicalDeviceFeatures PicaVulkanCoreFeatures(const VkPhysicalDeviceFeatures& supported, VkDriverId driver) {
     VkPhysicalDeviceFeatures enabled{};
+    if (PicaRobustBufferAccessRequired(driver))
+        enabled.robustBufferAccess = supported.robustBufferAccess;
     enabled.independentBlend = supported.independentBlend;
     enabled.multiViewport = supported.multiViewport;
     // Fragment primitive IDs address opt-in per-primitive seam metadata.
@@ -73,14 +86,40 @@ inline bool PicaPipelineLibrariesSupported(
            dynamicState.extendedDynamicState == VK_TRUE && core.fragmentStoresAndAtomics == VK_TRUE;
 }
 
+// Extended dynamic state is negotiated whenever the device offers it, with or
+// without libraries, so turning libraries off (by driver policy or
+// TRIAEVUM_NRI_PIPELINE_LIBRARIES=0) no longer also moves NRI onto its static
+// fallback (fixed vertex strides, maximum viewport count). Monolithic
+// pipelines then use the same dynamic NRI path as library pipelines.
+inline bool PicaExtendedDynamicStateSupported(
+    bool extensionAvailable, const VkPhysicalDeviceExtendedDynamicStateFeaturesEXT& dynamicState) {
+    return extensionAvailable && dynamicState.extendedDynamicState == VK_TRUE;
+}
+
+// The pipeline-state device extensions to enable, in one place for the live
+// device, its NRI wrapper and Forge's device preparation (they change the
+// pipelines NRI creates, hence the pipeline cache identity). Libraries imply
+// extended dynamic state (PicaPipelineLibrariesSupported requires it).
+inline std::vector<const char*> PicaPipelineStateExtensions(bool extendedDynamicState, bool libraries) {
+    if (libraries)
+        return {kPicaPipelineLibraryExtensions.begin(), kPicaPipelineLibraryExtensions.end()};
+    if (extendedDynamicState) return {VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME};
+    return {};
+}
+
 // Driver policy belongs here, shared by the live device and Forge. Capability
 // alone says nothing about compilation memory: Intel's Mesa driver (anv)
 // grows to tens of GB compiling library parts (issue #72), so it defaults to
-// monolithic pipelines. Explicit opt-in still requires every capability and
-// is meant for bounded diagnostic runs. An invalid value is reported in the
-// policy reason and otherwise treated as unset.
+// monolithic pipelines. AMD's Windows driver (amdvlk64) crashes linking
+// library parts on older releases (#117-#120) and, on a current one
+// (2.0.395, RX 7900 XT), spent about a minute compiling library parts at
+// startup and stalled play on more; it defaults to monolithic pipelines too
+// (with robust buffer access, see PicaRobustBufferAccessRequired). Explicit opt-in still
+// requires every capability and is meant for bounded diagnostic runs. An
+// invalid value is reported in the policy reason and otherwise treated as
+// unset.
 inline bool PicaPipelineLibrariesByDefault(VkDriverId driver) {
-    return driver != VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA;
+    return driver != VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA && driver != VK_DRIVER_ID_AMD_PROPRIETARY;
 }
 
 struct PicaPipelineLibraryPolicy {

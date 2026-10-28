@@ -91,16 +91,36 @@ int main() try {
     using Fast::Renderer3ds::ResolvePicaPipelineLibraryPolicy;
     const auto nvidia = VK_DRIVER_ID_NVIDIA_PROPRIETARY;
     const auto anv = VK_DRIVER_ID_INTEL_OPEN_SOURCE_MESA;
-    for (auto id : {nvidia, VK_DRIVER_ID_MESA_RADV, VK_DRIVER_ID_AMD_PROPRIETARY,
+    const auto amdvlk = VK_DRIVER_ID_AMD_PROPRIETARY;
+    for (auto id : {nvidia, VK_DRIVER_ID_MESA_RADV, VK_DRIVER_ID_AMD_OPEN_SOURCE,
                     VK_DRIVER_ID_INTEL_PROPRIETARY_WINDOWS, VkDriverId(0)})
         Check(ResolvePicaPipelineLibraryPolicy(nullptr, true, true, true, id).Enabled,
               "capable driver lost its default libraries");
-    Check(!ResolvePicaPipelineLibraryPolicy(nullptr, true, true, true, anv).Enabled &&
-          std::string_view(ResolvePicaPipelineLibraryPolicy(nullptr, true, true, true, anv).Reason) ==
-              "driver_policy",
-          "anv default enabled");
-    Check(ResolvePicaPipelineLibraryPolicy("1", true, true, true, anv).AllPipelines,
-          "capable explicit opt-in rejected");
+    // Monolithic by default: anv's compile memory (#72); amdvlk64's link
+    // crash and per-part compile cost (#84, #117-#120).
+    for (auto id : {anv, amdvlk}) {
+        const auto policy = ResolvePicaPipelineLibraryPolicy(nullptr, true, true, true, id);
+        Check(!policy.Requested && !policy.Enabled && std::string_view(policy.Reason) == "driver_policy",
+              "driver-policy default enabled libraries");
+        Check(ResolvePicaPipelineLibraryPolicy("1", true, true, true, id).AllPipelines,
+              "capable explicit opt-in rejected");
+    }
+    // Extended dynamic state follows the device, not the library policy.
+    using Fast::Renderer3ds::PicaExtendedDynamicStateSupported;
+    using Fast::Renderer3ds::PicaPipelineStateExtensions;
+    VkPhysicalDeviceExtendedDynamicStateFeaturesEXT dynamicState{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT};
+    Check(!PicaExtendedDynamicStateSupported(true, dynamicState), "unsupported dynamic state accepted");
+    dynamicState.extendedDynamicState = VK_TRUE;
+    Check(PicaExtendedDynamicStateSupported(true, dynamicState) &&
+          !PicaExtendedDynamicStateSupported(false, dynamicState),
+          "dynamic state support ignores the extension or the feature");
+    const auto monolithic = PicaPipelineStateExtensions(true, false);
+    Check(monolithic.size() == 1 &&
+          std::string_view(monolithic[0]) == VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME,
+          "monolithic pipelines lost extended dynamic state");
+    Check(PicaPipelineStateExtensions(true, true).size() == 3 && PicaPipelineStateExtensions(false, false).empty(),
+          "pipeline-state extension set");
     Check(!ResolvePicaPipelineLibraryPolicy("0", true, true, true, nvidia).Requested,
           "explicit disable ignored");
     Check(!ResolvePicaPipelineLibraryPolicy("1", false, true, true, anv).Enabled &&
@@ -123,16 +143,25 @@ int main() try {
           !VulkanImage2DWithinLimits(limits, 0, 480, 1, 1, VK_SAMPLE_COUNT_1_BIT),
           "unsupported image accepted");
     VkPhysicalDeviceFeatures support{};
-    Check(!Fast::Renderer3ds::PicaVulkanCoreFeatures(support).fragmentStoresAndAtomics,
+    Check(!Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_NVIDIA_PROPRIETARY).fragmentStoresAndAtomics,
           "unsupported fragment writes were advertised");
     support.fragmentStoresAndAtomics = VK_TRUE;
-    Check(Fast::Renderer3ds::PicaVulkanCoreFeatures(support).fragmentStoresAndAtomics,
+    Check(Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_NVIDIA_PROPRIETARY).fragmentStoresAndAtomics,
           "supported native fragment writes were disabled");
-    Check(!Fast::Renderer3ds::PicaVulkanCoreFeatures(support).drawIndirectFirstInstance,
+    Check(!Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_NVIDIA_PROPRIETARY).drawIndirectFirstInstance,
           "unsupported indirect firstInstance was advertised");
     support.drawIndirectFirstInstance = VK_TRUE;
-    Check(Fast::Renderer3ds::PicaVulkanCoreFeatures(support).drawIndirectFirstInstance,
+    Check(Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_NVIDIA_PROPRIETARY).drawIndirectFirstInstance,
           "supported indirect firstInstance (grass GPU selection) was disabled");
+    // Robust buffer access only where the driver needs it (amdvlk64 device loss).
+    support.robustBufferAccess = VK_TRUE;
+    Check(Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_AMD_PROPRIETARY).robustBufferAccess &&
+          !Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_NVIDIA_PROPRIETARY).robustBufferAccess &&
+          !Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_MESA_RADV).robustBufferAccess,
+          "robust buffer access driver rule");
+    support.robustBufferAccess = VK_FALSE;
+    Check(!Fast::Renderer3ds::PicaVulkanCoreFeatures(support, VK_DRIVER_ID_AMD_PROPRIETARY).robustBufferAccess,
+          "unsupported robust buffer access was enabled");
     VkPipelineVertexInputStateCreateInfo vi{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     VkPipelineInputAssemblyStateCreateInfo ia{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     ia.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;

@@ -26,7 +26,7 @@ int main() {
         VkPhysicalDeviceFeatures supported{};
         supported.independentBlend = VK_TRUE;
         supported.geometryShader = VK_TRUE;
-        const auto enabled = Renderer3ds::PicaVulkanCoreFeatures(supported);
+        const auto enabled = Renderer3ds::PicaVulkanCoreFeatures(supported, VK_DRIVER_ID_NVIDIA_PROPRIETARY);
         // Geometry shaders back the opt-in PBR seam primitive IDs.
         Check(enabled.independentBlend && enabled.geometryShader && !enabled.shaderInt16);
         VkPhysicalDeviceVulkan12Features supported12{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES};

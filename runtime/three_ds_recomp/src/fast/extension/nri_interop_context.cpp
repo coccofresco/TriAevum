@@ -526,7 +526,8 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
                                    bool swapchainExtensionsEnabled,
                                    RendererValidationTelemetry*
                                        validationTelemetry,
-                                   bool graphicsPipelineLibrariesEnabled) {
+                                   bool graphicsPipelineLibrariesEnabled,
+                                   bool extendedDynamicStateEnabled) {
     Shutdown();
     mImpl->ValidationTelemetry = validationTelemetry;
 #ifdef ENABLE_OOT3D_NRI
@@ -569,13 +570,12 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
     if (dynamicRenderingEnabled)
         deviceExtensions.push_back(
             VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
+    // NRI uses its dynamic vertex-stride and viewport path only when the
+    // wrapped device lists extended dynamic state.
+    for (const char* extension : Renderer3ds::PicaPipelineStateExtensions(
+             extendedDynamicStateEnabled, graphicsPipelineLibrariesEnabled))
+        deviceExtensions.push_back(extension);
     desc.vkExtensions.deviceExtensions = deviceExtensions.data();
-    if (graphicsPipelineLibrariesEnabled) {
-        deviceExtensions.insert(deviceExtensions.end(),
-                                Renderer3ds::kPicaPipelineLibraryExtensions.begin(),
-                                Renderer3ds::kPicaPipelineLibraryExtensions.end());
-        desc.vkExtensions.deviceExtensions = deviceExtensions.data();
-    }
     desc.vkExtensions.deviceExtensionNum =
         static_cast<uint32_t>(deviceExtensions.size());
     std::vector<const char*> instanceExtensions;
@@ -633,6 +633,7 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
     (void)fsrDeviceFeaturesEnabled;
     (void)swapchainExtensionsEnabled;
     (void)graphicsPipelineLibrariesEnabled;
+    (void)extendedDynamicStateEnabled;
     return false;
 #endif
 }

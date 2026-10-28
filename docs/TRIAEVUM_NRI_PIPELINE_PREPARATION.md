@@ -532,3 +532,55 @@ prints 58 part and 55 link requests, each matched by its `_done` line. The
 device-loss paths themselves (fault query, breadcrumb readout, checkpoints)
 are unexercised: no device was lost on the reference machine, and checkpoint
 data can only be read from a lost device.
+
+## AMD Windows Driver Policy (2026-10-28)
+
+Measured on an AMD Windows machine (RX 7900 XT, `amdvlk64` driver version
+2.0.395 = `0x0080018B`, `VK_DRIVER_ID_AMD_PROPRIETARY`). The reports'
+driver is older (2.0.353 = `0x00800161`).
+
+- **beta.1.2 as published** (libraries on): no crash on this newer driver, but
+  startup preparation took 58.6 s (`TRIAEVUM_INITIAL_PREPARATION
+  startup_seconds=58.595`). Forge's prepared cache did not cover the library
+  parts the game asked for: 48 fragment parts compiled in 221 s of driver
+  time, 97 links took 241 s, and the longest link took 18 s. The first 90
+  seconds rendered 56 frames. The older driver crashes in the link step
+  (#117-#120).
+- **Libraries off** (`TRIAEVUM_NRI_PIPELINE_LIBRARIES=0`, as earlier testers
+  tried): the GPU faults within frames 3-8 (`TRIAEVUM_VULKAN_DEVICE_FAULT
+  ... description="GPU fault" address_infos=[{type=read_invalid,
+  address=0x13A4CC000,precision=0x1000}]`). This is the reports'
+  `vkQueueSubmit(frame) -4`; here it surfaced first in the next
+  `vkCreateGraphicsPipelines`, which now also prints the fault report and
+  breadcrumbs. The address is the same in every run.
+- **Bisection:** `robustBufferAccess` on the device removes the fault.
+  Library-linked pipelines for every draw (`TRIAEVUM_NRI_PIPELINE_LIBRARIES=1`
+  with `TRIAEVUM_SHADER_PREPARATION=complete`) avoid it too. The following
+  do not change the fault or its address:
+  - enabling extended dynamic state with monolithic pipelines;
+  - turning off NRI PICA draws, NRI texture images, NRI display copies or the
+    NRI scanout;
+  - padding each per-geometry vertex buffer by up to 4 KiB.
+
+  Core and synchronization validation report nothing before the fault.
+  GPU-assisted validation reports no out-of-bounds access, and its
+  instrumented shaders do not fault. A CPU check of every native draw found
+  index and vertex ranges inside their bindings. The faulting access is
+  therefore an out-of-bounds buffer read that AMD's monolithic pipelines do
+  not clamp. Its exact source is not yet identified.
+
+The device profile (`pica_vulkan_device_profile.h`) therefore:
+- defaults `VK_DRIVER_ID_AMD_PROPRIETARY` to monolithic pipelines
+  (`policy=driver_policy`, like Intel's anv);
+- enables `robustBufferAccess` on that driver (`PicaRobustBufferAccessRequired`);
+- negotiates `VK_EXT_extended_dynamic_state` whenever it is offered, so
+  libraries off no longer also moves NRI onto its static fallback.
+
+Forge's helper takes the same device features, so its prepared pipelines stay
+cache hits. Result on the same machine (developer build of the branch, the
+beta.1.2 installation's data):
+- Forge's device preparation: 1838/1838 pipelines in 190 s with 4 workers,
+  1.0 GB peak.
+- Title boot: startup preparation 0.08 s; 3602 frames in 76 s with no fault;
+  110 pipelines created in play, 5.8 s of driver time in total.
+- Gameplay from a Barinade savestate: 57 fps over 75 s, rendering correct.

@@ -1174,6 +1174,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // every native pipeline uses them.
     bool mGraphicsPipelineLibrariesEnabled = false;
     bool mAllNativePipelinesUseLibraries = false;
+    // VK_EXT_extended_dynamic_state, enabled whenever offered (libraries or
+    // not), so the library policy no longer switches NRI's pipeline path.
+    bool mExtendedDynamicStateEnabled = false;
     NativePicaPreparationMode mNativePicaPreparationMode = NativePicaPreparationMode::Synchronous;
     bool mNativePicaProgramsPrepared = false;
     // Startup preparation progress (PrepareNativePicaPrograms parts).

@@ -124,18 +124,26 @@ class HeadlessDevice final : public Fast::Renderer3ds::NriPicaInterop {
             true, driverProperties.driverID);
         PipelineLibraries = policy.Enabled;
         AllPipelinesUseLibraries = policy.AllPipelines;
-        std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u driver_id=%u policy=%s\n",
+        // The same pipeline-state extensions as the live device (cache identity).
+        const bool extendedDynamicState = PipelineLibraries ||
+            Fast::Renderer3ds::PicaExtendedDynamicStateSupported(
+                hasExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME), extendedDynamic);
+        std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u driver_id=%u policy=%s extended_dynamic_state=%u\n",
             unsigned(librarySupported), unsigned(policy.Requested), unsigned(policy.Enabled),
             unsigned(libraryProperties.graphicsPipelineLibraryFastLinking),
             unsigned(libraryProperties.graphicsPipelineLibraryIndependentInterpolationDecoration),
-            unsigned(driverProperties.driverID), policy.Reason);
+            unsigned(driverProperties.driverID), policy.Reason, unsigned(extendedDynamicState));
         GeometryShaders = supported.features.geometryShader == VK_TRUE;
-        const auto coreFeatures = Fast::Renderer3ds::PicaVulkanCoreFeatures(supported.features);
+        const auto coreFeatures = Fast::Renderer3ds::PicaVulkanCoreFeatures(supported.features, DriverId);
         v12 = Fast::Renderer3ds::PicaVulkan12Features(v12);
         v12.pNext = &sync;
-        dynamic.pNext = PipelineLibraries ? &libraries : nullptr;
+        extendedDynamic.pNext = nullptr;
+        libraries.pNext = extendedDynamicState ? &extendedDynamic : nullptr;
+        dynamic.pNext = PipelineLibraries ? static_cast<void*>(&libraries)
+                        : extendedDynamicState ? static_cast<void*>(&extendedDynamic) : nullptr;
         std::vector<const char*> extensions{VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME, VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME};
-        if (PipelineLibraries) extensions.insert(extensions.end(), libraryExtensions.begin(), libraryExtensions.end());
+        for (const char* extension : Fast::Renderer3ds::PicaPipelineStateExtensions(extendedDynamicState, PipelineLibraries))
+            extensions.push_back(extension);
         VkDeviceCreateInfo device{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         device.pNext = &v12; device.pEnabledFeatures = &coreFeatures;
         device.queueCreateInfoCount = 1; device.pQueueCreateInfos = &queue;

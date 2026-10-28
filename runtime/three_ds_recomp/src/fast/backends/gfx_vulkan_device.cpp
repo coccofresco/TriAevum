@@ -396,14 +396,17 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         driverProperties.driverID);
     mGraphicsPipelineLibrariesEnabled = libraryPolicy.Enabled;
     mAllNativePipelinesUseLibraries = libraryPolicy.AllPipelines;
-    std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u driver_id=%u policy=%s\n",
+    mExtendedDynamicStateEnabled = mGraphicsPipelineLibrariesEnabled ||
+        Renderer3ds::PicaExtendedDynamicStateSupported(
+            hasExtension(VK_EXT_EXTENDED_DYNAMIC_STATE_EXTENSION_NAME), extendedDynamic);
+    std::fprintf(stderr, "TRIAEVUM_NRI_GPL_CAPABILITY supported=%u requested=%u enabled=%u fast_link=%u independent_interpolation=%u driver_id=%u policy=%s extended_dynamic_state=%u\n",
         unsigned(librarySupported), unsigned(libraryPolicy.Requested), unsigned(libraryPolicy.Enabled),
         unsigned(libraryProperties.graphicsPipelineLibraryFastLinking),
         unsigned(libraryProperties.graphicsPipelineLibraryIndependentInterpolationDecoration),
-        unsigned(driverProperties.driverID), libraryPolicy.Reason);
-    if (mGraphicsPipelineLibrariesEnabled)
-        extensions.insert(extensions.end(), Renderer3ds::kPicaPipelineLibraryExtensions.begin(),
-                          Renderer3ds::kPicaPipelineLibraryExtensions.end());
+        unsigned(driverProperties.driverID), libraryPolicy.Reason, unsigned(mExtendedDynamicStateEnabled));
+    for (const char* extension : Renderer3ds::PicaPipelineStateExtensions(
+             mExtendedDynamicStateEnabled, mGraphicsPipelineLibrariesEnabled))
+        extensions.push_back(extension);
     if (mSynchronization2Enabled)
         extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     if (mDynamicRenderingEnabled)
@@ -457,7 +460,8 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
                 }))
             extensions.push_back(required.c_str());
     }
-    const auto features = Renderer3ds::PicaVulkanCoreFeatures(supportedFeatures.features);
+    const auto features = Renderer3ds::PicaVulkanCoreFeatures(
+        supportedFeatures.features, driverProperties.driverID);
     // NRI's Vulkan helper and NIS implementation create timeline fences,
     // FP16 shader permutations and update-after-bind image descriptors.
     // Advertise to NRI only features that are also enabled on the wrapped
@@ -490,9 +494,11 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         dynamicRendering.pNext = featureChain;
         featureChain = &dynamicRendering;
     }
-    if (mGraphicsPipelineLibrariesEnabled) {
+    if (mExtendedDynamicStateEnabled) {
         extendedDynamic.pNext = featureChain;
         featureChain = &extendedDynamic;
+    }
+    if (mGraphicsPipelineLibrariesEnabled) {
         pipelineLibraries.pNext = featureChain;
         featureChain = &pipelineLibraries;
     }
