@@ -22,6 +22,10 @@ struct ShadercAudit {
 ShadercAudit ShadercCompilationAudit();
 
 using ShaderDefines = std::vector<std::pair<std::string, std::string>>;
+// A pass shader: Vulkan 1.2, performance, with ordered macro definitions.
+// Both compile functions reuse one shaderc compiler per calling thread.
+std::vector<uint32_t> CompilePassShaderSpirv(std::string_view source, SpirvStage stage, const char* name,
+                                             const ShaderDefines& defines = {});
 std::span<const uint32_t> FindBuiltinPassShaderSpirv(std::string_view source,
     SpirvStage stage, const ShaderDefines& defines = {}, uint32_t vulkanMinor = 2);
 

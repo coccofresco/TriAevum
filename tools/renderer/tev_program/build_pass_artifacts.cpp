@@ -6,6 +6,8 @@
 #include "spirv_pack_file.h"
 #include <shaderc/shaderc.hpp>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 
@@ -15,8 +17,10 @@ static void Check(bool ok, const std::string& message) {
 }
 
 int main(int argc, char** argv) try {
-    Check(argc == 2, "usage: build_pass_artifacts builtin_pass.spvpack|--check");
+    Check(argc == 2 || (argc == 3 && std::string_view(argv[1]) == "--compile-benchmark"),
+          "usage: build_pass_artifacts builtin_pass.spvpack|--check|--compile-benchmark ROUNDS");
     const bool check = std::string_view(argv[1]) == "--check";
+    const bool benchmark = std::string_view(argv[1]) == "--compile-benchmark";
     auto passes = Fast::Extension::BuildBuiltinPassShaders();
     const auto nativePassCount = passes.size();
     // The compatibility scanout uses the older Vulkan 1.1 descriptor contract.
@@ -45,6 +49,65 @@ int main(int argc, char** argv) try {
                                  BuildCompatibilityFragmentShader(features, srgb));
             }
         }
+    }
+    if (benchmark) {
+        // The runtime's compile functions (one compiler per thread) against a
+        // compiler built for every shader, as the runtime did before: the same
+        // SPIR-V words, and the time of each over ROUNDS passes of the catalogue.
+        // The per-shader compilers run first, while no other compiler lives
+        // (a live one would keep glslang initialized for them).
+        const int rounds = std::max(1, std::atoi(argv[2]));
+        using Clock = std::chrono::steady_clock;
+        const auto minorOf = [&](size_t i) -> uint32_t { return i < nativePassCount ? 2 : 1; };
+        std::vector<std::vector<uint32_t>> fresh(passes.size());
+        auto start = Clock::now();
+        for (int round = 0; round < rounds; ++round) {
+            for (size_t i = 0; i < passes.size(); ++i) {
+                const auto& pass = passes[i];
+                const auto kind = pass.Stage == SpirvStage::Vertex ? shaderc_vertex_shader :
+                                  pass.Stage == SpirvStage::Fragment ? shaderc_fragment_shader : shaderc_compute_shader;
+                shaderc::Compiler compiler;
+                shaderc::CompileOptions options;
+                options.SetTargetEnvironment(shaderc_target_env_vulkan,
+                    minorOf(i) == 2 ? shaderc_env_version_vulkan_1_2 : shaderc_env_version_vulkan_1_1);
+                options.SetOptimizationLevel(shaderc_optimization_level_performance);
+                for (const auto& [key, value] : pass.Defines) options.AddMacroDefinition(key, value);
+                const auto result = compiler.CompileGlslToSpv(pass.Source.data(), pass.Source.size(), kind,
+                                                              pass.Name, options);
+                Check(result.GetCompilationStatus() == shaderc_compilation_status_success, result.GetErrorMessage());
+                std::vector<uint32_t> words(result.cbegin(), result.cend());
+                Check(round == 0 || words == fresh[i], std::string("fresh compile not repeatable: ") + pass.Name);
+                fresh[i] = std::move(words);
+            }
+        }
+        const double freshSeconds = std::chrono::duration<double>(Clock::now() - start).count();
+        size_t words = 0;
+        start = Clock::now();
+        for (int round = 0; round < rounds; ++round) {
+            for (size_t i = 0; i < passes.size(); ++i) {
+                const auto& pass = passes[i];
+                Check(minorOf(i) == 2 || pass.Defines.empty(), "a Vulkan 1.1 pass with macros");
+                const auto reused = minorOf(i) == 2
+                    ? CompilePassShaderSpirv(pass.Source, pass.Stage, pass.Name, pass.Defines)
+                    : CompileShadercSpirv(pass.Source, pass.Stage, pass.Name);
+                Check(reused == fresh[i], std::string("reused compiler changed the SPIR-V of ") + pass.Name);
+                words += reused.size();
+            }
+        }
+        const double reusedSeconds = std::chrono::duration<double>(Clock::now() - start).count();
+        for (size_t i = 0; i < passes.size(); ++i) {
+            const auto stored = FindPassShaderArtifact(BuiltinPassArtifacts(), passes[i].Source, passes[i].Stage,
+                                                       passes[i].Defines, minorOf(i));
+            Check(stored.size() == fresh[i].size() && std::equal(stored.begin(), stored.end(), fresh[i].begin()),
+                  std::string("stored artifact differs from a fresh compile of ") + passes[i].Name);
+        }
+        const auto audit = ShadercCompilationAudit();
+        std::cout << "shaderc_compile_benchmark shaders=" << passes.size() << " rounds=" << rounds
+                  << " identical_words=" << words << " audit_calls=" << audit.Calls
+                  << " compiler_per_shader_ms=" << freshSeconds * 1000.0
+                  << " compiler_per_thread_ms=" << reusedSeconds * 1000.0
+                  << " speedup=" << (reusedSeconds > 0.0 ? freshSeconds / reusedSeconds : 0.0) << '\n';
+        return 0;
     }
     SpirvPackFile pack;
     shaderc::Compiler compiler;

@@ -138,6 +138,40 @@ class ShadercAuditScope {
   private:
     std::chrono::steady_clock::time_point mStart;
 };
+
+// One compiler per thread, kept for the thread's lifetime. A compiler built
+// for every call set glslang up again for every shader, about 2.5 times the
+// time of a reused compiler on desktop (build_pass_artifacts
+// --compile-benchmark). Reuse changes no output: the target,
+// optimization level and macros are set per call exactly as before, and the
+// cache contract ("shaderc/vulkan1.1/performance", "pass-vulkan1.2/performance")
+// still names them. A compiler may serve one call at a time per thread.
+shaderc::Compiler& ThreadCompiler() {
+    thread_local shaderc::Compiler compiler;
+    return compiler;
+}
+
+std::vector<uint32_t> CompileShaderc(std::string_view source, SpirvStage stage, const char* name,
+                                     shaderc_env_version vulkan, const ShaderDefines* defines) {
+    shaderc_shader_kind kind;
+    switch (stage) {
+        case SpirvStage::Vertex: kind = shaderc_vertex_shader; break;
+        case SpirvStage::Fragment: kind = shaderc_fragment_shader; break;
+        case SpirvStage::Compute: kind = shaderc_compute_shader; break;
+        default: throw std::invalid_argument("unsupported shader stage");
+    }
+    const ShadercAuditScope audit;
+    shaderc::CompileOptions options;
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, vulkan);
+    options.SetOptimizationLevel(shaderc_optimization_level_performance);
+    if (defines != nullptr)
+        for (const auto& [key, value] : *defines) options.AddMacroDefinition(key, value);
+    const auto result = ThreadCompiler().CompileGlslToSpv(source.data(), source.size(), kind, name, options);
+    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
+        throw std::runtime_error(std::string("shaderc failed for ") + (name != nullptr ? name : "") + ": " +
+                                 result.GetErrorMessage());
+    return {result.cbegin(), result.cend()};
+}
 }
 
 ShadercAudit ShadercCompilationAudit() {
@@ -153,22 +187,12 @@ const std::string& ShadercCompilerContract() {
 }
 
 std::vector<uint32_t> CompileShadercSpirv(std::string_view source, SpirvStage stage, const char* name) {
-    shaderc_shader_kind kind;
-    switch (stage) {
-        case SpirvStage::Vertex: kind = shaderc_vertex_shader; break;
-        case SpirvStage::Fragment: kind = shaderc_fragment_shader; break;
-        case SpirvStage::Compute: kind = shaderc_compute_shader; break;
-        default: throw std::invalid_argument("unsupported shader stage");
-    }
-    const ShadercAuditScope audit;
-    shaderc::Compiler compiler;
-    shaderc::CompileOptions options;
-    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
-    options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    const auto result = compiler.CompileGlslToSpv(source.data(), source.size(), kind, name, options);
-    if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-        throw std::runtime_error(std::string("shaderc failed for ") + name + ": " + result.GetErrorMessage());
-    return {result.cbegin(), result.cend()};
+    return CompileShaderc(source, stage, name, shaderc_env_version_vulkan_1_1, nullptr);
+}
+
+std::vector<uint32_t> CompilePassShaderSpirv(std::string_view source, SpirvStage stage, const char* name,
+                                             const ShaderDefines& defines) {
+    return CompileShaderc(source, stage, name, shaderc_env_version_vulkan_1_2, &defines);
 }
 
 void CachedPassShaderCompiler::Configure(std::filesystem::path directory) {
@@ -223,25 +247,7 @@ std::vector<uint32_t> CachedPassShaderCompiler::Resolve(
         const auto& compiler = ShadercCompilerContract();
         entry->second.Configure(mDirectory, compiler.empty() ? std::string{} : compiler + variant);
     }
-    return entry->second.Resolve(source, stage, [&] {
-        shaderc_shader_kind kind;
-        switch (stage) {
-            case SpirvStage::Vertex: kind = shaderc_vertex_shader; break;
-            case SpirvStage::Fragment: kind = shaderc_fragment_shader; break;
-            case SpirvStage::Compute: kind = shaderc_compute_shader; break;
-            default: throw std::invalid_argument("unsupported pass shader stage");
-        }
-        const ShadercAuditScope audit;
-        shaderc::Compiler compiler;
-        shaderc::CompileOptions options;
-        options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_2);
-        options.SetOptimizationLevel(shaderc_optimization_level_performance);
-        for (const auto& [key, value] : defines) options.AddMacroDefinition(key, value);
-        const auto result = compiler.CompileGlslToSpv(source.data(), source.size(), kind, name, options);
-        if (result.GetCompilationStatus() != shaderc_compilation_status_success)
-            throw std::runtime_error(std::string(name) + ": " + result.GetErrorMessage());
-        return std::vector<uint32_t>(result.cbegin(), result.cend());
-    });
+    return entry->second.Resolve(source, stage, [&] { return CompilePassShaderSpirv(source, stage, name, defines); });
 }
 
 SpirvCacheStats CachedPassShaderCompiler::Stats() const {
