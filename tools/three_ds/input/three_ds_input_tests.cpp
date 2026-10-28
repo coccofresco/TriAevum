@@ -730,6 +730,23 @@ int main() try {
         reconnected[0].InstanceId = 50;
         Require(SelectControllerDevice(reconnected, "pad", "aa01", 7) == 50,
                 "reconnect persisted an obsolete session ID");
+        // Rank (Android: a pad with both sticks) wins the automatic selection
+        // over lower instances and over an active lower-ranked device; equal
+        // ranks keep the rules above; an explicit preference still decides.
+        auto ranked = devices;
+        ranked[0].Rank = 1; // instance 7
+        Require(SelectControllerDevice(ranked, "", "") == 7 && SelectControllerDevice(ranked, "", "", 1) == 7,
+                "a full gamepad lost the automatic selection to a remote-like device");
+        ranked[1].Rank = 1; // instance 3
+        Require(SelectControllerDevice(ranked, "", "") == 3 && SelectControllerDevice(ranked, "", "", 7) == 7,
+                "equal ranks no longer pick the lowest instance or keep the active device");
+        Require(SelectControllerDevice(ranked, "virtual", "") == 1,
+                "rank overrode an explicit preference");
+        auto previousFirst = ranked;
+        std::swap(previousFirst[0], previousFirst[1]); // the active pad enumerated first
+        Require(SelectControllerDevice(previousFirst, "", "", 7) == 7 &&
+                SelectControllerDevice(previousFirst, "", "", 1) == 3,
+                "rank selection depends on enumeration order");
     }
     using namespace ThreeDsRecomp::Input;
     TestVirtualMotion();

@@ -65,6 +65,15 @@ inline bool IsSdlKeyboardActive() {
     return false;
 }
 
+// A pad with both sticks (what a 3DS game needs: Circle Pad and C-Stick).
+inline bool IsFullSdlGamepad(SDL_GameController* controller) {
+    return controller != nullptr &&
+           SDL_GameControllerHasAxis(controller, SDL_CONTROLLER_AXIS_LEFTX) == SDL_TRUE &&
+           SDL_GameControllerHasAxis(controller, SDL_CONTROLLER_AXIS_LEFTY) == SDL_TRUE &&
+           SDL_GameControllerHasAxis(controller, SDL_CONTROLLER_AXIS_RIGHTX) == SDL_TRUE &&
+           SDL_GameControllerHasAxis(controller, SDL_CONTROLLER_AXIS_RIGHTY) == SDL_TRUE;
+}
+
 inline SdlControllerSelection ResolveSdlController(
     const std::unordered_map<std::int32_t, SDL_GameController*>& connected,
     std::string_view guid, std::string_view serial, std::int32_t previousInstance) {
@@ -89,6 +98,13 @@ inline SdlControllerSelection ResolveSdlController(
 #endif
 #if SDL_VERSION_ATLEAST(2, 0, 18)
         device.HasRumble = SDL_GameControllerHasRumble(controller) == SDL_TRUE;
+#endif
+#if defined(__ANDROID__)
+        // SDL's automatic Android mapping makes any input device with a face
+        // button (DPAD_CENTER counts as A) a game controller: a TV remote or a
+        // system device opened first would otherwise be the lowest instance
+        // and win the automatic selection over the real pad.
+        device.Rank = IsFullSdlGamepad(controller) ? 1 : 0;
 #endif
         result.Devices.push_back(std::move(device));
     }

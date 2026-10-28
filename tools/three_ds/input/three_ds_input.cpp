@@ -180,11 +180,27 @@ bool MatchesController(const DeviceDescriptor& device, std::string_view guid,
 
 std::int32_t SelectControllerDevice(std::span<const DeviceDescriptor> devices,
     std::string_view guid, std::string_view serial, std::int32_t previousInstance) {
+    // Among the matching devices of the highest rank: the attached active
+    // device, else the lowest instance. With equal ranks (every platform but
+    // Android) this is the previous rule exactly.
     std::int32_t selected = -1;
+    std::int32_t bestRank = 0;
+    bool keptPrevious = false;
     for (const auto& device : devices) {
         if (device.InstanceId < 0 || !MatchesController(device, guid, serial)) continue;
-        if (device.InstanceId == previousInstance) return previousInstance;
-        if (selected < 0 || device.InstanceId < selected) selected = device.InstanceId;
+        if (selected < 0 || device.Rank > bestRank) {
+            selected = device.InstanceId;
+            bestRank = device.Rank;
+            keptPrevious = device.InstanceId == previousInstance;
+            continue;
+        }
+        if (device.Rank < bestRank || keptPrevious) continue;
+        if (device.InstanceId == previousInstance) {
+            selected = previousInstance;
+            keptPrevious = true;
+        } else if (device.InstanceId < selected) {
+            selected = device.InstanceId;
+        }
     }
     return selected;
 }

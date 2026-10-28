@@ -412,6 +412,11 @@ struct DeviceDescriptor {
     PromptSet Prompts = PromptSet::Generic;
     // SDL reports a rumble motor on the pad.
     bool HasRumble = false;
+    // Automatic selection prefers the highest rank (ties: the attached active
+    // device, else the lowest instance). 0 everywhere except Android, where a
+    // pad with both sticks ranks 1 over TV remotes, D-pad-only and system
+    // devices that SDL's automatic Android mapping also makes game controllers.
+    std::int32_t Rank = 0;
 };
 
 // SDL's name of the type ("xbox_one", "ps5", ...), for logs.
