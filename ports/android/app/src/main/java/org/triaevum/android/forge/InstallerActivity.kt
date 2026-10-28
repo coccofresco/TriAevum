@@ -129,8 +129,12 @@ class InstallerActivity : Activity() {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             val bound = (binder as InstallService.Local).service
             service = bound
-            if (!bound.snapshot.running) InstallService.takeInterrupted(this@InstallerActivity)?.let { interrupted = it }
+            val found = if (bound.snapshot.running) null else InstallService.takeInterrupted(this@InstallerActivity)
+            found?.let { interrupted = it }
             bound.attach(listener)
+            // The checkpoint is read once: the inspection may already have drawn the state card
+            // without it (a new process binds after its first inspection), so draw it again.
+            if (found != null) renderState()
             waitingForService.toList().forEach { it(bound) }
             waitingForService.clear()
         }
