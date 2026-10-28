@@ -789,6 +789,11 @@ void GfxRenderingAPIVulkan::PresentWorkerMain() {
             mPresentSwapchainDirty.store(true);
         } else if (present == VK_SUBOPTIMAL_KHR) {
             mSwapchainSuboptimal.store(true);
+#if defined(__ANDROID__)
+        } else if (present == VK_ERROR_SURFACE_LOST_KHR) {
+            // The Activity's surface went away: StartFrame rebuilds it.
+            NoteAndroidSurfaceLost("present");
+#endif
         } else if (present != VK_SUCCESS) {
             mPresentError.store(static_cast<int32_t>(present));
         }

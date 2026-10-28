@@ -1,6 +1,7 @@
 #include "android_host.h"
 
 #include <SDL.h>
+#include <atomic>
 #include <cstdio>
 #include <filesystem>
 #include <jni.h>
@@ -14,6 +15,7 @@ namespace {
 
 std::mutex installerPageMutex;
 std::string installerPage;
+std::atomic<bool> pauseRequested{false};
 
 // org.triaevum.android.diagnostics.StartupDiagnostics.nativeStage(String):
 // resolved once on SDL's main thread (a Java thread, so the app's class
@@ -73,7 +75,17 @@ JNIEXPORT jstring JNICALL Java_org_triaevum_android_NativeHostBridge_takeInstall
     return page.empty() ? nullptr : env->NewStringUTF(page.c_str());
 }
 
+// org.triaevum.android.NativeHostBridge.requestPause(): the Activity is
+// leaving the foreground (UI thread).
+JNIEXPORT void JNICALL Java_org_triaevum_android_NativeHostBridge_requestPause(JNIEnv*, jobject) {
+    pauseRequested.store(true, std::memory_order_release);
+}
+
 } // extern "C"
+
+bool TakeAndroidPauseRequest() noexcept {
+    return pauseRequested.exchange(false, std::memory_order_acq_rel);
+}
 
 void InitializeAndroidGameHost() {
     InstallStartupCheckpoints();

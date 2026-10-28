@@ -7,4 +7,10 @@ object NativeHostBridge {
      * "diagnostics"), once; null when none was asked for.
      */
     external fun takeInstallerPage(): String?
+
+    /**
+     * The activity is leaving the foreground: the game opens its menu (the menu's hold), so it
+     * waits for the player when they come back.
+     */
+    external fun requestPause()
 }

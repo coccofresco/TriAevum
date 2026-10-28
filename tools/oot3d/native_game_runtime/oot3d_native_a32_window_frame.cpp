@@ -7,6 +7,9 @@
 #include "oot3d_native_room_shadow_shell.h"
 #include "ship/config/Config.h"
 #include "three_ds_touch_overlay_settings.h"
+#if defined(__ANDROID__)
+#include "android_host.h"
+#endif
 
 namespace Oot3dA32Window {
 
@@ -580,6 +583,14 @@ bool NativeA32WindowSession::RunFrame() {
     nativeControlPollingState.TouchCameraReleaseRequested = false;
     nativeCandidateDispatch.TopScreenCamera.Camera.Active = false;
   }
+#if defined(__ANDROID__)
+  // Leaving the app (Home, another app, the screen off) is a pause through
+  // the menu's hold: the menu opens, never closes from this, so the game
+  // waits for the player when they come back. The renderer rebuilds the
+  // lost surface meanwhile (gfx_vulkan_android_surface.cpp).
+  if (TakeAndroidPauseRequest() && !inGameMenu.HoldsGame())
+    nativeControlPollingState.Menu.Toggle = true;
+#endif
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // A dev lab "menu" command replaces the host controls with its presses.
   inGameMenu.Update(devLabMenuDriving ? devLabMenuInput : nativeControlPollingState.Menu, imGuiOwnsInput,

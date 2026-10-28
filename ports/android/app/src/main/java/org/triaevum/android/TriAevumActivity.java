@@ -89,6 +89,14 @@ public final class TriAevumActivity extends SDLActivity {
 
     @Override protected void onPause() {
         StartupDiagnostics.stage(this, "paused");
+        // Leaving the game is a pause: the game's menu holds it until the player is back.
+        if (!mBrokenLibraries) {
+            try {
+                NativeHostBridge.INSTANCE.requestPause();
+            } catch (UnsatisfiedLinkError error) {
+                // The game's library is not loaded yet: nothing runs to pause.
+            }
+        }
         if (touchAdapter != null) touchAdapter.releaseAll();
         if (touchInput != null) touchInput.pause();
         super.onPause();

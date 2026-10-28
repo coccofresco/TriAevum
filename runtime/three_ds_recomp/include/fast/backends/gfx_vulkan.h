@@ -1024,6 +1024,15 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void DestroyBuffer(BufferAllocation& buffer);
     void RecreateSwapchain();
     bool SwapchainSurfaceChanged() const;
+#if defined(__ANDROID__)
+    // Android surface loss (gfx_vulkan_android_surface.cpp): the Activity's
+    // window goes away in the background and comes back as a new one. A lost
+    // or absent surface is a pause, not an error: no frame is begun until
+    // EnsureAndroidSurface has rebuilt the surface and the swapchain.
+    bool EnsureAndroidSurface();
+    void DropAndroidSurface(const char* reason);
+    void NoteAndroidSurfaceLost(const char* where) noexcept;
+#endif
     QueueFamilies FindQueueFamilies(VkPhysicalDevice device) const;
     SwapchainSupport QuerySwapchainSupport(VkPhysicalDevice device) const;
     bool DeviceSupportsSwapchain(VkPhysicalDevice device) const;
@@ -1252,6 +1261,13 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     std::atomic_bool mPresentSwapchainDirty = false;
     std::atomic_bool mSwapchainSuboptimal = false;
     std::atomic<int32_t> mPresentError = VK_SUCCESS;
+#if defined(__ANDROID__)
+    // Set by acquire/present (any thread) on VK_ERROR_SURFACE_LOST_KHR.
+    std::atomic<bool> mAndroidSurfaceLost{false};
+    // The ANativeWindow mSurface was created for; SDL replaces it after the
+    // Activity's surface was destroyed and created again.
+    void* mAndroidNativeWindow = nullptr;
+#endif
     std::vector<VkFence> mImagesInFlight;
     VkDescriptorSetLayout mTextureDescriptorSetLayout = VK_NULL_HANDLE;
     VkPipelineLayout mPipelineLayout = VK_NULL_HANDLE;

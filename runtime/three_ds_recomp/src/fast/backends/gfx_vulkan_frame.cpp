@@ -644,6 +644,14 @@ void GfxRenderingAPIVulkan::StartFrame() {
     if (requestedSampleCount != mNativePicaSampleCount) {
         ApplyNativePicaSampleCount(requestedSampleCount);
     }
+#if defined(__ANDROID__)
+    // A lost or absent Android surface (the Activity in the background) is a
+    // pause: no frame until the surface and swapchain are rebuilt. Before the
+    // suboptimal check below, which would query the surface.
+    if (!EnsureAndroidSurface()) {
+        return;
+    }
+#endif
     if (mPresentSwapchainDirty.exchange(false)) {
         mSwapchainDirty = true;
     }
@@ -652,6 +660,12 @@ void GfxRenderingAPIVulkan::StartFrame() {
     }
     const auto presentError = static_cast<VkResult>(mPresentError.exchange(VK_SUCCESS));
     if (presentError != VK_SUCCESS) {
+#if defined(__ANDROID__)
+        if (presentError == VK_ERROR_SURFACE_LOST_KHR) {
+            NoteAndroidSurfaceLost("present");
+            return;
+        }
+#endif
         CheckVk(presentError, "asynchronous vkQueuePresentKHR");
     }
     if (std::abs(requestedInternalResolutionScale -
@@ -749,6 +763,12 @@ void GfxRenderingAPIVulkan::StartFrame() {
             mSwapchainDirty = true;
             return;
         }
+#if defined(__ANDROID__)
+        if (acquire == VK_ERROR_SURFACE_LOST_KHR) {
+            NoteAndroidSurfaceLost("acquire");
+            return;
+        }
+#endif
         break;
     }
     if (acquire != VK_SUCCESS && acquire != VK_SUBOPTIMAL_KHR) {
@@ -998,6 +1018,10 @@ void GfxRenderingAPIVulkan::FinishRender() {
             mSwapchainDirty = true;
         } else if (present == VK_SUBOPTIMAL_KHR) {
             mSwapchainSuboptimal.store(true);
+#if defined(__ANDROID__)
+        } else if (present == VK_ERROR_SURFACE_LOST_KHR) {
+            NoteAndroidSurfaceLost("present");
+#endif
         } else if (present != VK_SUCCESS) {
             CheckVk(present, "vkQueuePresentKHR");
         }
