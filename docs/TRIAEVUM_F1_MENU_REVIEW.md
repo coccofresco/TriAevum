@@ -1,5 +1,24 @@
 # F1 settings rationalization
 
+## Folders inside a moved installation (2026-10-28, issue #124)
+
+Materials > Texture packs: a folder chosen with **Browse...** inside the
+portable installation (settings in `<A>/data/config`) is stored relative to
+the settings folder, so it still loads after the TriAevum folder is moved or
+renamed; a folder outside stays as chosen. A relative folder is read from the
+settings folder, never from the working folder
+(`fast/extension/portable_path_setting.h`; the window host names the folder
+through `AzaharTextureHostDefaults::SettingsDirectory`). The save-state
+folder and last state of F1 > Save states follow the same rule in
+`savestates.json`. Nothing on the panel changed.
+
+Verification: the actual-widget smoke (`CheckTexturePackBrowseAndImport`)
+browses to `<installation>/packs/HD` (stored `../../packs/HD`, the runtime
+loads from the installation's folder), then to a folder outside (stored as
+chosen). Actual-widget smoke: **11,983 assertions** on this tree; unit tests
+`FolderSettingsFollowAMovedInstallation`, `oot3d_native_a32_savestate_tests`
+and `triaevum_data_routing_tests` (installation renamed, reopened).
+
 ## Texture pack Browse and Import (2026-10-26)
 
 UX plan WP-07: Materials > Texture packs keeps its folder fields and gains

@@ -189,6 +189,34 @@ from `P/savestates/` to `D/savestates/`:
 - if anything fails, the game keeps using `P/savestates/` and tries again
   at the next start.
 
+### Moving or renaming the installation
+
+A Windows installation (and a plain Linux folder) is portable: the whole
+TriAevum folder can be moved or renamed, also to another drive, and it keeps
+working without the ROM (issue #124).
+
+- The launch profile names every file of the installation through
+  `${runtime_dir}` or `${profile_dir}`, and the installation records
+  (`active-title.json`, the prepared game's `forge-state.json`) use paths
+  relative to themselves.
+- Settings that name a file or folder inside the installation are stored
+  relative to the settings folder `D/config`: the save-state folder and the
+  last state in `savestates.json`, the F1 custom texture and dump folders in
+  `TriAevum.json`, and the save-state copy's record in `migrations.json`.
+  A folder you chose outside the installation stays as you chose it.
+- Values that earlier versions stored as absolute paths into the old
+  location are found again in the moved folder (the last state by its file
+  name in the save-state folder; a folder by the part of its path below the
+  installation folder) and are rewritten relative the next time they are
+  saved.
+- Forge reads the moved installation as ready. Update and Repair work there
+  without the ROM; Repair reuses the interior-sun data made at the old
+  location instead of preparing it again.
+- Reports that only describe a past run (`runtime-state.json`,
+  `shader-seeds/*/latest.json`) keep the absolute paths of that run. The
+  hash cache `titles/.hash-cache.json` keys files by path; after a move its
+  old entries are simply not used.
+
 ## What a backup holds
 
 A backup is one zip (`triaevum_backup_v1`): a `manifest.json` (version,
