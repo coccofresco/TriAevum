@@ -5,7 +5,7 @@
 #include "fast/renderer3ds/pica_motion_provenance.h"
 #include "fast/renderer3ds/point_shadow_map.h"
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
-#include "fast/renderer3ds/pica_shadow_probe.h"
+#include "fast/extension/pica_shadow_probe.h"
 #endif
 #include "fast/renderer3ds/pica_surface_lighting.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
@@ -1428,8 +1428,8 @@ vec3 pica_surface_shadow(int slot) {
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     if (surfaceShadow && result.Hooks.Has(PicaShaderSemantic::NativeColorOutput) &&
         HasPicaShaderInstrumentationFeature(request.RequestedFeatures, PicaShaderInstrumentationFeature::ShadowProbe) &&
-        Renderer3ds::InstrumentPicaShadowProbe(declarations)) {
-        epilogue += Renderer3ds::kPicaShadowProbeEpilogue;
+        InstrumentPicaShadowProbe(declarations)) {
+        epilogue += kPicaShadowProbeEpilogue;
         result.FragmentKey = SaltedVariantKey(result.FragmentKey, "TRIAEVUM_SHADOW_PROBE_V1");
         decisions.ShadowProbe = true;
         apply(PicaShaderInstrumentationFeature::ShadowProbe);

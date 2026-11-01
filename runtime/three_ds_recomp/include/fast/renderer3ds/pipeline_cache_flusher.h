@@ -6,7 +6,7 @@
 // preparation on a slow driver); the flusher writes the cache from its own
 // below-normal thread whenever enough new pipelines have accumulated, through
 // the same atomic store the shutdown path uses. Adapted from the WINDROID
-// fork's periodic cache flush (RECOMP-ZELDA-3DS-ANDROID, 857081f).
+// fork's periodic cache flush (WINDROID-EMU Android port, commit 857081f).
 
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 

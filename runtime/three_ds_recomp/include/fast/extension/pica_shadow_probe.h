@@ -3,7 +3,10 @@
 #include <string>
 #include <string_view>
 #include <utility>
-namespace Fast::Renderer3ds {
+// The epilogue reads the directional-shadow lighting symbols this extension
+// defines, so the probe lives beside them rather than in the title-neutral
+// renderer.
+namespace Fast::Extension {
 // Reject a stale source contract atomically. Default variants never call this.
 inline bool InstrumentPicaShadowProbe(std::string& declarations) {
     std::string result = declarations;
@@ -77,5 +80,5 @@ inline constexpr std::string_view kPicaShadowProbeEpilogue = R"glsl(
         }
     }
 )glsl";
-} // namespace Fast::Renderer3ds
+} // namespace Fast::Extension
 #endif
