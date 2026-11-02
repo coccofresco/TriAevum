@@ -343,10 +343,18 @@ bool NativeA32WindowSession::RunFrame() {
 #endif
   hdFonts.SetOutputHeight(height);
   UpdateScenePresentation();
+#if defined(__APPLE__)
+  // Input uses window points, but UI draws share the scene's drawable-pixel
+  // viewport. Fitting them to the logical picture shrinks and displaces the
+  // HUD and menus on Retina displays.
+  const auto uiPicture = Fast::Extension::ResolvePresentationPicture(
+      width, height, Fast::Extension::GraphicsSettingsRuntime::Instance().Snapshot().Aspect);
+#else
+  const auto &uiPicture = presentationPicture;
+#endif
   // The presentation picture every UI canvas is fitted into this frame.
   const oot3d::ui::N64UiOutputRegion uiRegion{
-      presentationPicture.X, presentationPicture.Y, presentationPicture.Width,
-      presentationPicture.Height};
+      uiPicture.X, uiPicture.Y, uiPicture.Width, uiPicture.Height};
   phaseStart = std::chrono::steady_clock::now();
   Fast::Renderer3ds::SlowStepTrace hostStartSteps("host_frame_start");
   window.GetMouseStateManager()->StartFrame();
@@ -686,8 +694,12 @@ bool NativeA32WindowSession::RunFrame() {
   // (the overlay may place them beside the picture) with the HUD's content
   // for its buttons and cross.
   Oot3dNativeGame::TopScreenTouchControlsPresentation touchControls;
+#if defined(__APPLE__)
+  const oot3d::ui::N64UiOutputRegion windowRegion{0U, 0U, width, height};
+#else
   const oot3d::ui::N64UiOutputRegion windowRegion{0U, 0U, std::max<uint32_t>(1, window.GetWidth()),
                                                   std::max<uint32_t>(1, window.GetHeight())};
+#endif
   const float touchCanvasWidth =
       240.0F * static_cast<float>(windowRegion.Width) / static_cast<float>(windowRegion.Height);
   const auto touchAnchors = ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot();

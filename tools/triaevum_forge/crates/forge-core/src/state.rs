@@ -485,6 +485,12 @@ impl<'a> Context<'a> {
         let Some(Value::Object(receipt)) = prepared.state.get("runtime") else {
             return Ok(repair(RepairReason::ReceiptMismatch, "The active title has no playable runtime receipt"));
         };
+        if self.platform == forge_catalog::MACOS
+            && receipt.get("plugin_sha256")
+                != prepared.state.get("module").and_then(|module| module.get("title_aot_image_sha256"))
+        {
+            return Ok(repair(RepairReason::ReceiptMismatch, "The installed title receipt changed; run Forge again"));
+        }
         if !runtime.is_file() {
             return Ok(repair(RepairReason::RuntimeMissing, "The installed game runtime is missing"));
         }
@@ -495,7 +501,7 @@ impl<'a> Context<'a> {
             return Ok(incompatible(IncompatibleReason::PackageIntegrity, details));
         }
         let verdict = match self.android {
-            None => self.desktop_runtime(&runtime, &present_sha, receipt, &prepared.directory)?,
+            None => self.desktop_runtime(&runtime, &present_sha, receipt, &prepared.directory, item)?,
             Some(android) => self.android_runtime(android, item, &present_sha, receipt)?,
         };
         let update = match verdict {
@@ -554,6 +560,7 @@ impl<'a> Context<'a> {
         present_sha: &str,
         receipt: &Map<String, Value>,
         title: &Path,
+        candidate: &Map<String, Value>,
     ) -> Result<Verdict> {
         // The present runtime is the catalog's (checked by the caller): a
         // receipt naming another one belongs to the previous package. The
@@ -566,6 +573,25 @@ impl<'a> Context<'a> {
         let mut receipt = receipt.clone();
         if update && executable == present {
             receipt.insert("runtime_sha256".into(), json!(present_sha));
+        }
+        if self.platform == forge_catalog::MACOS {
+            let plugin = match forge_catalog::precompiled::checked_file(
+                &self.package,
+                &candidate["plugin"],
+                &CancelToken::new(),
+            ) {
+                Ok(plugin) => plugin,
+                Err(error) => {
+                    return Ok(Verdict::State(incompatible(IncompatibleReason::PackageIntegrity, error.message)))
+                }
+            };
+            if resolve_reference(text(&receipt, "plugin"), title)? != plugin {
+                return Ok(Verdict::State(repair(
+                    RepairReason::ReceiptMismatch,
+                    "The bundled title path changed; run Forge again",
+                )));
+            }
+            receipt.insert("plugin_sha256".into(), candidate["plugin"]["sha256"].clone());
         }
         Ok(match forge_native::validate_installed_runtime(&executable, title, &self.data_root, &receipt) {
             Ok(_) => Verdict::Coherent { update },

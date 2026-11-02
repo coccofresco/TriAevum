@@ -232,6 +232,14 @@ GraphicsSettings ProductDefaultGraphicsSettings() {
     // material guide on every scene draw, the composite) cost ~4 ms of an
     // 18 ms frame on the Adreno 830 for reflections that are mostly sky.
     settings.Effects.WaterReflections = false;
+#elif defined(__APPLE__)
+    // The default 1280x720-point Retina window has a 2560x1440 drawable.
+    // Start at half drawable resolution on Apple GPUs, retaining Enhanced's
+    // VSM, point shadows, PBR and grass. The full preset remains selectable.
+    settings.InternalResolutionScale = 0.5F;
+    settings.Effects.WaterReflections = false;
+    // The macOS runtime does not build the separately licensed MXAO module.
+    settings.Effects.AmbientOcclusion = AmbientOcclusionMode::Off;
 #endif
     return settings;
 }

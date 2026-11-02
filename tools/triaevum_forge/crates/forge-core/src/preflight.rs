@@ -148,6 +148,11 @@ pub fn check_storage(folder: &Path, estimate: &StorageEstimate, available: Optio
 /// The warning for a system without the Vulkan loader, None otherwise.
 pub fn vulkan_loader_warning() -> Option<String> {
     (!forge_native::system::vulkan_loader_present()).then(|| {
+        if cfg!(target_os = "macos") {
+            return "Warning: the app's Vulkan graphics library could not be loaded. Extract a fresh complete \
+                    TriAevum app before playing. The installation continues."
+                .to_string();
+        }
         format!(
             "Warning: the Vulkan loader ({}) was not found on this system. The game draws with Vulkan: install or \
              update the graphics driver before playing. The installation continues.",

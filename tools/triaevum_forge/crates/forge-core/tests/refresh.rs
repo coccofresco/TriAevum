@@ -86,12 +86,22 @@ fn a_replaced_package_is_bound_without_the_rom_and_keeps_everything() {
     let new_receipt = receipt(&fixture);
     assert_eq!(new_receipt["runtime_sha256"], sha256_hex(NEW_RUNTIME));
     assert_eq!(new_receipt["plugin_sha256"], sha256_hex(NEW_PLUGIN));
-    assert_ne!(new_receipt["launch_profile_sha256"], old_receipt["launch_profile_sha256"]);
+    if host() != forge_catalog::MACOS {
+        assert_ne!(new_receipt["launch_profile_sha256"], old_receipt["launch_profile_sha256"]);
+    } else {
+        assert_eq!(new_receipt["launch_profile_sha256"], old_receipt["launch_profile_sha256"]);
+    }
     // Immutable plugin generations: the new one is added, the old one stays.
     let generations = fixture.package.join("private-plugins");
-    for plugin in [b"MZ fake title plugin".as_slice(), NEW_PLUGIN] {
-        let generation = generations.join(sha256_hex(plugin)).join(host().title_module);
-        assert_eq!(std::fs::read(&generation).unwrap(), plugin);
+    if host() == forge_catalog::MACOS {
+        assert!(!generations.exists(), "the signed title remains inside the app");
+        let plugin = fixture.package.join("titles").join(common::RECIPE).join(host().title_module);
+        assert_eq!(std::fs::read(plugin).unwrap(), NEW_PLUGIN);
+    } else {
+        for plugin in [b"MZ fake title plugin".as_slice(), NEW_PLUGIN] {
+            let generation = generations.join(sha256_hex(plugin)).join(host().title_module);
+            assert_eq!(std::fs::read(&generation).unwrap(), plugin);
+        }
     }
     // The packaged runtime was placed in the installation root.
     assert_eq!(std::fs::read(fixture.package.join(host().installed_runtime)).unwrap(), NEW_RUNTIME);
@@ -140,12 +150,20 @@ fn a_downgrade_needs_a_confirmation() {
 fn old_plugin_and_profile_damage_is_not_laundered() {
     let (fixture, _) = installed();
     replace_package(&fixture, None, NEW_RUNTIME, NEW_PLUGIN);
-    let generation =
-        fixture.package.join("private-plugins").join(sha256_hex(b"MZ fake title plugin")).join(host().title_module);
+    let bundled = host() == forge_catalog::MACOS;
+    let generation = if bundled {
+        fixture.package.join("titles").join(common::RECIPE).join(host().title_module)
+    } else {
+        fixture.package.join("private-plugins").join(sha256_hex(b"MZ fake title plugin")).join(host().title_module)
+    };
     std::fs::write(&generation, b"damaged").unwrap();
     let error = refresh(&fixture).unwrap_err();
-    assert!(error.message.starts_with("Installed runtime identity mismatch"), "{}", error.message);
-    std::fs::write(&generation, b"MZ fake title plugin").unwrap();
+    if bundled {
+        assert_eq!(error.kind, ErrorKind::ArtifactIntegrity);
+    } else {
+        assert!(error.message.starts_with("Installed runtime identity mismatch"), "{}", error.message);
+    }
+    std::fs::write(&generation, if bundled { NEW_PLUGIN } else { b"MZ fake title plugin" }).unwrap();
     let profile = fixture.launch_profile();
     let original = std::fs::read(&profile).unwrap();
     std::fs::write(&profile, b"{}").unwrap();

@@ -156,6 +156,9 @@ fn python_and_rust_refuse_the_same_installations() {
     let snapshot = fixture.package.with_file_name("snapshot");
     copy_tree(&fixture.package, &snapshot);
     let old_generation = || {
+        if common::host() == forge_catalog::MACOS {
+            return fixture.package.join("titles").join(common::RECIPE).join(common::host().title_module);
+        }
         fixture
             .package
             .join("private-plugins")

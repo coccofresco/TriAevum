@@ -1318,6 +1318,17 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsAndInfersTheOutputProvenance) {
     EXPECT_EQ(product.Preset, GraphicsPreset::Enhanced);
     EXPECT_EQ(product.OutputWidth, 1280U);
     EXPECT_EQ(product.OutputProvenance, Fast::WindowExtentProvenance::Default);
+#if defined(__APPLE__)
+    EXPECT_FLOAT_EQ(product.InternalResolutionScale, 0.5F);
+    EXPECT_FALSE(product.Effects.WaterReflections);
+    EXPECT_EQ(product.Effects.AmbientOcclusion, AmbientOcclusionMode::Off);
+    const auto enhanced = GraphicsSettingsService::Preset(GraphicsPreset::Enhanced);
+    EXPECT_FLOAT_EQ(enhanced.InternalResolutionScale, 1.0F);
+    EXPECT_TRUE(enhanced.Effects.WaterReflections);
+    EXPECT_EQ(product.Effects.DirectionalShadows.Mode, enhanced.Effects.DirectionalShadows.Mode);
+    EXPECT_EQ(product.Effects.PointShadows.Mode, enhanced.Effects.PointShadows.Mode);
+    EXPECT_EQ(product.Grass.MaxInstancesPerRoom, enhanced.Grass.MaxInstancesPerRoom);
+#endif
 }
 
 TEST(Oot3dGraphicsSettingsPersistence, RoundTripsTheAspectRatioAsHostOwnedOutputState) {

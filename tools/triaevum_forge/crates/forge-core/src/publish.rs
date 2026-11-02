@@ -339,8 +339,12 @@ pub fn publish_private_runtime(
     let installation = runtime_plugin.parent().map(Path::to_path_buf).unwrap_or_default();
     let package = resolve(&expanduser(request.package_root.unwrap_or(&installation)))?;
     let platform = if request.android.is_some() { crate::layout::ANDROID } else { host_platform()? };
+    // A macOS title is signed with the app. Keep that exact library in the
+    // sealed bundle; activation only writes the user's launch profile/data.
+    let bundled_title = platform == crate::layout::MACOS;
     let destination = match request.android {
-        None => installation.join("private-plugins").join(&plugin_hash).join(platform.title_module),
+        None if !bundled_title => installation.join("private-plugins").join(&plugin_hash).join(platform.title_module),
+        None => source_plugin.clone(),
         Some(_) => source_plugin.clone(),
     };
     let profile_path = resolve(&expanduser(request.launch_profile))?;
@@ -354,7 +358,8 @@ pub fn publish_private_runtime(
     let product = query_product_at(services, &runtime_executable, "", None, Some(&diagnostic))?;
     let profile_directory = profile_path.parent().map(Path::to_path_buf).unwrap_or_default();
     // The Android title library stays in the read-only native library folder.
-    let plugin_directory = request.android.is_none().then(|| destination.parent().unwrap_or(&installation));
+    let plugin_directory =
+        (request.android.is_none() && !bundled_title).then(|| destination.parent().unwrap_or(&installation));
     for directory in plugin_directory.into_iter().chain([profile_directory.as_path(), private_root.as_path()]) {
         create_dir(directory)?;
     }
@@ -505,7 +510,8 @@ pub fn publish_private_runtime(
     let profile =
         json!({"format": LAUNCH_PROFILE_FORMAT, "arguments": arguments, "path_scopes": Value::Object(scopes)});
     match request.android {
-        None => publish_plugin(&source_plugin, &destination, &plugin_hash, cancel)?,
+        None if !bundled_title => publish_plugin(&source_plugin, &destination, &plugin_hash, cancel)?,
+        None => (),
         Some(android) => {
             let library = destination.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
             atomic_write_json(

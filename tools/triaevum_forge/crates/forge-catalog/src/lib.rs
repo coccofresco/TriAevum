@@ -28,7 +28,7 @@ pub mod variants;
 pub use adapters::{adapt_extracted_inputs, import_contract, validate_adapter, Adaptation};
 pub use family::{InputPaths, FORMAT as CONTENT_FAMILY_FORMAT};
 pub use inputs::{InputFile, TitleInputs, KINDS};
-pub use platform::{desktop_target, for_target, host_platform, ReleasePlatform, ANDROID, LINUX, WINDOWS};
+pub use platform::{desktop_target, for_target, host_platform, ReleasePlatform, ANDROID, LINUX, MACOS, WINDOWS};
 pub use precompiled::{
     artifact_path, checked_file, load_catalog, runtime_record, select_title, set_native_library_directory,
     validate_title,

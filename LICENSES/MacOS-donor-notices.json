@@ -1,0 +1,43 @@
+[
+  {
+    "path": "LICENSES/MoltenVK-Apache-2.0.txt",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/MoltenVK/5189f8de86ec365860f63bf1da736815cfaea5cd/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "path": "LICENSES/Vulkan-Loader-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Loader/aa6dee8385afe4b2cc0152d086af2184743e16fd/LICENSE.txt",
+    "sha256": "43c0a37e6a0fa7ff3c843b3ec5a4fac84b712558ddac103fbd4c1649662a9ece"
+  },
+  {
+    "path": "LICENSES/MoltenVK-SPIRV-Cross-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Cross/aa217aeb6c9f0ace7a0ab233b28807edf45eb165/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "path": "LICENSES/MoltenVK-SPIRV-Tools-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Tools/0d6fd73ca73830ccab5fa1f00ed5ed40124e2c55/LICENSE",
+    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  {
+    "path": "LICENSES/MoltenVK-SPIRV-Headers-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Headers/29981f65241605e08b0ede4cfeb999fe3b723c6a/LICENSE",
+    "sha256": "ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613"
+  },
+  {
+    "path": "LICENSES/MoltenVK-Vulkan-Headers-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Headers/e3b1eec08173d6b825cd3ac88c885a63b621504a/LICENSE.md",
+    "sha256": "95ad366d23fadf701d355bc45fb8b82ae2d700239471d35d41286ac3b08ff903"
+  },
+  {
+    "path": "LICENSES/MoltenVK-cereal-LICENSE.txt",
+    "url": "https://raw.githubusercontent.com/USCiLab/cereal/a56bad8bbb770ee266e930c95d37fff2a5be7fea/LICENSE",
+    "sha256": "58604a126af6a671ea390ee3d5b3e42228aa59b2858fb7af1d5b20b31739ccbb"
+  },
+  {
+    "path": "LICENSES/Vulkan-Loader-source-NOTICES.txt",
+    "url": "https://github.com/KhronosGroup/Vulkan-Loader/tree/aa6dee8385afe4b2cc0152d086af2184743e16fd/loader",
+    "extraction": "Leading copyright/license comments of loader C/C++/Objective-C sources and headers",
+    "sha256": "a95b0f4c29be7af48a094e6a9653210ec2842df1285da67db280b26551c33266"
+  }
+]

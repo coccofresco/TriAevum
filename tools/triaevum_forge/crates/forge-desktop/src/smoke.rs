@@ -265,15 +265,16 @@ fn apply_screen(app: &mut ForgeApp, screen: &str) {
 fn enhancements_probe(app: &mut ForgeApp) {
     let data = app.installation.data_root.display().to_string();
     let managed = format!("{data}/textures/load/0004000000033600");
+    let legacy = format!("{data}/fixture/legacy/load/textures/0004000000033600");
     app.enhancements.status = Some(json!({
         "format": forge_core::enhancements::STATUS_FORMAT,
         "installed": true, "title_id": "0004000000033600", "retained_sources": true, "game_running": false,
         "hd_pack": {"stored": "archive", "enabled": true, "applied": false, "available": true},
         "mods": [{"id": "vanilla_plus_link", "stored": "ready", "enabled": true, "applied": true}],
         "custom_textures": {"folder": managed, "files": 1283, "enabled": true, "routed": false,
-            "effective_folder": "C:/Users/Player/AppData/Roaming/Azahar/load/textures/0004000000033600",
+            "effective_folder": legacy,
             "shadowed_by": "settings", "settings_error": null,
-            "legacy_folder": "C:/Users/Player/AppData/Roaming/Azahar/load/textures/0004000000033600", "applied": false},
+            "legacy_folder": legacy, "applied": false},
         "custom_romfs": {"present": true, "name": "Test overlay", "files": 3, "enabled": true, "applicable": true,
             "applied": false, "applied_files": 0, "applied_current": false,
             "rejected": [], "flagged": [
@@ -284,7 +285,7 @@ fn enhancements_probe(app: &mut ForgeApp) {
         "apply_needed": true,
     }));
     app.enhancements.confirm_custom_romfs = true;
-    app.enhancements.flat_pending = Some(std::path::PathBuf::from("C:/Users/Player/Downloads/my_pack.zip"));
+    app.enhancements.flat_pending = Some(app.installation.data_root.join("fixture/downloads/my_pack.zip"));
 }
 
 /// What the probe does next; `Wait` lets the layout settle.

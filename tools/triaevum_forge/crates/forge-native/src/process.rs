@@ -145,6 +145,27 @@ fn command(program: &[OsString], options: &RunOptions) -> Command {
     if let Environment::Replace(variables) = &options.environment {
         command.env_clear().envs(variables.iter().map(|(name, value)| (name, value)));
     }
+    #[cfg(target_os = "macos")]
+    {
+        // The bundled loader must use the bundled ICD, also for non-windowed
+        // shader helpers. Finder launches do not inherit the developer env.
+        if let Some(bundle) =
+            Path::new(&program[0]).ancestors().find(|path| path.extension().is_some_and(|extension| extension == "app"))
+        {
+            let icd = bundle.join("Contents/Resources/config/vulkan/MoltenVK_icd.json");
+            command.env("VK_DRIVER_FILES", &icd).env("VK_ICD_FILENAMES", &icd);
+            let activation = std::env::var_os("TRIAEVUM_MACOS_DATA_ROOT")
+                .filter(|value| !value.is_empty())
+                .map(std::path::PathBuf::from)
+                .or_else(|| {
+                    std::env::var_os("HOME")
+                        .map(|home| std::path::PathBuf::from(home).join("Library/Application Support/TriAevum"))
+                });
+            if let Some(activation) = activation {
+                command.env("SHIP_HOME", activation);
+            }
+        }
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

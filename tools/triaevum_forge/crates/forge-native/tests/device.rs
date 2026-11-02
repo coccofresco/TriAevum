@@ -287,7 +287,19 @@ fn renderer_cache_directory_policy() {
     assert_eq!(renderer_cache_directory().unwrap_err().message, "TRIAEVUM_RENDERER_CACHE_DIR must be absolute");
     std::env::set_var("TRIAEVUM_RENDERER_CACHE_DIR", "");
     std::env::set_var(if cfg!(windows) { "APPDATA" } else { "XDG_DATA_HOME" }, directory.path());
-    assert_eq!(renderer_cache_directory().unwrap(), directory.path().join("oot3d_native_vulkan").join("shader_cache"));
+    if cfg!(any(windows, target_os = "linux")) {
+        assert_eq!(
+            renderer_cache_directory().unwrap(),
+            directory.path().join("oot3d_native_vulkan").join("shader_cache")
+        );
+    } else {
+        // macOS/Android imports always pass their installation's cache path;
+        // they must not fall back to the Linux XDG or Windows APPDATA roots.
+        assert_eq!(
+            renderer_cache_directory().unwrap_err().message,
+            "This host must supply the renderer cache directory"
+        );
+    }
     for (name, value) in saved {
         match value {
             Some(value) => std::env::set_var(name, value),

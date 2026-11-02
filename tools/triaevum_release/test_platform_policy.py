@@ -4,12 +4,14 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import zipfile
 
 from audit_release import DEFAULT_POLICY, audit_release
 from common import atomic_write_json
 from package_release import package_release
 from platform_policy import resolve_policy
-from release_platform import WINDOWS, LINUX
+from release_platform import WINDOWS, LINUX, MACOS
+from macos_private_content import PRIVATE_DIRECTORY
 from readiness import evaluate_readiness
 import test_release_audit as fixture
 
@@ -44,6 +46,31 @@ def write_linux_package(root, files=None):
 
 
 class PlatformPolicyTests(unittest.TestCase):
+    def test_macos_private_title_exclusion_applies_to_source_archives(self):
+        # The standalone release audit must enforce this too, even when the
+        # archive bypasses the publisher's early input check.
+        original = json.loads(DEFAULT_POLICY.read_text())
+        policy = resolve_policy(original, MACOS.target, "rust")
+        self.assertTrue(set(original["forbidden_path_components"]).issubset(policy["forbidden_path_components"]))
+        self.assertEqual(resolve_policy(original, WINDOWS.target)["forbidden_path_components"],
+                         original["forbidden_path_components"])
+        self.assertEqual(resolve_policy(original, LINUX.target)["forbidden_path_components"],
+                         original["forbidden_path_components"])
+        for member in (f"tools/{PRIVATE_DIRECTORY}/private.cpp", f"tools/{PRIVATE_DIRECTORY.upper()}/private.cpp",
+                       f"tools\\{PRIVATE_DIRECTORY}\\private.cpp"):
+            with self.subTest(member=member), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                fixture.write_clean_package(root, "release-manifest.json")
+                source = root / "source/TriAevum-source.zip"
+                with zipfile.ZipFile(source, "a") as archive:
+                    archive.writestr(member, b"// synthetic forbidden source fixture\n")
+                manifest = json.loads((root / "release-manifest.json").read_text())
+                manifest["release"].update(target=MACOS.target, forge_profile="rust")
+                atomic_write_json(root / "release-manifest.json", manifest)
+                errors = audit_release(root).errors
+                self.assertTrue(any("source archive forbidden path component:" in error and
+                                    member.replace("\\", "/") in error for error in errors), errors)
+
     def test_sdk_shaderc_is_explicit_and_current_python_notice_is_required(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

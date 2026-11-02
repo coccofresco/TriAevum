@@ -9,6 +9,7 @@ from typing import Mapping
 
 FLATPAK_ID = "io.github.coccofresco.TriAevum"
 APPIMAGE_PAYLOAD = ("usr", "lib", "triaevum")
+MACOS_DATA_ROOT_ENV = "TRIAEVUM_MACOS_DATA_ROOT"
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,22 @@ def for_package(package: Path, *, environ: Mapping[str, str] | None = None,
     env = os.environ if environ is None else environ
     platform = sys.platform if platform is None else platform
     package = package.resolve()
+    if platform == "darwin":
+        bundle = next((path for path in (package, *package.parents) if path.suffix == ".app"), None)
+        if bundle is not None:
+            explicit = env.get(MACOS_DATA_ROOT_ENV, "")
+            home = env.get("HOME", "")
+            if explicit:
+                if not Path(explicit).is_absolute():
+                    raise ValueError("TRIAEVUM_MACOS_DATA_ROOT must be an absolute folder")
+                activation = Path(explicit).resolve()
+            else:
+                if not home or not Path(home).is_absolute():
+                    raise ValueError("the macOS app requires an absolute HOME")
+                activation = (Path(home) / "Library/Application Support/TriAevum").resolve()
+            if activation.is_relative_to(bundle):
+                raise ValueError("macOS activation must be outside the signed app bundle")
+            return HostLayout(package, activation)
     appdir = appimage_root(package, env.get("APPDIR", ""))
     if platform == "linux" and appdir is not None and package.is_relative_to(appdir):
         data_home = env.get("XDG_DATA_HOME", "")

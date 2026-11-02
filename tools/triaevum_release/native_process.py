@@ -85,6 +85,18 @@ def _native_library_search():
 
 def popen_native(*args, **kwargs):
     kwargs.setdefault("env", native_process_environment())
+    if sys.platform == "darwin" and args:
+        command = args[0]
+        executable = Path(command[0]) if isinstance(command, (list, tuple)) else Path(command)
+        bundle = next((path for path in executable.parents if path.suffix == ".app"), None)
+        if bundle is not None:
+            environment = dict(kwargs["env"])
+            icd = str(bundle / "Contents/Resources/config/vulkan/MoltenVK_icd.json")
+            environment.update(VK_DRIVER_FILES=icd, VK_ICD_FILENAMES=icd)
+            activation = os.environ.get("TRIAEVUM_MACOS_DATA_ROOT")
+            if activation or os.environ.get("HOME"):
+                environment["SHIP_HOME"] = activation or str(Path(os.environ["HOME"]) / "Library/Application Support/TriAevum")
+            kwargs["env"] = environment
     with _native_library_search():
         return subprocess.Popen(*args, **kwargs)
 

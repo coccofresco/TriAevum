@@ -3,8 +3,8 @@
 
 //! `platform.platform()` as Python 3.13 spells it, for the `platform` field
 //! of `TriAevum-preflight-error.json`: `Windows-11-10.0.26200-SP0`,
-//! `Linux-6.8.0-45-generic-x86_64-with-glibc2.39`. Other hosts get their
-//! system name (Python's Darwin form is not modelled).
+//! `Linux-6.8.0-45-generic-x86_64-with-glibc2.39`, and
+//! `macOS-14.0-arm64-arm-64bit-Mach-O`. Other hosts get their system name.
 
 /// `platform._platform(*parts)`: dash-joined, filename-safe, without
 /// "unknown" fields, doubled dashes or a trailing dash.
@@ -98,7 +98,34 @@ fn libc_version() -> String {
     String::new()
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+pub fn platform() -> String {
+    use std::ffi::CStr;
+
+    let mut version = [0u8; 256];
+    let mut size = version.len();
+    // SAFETY: a NUL-terminated key, a bounded output buffer and its size;
+    // null newp with zero length makes this a read-only sysctl query.
+    let result = unsafe {
+        libc::sysctlbyname(
+            c"kern.osproductversion".as_ptr(),
+            version.as_mut_ptr().cast(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    let version = if result == 0 && size <= version.len() {
+        CStr::from_bytes_until_nul(&version).ok().map(|value| value.to_string_lossy().into_owned())
+    } else {
+        None
+    };
+    let Some(version) = version else { return clean(&["Darwin", std::env::consts::ARCH]) };
+    let (machine, processor) = if cfg!(target_arch = "aarch64") { ("arm64", "arm") } else { ("x86_64", "i386") };
+    clean(&["macOS", &version, machine, processor, "64bit", "Mach-O"])
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub fn platform() -> String {
     clean(&[std::env::consts::OS, std::env::consts::ARCH])
 }

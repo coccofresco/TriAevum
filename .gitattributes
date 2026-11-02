@@ -6,3 +6,8 @@ tools/oot3d/native_pica_frontend/instrumentation/*.patch -whitespace
 # SingleScreen 3.0 low-resolution assets shipped with TriAevum.
 *.ctxb binary
 *.zar binary
+# Preserve the reviewed upstream notice byte-for-byte, including its final blank line.
+LICENSES/MoltenVK-SPIRV-Headers-LICENSE.txt -whitespace
+# Preserve the verbatim donor notices from the verified reference package.
+LICENSES/iMMERSE-LICENSE.txt -whitespace
+LICENSES/nihstro-BSD-3-Clause.txt -whitespace

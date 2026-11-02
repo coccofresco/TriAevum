@@ -10,9 +10,33 @@ from pathlib import Path
 from build_forge_binary import REPO_ROOT, required_data
 from source_archive import DEFAULT_POLICY, create_source_archive, source_path_allowed
 from source_contracts import source_contract_errors
+from macos_private_content import MARKERS, PRIVATE_DIRECTORY
 
 
 class SourceArchiveTests(unittest.TestCase):
+    def test_macos_source_export_filters_private_paths_and_refuses_mixed_text(self):
+        policy = json.loads(self.policy.read_text())
+        policy.update(default_forge_profile="fixture", forge_profiles={"fixture": {}},
+                      platforms={"aarch64-apple-darwin": {}})
+        self.policy.write_text(json.dumps(policy))
+        private = self.repository / (PRIVATE_DIRECTORY + "_address_map.py")
+        private.write_text("# synthetic fixture\n")
+        subprocess.run(["git", "-C", str(self.repository), "add", "."], check=True)
+        subprocess.run(["git", "-C", str(self.repository), "commit", "-q", "-m", "private fixture"], check=True)
+        commit = subprocess.check_output(["git", "-C", str(self.repository), "rev-parse", "HEAD"], text=True).strip()
+        for target in (None, "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin"):
+            output = self.root / ((target or "legacy") + ".zip")
+            create_source_archive(self.repository, output, source_commit=commit, policy_path=self.policy, target=target)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(private.name in archive.namelist(), target != "aarch64-apple-darwin")
+        (self.repository / "src/main.cpp").write_text("// credits: " + MARKERS[1].decode().title() + " Curse\n")
+        subprocess.run(["git", "-C", str(self.repository), "commit", "-qam", "mixed notice"], check=True)
+        commit = subprocess.check_output(["git", "-C", str(self.repository), "rev-parse", "HEAD"], text=True).strip()
+        with self.assertRaisesRegex(ValueError, "source text names a private title"):
+            create_source_archive(self.repository, self.root / "rejected.zip", source_commit=commit,
+                                  policy_path=self.policy, target="aarch64-apple-darwin")
+        self.assertFalse((self.root / "rejected.zip").exists())
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)

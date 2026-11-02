@@ -75,9 +75,22 @@ pub const ANDROID: ReleasePlatform = ReleasePlatform {
     installed_runtime: "lib/arm64-v8a/libTriAevum.so",
 };
 
-/// The targets a catalog may name. macOS catalogs do not exist yet; adding
-/// one is a format decision, not something to infer here.
-pub const TARGETS: [ReleasePlatform; 3] = [WINDOWS, LINUX, ANDROID];
+/// Paths are relative to the signed app's Contents/Resources directory.
+pub const MACOS: ReleasePlatform = ReleasePlatform {
+    target: "aarch64-apple-darwin",
+    runtime: "TriAevum",
+    forge: "TriAevumForge",
+    native_module: "forge/oot3d_game_module.dylib",
+    title_module: "triaevum_title_aot.dylib",
+    profile: "aarch64-macos-release-v1",
+    compiler: "clang++",
+    archiver: "llvm-ar",
+    support_library: "libtriaevum_title_whole_aot_support.a",
+    archive_suffix: ".zip",
+    installed_runtime: "TriAevum",
+};
+
+pub const TARGETS: [ReleasePlatform; 4] = [WINDOWS, LINUX, ANDROID, MACOS];
 
 pub fn for_target(target: &str) -> Result<ReleasePlatform> {
     find_target(&TARGETS, target)
@@ -87,7 +100,7 @@ pub fn for_target(target: &str) -> Result<ReleasePlatform> {
 /// bindings accept. Android catalogs come from the Android package publisher
 /// (`android_forge_package.py`), which binds the runtime library itself.
 pub fn desktop_target(target: &str) -> Result<ReleasePlatform> {
-    find_target(&[WINDOWS, LINUX], target)
+    find_target(&[WINDOWS, LINUX, MACOS], target)
 }
 
 fn find_target(targets: &[ReleasePlatform], target: &str) -> Result<ReleasePlatform> {
@@ -115,6 +128,9 @@ pub fn catalog_platform(catalog: &Map<String, Value>) -> Result<ReleasePlatform>
 pub fn host_platform() -> Result<ReleasePlatform> {
     if cfg!(all(target_os = "android", target_arch = "aarch64")) {
         return Ok(ANDROID);
+    }
+    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        return Ok(MACOS);
     }
     let machine = std::env::consts::ARCH;
     if machine != "x86_64" {

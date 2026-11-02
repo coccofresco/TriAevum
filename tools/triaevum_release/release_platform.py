@@ -36,6 +36,13 @@ LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
                         "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".tar.gz",
                         "TriAevum")
+# Catalog paths are relative to TriAevum.app/Contents/Resources. The signed
+# executables remain there; only user data is activated outside the bundle.
+MACOS = ReleasePlatform("aarch64-apple-darwin", "TriAevum",
+                        "TriAevumForge", "forge/oot3d_game_module.dylib",
+                        "triaevum_title_aot.dylib", "aarch64-macos-release-v1",
+                        "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".zip",
+                        "TriAevum")
 # The APK: Android installs the libraries in the application's native library
 # folder, never in the Forge package; Forge resolves lib/arm64-v8a/ records there.
 ANDROID = ReleasePlatform("aarch64-linux-android", "lib/arm64-v8a/libTriAevum.so",
@@ -66,6 +73,8 @@ def place_installed_runtime(root: Path, value: ReleasePlatform) -> Path:
     The Windows runtime finds its DLLs in runtime/, but its own folder is searched
     first: DLLs a previous package left in the root would shadow the new ones.
     """
+    if value == MACOS:
+        return root / value.runtime
     for stale in root.glob(".*.stale"):
         try:
             stale.unlink()
@@ -84,7 +93,7 @@ def is_windows(value: ReleasePlatform) -> bool:
 
 
 def for_target(target: str) -> ReleasePlatform:
-    for item in (WINDOWS, LINUX):
+    for item in (WINDOWS, LINUX, MACOS):
         if target == item.target:
             return item
     raise ValueError(f"Unsupported release target: {target}")
@@ -92,6 +101,8 @@ def for_target(target: str) -> ReleasePlatform:
 
 def host_platform() -> ReleasePlatform:
     machine = platform.machine().lower()
+    if sys.platform == "darwin" and machine in ("arm64", "aarch64"):
+        return MACOS
     if machine not in ("amd64", "x86_64"):
         raise ValueError(f"This release requires an x86-64 host, not {machine}")
     if sys.platform == "win32":

@@ -1714,6 +1714,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                widescreenProjection.Projection.FovMultiplier},
               {"frustum_calls",
                widescreenProjection.Projection.FrustumCalls},
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
               {"mm3d_composition",
                widescreenProjection.Title == nullptr
                    ? nlohmann::json(nullptr)
@@ -1722,6 +1723,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                widescreenProjection.Title == nullptr
                    ? nlohmann::json(nullptr)
                    : widescreenProjection.Title->GuestPatchSummary()},
+#endif
               {"orthographic_calls",
                widescreenProjection.Projection.OrthographicCalls},
               {"callsites", std::move(projectionCallsites)},

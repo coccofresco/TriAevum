@@ -226,8 +226,17 @@ pub const ANDROID: ReleasePlatform = ReleasePlatform {
     installed_runtime: "lib/arm64-v8a/libTriAevum.so",
 };
 
+pub const MACOS: ReleasePlatform = ReleasePlatform {
+    target: "aarch64-apple-darwin",
+    runtime: "TriAevum",
+    forge: "TriAevumForge",
+    native_module: "forge/oot3d_game_module.dylib",
+    title_module: "triaevum_title_aot.dylib",
+    installed_runtime: "TriAevum",
+};
+
 pub fn for_target(target: &str) -> Result<ReleasePlatform> {
-    [WINDOWS, LINUX, ANDROID].into_iter().find(|platform| platform.target == target).ok_or_else(|| {
+    [WINDOWS, LINUX, ANDROID, MACOS].into_iter().find(|platform| platform.target == target).ok_or_else(|| {
         ForgeError::new(forge_base::ErrorKind::IncompatibleTarget, format!("Unsupported release target: {target}"))
     })
 }
@@ -279,6 +288,9 @@ pub fn ensure_runtime_closed(root: &Path, platform: &ReleasePlatform) -> Result<
 /// later runs remove released `.stale` files. Read-only files are replaced,
 /// briefly locked ones retried, and a file still held names its holder.
 pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Result<PathBuf> {
+    if *platform == MACOS {
+        return Ok(root.join(platform.runtime));
+    }
     if let Ok(entries) = std::fs::read_dir(root) {
         for entry in entries.flatten() {
             let name = entry.file_name().to_string_lossy().into_owned();
@@ -324,6 +336,17 @@ mod tests {
 
     fn env_of(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<String> {
         move |name| pairs.iter().find(|(key, _)| *key == name).map(|(_, value)| value.to_string())
+    }
+
+    #[test]
+    fn macos_runtime_placement_does_not_touch_the_signed_package() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let stale = root.join(".sealed.1.stale");
+        std::fs::write(&stale, b"sealed").unwrap();
+        assert_eq!(place_installed_runtime(root, &MACOS).unwrap(), root.join(MACOS.runtime));
+        assert_eq!(std::fs::read(stale).unwrap(), b"sealed");
+        assert_eq!(for_target(MACOS.target).unwrap(), MACOS);
     }
 
     #[test]

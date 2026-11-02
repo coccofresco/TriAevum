@@ -16,7 +16,10 @@ from typing import Any, Iterable, Sequence
 try:
     from .product_contract import validate_product_info
     from .precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
-    from .release_platform import WINDOWS, for_target, catalog_platform
+    from .release_platform import MACOS, WINDOWS, for_target, catalog_platform
+    from .macos_macho_audit import bundle_errors as macos_bundle_errors
+    from .macos_notices import notice_errors as macos_notice_errors
+    from .macos_private_content import package_errors as macos_private_errors
     from .platform_policy import forge_profile_name, resolve_policy
     from .common import (RELEASE_MANIFEST_PATHS, load_json_object, normalize_relative_path,
                          release_manifest_path, sha256_file)
@@ -30,7 +33,10 @@ try:
 except ImportError:
     from product_contract import validate_product_info
     from precompiled_titles import MODEL, CATALOG, load_catalog, validate_title, checked_file
-    from release_platform import WINDOWS, for_target, catalog_platform
+    from release_platform import MACOS, WINDOWS, for_target, catalog_platform
+    from macos_macho_audit import bundle_errors as macos_bundle_errors
+    from macos_notices import notice_errors as macos_notice_errors
+    from macos_private_content import package_errors as macos_private_errors
     from platform_policy import forge_profile_name, resolve_policy
     from common import (RELEASE_MANIFEST_PATHS, load_json_object, normalize_relative_path,
                         release_manifest_path, sha256_file)
@@ -520,7 +526,9 @@ def audit_release(
             if marker is not None:
                 reject(f"{relative} contains proprietary SDK code ({marker.decode('ascii')}); "
                        "it belongs only in its separately licensed module")
-        if role in rust_binary_roles:
+        if role in rust_binary_roles and platform != MACOS:
+            # The Mac bundle gate scans all native roles and outer Frameworks,
+            # reporting only their package names, never a matched home path.
             leaked = _binary_pattern(path, host_path_markers)
             if leaked is not None:
                 reject(f"{relative} embeds a build-machine path ({leaked[:80]}); "
@@ -669,6 +677,14 @@ def audit_release(
     )
     for violation in manifest_violations:
         reject(f"release manifest policy violation: {violation}")
+
+    if platform == MACOS:
+        for error in macos_notice_errors(lambda name: (root / name).read_bytes()):
+            reject(error)
+        for error in macos_private_errors(root):
+            reject(error)
+        for error in macos_bundle_errors(root, declared, release):
+            reject(error)
 
     summary = {
         "package": str(root),

@@ -6,6 +6,10 @@ project(TriAevumMacRuntime LANGUAGES C CXX)
 if(NOT APPLE OR NOT CMAKE_OSX_ARCHITECTURES STREQUAL "arm64")
     message(FATAL_ERROR "Configure on macOS with -DCMAKE_OSX_ARCHITECTURES=arm64")
 endif()
+# Public Mac builds contain only the supported title adapter, including when
+# reconfiguring a build directory whose cache used the repository defaults.
+set(TRIAEVUM_TITLES "oot3d" CACHE STRING "Titles in the public macOS build" FORCE)
+include("${CMAKE_CURRENT_LIST_DIR}/../PathRemapping.cmake")
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -50,3 +54,10 @@ if(TRIAEVUM_MACOS_DEPENDENCY_SOURCE_CACHE)
 endif()
 get_filename_component(root "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
 add_subdirectory("${root}" product)
+
+# Forge's pipeline helper must use the runtime's pinned NRI and shared SPIR-V
+# packs. Build it in this graph so publishers need no second dependency build.
+add_subdirectory("${root}/tools/renderer/pipeline_prepare" pipeline_prepare)
+add_custom_target(triaevum_macos_release
+    DEPENDS TriAevum oot3d_game_module oot3d_native_pica_aot_compiler
+            triaevum_nri_pipeline_prepare)

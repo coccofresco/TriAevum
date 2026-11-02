@@ -57,6 +57,7 @@ constexpr std::array<NativeLanguage, 9> kLanguages{{
     {"08_EU_ITALIAN", "it", "Italiano", 4},
 }};
 
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
 // MM3D: layouts in layout/<REGION>_<Language>/, messages in
 // message/<region>/<region><letter>.gmsg. The EUR card ships Dutch layouts
 // whose archives are empty, so Dutch is not offered.
@@ -78,6 +79,8 @@ constexpr std::array<Mm3dLanguage, 9> kMm3dLanguages{{
     {"US_French", "us/usf.gmsg", "fr", "Francais", 2},
     {"US_Spanish", "us/uss.gmsg", "es", "Espanol", 5},
 }};
+
+#endif
 
 struct RomFsFile {
   std::string Parent, Owner; // containing directory and its parent
@@ -248,6 +251,7 @@ std::vector<GameLanguage> DetectOot3dLanguages(RomFsImage &image) {
   return result;
 }
 
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
 // A GAR v2 archive whose every member has content.
 bool PopulatedGar(RomFsImage &image, const RomFsFile &file) {
   if (file.Length < 0x20)
@@ -297,6 +301,7 @@ std::vector<GameLanguage> DetectMm3dLanguages(RomFsImage &image) {
         "No complete MM3D layout/message language found in RomFS");
   return result;
 }
+#endif
 } // namespace
 
 std::vector<GameLanguage> DetectGameLanguages(const std::filesystem::path &path,
@@ -307,7 +312,11 @@ std::vector<GameLanguage> DetectGameLanguages(const std::filesystem::path &path,
   case TitleAdapter::Oot3dEur:
     return DetectOot3dLanguages(image);
   case TitleAdapter::Mm3d:
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
     return DetectMm3dLanguages(image);
+#else
+    break;
+#endif
   case TitleAdapter::Generic:
     break;
   }

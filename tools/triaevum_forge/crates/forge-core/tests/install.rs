@@ -31,7 +31,10 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     let mut stages = Vec::new();
     let result = fixture.install(&runtime, &mut stages).unwrap();
 
-    let names: Vec<&str> = stages.iter().map(|(stage, _)| stage.as_str()).collect();
+    let mut names: Vec<&str> = stages.iter().map(|(stage, _)| stage.as_str()).collect();
+    // A host without a Vulkan loader adds a warning in the preflight stage.
+    // Stage order must not depend on the test machine's graphics installation.
+    names.dedup();
     assert_eq!(&names[..5], ["preflight", "extract", "verify", "prepare", "activate"]);
     assert_eq!(stages.last().unwrap(), &("ready".to_string(), "The title is ready to play.".to_string()));
     assert!(names.contains(&"interior-sun"));
@@ -48,7 +51,13 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     let data = fixture.data();
     assert!(hidden_entries(&data).is_empty(), "staging removed");
     let plugin_sha = sha256_hex(b"MZ fake title plugin");
-    let generation = fixture.package.join("private-plugins").join(&plugin_sha).join(host().title_module);
+    let plugin_relative = if host() == forge_catalog::MACOS {
+        assert!(!fixture.package.join("private-plugins").exists());
+        format!("titles/{RECIPE}/{}", host().title_module)
+    } else {
+        format!("private-plugins/{plugin_sha}/{}", host().title_module)
+    };
+    let generation = fixture.package.join(&plugin_relative);
     assert_eq!(std::fs::read(&generation).unwrap(), b"MZ fake title plugin");
     assert_eq!(*runtime.plugin_queries.borrow(), std::slice::from_ref(&generation));
     // The packaged runtime was placed in the installation root.
@@ -58,10 +67,7 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     let profile = load_json_object(&fixture.launch_profile()).unwrap();
     assert_eq!(profile["format"], "oot3d_native_game_launch_profile_v1");
     let arguments: Vec<&str> = profile["arguments"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
-    assert_eq!(
-        arguments[0..2],
-        ["--title-plugin", &format!("${{runtime_dir}}/private-plugins/{plugin_sha}/{}", host().title_module)]
-    );
+    assert_eq!(arguments[0..2], ["--title-plugin", &format!("${{runtime_dir}}/{plugin_relative}")]);
     assert_eq!(arguments[4..6], ["--resource-root", "${runtime_dir}/resources"]);
     // A plain package is its own activation: its data is a runtime_dir path.
     assert_eq!(arguments[10..12], ["--config", "${runtime_dir}/data/config/TriAevum.json"]);

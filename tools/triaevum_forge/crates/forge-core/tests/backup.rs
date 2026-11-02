@@ -593,7 +593,7 @@ fn tampered_backups_are_refused_before_anything_is_written() {
 #[test]
 fn an_interrupted_restore_after_two_categories_recovers_the_previous_version() {
     if let Ok(root) = std::env::var(CHILD) {
-        // The child: restore and die right after the second category.
+        // The child exits without unwinding right after the second category.
         let site = windows_site_at(Path::new(&root));
         let options = RestoreOptions { units: None, abort_after_category: Some(2) };
         let backup = PathBuf::from(std::env::var(CHILD_BACKUP).unwrap());
@@ -618,7 +618,7 @@ fn an_interrupted_restore_after_two_categories_recovers_the_previous_version() {
         .env(CHILD_BACKUP, text(&zip))
         .status()
         .unwrap();
-    assert!(!status.success() && status.code() != Some(3), "the child must die inside the restore: {status:?}");
+    assert_eq!(status.code(), Some(86), "the child must reach the injected restore boundary: {status:?}");
 
     // Killed: saves and save states committed, settings not.
     let journal_path = pending_restore(&site.data).expect("the journal survives the kill");

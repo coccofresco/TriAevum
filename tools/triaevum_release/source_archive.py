@@ -15,10 +15,12 @@ try:
     from .common import load_json_object, normalize_relative_path, sha256_file
     from .source_contracts import source_contract_errors
     from .platform_policy import forge_profile_name, source_policy
+    from .macos_private_content import names_private_title, stream_names_private_title
 except ImportError:
     from common import load_json_object, normalize_relative_path, sha256_file
     from source_contracts import source_contract_errors
     from platform_policy import forge_profile_name, source_policy
+    from macos_private_content import names_private_title, stream_names_private_title
 
 
 ROOT = Path(__file__).resolve().parent
@@ -112,6 +114,8 @@ def collect_source_files(
 
 def source_path_allowed(relative: str, policy: dict[str, Any]) -> bool:
     path = PurePosixPath(normalize_relative_path(relative))
+    if policy.get("macos_private_title_check") and names_private_title(path.as_posix()):
+        return False
     lowered = relative.lower()
     # A checkout imported from a source ZIP can still track its old receipt.
     # The root receipt is generated below for this archive, never copied.
@@ -154,6 +158,7 @@ def create_source_archive(
     source_commit: str,
     policy_path: Path = DEFAULT_POLICY,
     forge_profile: str | None = None,
+    target: str | None = None,
 ) -> dict[str, Any]:
     policy = load_json_object(policy_path)
     if policy.get("format") != "triaevum_public_release_policy_v1":
@@ -161,7 +166,7 @@ def create_source_archive(
     # The package's Forge build adds its own source requirements (the Rust
     # workspace, lockfile, toolchain pin and crate notices).
     if forge_profile is not None or "forge_profiles" in policy:
-        policy = source_policy(policy, forge_profile or forge_profile_name(policy))
+        policy = source_policy(policy, forge_profile or forge_profile_name(policy), target)
     files, commits = collect_source_files(repository, source_commit)
     included = sorted(
         (item for item in files if source_path_allowed(item.archive_path, policy)),
@@ -170,6 +175,12 @@ def create_source_archive(
     if not included:
         raise ValueError("source policy selected no files")
     by_path = {item.archive_path: item.repository / item.relative for item in included}
+    if policy.get("macos_private_title_check"):
+        for relative, path in by_path.items():
+            with path.open("rb") as stream:
+                if stream_names_private_title(stream, filename=relative):
+                    # Never silently drop a mixed notice or alter source bytes.
+                    raise ValueError("macOS source text names a private title: " + relative)
     errors = list(source_contract_errors(by_path, lambda path: by_path[path].read_bytes(), policy))
     if errors:
         raise ValueError("Incomplete corresponding source: " + "; ".join(errors))
@@ -196,6 +207,8 @@ def create_source_archive(
             "content_identity_sha256": aggregate.hexdigest(),
             "excluded_tracked_files": len(files) - len(included),
         }
+        if target is not None:
+            metadata["target"] = target
         archive.writestr(
             _zip_info("SOURCE_ARCHIVE_MANIFEST.json"),
             (json.dumps(metadata, indent=2, sort_keys=True) + "\n").encode("utf-8"),
@@ -216,6 +229,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
     parser.add_argument("--forge-profile", help="Forge profile of the package (release_policy.json)")
+    parser.add_argument("--target", help="Explicit source export target; required for macOS exclusions")
     args = parser.parse_args(argv)
     try:
         result = create_source_archive(
@@ -224,6 +238,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             source_commit=args.source_commit,
             policy_path=args.policy,
             forge_profile=args.forge_profile,
+            target=args.target,
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as exc:
         print(json.dumps({"status": "error", "error": str(exc)}, indent=2))

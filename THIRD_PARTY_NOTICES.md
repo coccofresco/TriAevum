@@ -481,8 +481,43 @@ the applicable license is distributed as `LICENSES/shaderc-Apache-2.0.txt`.
 Its Visual C++ runtime dependencies (`msvcp140.dll`, `vcruntime140.dll`,
 `vcruntime140_1.dll`) are deployed beside the executable from Visual Studio's
 redistributable directory; see `LICENSES/Microsoft-Visual-Cpp-Runtime.md`.
-The system Vulkan loader and display driver are machine prerequisites and are
-not redistributed by TriAevum.
+For the Windows and Linux packages, the system Vulkan loader and display driver
+are machine prerequisites and are not redistributed by TriAevum.
+
+## macOS SDL2, Vulkan loader and MoltenVK
+
+The macOS app bundles dynamic SDL2 (`libSDL2-2.0.0.dylib`), the Khronos Vulkan
+loader (`libvulkan.1.dylib`) and MoltenVK (`libMoltenVK.dylib`). The SDL2 zlib
+notice above applies to this dynamic distribution as well. Apple's Metal
+framework and system driver remain operating-system components.
+
+[Vulkan-Loader](https://github.com/KhronosGroup/Vulkan-Loader) is primarily
+Apache-2.0, with permissive exceptions. `LICENSES/Vulkan-Loader-LICENSE.txt`
+contains its license; `LICENSES/Vulkan-Loader-source-NOTICES.txt` preserves
+the loader source copyright and license headers, including the MIT notices
+for cJSON (Dave Gamble and contributors) and loader JSON support (Khronos,
+Valve and LunarG). These files accompany the redistributed loader.
+
+[MoltenVK](https://github.com/KhronosGroup/MoltenVK), copyright 2015-2026
+The Brenwill Workshop Ltd. and contributors, is Apache-2.0 licensed; see
+`LICENSES/MoltenVK-Apache-2.0.txt`. Its runtime and shader converter incorporate
+SPIRV-Cross and SPIRV-Tools (Apache-2.0), SPIRV-Headers (Khronos permissive
+licenses), Vulkan-Headers (used under Apache-2.0), and cereal (BSD-3-Clause,
+Randolph Voorhies and Shane Grant). Their complete upstream notices are
+`LICENSES/MoltenVK-SPIRV-Cross-LICENSE.txt`,
+`LICENSES/MoltenVK-SPIRV-Tools-LICENSE.txt`,
+`LICENSES/MoltenVK-SPIRV-Headers-LICENSE.txt`,
+`LICENSES/MoltenVK-Vulkan-Headers-LICENSE.txt`, and
+`LICENSES/MoltenVK-cereal-LICENSE.txt`. The Apache-2.0 text for Vulkan-Headers
+is also supplied in `LICENSES/MoltenVK-Apache-2.0.txt`. MoltenVK's demo-only
+volk and Vulkan-Tools dependencies are not included in the app.
+
+`LICENSES/MacOS-donor-notices.json` records immutable upstream revisions,
+source URLs and hashes for these notice snapshots. The macOS publisher copies
+them from verified corresponding source, and the macOS audit checks their
+reviewed contents. A dependency update with different notices requires a
+reviewed notice and hash update; the notice revisions do not substitute for
+the provenance of the actual binary inputs.
 
 ## NXVK Switch compatibility adapter
 

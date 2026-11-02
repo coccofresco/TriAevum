@@ -18,10 +18,12 @@ enum class TitleAdapter { Oot3dEur, Mm3d, Generic };
 // SHA-256 of OoT3D EUR's decompressed code.bin.
 inline constexpr std::string_view kOot3dEurCodeBinSha256 =
     "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220";
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
 // SHA-256 of MM3D's decompressed code.bin (v1.0). The EUR and USA cards carry
 // the same bytes; the region lives in the program ID and RomFS.
 inline constexpr std::string_view kMm3dCodeBinSha256 =
     "6eec27b1827eab2c87744ac38066d569ffe6fe75790b1eb3300bd91f5099038d";
+#endif
 
 [[nodiscard]] inline bool SameCodeBinSha256(std::string_view actual, std::string_view expected) noexcept {
     return actual.size() == expected.size() &&
@@ -33,22 +35,33 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
 [[nodiscard]] inline TitleAdapter ResolveTitleAdapter(std::string_view codeBinSha256) noexcept {
     if (SameCodeBinSha256(codeBinSha256, kOot3dEurCodeBinSha256))
         return TitleAdapter::Oot3dEur;
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
     if (SameCodeBinSha256(codeBinSha256, kMm3dCodeBinSha256))
         return TitleAdapter::Mm3d;
+#endif
     return TitleAdapter::Generic;
 }
 
 // The product name a title runs under (window title, log name), or nullptr to
 // keep the launch's own name. UTF-8.
 [[nodiscard]] inline const char* TitleProductName(TitleAdapter adapter) noexcept {
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
     return adapter == TitleAdapter::Mm3d ? "TriAevum \xE2\x80\x94 Moonfall Curse" : nullptr;
+#else
+    (void)adapter;
+    return nullptr;
+#endif
 }
 
 // The F1 graphics window's title, or nullptr for the renderer's default.
 [[nodiscard]] inline const char* TitleGraphicsWindowTitle(TitleAdapter adapter) noexcept {
     switch (adapter) {
     case TitleAdapter::Mm3d:
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
         return "Moonfall Curse Graphics";
+#else
+        break;
+#endif
     case TitleAdapter::Generic:
         return "Graphics";
     case TitleAdapter::Oot3dEur:
@@ -73,7 +86,11 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
     case TitleAdapter::Oot3dEur:
         return "oot3d_eur";
     case TitleAdapter::Mm3d:
+#if !defined(__APPLE__) || defined(TRIAEVUM_TITLE_MM3D)
         return "mm3d";
+#else
+        break;
+#endif
     case TitleAdapter::Generic:
         break;
     }

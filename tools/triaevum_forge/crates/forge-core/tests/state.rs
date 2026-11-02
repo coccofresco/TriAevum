@@ -151,7 +151,11 @@ fn a_changed_receipt_hash_is_a_receipt_mismatch() {
     let InstallationState::RepairNeeded { reason: RepairReason::ReceiptMismatch, details } = &state else {
         panic!("{state:?}")
     };
-    assert!(details.starts_with("Installed runtime identity mismatch"), "{details}");
+    if host() == forge_catalog::MACOS {
+        assert_eq!(details, "The installed title receipt changed; run Forge again");
+    } else {
+        assert!(details.starts_with("Installed runtime identity mismatch"), "{details}");
+    }
     assert_eq!(state.to_value()["reason"]["kind"], "receipt_mismatch");
 }
 

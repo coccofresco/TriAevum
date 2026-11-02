@@ -26,13 +26,13 @@ try:
     from .audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
     from .common import atomic_write_json, load_json_object, sha256_file
     from .linux_elf_audit import glibc_errors, inspect_elf
-    from .release_platform import ANDROID, LINUX, WINDOWS, for_target, host_platform
+    from .release_platform import ANDROID, LINUX, MACOS, WINDOWS, for_target, host_platform
     from . import rust_forge_notices
 except ImportError:
     from audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
     from common import atomic_write_json, load_json_object, sha256_file
     from linux_elf_audit import glibc_errors, inspect_elf
-    from release_platform import ANDROID, LINUX, WINDOWS, for_target, host_platform
+    from release_platform import ANDROID, LINUX, MACOS, WINDOWS, for_target, host_platform
     import rust_forge_notices
 
 
@@ -41,13 +41,16 @@ FORGE_ROOT = REPO_ROOT / "tools/triaevum_forge"
 RECEIPT = "forge/rust-forge.json"
 PACKAGES = ("forge-desktop", "forge-cli")
 # The Windows package also carries the update helper (UX plan WP-04B).
-TARGET_PACKAGES = {WINDOWS.target: (*PACKAGES, "forge-update-helper"), LINUX.target: PACKAGES}
+TARGET_PACKAGES = {WINDOWS.target: (*PACKAGES, "forge-update-helper"), LINUX.target: PACKAGES,
+                   MACOS.target: PACKAGES}
 # Cargo binary name -> (package path, release role), per desktop target.
 BINARIES = {
     WINDOWS.target: {"TriAevumForge.exe": (WINDOWS.forge, "forge_executable"),
                      "triaevum-forge.exe": ("forge/triaevum-forge.exe", "forge_command_line"),
                      "triaevum-update-helper.exe": ("forge/triaevum-update-helper.exe", "forge_update_helper")},
     LINUX.target: {"TriAevumForge": (LINUX.forge, "forge_executable"),
+                   "triaevum-forge": ("forge/triaevum-forge", "forge_command_line")},
+    MACOS.target: {"TriAevumForge": (MACOS.forge, "forge_executable"),
                    "triaevum-forge": ("forge/triaevum-forge", "forge_command_line")},
 }
 

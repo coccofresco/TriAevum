@@ -335,11 +335,37 @@ impl Context<'_> {
         let recipe = load_recipe(&recipes_path(&self.package), &active.recipe_id)?;
         select_title(&self.package, &recipe, Some(&catalog), &self.platform, cancel)
             .map_err(|error| error.during(Operation::PackageVerify))?;
+        // Replacing a macOS app replaces its signed title library as well.
+        // Only substitute the new, catalog-verified identity when the old
+        // receipt selects that exact bundled path. The profile and all other
+        // user-data bindings still have to validate unchanged.
+        let mut previous_runtime = runtime.clone();
+        if self.platform == forge_catalog::MACOS {
+            if runtime.get("plugin_sha256")
+                != prepared.state.get("module").and_then(|module| module.get("title_aot_image_sha256"))
+            {
+                return Err(update_error(
+                    ErrorKind::RecoveryRequired,
+                    "The installed title receipt changed; run Forge again",
+                ));
+            }
+            let previous_plugin =
+                forge_prepare::paths::resolve_reference(text(&runtime, "plugin"), &prepared.directory)?;
+            let candidate_path = candidate["plugin"]["path"].as_str().unwrap_or_default();
+            let current_plugin = forge_prepare::paths::resolve(&artifact_path(&self.package, candidate_path))?;
+            if previous_plugin != current_plugin {
+                return Err(update_error(
+                    ErrorKind::RecoveryRequired,
+                    "The bundled title path changed; run Forge again",
+                ));
+            }
+            previous_runtime.insert("plugin_sha256".into(), json!(candidate_plugin));
+        }
         // The old runtime was replaced by the package manager. Validate every
         // other old binding, and the new runtime against its catalog, before
         // the installer may publish a replacement tuple.
         let profile = match self.android {
-            None => self.validate_desktop(&prepared.directory, &runtime, catalog_runtime)?,
+            None => self.validate_desktop(&prepared.directory, &previous_runtime, catalog_runtime)?,
             Some(android) => self.validate_android(android, &runtime)?,
         };
         Ok(Plan::Install(Box::new(Install {

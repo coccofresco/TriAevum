@@ -1016,13 +1016,15 @@ def publish_private_runtime(
     installation = runtime_plugin.expanduser().resolve().parent
     package = (package_root or installation).expanduser().resolve()
     platform = host_platform()
-    destination = installation / "private-plugins" / plugin_hash / platform.title_module
+    bundled_title = platform.target == "aarch64-apple-darwin"
+    destination = source_plugin if bundled_title else installation / "private-plugins" / plugin_hash / platform.title_module
     profile_path = launch_profile.expanduser().resolve()
     private_root = data_root.expanduser().resolve()
     # Installing a title places the runtime in the installation root.
     runtime_executable = place_installed_runtime(package, platform)
     product_receipt = query_product(runtime_executable)
-    destination.parent.mkdir(parents=True, exist_ok=True)
+    if not bundled_title:
+        destination.parent.mkdir(parents=True, exist_ok=True)
     profile_path.parent.mkdir(parents=True, exist_ok=True)
     private_root.mkdir(parents=True, exist_ok=True)
     config_root = private_root / "config"

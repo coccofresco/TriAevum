@@ -28,6 +28,19 @@ class HostLayoutTests(unittest.TestCase):
         self.assertEqual(layout.data, self.package / "data")
         self.assertFalse(layout.use_file_portal)
 
+    def test_macos_bundle_keeps_activation_outside_the_seal(self):
+        package = self.root / "TriAevum.app/Contents/MacOS"
+        env = {"HOME": str(self.root / "home")}
+        layout = for_package(package, environ=env, platform="darwin")
+        self.assertEqual(layout.activation, self.root / "home/Library/Application Support/TriAevum")
+        env["TRIAEVUM_MACOS_DATA_ROOT"] = str(self.xdg)
+        self.assertEqual(for_package(package, environ=env, platform="darwin").activation, self.xdg)
+        for invalid in ("relative", str(package / "data")):
+            env["TRIAEVUM_MACOS_DATA_ROOT"] = invalid
+            with self.assertRaises(ValueError):
+                for_package(package, environ=env, platform="darwin")
+        self.assertFalse(package.exists())
+
     def test_linux_outside_application_is_still_portable(self):
         for app_id in ("", "org.freedesktop.Sdk"):
             env = dict(self.env, FLATPAK_ID=app_id)

@@ -77,6 +77,25 @@
         }
       }
     },
+    "aarch64-apple-darwin": {
+      "allowed_roles": {
+        "runtime_executable": ["TriAevum"],
+        "forge_executable": ["TriAevumForge"],
+        "forge_runtime_module": ["forge/oot3d_game_module.dylib"],
+        "shader_preparation_tool": ["forge/oot3d_native_pica_aot_compiler", "forge/oot3d_native_nri_pipeline_prepare"],
+        "precompiled_title": ["titles/*/triaevum_title_aot.dylib"],
+        "documentation": ["README.md", "docs/*", "docs/**/*"]
+      },
+      "required_paths": ["TriAevum", "TriAevumForge", "forge/oot3d_game_module.dylib", "forge/oot3d_native_pica_aot_compiler", "forge/oot3d_native_nri_pipeline_prepare", "config/vulkan/MoltenVK_icd.json", "docs/macos-bundle.json", "docs/TRIAEVUM_MACOS_INSTALL.md", "docs/LICENSE_SCOPE.md", "docs/THIRD_PARTY_NOTICES.md", "docs/SOURCE_OFFER.md", "LICENSES/MoltenVK-Apache-2.0.txt", "LICENSES/Vulkan-Loader-LICENSE.txt", "LICENSES/MacOS-donor-notices.json", "docs/TRIAEVUM_CONTRIBUTIONS.md", "docs/AZAHAR_AUDIO_PROVENANCE.md", "docs/TRIAEVUM_RELEASE_APPROVAL_RECORD.md", "docs/TRIAEVUM_PRECOMPILED_RELEASE.md"],
+      "source_archive_required_paths": ["docs/TRIAEVUM_MACOS_INSTALL.md", "docs/TRIAEVUM_CONTRIBUTIONS.md", "docs/AZAHAR_AUDIO_PROVENANCE.md", "docs/TRIAEVUM_RELEASE_APPROVAL_RECORD.md", "docs/TRIAEVUM_PRECOMPILED_RELEASE.md", "LICENSES/MacOS-donor-notices.json"],
+      "forbidden_extensions": [".dll", ".exe", ".so", ".lib"],
+      "forge_profiles": {
+        "rust": {
+          "allowed_roles": {"forge_command_line": ["forge/triaevum-forge"]},
+          "required_paths": ["forge/triaevum-forge"]
+        }
+      }
+    },
     "x86_64-unknown-linux-gnu": {
       "allowed_roles": {
         "runtime_executable": ["TriAevum"],

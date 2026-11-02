@@ -56,7 +56,21 @@ fn available_space_at(_: &Path) -> Option<u64> {
 }
 
 /// The Vulkan loader library the game opens by name on this system.
-pub const VULKAN_LOADER: &str = if cfg!(windows) { "vulkan-1.dll" } else { "libvulkan.so.1" };
+pub const VULKAN_LOADER: &str = if cfg!(windows) {
+    "vulkan-1.dll"
+} else if cfg!(target_os = "macos") {
+    "libvulkan.1.dylib"
+} else {
+    "libvulkan.so.1"
+};
+
+#[cfg(target_os = "macos")]
+fn bundled_vulkan_loader(executable: &Path) -> Option<std::path::PathBuf> {
+    executable
+        .ancestors()
+        .find(|path| path.extension().is_some_and(|extension| extension == "app"))
+        .map(|bundle| bundle.join("Contents/Frameworks").join(VULKAN_LOADER))
+}
 
 /// Whether the system resolves [`VULKAN_LOADER`] by name, as the game does.
 /// Loading it runs no Vulkan code: the library is released at once.
@@ -84,6 +98,15 @@ pub fn vulkan_loader_present() -> bool {
         return true;
     }
     let name = std::ffi::CString::new(VULKAN_LOADER).expect("library name");
+    #[cfg(target_os = "macos")]
+    let name = {
+        use std::os::unix::ffi::OsStrExt;
+        std::env::current_exe()
+            .ok()
+            .and_then(|executable| bundled_vulkan_loader(&executable))
+            .and_then(|path| std::ffi::CString::new(path.as_os_str().as_bytes()).ok())
+            .unwrap_or(name)
+    };
     // SAFETY: a NUL-terminated library name; the handle is released once.
     unsafe {
         let handle = libc::dlopen(name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL);
@@ -103,6 +126,19 @@ pub fn vulkan_loader_present() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn desktop_and_cli_probe_the_bundled_loader() {
+        for executable in ["TriAevumForge", "forge/triaevum-forge"] {
+            let path = Path::new("/Applications/TriAevum.app/Contents/Resources").join(executable);
+            assert_eq!(
+                bundled_vulkan_loader(&path).unwrap(),
+                Path::new("/Applications/TriAevum.app/Contents/Frameworks/libvulkan.1.dylib")
+            );
+        }
+        assert!(bundled_vulkan_loader(Path::new("/tmp/triaevum-forge")).is_none());
+    }
 
     #[test]
     fn free_space_of_a_missing_path_is_its_volume_s() {

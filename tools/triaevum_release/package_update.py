@@ -11,6 +11,7 @@ from .host_layout import for_package
 from .installed_runtime import validate_installed_runtime
 from .precompiled_titles import CATALOG, load_catalog, select_title, install_precompiled_title
 from .release_platform import host_platform
+from .installation_context import resolve_reference
 
 
 def refresh_packaged_runtime(*, executable: Path, title: Path, data_root: Path,
@@ -42,6 +43,17 @@ def refresh_packaged_runtime(*, executable: Path, title: Path, data_root: Path,
         # other old binding, and the new executable against its catalog, before
         # allowing the installer to publish a replacement tuple.
         previous = dict(runtime, runtime_sha256=catalog["runtime"]["sha256"])
+        if host_platform().target == "aarch64-apple-darwin":
+            if runtime.get("plugin_sha256") != prepared.state.get("module", {}).get("title_aot_image_sha256"):
+                raise ValueError("The installed title receipt changed; run Forge again")
+            # The app replacement also replaced the signed title library.
+            # select_title verified its new catalog identity; retain the old
+            # profile/path checks and every other user-data binding.
+            old_plugin = resolve_reference(str(runtime.get("plugin") or ""), title)
+            new_plugin = (package / candidate["plugin"]["path"]).resolve()
+            if old_plugin != new_plugin:
+                raise ValueError("The bundled title path changed; run Forge again")
+            previous["plugin_sha256"] = candidate["plugin"]["sha256"]
         profile = validate_installed_runtime(executable, title, data_root, previous)
 
     # The installer acquires the publication lock itself and revalidates prepared

@@ -12,11 +12,30 @@ import forge
 import forge_gui
 import precompiled_titles
 from common import atomic_write_json, sha256_file
-from release_platform import (WINDOWS, LINUX, catalog_platform, for_target,
+from release_platform import (WINDOWS, LINUX, MACOS, catalog_platform, for_target, host_platform,
                               installed_runtime_path, place_installed_runtime)
 
 
 class ReleasePlatformTests(unittest.TestCase):
+    def test_macos_target_and_host_are_explicit(self):
+        self.assertEqual(catalog_platform({"target": MACOS.target}), MACOS)
+        with patch("release_platform.sys.platform", "darwin"), \
+             patch("release_platform.platform.machine", return_value="arm64"):
+            self.assertEqual(host_platform(), MACOS)
+        with patch("release_platform.sys.platform", "linux"), \
+             patch("release_platform.platform.machine", return_value="aarch64"):
+            with self.assertRaises(ValueError):
+                host_platform()
+
+    def test_macos_activation_never_mutates_the_signed_package(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / MACOS.runtime).write_bytes(b"signed runtime")
+            stale = root / ".fixture.1.stale"
+            stale.write_bytes(b"sealed file")
+            self.assertEqual(place_installed_runtime(root, MACOS), root / MACOS.runtime)
+            self.assertEqual(stale.read_bytes(), b"sealed file")
+
     def test_developer_title_command_selects_host_toolchain(self):
         for platform in (WINDOWS, LINUX):
             with self.subTest(target=platform.target), \

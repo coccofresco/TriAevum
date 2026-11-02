@@ -107,8 +107,8 @@ impl Mode {
 pub struct RestoreOptions {
     /// Restore only these units (default: every restorable one).
     pub units: Option<Vec<String>>,
-    /// Fault injection for tests: abort the process right after this many
-    /// categories committed. Never set by a request.
+    /// Fault injection for tests: exit with code 86, without unwinding, right
+    /// after this many categories committed. Never set by a request.
     pub abort_after_category: Option<usize>,
 }
 
@@ -1036,7 +1036,10 @@ fn apply(
         write_journal(journal_path, journal)?;
         committed += 1;
         if options.abort_after_category == Some(committed) {
-            std::process::abort();
+            // Leave the journal and partial restore intact, without running
+            // stack destructors or the error/rollback path. An ordinary exit
+            // avoids OS crash reports for this deliberate interruption.
+            std::process::exit(86);
         }
     }
     set(journal, "/state", json!("committed"));

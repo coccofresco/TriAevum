@@ -167,12 +167,14 @@ void Select(const char* combo, const char* option) {
 }
 void EditScalar(const char* label, const char* value) {
     auto& io = ImGui::GetIO();
-    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    // ImGui swaps physical Ctrl/Super events for macOS editing shortcuts.
+    const auto shortcut = io.ConfigMacOSXBehaviors ? ImGuiMod_Super : ImGuiMod_Ctrl;
+    io.AddKeyEvent(shortcut, true);
     Click(label);
     Check(GImGui->TempInputId != 0, std::string("scalar input did not open: ") + label);
     io.AddKeyEvent(ImGuiKey_A, true); Frame();
     io.AddKeyEvent(ImGuiKey_A, false);
-    io.AddKeyEvent(ImGuiMod_Ctrl, false); Frame();
+    io.AddKeyEvent(shortcut, false); Frame();
     io.AddInputCharactersUTF8(value); Frame();
     io.AddKeyEvent(ImGuiKey_Enter, true); Frame();
     io.AddKeyEvent(ImGuiKey_Enter, false); Frame(); Frame();
@@ -180,10 +182,11 @@ void EditScalar(const char* label, const char* value) {
 void EditText(const char* label, const char* value) {
     Click(label);
     auto& io = ImGui::GetIO();
-    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    const auto shortcut = io.ConfigMacOSXBehaviors ? ImGuiMod_Super : ImGuiMod_Ctrl;
+    io.AddKeyEvent(shortcut, true);
     io.AddKeyEvent(ImGuiKey_A, true); Frame();
     io.AddKeyEvent(ImGuiKey_A, false);
-    io.AddKeyEvent(ImGuiMod_Ctrl, false); Frame();
+    io.AddKeyEvent(shortcut, false); Frame();
     io.AddKeyEvent(ImGuiKey_Backspace, true); Frame();
     io.AddKeyEvent(ImGuiKey_Backspace, false); Frame();
     io.AddInputCharactersUTF8(value); Frame(); Frame();
@@ -1975,10 +1978,13 @@ int main(int argc, char** argv) try {
         size = ImVec2(760, 2600);
         Frame();
         Frame(true);
+#ifdef ENABLE_OOT3D_IMMERSE
+        // Only a build with the separately licensed module exposes its credit.
         Check(loggedPanelText.find("iMMERSE by Pascal Gilcher") != std::string::npos &&
                   loggedPanelText.find("all rights reserved") != std::string::npos &&
                   loggedPanelText.find("Licence exception") != std::string::npos,
               "Ambient Occlusion lacks the MXAO credit and licence exception");
+#endif
         size = pageSize;
         Click("Materials");
         for (const char* section : {"Texture packs", "Material editor", "Reflection materials"}) Find(section);
