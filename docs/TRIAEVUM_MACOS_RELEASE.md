@@ -35,6 +35,29 @@ launcher and Frameworks, for embedded build-machine paths. Failures identify
 the packaged binary without reproducing a matched host path. Prebuilt donor
 libraries must pass this same gate; the publisher does not rewrite their data.
 
+Build the Vulkan loader separately from the reviewed revision with:
+
+```sh
+cmake -S ports/macos/vulkan-loader -B "$BUILD/vulkan-loader" -G Ninja \
+  -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+  -DCMAKE_BUILD_TYPE=Release
+cmake --build "$BUILD/vulkan-loader" --target vulkan -j2
+```
+
+This publisher entry point verifies pinned loader/header source archives and
+uses the same prefix maps. It also sets public logical search directories:
+compiler maps cannot remove a build-machine installation prefix from generated
+string literals. Use the built `_deps/vulkanloader-build/loader/libvulkan.1.dylib`
+as the publisher input; do not run a system install. The header revision is
+the loader's upstream `known_good.json` version; its license text is identical
+to the already shipped Vulkan-Headers notice, with both revisions recorded in
+`LICENSES/MacOS-donor-notices.json`. Check the real library with the unchanged
+host-path gate after building and after publisher normalization.
+
+The MoltenVK notice record identifies the official 1.4.2 macOS archive and its
+unmodified library hash, alongside the matching source/dependency revisions.
+Verify these before thinning or signing, which changes the library hash.
+
 `ports/macos/package_app.sh --help` lists explicit input paths. Supply:
 
 - `--reference`: complete audited desktop reference package, including its

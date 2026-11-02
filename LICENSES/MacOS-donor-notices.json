@@ -1,7 +1,13 @@
 [
   {
     "path": "LICENSES/MoltenVK-Apache-2.0.txt",
-    "url": "https://raw.githubusercontent.com/KhronosGroup/MoltenVK/5189f8de86ec365860f63bf1da736815cfaea5cd/LICENSE",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/MoltenVK/db66022459ffb663aa2b50f6b018bc2e124f5edf/LICENSE",
+    "distribution": {
+      "version": "1.4.2",
+      "url": "https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-macos.tar",
+      "sha256": "f95765a6229cb7b915990a2890ce12ebe36a730b021545d3d52ae69ce4c4024e",
+      "unmodified_library_sha256": "aef00b13bcc808adf15b85bef9ae67393d92be7ed5dfe41cad16fa809e4a4c5f"
+    },
     "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
   },
   {
@@ -11,7 +17,7 @@
   },
   {
     "path": "LICENSES/MoltenVK-SPIRV-Cross-LICENSE.txt",
-    "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Cross/aa217aeb6c9f0ace7a0ab233b28807edf45eb165/LICENSE",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Cross/6c09849fe88c48eaed08413aa022aaa136a3a057/LICENSE",
     "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
   },
   {
@@ -27,6 +33,9 @@
   {
     "path": "LICENSES/MoltenVK-Vulkan-Headers-LICENSE.txt",
     "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Headers/e3b1eec08173d6b825cd3ac88c885a63b621504a/LICENSE.md",
+    "also_used_by": {
+      "Vulkan-Loader": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Headers/9fbc2a782ee3f8a4db64e7d991e23da75e893f44/LICENSE.md"
+    },
     "sha256": "95ad366d23fadf701d355bc45fb8b82ae2d700239471d35d41286ac3b08ff903"
   },
   {

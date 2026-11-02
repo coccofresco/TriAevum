@@ -595,6 +595,7 @@ def audit_release(
 
     title_roles = {"precompiled_catalog", "precompiled_title", "translated_title_source", "title_build_source"}
     adapter_paths = set()
+    macos_corpus_paths = set()
     if precompiled:
         for role in title_roles - roles_seen:
             reject(f"precompiled release is missing role: {role}")
@@ -603,6 +604,9 @@ def audit_release(
         try:
             catalog = load_catalog(root)
             validate_bundled_corpus(root, catalog, declared)
+            if platform == MACOS:
+                macos_corpus_paths = {path for path, item in declared.items()
+                                      if item["role"] == "portable_shader_corpus"}
             validate_precomputed_tables(root, catalog, declared)
             if catalog_platform(catalog) != platform:
                 raise ValueError("Catalog target differs from release target")
@@ -681,7 +685,7 @@ def audit_release(
     if platform == MACOS:
         for error in macos_notice_errors(lambda name: (root / name).read_bytes()):
             reject(error)
-        for error in macos_private_errors(root):
+        for error in macos_private_errors(root, catalogued_corpus_paths=macos_corpus_paths):
             reject(error)
         for error in macos_bundle_errors(root, declared, release):
             reject(error)
