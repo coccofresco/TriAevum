@@ -15,8 +15,11 @@ ADB connection without hosting a second compiler/SDK installation.
   shared service interfaces. No Android-specific renderer or new decompilation.
 - Android renders the configured effects like the desktop (2026-10-23). The
   runtime initializes a missing configuration with the product defaults
-  (`--initialize-config product`): the full Enhanced preset, with the picture
-  filling the display (Free aspect) instead of a 16:9 pillarbox.
+  (`--initialize-config product`): the Enhanced for Mobile preset (Enhanced at
+  30 fps without interpolation, 80% internal scale, 80% of the grass budget, no
+  water reflections), with the picture filling the display (Free aspect, a
+  host-owned default outside the preset) instead of a 16:9 pillarbox. The full
+  Enhanced stays selectable in F1 and the in-game menu.
   `NativePresentationPolicy` is no longer forced on Android; F2 toggles the
   native mask on every platform.
 - Platform lifecycle, surfaces, input devices, storage and audio-device binding

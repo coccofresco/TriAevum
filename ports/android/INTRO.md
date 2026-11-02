@@ -4,7 +4,7 @@
 
 Run the real whole-AOT title from normal boot through the existing Vulkan/NRI
 runtime, not an emulator or reconstructed cutscene demo. Android renders the
-product's full Enhanced preset at the display's aspect (until 2026-10-23 it forced the F2
+product's Enhanced for Mobile preset at the display's aspect (until 2026-10-23 it forced the F2
 native-presentation mask). Controls overlay,
 Forge import UI and release qualification follow a visible intro.
 

@@ -77,6 +77,9 @@ void InstallGraphicsSettingsWindowTitle(std::string title);
 class GraphicsSettingsPanel final {
   public:
     void Draw();
+    // The host whose presets the selector lists: this build's, unless a test
+    // draws another host's list.
+    void SetPresetHost(GraphicsPresetHost host) noexcept { mPresetHost = host; }
 
   private:
     using Section = bool (GraphicsSettingsPanel::*)(GraphicsSettings&, const GraphicsCapabilities&);
@@ -110,6 +113,7 @@ class GraphicsSettingsPanel final {
     void DrawGrassSettings();
     void DrawTextureSettings();
 
+    GraphicsPresetHost mPresetHost = kGraphicsPresetHost;
     float mPendingRenderScale = 1.0F;
     bool mRenderScaleEditing = false;
     std::array<int, 2> mPendingOutputResolution{1280, 720};

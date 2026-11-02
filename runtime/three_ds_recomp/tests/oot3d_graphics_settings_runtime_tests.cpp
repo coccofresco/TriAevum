@@ -178,7 +178,7 @@ TEST(GraphicsSettingsRuntimeTest, SavesLoadsAndDeletesUserPresetsButNeverBuiltIn
     EXPECT_TRUE(runtime.ActiveUserPreset().empty());
 
     // Built-in names are refused, whatever their case or padding.
-    for (const char* reserved : {"Enhanced", " authentic ", "TOON", "custom"}) {
+    for (const char* reserved : {"Enhanced", " authentic ", "TOON", "custom", " ENHANCED FOR MOBILE "}) {
         const auto refused = runtime.SaveUserPreset(reserved);
         EXPECT_FALSE(refused.Succeeded) << reserved;
     }
@@ -293,6 +293,28 @@ TEST(GraphicsPresetLibraryTest, RoundTripsAndKeepsNewerPresets) {
     const auto readOnly = GraphicsPresetLibrary::Deserialize(future);
     EXPECT_TRUE(readOnly.Presets().empty());
     EXPECT_FALSE(readOnly.ReadOnlyReason().empty());
+}
+
+// A user preset saved under this name before it became a built-in preset's is
+// not offered, and it is not lost with the next write of the library.
+TEST(GraphicsPresetLibraryTest, KeepsAUserPresetNamedLikeEnhancedForMobile) {
+    using namespace Fast::Extension;
+    GraphicsPresetLibrary library;
+    library.Save("Sera", GraphicsSettingsService::Preset(GraphicsPreset::Enhanced));
+    auto document = library.Serialize();
+    auto mine = document["Presets"][0];
+    mine["Name"] = "enhanced for mobile";
+    document["Presets"].push_back(mine);
+
+    std::vector<std::string> issues;
+    auto loaded = GraphicsPresetLibrary::Deserialize(document, &issues);
+    ASSERT_EQ(loaded.Presets().size(), 1U);
+    EXPECT_EQ(loaded.Presets()[0].Name, "Sera");
+    ASSERT_EQ(issues.size(), 1U);
+    loaded.Save("Notte", GraphicsSettingsService::Preset(GraphicsPreset::Toon));
+    const auto written = loaded.Serialize();
+    ASSERT_EQ(written["Presets"].size(), 3U);
+    EXPECT_EQ(written["Presets"][2], mine);
 }
 
 } // namespace

@@ -1,5 +1,52 @@
 # F1 settings rationalization
 
+## Enhanced for Mobile (2026-11-02)
+
+**Graphics preset** gains **Enhanced for Mobile** on Android, between Enhanced
+and Toon, in F1 and in the in-game menu's Video tab; Android's product default
+is this preset and the full Enhanced stays selectable. It is Enhanced with four
+values changed, the ones that set a phone's cost: 30 fps without interpolation,
+80% internal scale, 80% of the grass budget (400,000) and no water reflections.
+Aspect Free stays a host-owned Android default outside the preset, so the
+preset does not change it. Any edit makes it Custom, as with every preset.
+
+Windows, Linux and macOS do not offer it. The enumerator follows Custom, so the
+numbers in reports, the desktop lists and fresh default configurations do not
+change. Forge's desktop contract is unchanged; the Rust Forge expects
+`EnhancedForMobile` at `Original30` from the Android runtime (`ProductDefaults`
+in `forge-native/src/product.rs`, chosen by the build target because Android
+installations run only in the Android application), and the Python contract,
+which only builds desktop packages, stays as it was.
+
+Persistence: `Graphics.Preset` is `EnhancedForMobile`, displayed "Enhanced for
+Mobile" (`GraphicsPresetDisplayName`; the list is `BuiltInGraphicsPresets`). No
+schema change: a file that names it loads as saved on any host. A desktop keeps
+the name and the values, F1 shows the name without offering it, and the
+in-game menu shows Custom, the row of a preset the host does not list. Older
+files are never relabelled: a phone's `Enhanced` with the reduced values stays
+Enhanced. The name is reserved for user presets on every host, and a user
+preset already saved under it is kept in the file but not offered. Reset
+display settings keeps the preset's 80% scale, so the name stays true.
+
+Corpus: `graphics_settings*` and `graphics_preset*` are decision-policy inputs
+(`POLICY_PATTERNS`), so this change precedes the next recording, like the
+Android defaults before it. Of the preset's values only water reflections reach
+a variant request (off, the frame's reflections stay Off and no water-only Hi-Z
+is requested); frame rate, scale and grass budget do not. The preset's identity
+never does (`EncodePicaVariantEffects` records Custom; the renderer compares
+only with Authentic).
+
+Verification (developer build, not a Forge-installed package): actual-widget
+smoke **11,711 assertions**: the desktop list without it, the mobile list
+through `GraphicsSettingsPanel::SetPresetHost`, choosing it, saving it under
+its name, Enhanced back in full, Frame rate edited to Custom, a desktop keeping
+the name of a configuration that carries it. Unit tests:
+`EnhancedForMobileIsEnhancedAtAPhonesCost` (exactly the four values differ),
+`LoadsConfigurationsWithAndWithoutEnhancedForMobile`,
+`OnlyAMobileHostOffersEnhancedForMobile`,
+`KeepsAUserPresetNamedLikeEnhancedForMobile`, `defaults_follow_the_host`.
+The changed files compile with the Android NDK; no phone was used.
+
 ## Anisotropic filtering (2026-10-28, issue #122)
 
 Display > Antialiasing and upscaling gains **Anisotropic filtering** (Off,

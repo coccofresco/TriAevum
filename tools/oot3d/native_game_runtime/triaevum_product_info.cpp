@@ -15,7 +15,7 @@
 nlohmann::json TriAevumProductDefaultConfig() {
     using namespace Fast::Extension;
     // A new installation starts from the product's default graphics (owned by
-    // the graphics runtime: the Enhanced preset, the default window and the
+    // the graphics runtime: the platform's preset, the default window and the
     // platform's choices) with the title's grass source texture rules, which
     // no preset owns. Existing installations retain their config.
     auto graphics = ProductDefaultGraphicsSettings();

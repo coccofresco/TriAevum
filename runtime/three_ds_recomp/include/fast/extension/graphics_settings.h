@@ -12,12 +12,15 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
 namespace Fast::Extension {
 
-enum class GraphicsPreset : uint8_t { Authentic, Enhanced, Toon, Custom };
+// Reports print the number: a new preset goes after Custom, the menus list them
+// in their own order (BuiltInGraphicsPresets).
+enum class GraphicsPreset : uint8_t { Authentic, Enhanced, Toon, Custom, EnhancedForMobile };
 enum class WindowMode : uint8_t { Windowed, Borderless, ExclusiveFullscreen };
 // The picture's aspect ratio: the original top screen (5:3), 16:9, 21:9 (7:3)
 // or Free (the output's own ratio: the window as the user shapes it, the
@@ -449,8 +452,31 @@ class GraphicsSettingsService {
 // struct defaults above are the Authentic look, not the product default). It
 // is the baseline every "Modified" marker compares with; the title adds only
 // its content rules (grass sources) to it when it writes a new configuration.
+#if defined(__ANDROID__)
+inline constexpr GraphicsPreset kProductDefaultGraphicsPreset = GraphicsPreset::EnhancedForMobile;
+#else
 inline constexpr GraphicsPreset kProductDefaultGraphicsPreset = GraphicsPreset::Enhanced;
+#endif
 [[nodiscard]] GraphicsSettings ProductDefaultGraphicsSettings();
+
+// Which built-in presets a host offers: Enhanced for Mobile only on a phone. A
+// configuration that names it elsewhere still loads, keeps its values and its
+// name, and leaves it by choosing another preset.
+enum class GraphicsPresetHost : uint8_t { Desktop, Mobile };
+#if defined(__ANDROID__)
+inline constexpr GraphicsPresetHost kGraphicsPresetHost = GraphicsPresetHost::Mobile;
+#else
+inline constexpr GraphicsPresetHost kGraphicsPresetHost = GraphicsPresetHost::Desktop;
+#endif
+
+// The presets a user chooses between, in menu order. Custom is not among them:
+// it is the result of changing any setting.
+[[nodiscard]] std::span<const GraphicsPreset> BuiltInGraphicsPresets(GraphicsPresetHost host) noexcept;
+// The name F1 and the in-game menu show (persistence has its own name).
+[[nodiscard]] const char* GraphicsPresetDisplayName(GraphicsPreset preset) noexcept;
+// A preset's row in a menu that lists BuiltInGraphicsPresets(host) and then
+// Custom. A preset the host does not offer has the Custom row.
+[[nodiscard]] int GraphicsPresetChoiceIndex(GraphicsPresetHost host, GraphicsPreset preset) noexcept;
 
 // The display part of the settings back at the product defaults: window mode,
 // output size (as the fresh default, so the window opens at the default fit),

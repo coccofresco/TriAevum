@@ -382,16 +382,24 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     Row row;
     row.Key = "Graphics preset";
     row.Kind = RowKind::Choice;
-    row.Help = "Authentic keeps the original look. Enhanced adds the modern lighting, shadows and effects. "
-               "Toon applies the cel-shaded style. Any change below makes the preset Custom; the window, "
-               "resolution, VSync and texture packs stay as they are.";
-    row.Choices = {"Authentic", "Enhanced", "Toon", "Custom"};
-    row.Read = [this] { return static_cast<int>(mGraphics.Preset); };
-    row.Write = [this](int value) -> WriteResult {
-      if (value == static_cast<int>(GraphicsPreset::Custom)) return {"Custom is the result of changing any setting", false};
-      return ApplyGraphics(GraphicsSettingsService::PresetForCurrent(static_cast<GraphicsPreset>(value), mGraphics), true);
+    const auto offered = Fast::Extension::BuiltInGraphicsPresets(Fast::Extension::kGraphicsPresetHost);
+    const int customChoice = static_cast<int>(offered.size());
+    row.Help = "Authentic keeps the original look. Enhanced adds the modern lighting, shadows and effects. ";
+    if (Fast::Extension::kGraphicsPresetHost == Fast::Extension::GraphicsPresetHost::Mobile)
+      row.Help += "Enhanced for Mobile is Enhanced at 30 fps, with a lower internal resolution, less grass and no "
+                  "water reflections, so the phone stays cool. ";
+    row.Help += "Toon applies the cel-shaded style. Any change below makes the preset Custom; the window, "
+                "resolution, VSync and texture packs stay as they are.";
+    for (const auto preset : offered) row.Choices.emplace_back(Fast::Extension::GraphicsPresetDisplayName(preset));
+    row.Choices.emplace_back("Custom");
+    row.Read = [this] {
+      return Fast::Extension::GraphicsPresetChoiceIndex(Fast::Extension::kGraphicsPresetHost, mGraphics.Preset);
     };
-    row.ChoiceAvailable = [](int value) { return value != static_cast<int>(GraphicsPreset::Custom); };
+    row.Write = [this, offered, customChoice](int value) -> WriteResult {
+      if (value >= customChoice) return {"Custom is the result of changing any setting", false};
+      return ApplyGraphics(GraphicsSettingsService::PresetForCurrent(offered[value], mGraphics), true);
+    };
+    row.ChoiceAvailable = [customChoice](int value) { return value != customChoice; };
     row.Modified = [this] { return mGraphics.Preset != mBaseline.Preset; };
     tab.Rows.push_back(std::move(row));
   }

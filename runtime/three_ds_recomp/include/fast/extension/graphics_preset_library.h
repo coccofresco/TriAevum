@@ -24,7 +24,7 @@ struct UserGraphicsPreset {
 
 enum class GraphicsPresetNameError : uint8_t { None, Empty, TooLong, InvalidCharacter, BuiltIn };
 
-// The user's preset library. Built-in presets (Authentic, Enhanced, Toon)
+// The user's preset library. Built-in presets (BuiltInGraphicsPresets)
 // and Custom are not part of it and their names cannot be taken, so a
 // built-in preset can never be overwritten or deleted.
 class GraphicsPresetLibrary {

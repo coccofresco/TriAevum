@@ -364,9 +364,8 @@ void GraphicsSettingsPanel::DrawPresetSelector() {
     auto settings = runtime.Snapshot();
     const auto userPresets = runtime.UserPresetNames();
     const auto activeUserPreset = runtime.ActiveUserPreset();
-    const char* const builtIns[] = {"Authentic", "Enhanced", "Toon"};
     const bool custom = settings.Preset == GraphicsPreset::Custom;
-    const std::string shown = !custom ? builtIns[static_cast<size_t>(settings.Preset)]
+    const std::string shown = !custom ? GraphicsPresetDisplayName(settings.Preset)
                               : !activeUserPreset.empty() ? activeUserPreset : "Custom";
     const auto applyBuiltIn = [&](GraphicsPreset preset) {
         settings = GraphicsSettingsService::PresetForCurrent(preset, settings);
@@ -375,9 +374,8 @@ void GraphicsSettingsPanel::DrawPresetSelector() {
         mOutputResolutionEditing = false;
     };
     if (ImGui::BeginCombo("Graphics preset", shown.c_str())) {
-        for (size_t index = 0; index < std::size(builtIns); ++index) {
-            const auto preset = static_cast<GraphicsPreset>(index);
-            if (ImGui::Selectable(builtIns[index], settings.Preset == preset)) applyBuiltIn(preset);
+        for (const auto preset : BuiltInGraphicsPresets(mPresetHost)) {
+            if (ImGui::Selectable(GraphicsPresetDisplayName(preset), settings.Preset == preset)) applyBuiltIn(preset);
         }
         if (!userPresets.empty()) ImGui::SeparatorText("Your presets");
         ImGui::PushID("UserPresets");

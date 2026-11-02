@@ -23,11 +23,57 @@ fn preflight(message: &str) -> ForgeError {
     ForgeError::new(ErrorKind::NativePreflight, message)
 }
 
+/// The graphics defaults a playable runtime publishes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProductDefaults {
+    /// Windows, Linux and macOS: Enhanced at interpolation x2.
+    Desktop,
+    /// Android (`ProductDefaultGraphicsSettings`): Enhanced for Mobile at 30 fps.
+    Android,
+}
+
+impl ProductDefaults {
+    /// What the runtime beside this Forge publishes: Android installations
+    /// run only in the Android application (`android_job`).
+    pub const HOST: Self = if cfg!(target_os = "android") { Self::Android } else { Self::Desktop };
+
+    const fn preset(self) -> &'static str {
+        match self {
+            Self::Desktop => "Enhanced",
+            Self::Android => "EnhancedForMobile",
+        }
+    }
+
+    const fn frame_rate(self) -> &'static str {
+        match self {
+            Self::Desktop => "Interpolated2x",
+            Self::Android => "Original30",
+        }
+    }
+
+    const fn frame_rate_error(self) -> &'static str {
+        match self {
+            Self::Desktop => "Runtime defaults do not enable visual interpolation x2",
+            Self::Android => "Runtime defaults do not keep the original 30 fps",
+        }
+    }
+}
+
 /// `validate_product_info(info, source_commit)`.
 ///
-/// Deliberate difference: a `FrameRate` that is present but not an object
+/// Deliberate differences: a `FrameRate` that is present but not an object
 /// crashed Python with AttributeError; it is the interpolation error here.
+/// Python builds desktop packages only, so it knows only the desktop defaults.
 pub fn validate_product_info(info: &Map<String, Value>, source_commit: &str) -> Result<()> {
+    validate_product_info_for(info, source_commit, ProductDefaults::HOST)
+}
+
+/// [`validate_product_info`] for the runtime of a named host.
+pub fn validate_product_info_for(
+    info: &Map<String, Value>,
+    source_commit: &str,
+    defaults: ProductDefaults,
+) -> Result<()> {
     if !eq_str(get(info, "format"), FORMAT)
         || !eq_str(get(info, "runtime"), "oot3d_native_game")
         || !py_eq(get(info, "whole_aot_plugin_abi"), &json!(2))
@@ -55,16 +101,16 @@ pub fn validate_product_info(info: &Map<String, Value>, source_commit: &str) -> 
         },
         _ => return Err(preflight("Runtime did not publish its graphics defaults")),
     };
-    if !eq_str(get(graphics, "Preset"), "Enhanced") {
-        return Err(preflight("Runtime defaults do not select the Enhanced preset"));
+    if !eq_str(get(graphics, "Preset"), defaults.preset()) {
+        return Err(preflight(&format!("Runtime defaults do not select the {} preset", defaults.preset())));
     }
     let mode = match graphics.get("FrameRate") {
         None => &Value::Null,
         Some(Value::Object(frame_rate)) => get(frame_rate, "Mode"),
-        Some(_) => return Err(preflight("Runtime defaults do not enable visual interpolation x2")),
+        Some(_) => return Err(preflight(defaults.frame_rate_error())),
     };
-    if !eq_str(mode, "Interpolated2x") {
-        return Err(preflight("Runtime defaults do not enable visual interpolation x2"));
+    if !eq_str(mode, defaults.frame_rate()) {
+        return Err(preflight(defaults.frame_rate_error()));
     }
     Ok(())
 }

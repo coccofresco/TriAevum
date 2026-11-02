@@ -19,7 +19,11 @@ bool SameName(std::string_view left, std::string_view right) {
                       [&](char a, char b) { return lower(a) == lower(b); });
 }
 
-constexpr std::array<std::string_view, 4> kReservedNames{"Authentic", "Enhanced", "Toon", "Custom"};
+// Enhanced for Mobile is offered only on a phone, but a configuration can move
+// between hosts: its name is reserved on every host.
+constexpr std::string_view kEnhancedForMobileName{"Enhanced for Mobile"};
+constexpr std::array<std::string_view, 5> kReservedNames{"Authentic", "Enhanced", "Toon", "Custom",
+                                                         kEnhancedForMobileName};
 
 // The documents of the host-owned state (KeepHostOwnedSettings), which a
 // preset never applies: a preset document leaves them out, as the Enhanced
@@ -173,6 +177,14 @@ GraphicsPresetLibrary GraphicsPresetLibrary::Deserialize(const nlohmann::json& b
     for (const auto& entry : *presets) {
         const auto name = entry.is_object() && entry.contains("Name") && entry["Name"].is_string()
             ? entry["Name"].get<std::string>() : std::string{};
+        // A preset the user saved under this name before it became a built-in
+        // name is theirs: not offered, but written back rather than lost.
+        if (SameName(NormalizeName(name), kEnhancedForMobileName) && entry.contains("Graphics") &&
+            entry["Graphics"].is_object()) {
+            report("GraphicsPresets: preset \"" + name + "\" has a built-in preset's name; kept, not offered");
+            library.mPreserved.push_back({NormalizeName(name), entry["Graphics"].dump()});
+            continue;
+        }
         if (const auto error = ValidateName(name); error != GraphicsPresetNameError::None) {
             report("GraphicsPresets: skipped preset \"" + name + "\": " + DescribeNameError(error));
             continue;

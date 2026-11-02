@@ -58,6 +58,7 @@ constexpr EnumNames<GraphicsPreset> kPresetNames{
     {GraphicsPreset::Enhanced, "Enhanced"},
     {GraphicsPreset::Toon, "Toon"},
     {GraphicsPreset::Custom, "Custom"},
+    {GraphicsPreset::EnhancedForMobile, "EnhancedForMobile"},
 };
 constexpr EnumNames<WindowMode> kWindowNames{
     {WindowMode::Windowed, "Windowed"},
@@ -1905,11 +1906,13 @@ GraphicsSettingsLoadResult DecodeGraphicsSettings(
                        "Graphics.Camera.ExtendedDrawDistance", result);
     }
     // Optional: a document from before anisotropic filtering takes its
-    // preset's value (Enhanced 4x, otherwise off).
+    // preset's value (Enhanced and Enhanced for Mobile 4x, otherwise off).
     if (const Json* textures = FindMember(document, "Textures"); textures != nullptr && textures->is_object()) {
         ReadScalar(*textures, "Anisotropy", result.Value.Anisotropy, "Graphics.Textures.Anisotropy", result);
     } else {
-        result.Value.Anisotropy = result.Value.Preset == GraphicsPreset::Enhanced ? 4U : 1U;
+        const bool enhanced = result.Value.Preset == GraphicsPreset::Enhanced ||
+                              result.Value.Preset == GraphicsPreset::EnhancedForMobile;
+        result.Value.Anisotropy = enhanced ? 4U : 1U;
     }
     if (version >= 8U) {
         if (const Json* texturePacks =

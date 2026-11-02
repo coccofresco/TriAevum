@@ -40,7 +40,8 @@ presets by name, the dev tools and the rest).
 - "Modified" (the dot before a value) compares with the product's default
   graphics, `ProductDefaultGraphicsSettings()` owned by the graphics runtime
   (`kProductDefaultGraphicsPreset`, the Enhanced preset with the default
-  window), not with the C++ struct defaults (the Authentic look). The
+  window; Enhanced for Mobile on Android), not with the C++ struct defaults
+  (the Authentic look). The
   Resolution row is modified once the user chose a size (provenance `user`).
 - A display change (window mode, resolution) asks "Keep these display
   settings?" with the same countdown as F1; the question is asked once, in
@@ -51,7 +52,7 @@ presets by name, the dev tools and the rest).
 
 | Tab | Rows |
 | --- | --- |
-| Video | Graphics preset (Authentic / Enhanced / Toon; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Anisotropic filtering (Off / 2x / 4x / 8x / 16x; 4x in Enhanced), Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile), Button labels (Controller / Original 3DS, see "HUD button labels") |
+| Video | Graphics preset (Authentic / Enhanced / Toon, on Android also Enhanced for Mobile; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Anisotropic filtering (Off / 2x / 4x / 8x / 16x; 4x in Enhanced), Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile), Button labels (Controller / Original 3DS, see "HUD button labels") |
 | Graphics | Lighting model, Global illumination, Ambient occlusion, Shadows (modern lighting only), Reflections, Toon, Grass quality, Distant grass cards, Textures > Custom textures (F1's "Load custom textures"; keeps the preset) |
 | Controls | Keyboard / Mouse / Controller / Capture mouse, Rumble (Off / Light / Strong, F1 > Controls > Devices > Controller), Button prompts, Control preset, Aim source, Invert aim X / Y; with the TopScreen profile, Camera (Gameplay camera, speed, smoothing, invert X / Y, Camera zoom, Camera FOV) and C-Stick aiming (speed, invert X / Y) |
 | Photo mode | Photo camera (F6), Hide HUD, Photo camera speed, Back to the game's view, then the camera's controls as read-only rows (F6, WASD / left stick, Q / E / shoulders, mouse drag / right stick, Shift / Ctrl) |

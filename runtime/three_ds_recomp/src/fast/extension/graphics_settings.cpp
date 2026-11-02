@@ -84,6 +84,8 @@ bool IsDirectionalShadowResolution(uint32_t resolution) {
     return resolution == 2048U || resolution == 4096U;
 }
 
+constexpr float kEnhancedForMobileRenderScale = 0.8F;
+
 } // namespace
 
 void ResetToonLightBandProfile(ToonStyleSettings& settings) noexcept {
@@ -198,6 +200,21 @@ GraphicsSettings GraphicsSettingsService::Preset(GraphicsPreset preset) {
     if (preset == GraphicsPreset::Enhanced) {
         // A tuned play configuration (EnhancedPresetDocument).
         value = EnhancedPresetSettings();
+    } else if (preset == GraphicsPreset::EnhancedForMobile) {
+        // Enhanced's look at a phone's cost: 30 fps without interpolation, 80%
+        // internal scale and 80% of the desktop grass budget. A phone at 60 fps
+        // runs hot and loses its GPU clocks within a minute.
+        value = EnhancedPresetSettings();
+        value.Preset = preset;
+        value.FrameRate = FrameRateMode::Original30;
+        value.InternalResolutionScale = kEnhancedForMobileRenderScale;
+        value.Grass.MaxInstancesPerRoom = value.Grass.MaxInstancesPerRoom / 5U * 4U;
+        // Water keeps its waves, Fresnel sky (fog colour) reflection, sun
+        // specular and foam in the scene shader; the screen-space water trace
+        // (Hi-Z, the material guide on every scene draw, the composite) cost
+        // ~4 ms of an 18 ms frame on the Adreno 830 for reflections that are
+        // mostly sky.
+        value.Effects.WaterReflections = false;
     } else if (preset == GraphicsPreset::Toon) {
         // The toon look keeps its own base: FXAA, VSM, GTAO and Medium grass.
         value.AntiAliasing = AntiAliasingMode::Fxaa;
@@ -224,21 +241,9 @@ GraphicsSettings ProductDefaultGraphicsSettings() {
     settings.OutputHeight = kProductDefaultWindowExtent.Height;
     settings.OutputProvenance = WindowExtentProvenance::Default;
 #if defined(__ANDROID__)
-    // A conservative start from the Enhanced preset, which stays selectable in
-    // full: 30 fps without interpolation, 80% internal scale and 80% of the
-    // desktop grass budget. A phone at 60 fps runs hot and loses its GPU clocks
-    // within a minute. The picture fills the display instead of a 16:9
-    // pillarbox (the aspect is host-owned, so the preset stays).
-    settings.FrameRate = FrameRateMode::Original30;
-    settings.InternalResolutionScale = 0.8F;
-    settings.Grass.MaxInstancesPerRoom =
-        settings.Grass.MaxInstancesPerRoom / 5U * 4U;
+    // The picture fills the display instead of a 16:9 pillarbox (the aspect is
+    // host-owned, so the preset stays).
     settings.Aspect = AspectRatioMode::Free;
-    // Water keeps its waves, Fresnel sky (fog colour) reflection, sun specular
-    // and foam in the scene shader; the screen-space water trace (Hi-Z, the
-    // material guide on every scene draw, the composite) cost ~4 ms of an
-    // 18 ms frame on the Adreno 830 for reflections that are mostly sky.
-    settings.Effects.WaterReflections = false;
 #elif defined(__APPLE__)
     // The default 1280x720-point Retina window has a 2560x1440 drawable.
     // Start at half drawable resolution on Apple GPUs, retaining Enhanced's
@@ -251,15 +256,42 @@ GraphicsSettings ProductDefaultGraphicsSettings() {
     return settings;
 }
 
+std::span<const GraphicsPreset> BuiltInGraphicsPresets(GraphicsPresetHost host) noexcept {
+    static constexpr std::array desktop{GraphicsPreset::Authentic, GraphicsPreset::Enhanced, GraphicsPreset::Toon};
+    static constexpr std::array mobile{GraphicsPreset::Authentic, GraphicsPreset::Enhanced,
+                                       GraphicsPreset::EnhancedForMobile, GraphicsPreset::Toon};
+    if (host == GraphicsPresetHost::Mobile) return mobile;
+    return desktop;
+}
+
+const char* GraphicsPresetDisplayName(GraphicsPreset preset) noexcept {
+    switch (preset) {
+        case GraphicsPreset::Authentic: return "Authentic";
+        case GraphicsPreset::Enhanced: return "Enhanced";
+        case GraphicsPreset::EnhancedForMobile: return "Enhanced for Mobile";
+        case GraphicsPreset::Toon: return "Toon";
+        case GraphicsPreset::Custom: break;
+    }
+    return "Custom";
+}
+
+int GraphicsPresetChoiceIndex(GraphicsPresetHost host, GraphicsPreset preset) noexcept {
+    const auto offered = BuiltInGraphicsPresets(host);
+    return static_cast<int>(std::find(offered.begin(), offered.end(), preset) - offered.begin());
+}
+
 void ResetDisplaySettings(GraphicsSettings& settings) {
     // The least demanding presentation: a window at the product's default
-    // size, native render scale, no anti-aliasing or upscaler.
+    // size, native render scale, no anti-aliasing or upscaler. Enhanced for
+    // Mobile keeps its own scale: it is the preset's, and a phone's safe one.
     const GraphicsSettings safe{};
     settings.Window = safe.Window;
     settings.OutputWidth = kProductDefaultWindowExtent.Width;
     settings.OutputHeight = kProductDefaultWindowExtent.Height;
     settings.OutputProvenance = WindowExtentProvenance::Default;
-    settings.InternalResolutionScale = safe.InternalResolutionScale;
+    settings.InternalResolutionScale = settings.Preset == GraphicsPreset::EnhancedForMobile
+                                           ? kEnhancedForMobileRenderScale
+                                           : safe.InternalResolutionScale;
     settings.AntiAliasing = safe.AntiAliasing;
     settings.MsaaSamples = safe.MsaaSamples;
     settings.Upscaler = safe.Upscaler;
