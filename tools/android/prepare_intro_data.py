@@ -79,7 +79,7 @@ def prepare(installation: Path, launch_profile: Path, output: Path, *, capture: 
         "--presentation-rate": "60",
         "--input-admission": "auto",
         # No Forge on the phone: the runtime writes the product defaults
-        # (Enhanced, Interpolated2x, Free aspect on Android) on first start.
+        # (Enhanced at 30 fps, 80% scale and grass budget, Free aspect) on first start.
         "--initialize-config": "product",
         "--width": "640", "--height": "360",
         "--max-seconds": "120",

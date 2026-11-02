@@ -224,8 +224,15 @@ GraphicsSettings ProductDefaultGraphicsSettings() {
     settings.OutputHeight = kProductDefaultWindowExtent.Height;
     settings.OutputProvenance = WindowExtentProvenance::Default;
 #if defined(__ANDROID__)
-    // The full Enhanced preset; the picture fills the phone's display instead
-    // of a 16:9 pillarbox (the aspect is host-owned, so the preset stays).
+    // A conservative start from the Enhanced preset, which stays selectable in
+    // full: 30 fps without interpolation, 80% internal scale and 80% of the
+    // desktop grass budget. A phone at 60 fps runs hot and loses its GPU clocks
+    // within a minute. The picture fills the display instead of a 16:9
+    // pillarbox (the aspect is host-owned, so the preset stays).
+    settings.FrameRate = FrameRateMode::Original30;
+    settings.InternalResolutionScale = 0.8F;
+    settings.Grass.MaxInstancesPerRoom =
+        settings.Grass.MaxInstancesPerRoom / 5U * 4U;
     settings.Aspect = AspectRatioMode::Free;
     // Water keeps its waves, Fresnel sky (fog colour) reflection, sun specular
     // and foam in the scene shader; the screen-space water trace (Hi-Z, the
