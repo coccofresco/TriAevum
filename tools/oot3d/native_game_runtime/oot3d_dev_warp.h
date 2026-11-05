@@ -181,8 +181,10 @@ class DevWarpRuntime {
   bool WarpToZone(std::string_view id, const DevWarpSelection &arrival, std::string *error);
   // Why the selection cannot be written (an unproven or unknown axis), or empty.
   [[nodiscard]] std::string ArrivalError(const DevWarpSelection &arrival) const;
-  // The zone's suggestion where `arrival` asks for it.
-  [[nodiscard]] static DevWarpSelection Resolve(const DevWarpSelection &arrival, const DevWarpZone *zone);
+  // The zone's suggestion where `arrival` asks for it (Keep outside a zone,
+  // and Keep for an axis the title has not proven: a preset never blocks a
+  // zone, an explicit value of an unproven axis does).
+  [[nodiscard]] DevWarpSelection Resolve(const DevWarpSelection &arrival, const DevWarpZone *zone) const;
   void WarpToPoint(const std::string &name);
   // A place that is not a stored point (agents' lab warps), same respawn.
   void WarpToPlace(const std::string &label, const DevWarpPoint &point);

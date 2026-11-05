@@ -158,10 +158,14 @@ const DevWarpEntrance *DevWarpRuntime::FindEntrance(uint16_t entrance) const {
   return nullptr;
 }
 
-DevWarpSelection DevWarpRuntime::Resolve(const DevWarpSelection &arrival, const DevWarpZone *zone) {
+DevWarpSelection DevWarpRuntime::Resolve(const DevWarpSelection &arrival, const DevWarpZone *zone) const {
+  const auto axes = Axes();
   DevWarpSelection resolved = arrival;
-  for (size_t axis = 0; axis < kDevWarpMaxAxes; ++axis)
-    if (resolved[axis] == kDevWarpPreset) resolved[axis] = zone != nullptr ? zone->Preset[axis] : kDevWarpKeep;
+  for (size_t axis = 0; axis < kDevWarpMaxAxes; ++axis) {
+    if (resolved[axis] != kDevWarpPreset) continue;
+    const bool proven = axis < axes.size() && axes[axis].Proven;
+    resolved[axis] = zone != nullptr && proven ? zone->Preset[axis] : kDevWarpKeep;
+  }
   return resolved;
 }
 

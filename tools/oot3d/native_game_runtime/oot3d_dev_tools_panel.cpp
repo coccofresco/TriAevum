@@ -124,7 +124,7 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     }
     const auto *row = mWarp->FindEntrance(selected->Entrance);
     const auto availability = row != nullptr ? mWarp->Check(*row) : DevWarpAvailability{true, false, "no catalog row"};
-    const auto resolved = DevWarpRuntime::Resolve(arrival.Arrival, selected);
+    const auto resolved = mWarp->Resolve(arrival.Arrival, selected);
     const auto arrivalError = mWarp->ArrivalError(resolved);
     const bool gameplay = status.Observation.Gameplay;
     ImGui::BeginDisabled(!gameplay || (availability.Known && !availability.Available) || !arrivalError.empty());
@@ -256,7 +256,7 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     }
     const auto availability = mWarp->Check(*target);
     const bool gameplay = status.Observation.Gameplay;
-    const auto arrivalError = mWarp->ArrivalError(DevWarpRuntime::Resolve(arrival, nullptr));
+    const auto arrivalError = mWarp->ArrivalError(mWarp->Resolve(arrival, nullptr));
     const bool titleArrival = mWarp->HasTitleAbi() && !mWarp->Axes().empty();
     ImGui::BeginDisabled(!gameplay || (availability.Known && !availability.Available) ||
                          (titleArrival && !arrivalError.empty()));

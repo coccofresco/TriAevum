@@ -371,6 +371,25 @@ int main() {
                             "mm3d:0xD600:night=1", "mm3d:12abc"})
       Check(throws(bad), bad);
   }
+  // Unproven axes: a zone preset degrades to Keep, an explicit value is refused.
+  {
+    Fake g;
+    DevWarpRuntime runtime({}, std::make_shared<Mm3dDevTools>(Mm3dDevProof{true, true, false}));
+    std::string error;
+    Check(runtime.Resolve(kDevWarpPresetAll, runtime.FindZone("stock-pot-inn")) == kDevWarpKeepAll,
+          "unproven presets resolve to keep");
+    Check(runtime.WarpToZone("stock-pot-inn", kDevWarpPresetAll, &error), error.c_str());
+    runtime.Advance(g, 0, 1);
+    Check(runtime.Status().Phase == DevWarpPhase::Requested && g.Get<uint16_t>(Fake::P + 0xC52E) == 0xBC00 &&
+              g.Get<uint16_t>(Common + 0x20) == 0x4000,
+          "a zone warps with keep-only arrival before the proofs");
+    Fake h;
+    DevWarpRuntime explicitTime({}, std::make_shared<Mm3dDevTools>(Mm3dDevProof{true, true, false}));
+    Check(explicitTime.WarpToZone("stock-pot-inn", DevWarpSelection{-2, 0x8000, -2, -2}, &error), error.c_str());
+    explicitTime.Advance(h, 0, 1);
+    Check(explicitTime.Status().Phase == DevWarpPhase::Failed && h.writes.empty(),
+          "an explicit unproven value is refused without writes");
+  }
   // The shared runtime: zone warp, boot zone once, persistence beside SoH's keys.
   {
     const auto path = std::filesystem::temp_directory_path() / "mm3d_dev_tools_tests.json";
