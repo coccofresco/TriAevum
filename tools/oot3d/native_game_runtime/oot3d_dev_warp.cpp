@@ -146,6 +146,91 @@ void DevWarpRuntime::WarpTo(const DevWarpEntrance &entrance, DevWarpAge age, std
   mStatus.Message = "Warping to " + mPending->Label + "...";
 }
 
+const DevWarpZone *DevWarpRuntime::FindZone(std::string_view id) const {
+  for (const auto &zone : Zones())
+    if (id == zone.Id) return &zone;
+  return nullptr;
+}
+
+const DevWarpEntrance *DevWarpRuntime::FindEntrance(uint16_t entrance) const {
+  for (const auto &row : Entrances())
+    if (row.Entrance == entrance && row.Grotto < 0) return &row;
+  return nullptr;
+}
+
+DevWarpSelection DevWarpRuntime::Resolve(const DevWarpSelection &arrival, const DevWarpZone *zone) {
+  DevWarpSelection resolved = arrival;
+  for (size_t axis = 0; axis < kDevWarpMaxAxes; ++axis)
+    if (resolved[axis] == kDevWarpPreset) resolved[axis] = zone != nullptr ? zone->Preset[axis] : kDevWarpKeep;
+  return resolved;
+}
+
+std::string DevWarpRuntime::ArrivalError(const DevWarpSelection &arrival) const {
+  const auto axes = Axes();
+  for (size_t axis = 0; axis < kDevWarpMaxAxes; ++axis) {
+    if (arrival[axis] == kDevWarpKeep || arrival[axis] == kDevWarpPreset) continue;
+    if (axis >= axes.size()) return "this title has no arrival option " + std::to_string(axis);
+    if (arrival[axis] < 0) return std::string(axes[axis].Label) + " has no value " + std::to_string(arrival[axis]);
+    if (!axes[axis].Proven)
+      return std::string(axes[axis].Label) + ": " + (*axes[axis].Pending ? axes[axis].Pending : "awaiting proof");
+  }
+  return {};
+}
+
+void DevWarpRuntime::QueueLocked(Request request, const std::string &message) {
+  mPending = std::move(request);
+  mStatus.Phase = DevWarpPhase::Waiting;
+  mStatus.Message = message;
+}
+
+void DevWarpRuntime::WarpTo(const DevWarpEntrance &entrance, const DevWarpSelection &arrival) {
+  Request request;
+  // "<scene>, <spawn>": a title's spawn rows are named within their scene.
+  request.Label = entrance.English;
+  const auto rows = Entrances();
+  for (const auto &scene : Scenes()) {
+    if (scene.First + scene.Count > rows.size()) continue;
+    const auto slice = rows.subspan(scene.First, scene.Count);
+    if (std::any_of(slice.begin(), slice.end(), [&](const auto &row) { return row.Entrance == entrance.Entrance; })) {
+      request.Label = std::string(scene.English) + ", " + entrance.English;
+      break;
+    }
+  }
+  request.Entrance = entrance.Entrance;
+  request.Scene = entrance.Scene;
+  request.Arrival = Resolve(arrival, nullptr);
+  const auto message = "Warping to " + request.Label + "...";
+  std::scoped_lock lock(mMutex);
+  QueueLocked(std::move(request), message);
+}
+
+bool DevWarpRuntime::ZoneRequestLocked(const DevWarpZone &zone, const DevWarpSelection &arrival, Request &request,
+                                       std::string *error) const {
+  const auto *row = FindEntrance(zone.Entrance);
+  if (row == nullptr) {
+    if (error != nullptr) *error = std::string("zone ") + zone.Id + " names no catalog entrance";
+    return false;
+  }
+  request.Label = zone.Name;
+  request.Entrance = row->Entrance;
+  request.Scene = row->Scene;
+  request.Arrival = Resolve(arrival, &zone);
+  return true;
+}
+
+bool DevWarpRuntime::WarpToZone(std::string_view id, const DevWarpSelection &arrival, std::string *error) {
+  const auto *zone = FindZone(id);
+  if (zone == nullptr) {
+    if (error != nullptr) *error = "unknown zone " + std::string(id);
+    return false;
+  }
+  Request request;
+  std::scoped_lock lock(mMutex);
+  if (!ZoneRequestLocked(*zone, arrival, request, error)) return false;
+  QueueLocked(std::move(request), "Warping to " + std::string(zone->Name) + "...");
+  return true;
+}
+
 void DevWarpRuntime::WarpToPoint(const std::string &name) {
   std::scoped_lock lock(mMutex);
   const auto found = mPoints.find(name);
@@ -213,7 +298,37 @@ void DevWarpRuntime::RemovePoint(const std::string &name) {
 void DevWarpRuntime::SetBootPoint(const std::string &name) {
   std::scoped_lock lock(mMutex);
   for (auto &[key, point] : mPoints) point.BootToPoint = key == name;
+  mArrivalOptions.BootZone.clear();
   SaveLocked();
+}
+
+void DevWarpRuntime::SetBootZone(std::string_view id) {
+  std::scoped_lock lock(mMutex);
+  mArrivalOptions.BootZone = std::string(id);
+  if (!id.empty())
+    for (auto &[key, point] : mPoints) point.BootToPoint = false;
+  SaveLocked();
+}
+
+DevWarpArrivalOptions DevWarpRuntime::ArrivalOptions() const {
+  std::scoped_lock lock(mMutex);
+  return mArrivalOptions;
+}
+
+void DevWarpRuntime::SetArrivalOptions(const DevWarpArrivalOptions &options) {
+  std::scoped_lock lock(mMutex);
+  if (options.SelectedZone == mArrivalOptions.SelectedZone && options.BootZone == mArrivalOptions.BootZone &&
+      options.Arrival == mArrivalOptions.Arrival)
+    return;
+  const bool bootChanged = options.BootZone != mArrivalOptions.BootZone;
+  mArrivalOptions = options;
+  if (bootChanged && !options.BootZone.empty())
+    for (auto &[key, point] : mPoints) point.BootToPoint = false;
+  SaveLocked();
+}
+
+bool DevWarpRuntime::PersistsArrival() const {
+  return mTitle && (!mTitle->Axes().empty() || !mTitle->Zones().empty());
 }
 
 DevWarpScreenOptions DevWarpRuntime::Options() const {
@@ -301,9 +416,13 @@ bool DevWarpRuntime::Apply(DevWarpGuest &guest, uint32_t playState, const Reques
   };
   if (mTitle) {
     if (request.Type == Kind::Grotto) return fail("This title has no OoT grotto ABI");
+    if (request.Night.has_value()) return fail("this title's time of day is an arrival option");
+    if (const auto reason = ArrivalError(request.Arrival); !reason.empty()) {
+      if (error != nullptr) *error = reason;
+      return false;
+    }
     return mTitle->Apply(guest, playState, request.Entrance,
-                        request.Type == Kind::WarpPoint ? &request.Point : nullptr,
-                        request.Age, request.Night, error);
+                        request.Type == Kind::WarpPoint ? &request.Point : nullptr, request.Arrival, error);
   }
   // SoH's Debug Warp Screen sets the age and the time of day it shows. In
   // play the age changes the native way, through the PlayState's
@@ -361,8 +480,20 @@ bool DevWarpRuntime::Apply(DevWarpGuest &guest, uint32_t playState, const Reques
 void DevWarpRuntime::Report(DevWarpGuest &guest, const char *event, uint64_t guestFrame) {
   if (mTitle) {
     const auto& o = mStatus.Observation;
-    std::fprintf(stderr, "TRIAEVUM_DEV_WARP %s frame=%llu scene=%d entrance=0x%04X player=%d\n",
-                 event, static_cast<unsigned long long>(guestFrame), o.Scene, o.Entrance, o.Player);
+    std::string arrival;
+    if (mActive.has_value()) {
+      const auto axes = mTitle->Axes();
+      for (size_t axis = 0; axis < axes.size() && axis < kDevWarpMaxAxes; ++axis)
+        arrival += std::string(axis == 0U ? " arrival=" : ",") + axes[axis].Id + ":" +
+                   std::to_string(mActive->Arrival[axis]);
+    }
+    const auto state = mTitle->Describe(o);
+    std::fprintf(stderr,
+                 "TRIAEVUM_DEV_WARP %s target=\"%s\" frame=%llu scene=%d room=%u entrance=0x%04X player=%d%s "
+                 "state=\"%s\"\n",
+                 event, mActive.has_value() ? mActive->Label.c_str() : "",
+                 static_cast<unsigned long long>(guestFrame), o.Scene, o.Room, o.Entrance, o.Player ? 1 : 0,
+                 arrival.c_str(), state.c_str());
     return;
   }
   // Developer log: what the warp observed, for checking it outside the menu.
@@ -396,7 +527,15 @@ void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t g
   // SoH's boot point: the first time gameplay starts in this session.
   if (!mBootChecked && observation.Gameplay) {
     mBootChecked = true;
-    if (!mPending.has_value() && !mActive.has_value()) {
+    const auto *bootZone = mArrivalOptions.BootZone.empty() ? nullptr : FindZone(mArrivalOptions.BootZone);
+    if (!mPending.has_value() && !mActive.has_value() && bootZone != nullptr) {
+      Request request;
+      std::string error;
+      if (ZoneRequestLocked(*bootZone, mArrivalOptions.Arrival, request, &error))
+        QueueLocked(std::move(request), "Boot zone: warping to " + std::string(bootZone->Name) + "...");
+      else
+        std::fprintf(stderr, "TRIAEVUM_DEV_WARP failed target=\"%s\" reason=%s\n", bootZone->Id, error.c_str());
+    } else if (!mPending.has_value() && !mActive.has_value()) {
       for (const auto &[name, point] : mPoints) {
         if (!point.BootToPoint) continue;
         Request request;
@@ -437,6 +576,15 @@ void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t g
         mReportFrames = kReportFrames;
         mStatus.Message = "Arrived at " + mActive->Label + ".";
         Report(guest, "arrived", guestFrame);
+        // The title's arrival options must have taken effect.
+        const auto mismatch = mTitle ? mTitle->ArrivalMismatch(guest, observation, mActive->Arrival) : std::string{};
+        if (!mismatch.empty()) {
+          mStatus.Phase = DevWarpPhase::Failed;
+          mStatus.Message = "Arrived at " + mActive->Label + ", but the arrival options did not apply: " + mismatch;
+          std::fprintf(stderr, "TRIAEVUM_DEV_WARP failed target=\"%s\" frame=%llu %s\n", mActive->Label.c_str(),
+                       static_cast<unsigned long long>(guestFrame), mismatch.c_str());
+          mActive.reset();
+        }
       } else if (guestFrame - mRequestFrame > kArrivalTimeoutFrames) {
         mStatus.Phase = DevWarpPhase::Failed;
         mStatus.Message = "The warp to " + mActive->Label + " did not arrive.";
@@ -512,6 +660,18 @@ void DevWarpRuntime::Load() {
       mOptions.Age = screen->value("LinkAge", 1) == 0 ? DevWarpAge::Adult : DevWarpAge::Child;
       mOptions.Night = screen->value("Night", false);
     }
+    if (PersistsArrival()) {
+      if (const auto zones = document.find("Zones"); zones != document.end() && zones->is_object()) {
+        mArrivalOptions.SelectedZone = zones->value("Selected", std::string{});
+        if (const auto boot = zones->find("Boot"); boot != zones->end() && boot->is_string())
+          mArrivalOptions.BootZone = boot->get<std::string>();
+      }
+      if (const auto arrival = document.find("Arrival"); arrival != document.end() && arrival->is_object()) {
+        const auto axes = mTitle->Axes();
+        for (size_t axis = 0; axis < axes.size() && axis < kDevWarpMaxAxes; ++axis)
+          mArrivalOptions.Arrival[axis] = arrival->value(axes[axis].Id, kDevWarpPreset);
+      }
+    }
   } catch (const std::exception &exception) {
     mStorageError = "Cannot read " + mStorage.string() + ": " + exception.what();
   }
@@ -527,7 +687,7 @@ void DevWarpRuntime::SaveLocked() {
                     {"rotY", point.RotY},
                     {"bootToPoint", point.BootToPoint},
                     {"useSceneEntrance", point.UseSceneEntrance}};
-  const nlohmann::json document = {
+  nlohmann::json document = {
       {"WarpPoints", std::move(points)},
       {"DebugWarpScreen",
        {{"Better", mOptions.Better},
@@ -537,6 +697,17 @@ void DevWarpRuntime::SaveLocked() {
         {"BetterEntrance", mOptions.BetterEntrance},
         {"LinkAge", static_cast<int>(mOptions.Age)},
         {"Night", mOptions.Night}}}};
+  // A title with arrival axes or zones; OoT3D's file keeps SoH's keys only.
+  if (PersistsArrival()) {
+    document["Zones"] = {{"Selected", mArrivalOptions.SelectedZone},
+                         {"Boot", mArrivalOptions.BootZone.empty() ? nlohmann::json(nullptr)
+                                                                   : nlohmann::json(mArrivalOptions.BootZone)}};
+    nlohmann::json arrival = nlohmann::json::object();
+    const auto axes = mTitle->Axes();
+    for (size_t axis = 0; axis < axes.size() && axis < kDevWarpMaxAxes; ++axis)
+      arrival[axes[axis].Id] = mArrivalOptions.Arrival[axis];
+    document["Arrival"] = std::move(arrival);
+  }
   const auto temporary = mStorage.string() + ".tmp";
   {
     std::ofstream stream(temporary, std::ios::binary | std::ios::trunc);

@@ -1,10 +1,14 @@
 #include "mm3d_dev_tools.h"
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <map>
 #include <set>
 
 using namespace Oot3dNativeGame;
+using namespace Oot3dNativeGame::Mm3dDevAbi;
 namespace {
 void Check(bool value, const char *message) {
   if (!value) {
@@ -80,6 +84,8 @@ public:
     Put(Common + 0x3518, uint32_t{0xD800});
     Put(Common + 0x20, uint16_t{0x4000});
     Put(Common + 0x369E, uint16_t{0xFFEF});
+    Put(Common + 0x36A0, uint16_t{0xFFFF});
+    Put(Common + 0x14, int32_t{1});
     Put(P + 0xA68, P + 0x408);
     Put(P + 0x408 + 0x154, uint16_t{7});
     Put(P + 0x408 + 0x156, uint16_t{1});
@@ -145,7 +151,7 @@ int main() {
     Check(!Resolve(g, 0xD60F, value), "unknown layers rejected");
     Check(!Resolve(g, 0xE000, value), "group overflow rejected");
     std::string error;
-    Check(abi.Apply(g, Fake::P, 0xD600, nullptr, {}, {}, &error), "scene transaction accepted");
+    Check(abi.Apply(g, Fake::P, 0xD600, nullptr, kDevWarpKeepAll, &error), "scene transaction accepted");
     Check(g.Get<uint16_t>(Fake::P + 0xC52E) == 0xD600, "high-bit entrance preserved unsigned");
     Check(g.writes.back() == Fake::P + 0xC529 && g.Get<uint8_t>(Fake::P + 0xC529) == 20, "trigger is published last");
     Check(g.Get<uint16_t>(Common + 0x20) == 0x4000 && g.Get<uint8_t>(Common + 0x26) == 4, "time and form preserved");
@@ -172,26 +178,26 @@ int main() {
     const auto before = g.bytes;
     g.failOnce = Fake::P + 0xC52E;
     std::string error;
-    Check(!abi.Apply(g, Fake::P, 0xD600, nullptr, {}, {}, &error), "partial failed write rejected");
+    Check(!abi.Apply(g, Fake::P, 0xD600, nullptr, kDevWarpKeepAll, &error), "partial failed write rejected");
     Check(g.bytes == before, "all preparation bytes rolled back");
     Check(std::find(g.writes.begin(), g.writes.end(), Fake::P + 0xC529) == g.writes.end(),
           "no trigger on preparation failure");
     g.writes.clear();
     g.bytes.erase(Fake::P + 0xC535);
-    Check(!abi.Apply(g, Fake::P, 0xD600, nullptr, {}, {}, &error) && g.writes.empty(),
+    Check(!abi.Apply(g, Fake::P, 0xD600, nullptr, kDevWarpKeepAll, &error) && g.writes.empty(),
           "preflight denial causes zero writes");
   }
   {
     Fake g;
     Mm3dDevTools unproven{Mm3dDevProof{}};
     std::string error;
-    Check(!unproven.Apply(g, Fake::P, 0xD600, nullptr, {}, {}, &error) && g.writes.empty(),
+    Check(!unproven.Apply(g, Fake::P, 0xD600, nullptr, kDevWarpKeepAll, &error) && g.writes.empty(),
           "unproven ABI never writes");
     DevWarpPoint point;
     point.EntranceId = 0xD600;
-    Check(!abi.Apply(g, Fake::P, 0xD600, &point, {}, {}, &error) && g.writes.empty(),
+    Check(!abi.Apply(g, Fake::P, 0xD600, &point, kDevWarpKeepAll, &error) && g.writes.empty(),
           "unproven -8 respawn never writes");
-    Check(!abi.Apply(g, Fake::P, 0xD600, nullptr, {}, true, &error) && g.writes.empty(),
+    Check(!abi.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{-1, 0x0000, -1, -1}, &error) && g.writes.empty(),
           "unproven time mutation rejected");
   }
   {
@@ -227,6 +233,209 @@ int main() {
     g.Put(Fake::P + 0xC529, uint8_t{0});
     runtime.Advance(g, 0, 4);
     Check(runtime.Status().Phase == DevWarpPhase::Arrived, "arrival after observed transition edge");
+  }
+  // Arrival options: each gate off refuses with zero writes.
+  {
+    const Mm3dDevProof all{true, true, false, true, true, true};
+    for (size_t axis = 0; axis < 3; ++axis) {
+      Fake g;
+      Mm3dDevProof proof = all;
+      (axis == kMm3dAxisDay ? proof.Day : axis == kMm3dAxisTime ? proof.TimeOfDay : proof.PlayerForm) = false;
+      Mm3dDevTools gated(proof);
+      DevWarpSelection arrival = kDevWarpKeepAll;
+      arrival[axis] = axis == kMm3dAxisDay ? 2 : axis == kMm3dAxisTime ? 0x8000 : FormDeku;
+      std::string error;
+      Check(!gated.Axes()[axis].Proven, "gated axis is reported unproven");
+      Check(!gated.Apply(g, Fake::P, 0xD600, nullptr, arrival, &error) && g.writes.empty() &&
+                error.find("awaiting proof") != std::string::npos,
+            "an unproven arrival option never writes");
+      DevWarpRuntime runtime({}, std::make_shared<Mm3dDevTools>(proof));
+      Check(!runtime.ArrivalError(arrival).empty(), "the runtime names the unproven option");
+      Check(runtime.ArrivalError(kDevWarpPresetAll).empty() && runtime.ArrivalError(kDevWarpKeepAll).empty(),
+            "Keep and Preset never need a proof");
+    }
+  }
+  // Day, time and form join the transaction before the trigger.
+  {
+    Fake g;
+    Mm3dDevTools proven({true, true, false, true, true, true});
+    g.Put(Common + 0x08, uint8_t{0x16}); // Goron Mask equipped
+    std::string error;
+    Check(proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{2, 0xEAAB, FormZora, -1}, &error), error.c_str());
+    Check(g.Get<int32_t>(Common + 0x14) == 2 && g.Get<uint16_t>(Common + 0x20) == 0xEAAB &&
+              g.Get<uint8_t>(Common + 0x26) == FormZora && g.Get<uint8_t>(Common + 0x08) == 0,
+          "day, time, form written and the mask cleared");
+    Check(g.writes.back() == Fake::P + 0xC529, "trigger still published last");
+    const auto position = [&](uint32_t a) { return std::find(g.writes.begin(), g.writes.end(), a) - g.writes.begin(); };
+    Check(position(Common + 0x14) < position(Fake::P + 0xC52E) && position(Common + 0x26) < position(Fake::P + 0xC52E),
+          "arrival fields precede the transition fields");
+    Check(g.Get<int32_t>(Common + 0x18) == 0, "eventDayCount untouched");
+  }
+  {
+    Fake g;
+    Mm3dDevTools proven({true, true, false, true, true, true});
+    const auto before = g.bytes;
+    g.failOnce = Fake::P + 0xC535;
+    std::string error;
+    Check(!proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{3, 0x0000, FormDeku, -1}, &error) &&
+              g.bytes == before,
+          "arrival fields roll back with the transition");
+    g.Put(Common + 0x36A0, uint16_t{0x8000});
+    g.writes.clear();
+    Check(!proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{-1, 0x8000, -1, -1}, &error) && g.writes.empty(),
+          "a staged nextDayTime refuses a time write");
+    Check(proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{-1, -1, FormDeku, -1}, &error),
+          "a staged nextDayTime does not block a form-only warp");
+  }
+  {
+    Fake g;
+    Mm3dDevTools proven({true, true, false, true, true, true});
+    std::string error;
+    Check(!proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{-1, -1, FormDeity, -1}, &error) &&
+              g.writes.empty() && error.find("Fierce Deity") != std::string::npos,
+          "Fierce Deity refused outside the boss lairs");
+    Check(!proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{4, -1, -1, -1}, &error) && g.writes.empty(),
+          "day 4 is not offered");
+    Check(proven.Apply(g, Fake::P, 0x3800, nullptr, DevWarpSelection{-1, -1, FormDeity, -1}, &error),
+          "Fierce Deity accepted in Odolwa's Lair");
+  }
+  // Arrival checks: day, the time window, the 06:00 night rule, form and mask.
+  {
+    Fake g;
+    Mm3dDevTools proven({true, true, false, true, true, true});
+    DevWarpObservation o;
+    g.Put(Common + 0x14, int32_t{2});
+    g.Put(Common + 0x20, uint16_t{0xEAAB + 0x100});
+    g.Put(Common + 0x0C, uint8_t{1});
+    g.Put(Common + 0x26, uint8_t{FormZora});
+    Check(proven.ArrivalMismatch(g, o, DevWarpSelection{2, 0xEAAB, FormZora, -1}).empty(), "matching arrival");
+    Check(proven.ArrivalMismatch(g, o, DevWarpSelection{3, -1, -1, -1}).starts_with("field=day"), "day mismatch");
+    Check(proven.ArrivalMismatch(g, o, DevWarpSelection{-1, 0x8000, -1, -1}).starts_with("field=time"),
+          "time outside the window");
+    g.Put(Common + 0x0C, uint8_t{0});
+    Check(proven.ArrivalMismatch(g, o, DevWarpSelection{-1, 0xEAAB, -1, -1}).starts_with("field=night"),
+          "22:00 must be night");
+    Check(NightAt(0x3FFF) && !NightAt(0x4000) && !NightAt(0xBFFF) && NightAt(0xC000),
+          "MM3D night: before 06:00 or from 18:00");
+    g.Put(Common + 0x08, uint8_t{0x17});
+    Check(proven.ArrivalMismatch(g, o, DevWarpSelection{-1, -1, FormZora, -1}).starts_with("field=form"),
+          "a mask left on is a form mismatch");
+    Check(proven.ArrivalMismatch(g, o, kDevWarpKeepAll).empty(), "Keep checks nothing");
+    o.PlayState = true;
+    o.Arrival = {1, 0x8000, FormHuman, -1};
+    Check(proven.Describe(o) == "Day 1 12:00, Human", proven.Describe(o).c_str());
+  }
+  // Clock values agree with the generator's.
+  Check(Clock(6, 0) == 0x4001 && Clock(12, 0) == 0x8000 && Clock(22, 0) == 0xEAAB && Clock(0, 0) == 0 &&
+            ClockText(0xEAAB) == "22:00" && ClockText(0x4001) == "06:00",
+        "clock conversion");
+  // Zones: every zone names a catalog row; presets are Keep or a valid value.
+  {
+    std::set<std::string> ids;
+    for (const auto &zone : kMm3dDevZones) {
+      Check(ids.insert(zone.Id).second, "zone ids are unique");
+      Entrance(zone.Entrance);
+      Check(zone.Preset[0] == -1 || (zone.Preset[0] >= 1 && zone.Preset[0] <= 3), "zone day preset");
+      Check(zone.Preset[1] >= -1 && zone.Preset[1] <= 0xFFFF, "zone time preset");
+      Check(zone.Preset[2] >= -1 && zone.Preset[2] <= 4 && zone.Preset[2] != FormDeity, "zone form preset");
+      Check(zone.Preset[3] == -1, "zone has three axes");
+    }
+    Check(ids.size() >= 60 && ids.count("stock-pot-inn") && ids.count("south-clock-town-clock-tower-door"),
+          "curated zones present");
+  }
+  // TRIAEVUM_DEV_WARP parsing.
+  {
+    const auto parse = [](std::string_view text) {
+      return ParseMm3dDevWarpScript(text, kMm3dDevEntrances, kMm3dDevZones);
+    };
+    const auto throws = [&](std::string_view text) {
+      try {
+        parse(text);
+      } catch (const std::runtime_error &) {
+        return true;
+      }
+      return false;
+    };
+    auto plain = parse("mm3d:0xD600");
+    Check(plain.Entrance == 0xD600 && plain.Zone.empty() && plain.Arrival == kDevWarpKeepAll,
+          "a bare entrance keeps everything");
+    auto full = parse("mm3d:0xD210:day=2:time=1200:form=deku");
+    Check(full.Arrival == DevWarpSelection{2, 0x8000, FormDeku, -1}, "entrance with options");
+    auto zone = parse("mm3d:zone=stock-pot-inn:time=2200");
+    Check(zone.Zone == "stock-pot-inn" && zone.Arrival == DevWarpSelection{-2, 0xEAAB, -2, -2},
+          "a zone takes its preset except the named options");
+    Check(parse("mm3d:zone=odolwas-lair:form=deity").Arrival[2] == FormDeity, "deity alias");
+    Check(parse("mm3d:zone=stock-pot-inn:day=keep").Arrival[0] == kDevWarpKeep, "keep overrides a preset");
+    for (const char *bad : {"oot:1:2", "mm3d:", "mm3d:0xD60F", "mm3d:0x10000", "mm3d:zone=nowhere", "mm3d:0xD600:day=4",
+                            "mm3d:0xD600:time=2500", "mm3d:0xD600:time=22:00", "mm3d:0xD600:form=fairy",
+                            "mm3d:0xD600:night=1", "mm3d:12abc"})
+      Check(throws(bad), bad);
+  }
+  // The shared runtime: zone warp, boot zone once, persistence beside SoH's keys.
+  {
+    const auto path = std::filesystem::temp_directory_path() / "mm3d_dev_tools_tests.json";
+    std::filesystem::remove(path);
+    auto title = std::make_shared<Mm3dDevTools>(Mm3dDevProof{true, true, false, true, true, true});
+    {
+      DevWarpRuntime runtime(path, title);
+      std::string error;
+      Check(!runtime.WarpToZone("nowhere", kDevWarpPresetAll, &error), "unknown zone refused");
+      DevWarpArrivalOptions options;
+      options.SelectedZone = "north-clock-town";
+      options.BootZone = "north-clock-town";
+      options.Arrival = {kDevWarpPreset, 0xEAAB, kDevWarpKeep, kDevWarpPreset};
+      runtime.SetArrivalOptions(options);
+      Check(runtime.StorageError().empty(), runtime.StorageError().c_str());
+    }
+    {
+      std::ifstream stream(path);
+      const auto document = nlohmann::json::parse(stream);
+      Check(document.contains("WarpPoints") && document.contains("DebugWarpScreen"), "SoH keys kept");
+      Check(document["Zones"]["Selected"] == "north-clock-town" && document["Zones"]["Boot"] == "north-clock-town",
+            "zones persisted");
+      Check(document["Arrival"]["day"] == kDevWarpPreset && document["Arrival"]["time"] == 0xEAAB &&
+                document["Arrival"]["form"] == kDevWarpKeep,
+            "arrival persisted by axis id");
+    }
+    Fake g;
+    DevWarpRuntime runtime(path, title);
+    Check(runtime.ArrivalOptions().BootZone == "north-clock-town" && runtime.ArrivalOptions().Arrival[1] == 0xEAAB,
+          "persisted options reload");
+    runtime.Advance(g, 0, 1);
+    Check(runtime.Status().Phase == DevWarpPhase::Requested, "boot zone requested at first gameplay");
+    Check(g.Get<uint16_t>(Fake::P + 0xC52E) == 0xD620 && g.Get<int32_t>(Common + 0x14) == 1 &&
+              g.Get<uint16_t>(Common + 0x20) == 0xEAAB && g.Get<uint8_t>(Common + 0x26) == FormHuman,
+          "boot zone: preset day, overridden time, kept form");
+    // The native transition: busy, then North Clock Town with the player.
+    g.Put(Fake::P + 0xC529, uint8_t{0});
+    g.Put(Fake::P + 0xC85A, uint8_t{3});
+    runtime.Advance(g, 0, 2);
+    g.Put(Fake::P + 0xC85A, uint8_t{0});
+    g.Put(Common + 0x3518, uint32_t{0xD620});
+    g.Put(Fake::P + 0x148, int16_t{0x6E});
+    g.Put(Common + 0x0C, uint8_t{1});
+    runtime.Advance(g, 0, 3);
+    Check(runtime.Status().Phase == DevWarpPhase::Arrived, runtime.Status().Message.c_str());
+    for (uint64_t frame = 4; frame < 200; ++frame)
+      runtime.Advance(g, 0, frame);
+    Check(runtime.Status().Phase == DevWarpPhase::Arrived, "the boot zone is taken once");
+    runtime.SetBootPoint("anything");
+    Check(runtime.ArrivalOptions().BootZone.empty(), "a boot point clears the boot zone");
+    // An arrival whose time did not take is reported as failed.
+    runtime.WarpTo(Entrance(0xD800), DevWarpSelection{-1, 0xEAAB, -1, -1});
+    runtime.Advance(g, 0, 300);
+    g.Put(Common + 0x20, uint16_t{0x8000});
+    g.Put(Fake::P + 0xC529, uint8_t{0});
+    g.Put(Fake::P + 0xC85A, uint8_t{3});
+    runtime.Advance(g, 0, 301);
+    g.Put(Fake::P + 0xC85A, uint8_t{0});
+    g.Put(Common + 0x3518, uint32_t{0xD800});
+    g.Put(Fake::P + 0x148, int16_t{0x6F});
+    runtime.Advance(g, 0, 302);
+    Check(runtime.Status().Phase == DevWarpPhase::Failed &&
+              runtime.Status().Message.find("field=time") != std::string::npos,
+          runtime.Status().Message.c_str());
+    std::filesystem::remove(path);
   }
   std::cout << "MM3D developer ABI boundary checks passed\n";
 }
