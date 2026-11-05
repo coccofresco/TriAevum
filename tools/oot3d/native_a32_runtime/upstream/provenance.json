@@ -19,15 +19,15 @@
     {
       "path": "recomp/a32_runtime.h",
       "base_sha256": "cdd60e3bb5d76956c075c439490ba7578e17260de57659fb38b3cdd18340b04a",
-      "working_sha256": "82428b646cb72f43387005707c7f98e5df84f1b8aafc48d4b3d50bca8b0c4ba9",
-      "working_size": 7412,
+      "working_sha256": "62cb0a62c3fc9a33ce9710cfbd91774581c8baef5a3391475a0cc1fd5347b488",
+      "working_size": 7879,
       "purpose": "Represent disjoint core decoders plus call-site compiled-function and budgeted multi-block true-AOT dispatch boundaries."
     },
     {
       "path": "recomp/a32_runtime.cpp",
       "base_sha256": "b96890bae8eb9d8d364f33506a80c3f0851da593a1d2af9ceaffb774feb1e6b0",
-      "working_sha256": "31775a316fa776e03e1f608818906ec693f8ed052d3e03e9a4af520b3d52f53b",
-      "working_size": 31199,
+      "working_sha256": "66cfba99ea6640c4fc6a19419d9406d524df78468710244ecda517fda62c3a75",
+      "working_size": 31780,
       "purpose": "Dispatch classified core operations, compiled functions reached by calls or direct/tail entries, and budgeted multi-block true-AOT regions while materializing the guest PC only at observable boundaries. Execute BLX #imm into Thumb and run odd (Thumb) PCs through a32_thumb.cpp from guest memory."
     },
     {
