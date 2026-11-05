@@ -14,6 +14,18 @@ target_compile_features(spirv_cache_tests PRIVATE cxx_std_20)
 target_link_libraries(spirv_cache_tests PRIVATE ThreeDsRecomp::RendererExtensionCore Threads::Threads)
 add_test(NAME spirv_cache_tests COMMAND spirv_cache_tests)
 
+if(THREE_DS_RECOMP_NRI_PATCHED_SOURCE_DIR)
+    # The NRI this build compiles carries every OOT3D patch, and the check
+    # rejects a source without the unbound color attachment patch.
+    add_test(NAME nri_patch_set_tests
+        COMMAND ${CMAKE_COMMAND}
+            -DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_PATCHED_SOURCE_DIR}
+            -DNGX_VERSION=${THREE_DS_RECOMP_NGX_VERSION}
+            -DPATCH_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../cmake/patches
+            -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/nri_patch_set_tests
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/nri_patch_set_tests.cmake)
+endif()
+
 add_executable(framebuffer_readback_tests framebuffer_readback_tests.cpp)
 target_compile_features(framebuffer_readback_tests PRIVATE cxx_std_20)
 target_include_directories(framebuffer_readback_tests PRIVATE ../include)

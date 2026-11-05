@@ -215,36 +215,46 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 		else()
 			set(NRI_ENABLE_NGX_SDK OFF CACHE BOOL "" FORCE)
 		endif()
-		if(THREE_DS_RECOMP_NRI_SOURCE_DIR)
-			FetchContent_Declare(nri SOURCE_DIR "${THREE_DS_RECOMP_NRI_SOURCE_DIR}")
+		# FetchContent ignores PATCH_COMMAND when FETCHCONTENT_SOURCE_DIR_NRI
+		# overrides the source, so an overridden NRI used to build without the
+		# OOT3D patches (a development build then crashed in CmdBeginRendering
+		# on the NULL descriptor of a guide the frame's effects leave unbound).
+		# An override is an existing source directory like
+		# THREE_DS_RECOMP_NRI_SOURCE_DIR and gets the same idempotent patches.
+		set(_oot3d_nri_existing_source "${THREE_DS_RECOMP_NRI_SOURCE_DIR}")
+		if(NOT _oot3d_nri_existing_source AND FETCHCONTENT_SOURCE_DIR_NRI)
+			set(_oot3d_nri_existing_source "${FETCHCONTENT_SOURCE_DIR_NRI}")
+		endif()
+		if(_oot3d_nri_existing_source)
+			FetchContent_Declare(nri SOURCE_DIR "${_oot3d_nri_existing_source}")
 			execute_process(
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_android_platform.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-DNGX_VERSION=${THREE_DS_RECOMP_NGX_VERSION}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_ngx_version.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_dlss_capability.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_vulkan12_shaders.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_vulkan12_depth_resolve.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_graphics_pipeline_libraries.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_storage_view_sampled.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_unbound_color_attachments.cmake
 				COMMAND ${CMAKE_COMMAND}
-					-DNRI_SOURCE_DIR=${THREE_DS_RECOMP_NRI_SOURCE_DIR}
+					-DNRI_SOURCE_DIR=${_oot3d_nri_existing_source}
 					-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/nri_destroy_lifetime.cmake
 				COMMAND_ERROR_IS_FATAL ANY)
 		else()
@@ -293,6 +303,17 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 				CACHE STRING "" FORCE)
 		endif()
 		FetchContent_MakeAvailable(nri)
+		unset(_oot3d_nri_existing_source)
+		# However NRI was provided, the renderer needs every patch: an
+		# unpatched source must fail here, not at run time.
+		execute_process(
+			COMMAND ${CMAKE_COMMAND}
+				-DNRI_SOURCE_DIR=${nri_SOURCE_DIR}
+				-DNGX_VERSION=${THREE_DS_RECOMP_NGX_VERSION}
+				-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/patches/oot3d_nri_verify_patches.cmake
+			COMMAND_ERROR_IS_FATAL ANY)
+		set(THREE_DS_RECOMP_NRI_PATCHED_SOURCE_DIR "${nri_SOURCE_DIR}"
+			CACHE INTERNAL "NRI source directory verified to carry the OOT3D patches")
 		if(WIN32 AND NRI_STATIC_LIBRARY AND TARGET NRI)
 			# VERSIONINFO belongs to a final DLL/EXE. Keeping NRI.rc in the
 			# static archive also makes Ninja depend on the caller's ambient
