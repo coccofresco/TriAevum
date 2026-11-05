@@ -493,11 +493,11 @@ void DevWarpRuntime::Report(DevWarpGuest &guest, const char *event, uint64_t gue
     }
     const auto state = mTitle->Describe(o);
     std::fprintf(stderr,
-                 "TRIAEVUM_DEV_WARP %s target=\"%s\" frame=%llu scene=%d room=%u entrance=0x%04X player=%d%s "
-                 "state=\"%s\"\n",
+                 "TRIAEVUM_DEV_WARP %s target=\"%s\" frame=%llu scene=%d room=%u entrance=0x%04X player=%d "
+                 "pos=%.1f,%.1f,%.1f yaw=%d%s state=\"%s\"\n",
                  event, mActive.has_value() ? mActive->Label.c_str() : "",
                  static_cast<unsigned long long>(guestFrame), o.Scene, o.Room, o.Entrance, o.Player ? 1 : 0,
-                 arrival.c_str(), state.c_str());
+                 o.Position[0], o.Position[1], o.Position[2], o.RotY, arrival.c_str(), state.c_str());
     return;
   }
   // Developer log: what the warp observed, for checking it outside the menu.

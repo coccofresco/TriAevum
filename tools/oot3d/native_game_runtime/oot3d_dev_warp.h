@@ -72,6 +72,8 @@ struct DevWarpObservation {
   int16_t RotY = 0;
   // A title with arrival axes: the guest's current value per axis.
   DevWarpSelection Arrival = kDevWarpKeepAll;
+  // A title ABI's player health in its own units (-1 unknown), for the log.
+  int32_t Health = -1;
 };
 
 enum class DevWarpPhase : uint8_t { Idle, Waiting, Requested, Arrived, Failed };

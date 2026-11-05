@@ -93,6 +93,7 @@ inline constexpr uint32_t Day = Common + 0x14;           // s32 1..3 (4 = after 
 inline constexpr uint32_t Time = Common + 0x20;          // u16, 0x0000 midnight, 0x8000 noon
 inline constexpr uint32_t Form = Common + 0x26;          // u8: 0 Fierce Deity, 1 Goron, 2 Zora, 3 Deku, 4 Human
 inline constexpr uint32_t NextDayTime = Common + 0x36A0; // u16, 0xFFFF none
+inline constexpr uint32_t Health = Common + 0x13C;       // u16, 16 per heart (Restoration PlayerData)
 enum : int32_t { FormDeity = 0, FormGoron = 1, FormZora = 2, FormDeku = 3, FormHuman = 4 };
 // MM3D Play_Init: night when (time - 06:00) mod 24 h >= 12 h, i.e. before 06:00
 // or from 18:00 (N64's morning boundary is 06:30).
@@ -295,6 +296,8 @@ public:
       return false;
     o.PlayState = true;
     o.Arrival = {day, o.DayTime, form, kDevWarpKeep};
+    uint16_t health = 0;
+    o.Health = Read(g, Health, health) ? health : -1;
     o.Age = -1;
     o.AgeOnLoad = -1;
     busy = (trigger || mode || overrideEntrance) ? 0 : -1;
@@ -444,9 +447,12 @@ public:
   std::string Describe(const DevWarpObservation &o) const override {
     if (!o.PlayState)
       return {};
-    return "Day " + std::to_string(o.Arrival[kMm3dAxisDay]) + " " +
-           Mm3dDevAbi::ClockText(uint16_t(o.Arrival[kMm3dAxisTime])) + ", " +
-           Mm3dDevAbi::FormName(o.Arrival[kMm3dAxisForm]);
+    std::string text = "Day " + std::to_string(o.Arrival[kMm3dAxisDay]) + " " +
+                       Mm3dDevAbi::ClockText(uint16_t(o.Arrival[kMm3dAxisTime])) + ", " +
+                       Mm3dDevAbi::FormName(o.Arrival[kMm3dAxisForm]);
+    if (o.Health >= 0)
+      text += ", health " + std::to_string(o.Health);
+    return text;
   }
   bool CameraOwnsInput(DevWarpGuest &g) const override {
     using namespace Mm3dDevAbi;
