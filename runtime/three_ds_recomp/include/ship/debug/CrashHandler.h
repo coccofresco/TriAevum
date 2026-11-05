@@ -63,6 +63,13 @@ class CrashHandler {
     static bool DialogShown() noexcept;
 
     /**
+     * @brief Whether error dialogs are disabled for this process
+     * (TRIAEVUM_CRASH_DIALOG=0): an automated run then logs the crash and
+     * exits instead of waiting for someone to dismiss a message box.
+     */
+    static bool DialogsSuppressed() noexcept;
+
+    /**
      * @brief Appends @p str followed by a newline to the crash report buffer.
      * @param str Null-terminated string to append.
      */

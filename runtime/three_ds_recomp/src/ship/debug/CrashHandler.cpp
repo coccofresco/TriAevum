@@ -5,6 +5,7 @@
 #include "ship/Context.h"
 
 #include <atomic>
+#include <cstdlib>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -198,11 +199,14 @@ static void ErrorHandler(int sig, siginfo_t* sigInfo, void* data) {
         WRITE_VAR_LINE(crashHandler, intToCharBuffer, functionName.c_str());
     }
     gCrashDialogShown.store(true);
-    SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, (Context::GetRawInstance()->GetName() + " has crashed").c_str(),
-                             (Context::GetRawInstance()->GetName() +
-                              " has crashed. Diagnostic details were written to the local logs directory.")
-                                 .c_str(),
-                             nullptr);
+    if (!CrashHandler::DialogsSuppressed()) {
+        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR,
+                                 (Context::GetRawInstance()->GetName() + " has crashed").c_str(),
+                                 (Context::GetRawInstance()->GetName() +
+                                  " has crashed. Diagnostic details were written to the local logs directory.")
+                                     .c_str(),
+                                 nullptr);
+    }
     free(symbols);
     crashHandler->PrintCommon();
 
@@ -421,11 +425,13 @@ extern "C" LONG WINAPI seh_filter(PEXCEPTION_POINTERS ex) {
     WRITE_VAR_LINE(crashHandler, "Exception: ", exceptionString);
     crashHandler->PrintStack(ex->ContextRecord);
     gCrashDialogShown.store(true);
-    MessageBoxA(nullptr,
-                (Context::GetRawInstance()->GetName() +
-                 " has crashed. Diagnostic details were written to the local logs directory.")
-                    .c_str(),
-                "Crash", MB_OK | MB_ICONERROR);
+    if (!CrashHandler::DialogsSuppressed()) {
+        MessageBoxA(nullptr,
+                    (Context::GetRawInstance()->GetName() +
+                     " has crashed. Diagnostic details were written to the local logs directory.")
+                        .c_str(),
+                    "Crash", MB_OK | MB_ICONERROR);
+    }
 
     return EXCEPTION_EXECUTE_HANDLER;
 }
@@ -434,6 +440,11 @@ extern "C" LONG WINAPI seh_filter(PEXCEPTION_POINTERS ex) {
 
 bool CrashHandler::DialogShown() noexcept {
     return gCrashDialogShown.load();
+}
+
+bool CrashHandler::DialogsSuppressed() noexcept {
+    const char* value = std::getenv("TRIAEVUM_CRASH_DIALOG");
+    return value != nullptr && value[0] == '0' && value[1] == '\0';
 }
 
 CrashHandler::CrashHandler() : mOutBuffer(std::make_unique<char[]>(gMaxBufferSize)) {
