@@ -547,7 +547,7 @@ private:
   // drain of native draws drew, and the record of the frame presented now.
   Oot3dNativeGame::TopScreenNativeLabelFrames nativeLabelFrames;
   std::optional<Oot3dNativeGame::TopScreenNativeLabelRecord> presentedNativeLabels;
-  uint64_t nativeLabelQuestHookCalls = 0U;
+  Oot3dNativeGame::TopScreenActionLetterPairing nativeLabelActionLetters;
   // Diagnostic: raw TextureCopy destinations watched for guest access while
   // extended diagnostics are on. Empty otherwise, so normal runs are untouched.
   std::vector<std::pair<uint32_t, uint32_t>> rawCopyWatchRanges;

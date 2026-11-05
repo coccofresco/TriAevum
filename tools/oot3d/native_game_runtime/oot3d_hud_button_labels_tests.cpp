@@ -9,7 +9,9 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <initializer_list>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -166,6 +168,90 @@ void TestNativeLabelFrames() {
   Require(frames.Size() == 1U && frames.ForFrame(5U) == nullptr, "a restarted history");
 }
 
+TopScreenHudLabelSlot LetterOfUpdate(int update) {
+  TopScreenHudLabelSlot slot;
+  slot.Button = TopScreenHudButton::A;
+  slot.CenterX = static_cast<float>(update);
+  return slot;
+}
+
+// Records with these Quest materialization counts, paired in order; the
+// letters each record ends with (0 = none), materializations numbered from 1.
+std::vector<float> PairedLetters(std::initializer_list<std::uint64_t> counts, TopScreenActionLetterPairing &pairing) {
+  TopScreenNativeLabelFrames frames;
+  int update = 0;
+  std::uint64_t draw = 0U;
+  for (const std::uint64_t count : counts) {
+    TopScreenActionLetterReads reads;
+    reads.Count = count;
+    if (count >= 1U) reads.First = LetterOfUpdate(++update);
+    for (std::uint64_t extra = 1U; extra < count; ++extra) ++update;
+    if (count >= 1U) reads.Last = LetterOfUpdate(update);
+    auto pair = pairing.Next(reads);
+    if (pair.FillsPrevious) frames.SetLatestActionLetter(std::move(pair.Previous));
+    TopScreenNativeLabelRecord record;
+    record.ThroughDraw = draw += 100U;
+    record.ActionLetter = std::move(pair.Current);
+    frames.Record(std::move(record));
+  }
+  std::vector<float> letters;
+  for (std::uint64_t through = 100U; through <= draw; through += 100U) {
+    const auto *record = frames.Decoding(through);
+    letters.push_back(record != nullptr && record->ActionLetter ? record->ActionLetter->CenterX : 0.0F);
+  }
+  return letters;
+}
+
+void TestActionLetterPairing() {
+  using Letters = std::vector<float>;
+  // One materialization per record (Kokiri): each record keeps its own.
+  {
+    TopScreenActionLetterPairing pairing;
+    Require(PairedLetters({1U, 1U, 1U}, pairing) == Letters({1.0F, 2.0F, 3.0F}), "one per record, unchanged");
+  }
+  // Hyrule Field, measured: every third update's record is taken before its
+  // materialization, which lands in the next record (0 then 2). Every record
+  // gets a letter, in order, each used once.
+  {
+    TopScreenActionLetterPairing pairing;
+    Require(PairedLetters({1U, 0U, 2U, 1U, 0U, 2U, 1U}, pairing) ==
+                Letters({1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 6.0F, 7.0F}),
+            "a late materialization fills the record waiting for it");
+  }
+  // The other order (2 then 0): the surplus read is carried.
+  {
+    TopScreenActionLetterPairing pairing;
+    Require(PairedLetters({1U, 1U, 2U, 0U, 1U}, pairing) == Letters({1.0F, 2.0F, 3.0F, 4.0F, 5.0F}),
+            "an early materialization is carried to its record");
+  }
+  // The HUD stops materializing: no stale letter, a record waits one record
+  // only and a carried letter lives one record only.
+  {
+    TopScreenActionLetterPairing pairing;
+    Require(PairedLetters({1U, 0U, 0U, 1U}, pairing) == Letters({1.0F, 0.0F, 2.0F, 0.0F}),
+            "a record waits for the next materialization only");
+  }
+  {
+    TopScreenActionLetterPairing pairing;
+    Require(PairedLetters({2U, 0U, 0U}, pairing) == Letters({1.0F, 2.0F, 0.0F}), "carried for one record");
+  }
+  // A reset (labels off, a restarted history) drops what waits or is carried.
+  {
+    TopScreenActionLetterPairing pairing;
+    (void)PairedLetters({2U}, pairing);
+    pairing.Reset();
+    Require(PairedLetters({0U}, pairing) == Letters({0.0F}), "a reset drops the carried letter");
+  }
+  // A materialization that read no letter (the ring hidden) pairs as nothing.
+  {
+    TopScreenActionLetterPairing pairing;
+    TopScreenActionLetterReads hidden;
+    hidden.Count = 1U;
+    const auto pair = pairing.Next(hidden);
+    Require(!pair.FillsPrevious && !pair.Current, "a hidden ring has no letter");
+  }
+}
+
 } // namespace
 
 int main() {
@@ -174,6 +260,7 @@ int main() {
   TestRebound();
   TestApply();
   TestNativeLabelFrames();
+  TestActionLetterPairing();
   std::cout << "oot3d_hud_button_labels_tests: ok\n";
   return EXIT_SUCCESS;
 }

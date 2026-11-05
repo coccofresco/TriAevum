@@ -79,6 +79,14 @@ struct TopScreenHudLabelSlot {
   std::uint32_t Descriptor = 0U;
 };
 
+// The A ring letters read by the Quest materializations since the last label
+// record: how many ran, the first one's letter and the latest one's.
+struct TopScreenActionLetterReads {
+  std::uint64_t Count = 0U;
+  std::optional<TopScreenHudLabelSlot> First;
+  std::optional<TopScreenHudLabelSlot> Last;
+};
+
 // The 3DS button that plays a native ocarina note type (0..4), if any.
 [[nodiscard]] std::optional<TopScreenHudButton> TopScreenOcarinaNoteButton(std::uint32_t noteType) noexcept;
 

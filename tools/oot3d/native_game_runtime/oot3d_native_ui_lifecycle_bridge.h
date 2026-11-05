@@ -139,6 +139,18 @@ public:
   const std::optional<TopScreenHudLabelSlot> &TopScreenActionLetter() const noexcept {
     return mTopScreenActionLetter;
   }
+  // The letters read by the Quest materializations since the previous take
+  // (their count, the first's and the latest's), for pairing them with the
+  // label records in order; restarts the count.
+  TopScreenActionLetterReads TakeTopScreenActionLetters() {
+    TopScreenActionLetterReads reads;
+    reads.Count = mTopScreenActionLetterReads;
+    reads.Last = mTopScreenActionLetter;
+    reads.First = mTopScreenActionLetterReads >= 2U ? mTopScreenFirstActionLetter : mTopScreenActionLetter;
+    mTopScreenActionLetterReads = 0U;
+    mTopScreenFirstActionLetter.reset();
+    return reads;
+  }
   bool ReadOcarinaGeometry(TopScreenOcarinaGeometry &geometry, std::string *error) {
     return ReadTopScreenOcarinaGeometry(mMemory, mTopScreenOcarina, &geometry, error);
   }
@@ -200,6 +212,10 @@ private:
   std::vector<TopScreenQuestHiddenColor> mTopScreenQuestHiddenColors;
   std::vector<TopScreenQuestCopiedQuad> mTopScreenQuestActionCopies;
   std::optional<TopScreenHudLabelSlot> mTopScreenActionLetter;
+  // The first materialization's letter since the last take, once a second
+  // one has replaced mTopScreenActionLetter.
+  std::optional<TopScreenHudLabelSlot> mTopScreenFirstActionLetter;
+  uint64_t mTopScreenActionLetterReads = 0U;
   std::optional<TopScreenHudLabelSlot> mTopScreenComposedActionLetter;
   std::optional<TopScreenPauseEdgeGeometry> mTopScreenPauseEdgeGeometry;
   std::optional<TopScreenPauseEdgeGeometry>

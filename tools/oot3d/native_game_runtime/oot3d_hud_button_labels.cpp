@@ -75,6 +75,37 @@ const TopScreenNativeLabelRecord *TopScreenNativeLabelFrames::Decoding(std::uint
   return nullptr;
 }
 
+void TopScreenNativeLabelFrames::SetLatestActionLetter(std::optional<TopScreenHudLabelSlot> letter) {
+  if (!mRecords.empty()) mRecords.back().ActionLetter = std::move(letter);
+}
+
+TopScreenActionLetterPair TopScreenActionLetterPairing::Next(const TopScreenActionLetterReads &reads) {
+  // The reads in order; only the first and the latest are kept (a third read
+  // in one record is the latest's neighbour).
+  std::uint64_t used = 0U;
+  const auto take = [&]() -> std::optional<TopScreenHudLabelSlot> {
+    return used++ == 0U ? reads.First : reads.Last;
+  };
+  TopScreenActionLetterPair pair;
+  if (mPreviousWaits && reads.Count != 0U) {
+    pair.FillsPrevious = true;
+    pair.Previous = take();
+  }
+  mPreviousWaits = false;
+  if (mHasCarried) {
+    pair.Current = std::move(mCarried);
+  } else if (used < reads.Count) {
+    pair.Current = take();
+  } else {
+    // This record's update materializes after it: the next read is its own.
+    mPreviousWaits = true;
+  }
+  mCarried.reset();
+  mHasCarried = used < reads.Count;
+  if (mHasCarried) mCarried = reads.Last;
+  return pair;
+}
+
 TopScreenHudLabelStats ApplyTopScreenHudButtonGlyphs(std::vector<oot3d::ui::UiPrimitive> &hud,
                                                     const std::optional<TopScreenHudLabelSlot> &actionLetter,
                                                     const TopScreenHudButtonGlyphs &glyphs,

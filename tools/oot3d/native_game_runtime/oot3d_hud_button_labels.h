@@ -62,12 +62,47 @@ public:
   // after the frame's own). A page that leaves its rest in that update is
   // already moving in the frame presented: its labels are not drawn there.
   [[nodiscard]] const TopScreenNativeLabelRecord *Decoding(std::uint64_t lastDraw) const noexcept;
+  // The latest record's A letter, given once its materialization has run
+  // (TopScreenActionLetterPairing); nothing without a record.
+  void SetLatestActionLetter(std::optional<TopScreenHudLabelSlot> letter);
   void Reset() noexcept { mRecords.clear(); }
   [[nodiscard]] std::size_t Size() const noexcept { return mRecords.size(); }
 
 private:
   static constexpr std::size_t kCapacity = 32U;
   std::vector<TopScreenNativeLabelRecord> mRecords;
+};
+
+// The A letters for a new label record: its own, and the previous record's
+// when that one was still waiting for its materialization.
+struct TopScreenActionLetterPair {
+  bool FillsPrevious = false;
+  std::optional<TopScreenHudLabelSlot> Previous;
+  std::optional<TopScreenHudLabelSlot> Current;
+};
+
+// Pairs Quest materializations with label records one to one, in order. A
+// host refresh does not hold exactly one guest update: an update split across
+// two refreshes leaves one record with no materialization and a neighbour
+// with two. Measured in Hyrule Field: the record comes first and its update
+// materializes in the next refresh, so the empty record waits for the next
+// materialization; a surplus read (the other order) is carried to the next
+// record. Either way a letter waits or is carried one record only and always
+// comes from a materialization that ran, so a HUD that stops materializing
+// leaves no letter behind.
+class TopScreenActionLetterPairing {
+public:
+  [[nodiscard]] TopScreenActionLetterPair Next(const TopScreenActionLetterReads &reads);
+  void Reset() noexcept {
+    mCarried.reset();
+    mHasCarried = false;
+    mPreviousWaits = false;
+  }
+
+private:
+  std::optional<TopScreenHudLabelSlot> mCarried;
+  bool mHasCarried = false;
+  bool mPreviousWaits = false;
 };
 
 // Replaces the labels in `hud` (final canvas coordinates: the HUD, the pause

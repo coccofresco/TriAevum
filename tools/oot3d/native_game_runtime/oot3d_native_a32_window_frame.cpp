@@ -2112,6 +2112,8 @@ void NativeA32WindowSession::RecordNativeButtonLabels() {
       !Oot3dNativeGame::TopScreenHudButtonGlyphsActive(activeTopScreenConfig.HudButtonLabels,
                                                        controlConfigRuntime->ActivePromptSet())) {
     nativeLabelFrames.Reset();
+    nativeLabelActionLetters.Reset();
+    if (uiLifecycleBridgeStorage) (void)uiLifecycleBridgeStorage->TakeTopScreenActionLetters();
     if (wideItemsStorage) wideItemsStorage->SetHiddenItemsLabels({});
     return;
   }
@@ -2138,11 +2140,13 @@ void NativeA32WindowSession::RecordNativeButtonLabels() {
   if (widescreenProjection.TopScreenPausePageRedrawActive &&
       !Oot3dNativeGame::ReadTopScreenItemsPageButtonLabels(process.Memory(), &record.ItemsLabels))
     record.ItemsLabels.clear();
-  // The A ring's letter only when its Quest materialization ran for these
-  // draws (a letter read for an earlier frame is not this frame's).
-  const auto questHookCalls = uiLifecycleBridge.Stats().topscreen_quest_hook_calls;
-  if (questHookCalls != nativeLabelQuestHookCalls) record.ActionLetter = uiLifecycleBridge.TopScreenActionLetter();
-  nativeLabelQuestHookCalls = questHookCalls;
+  // The A ring's letter only from a Quest materialization that ran (a letter
+  // read for an earlier frame is not this frame's), paired with the records
+  // in order: an update split across two refreshes leaves one record without
+  // its materialization and the neighbouring one with two.
+  auto actionLetters = nativeLabelActionLetters.Next(uiLifecycleBridge.TakeTopScreenActionLetters());
+  if (actionLetters.FillsPrevious) nativeLabelFrames.SetLatestActionLetter(std::move(actionLetters.Previous));
+  record.ActionLetter = std::move(actionLetters.Current);
   nativeLabelFrames.Record(std::move(record));
 }
 

@@ -238,6 +238,9 @@ bool Oot3dNativeUiLifecycleBridge::ApplyTopScreenGuestHook(uint32_t guestPc,
     return false;
 
   ++mStats.topscreen_quest_hook_calls;
+  // The first letter since the last take stays for its own label record.
+  if (mTopScreenActionLetterReads == 1U) mTopScreenFirstActionLetter = mTopScreenActionLetter;
+  ++mTopScreenActionLetterReads;
   mTopScreenQuestActionCopies.clear();
   mTopScreenActionLetter.reset();
   constexpr uint32_t kQuestRenderBufferBinding = 0x004FC660U;
