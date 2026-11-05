@@ -291,6 +291,14 @@ if(TRIAEVUM_TITLE_MM3D)
         oot3d_mm3d_single_screen)
     oot3d_target_defaults(oot3d_mm3d_dekui_settings_tests FOLDER Tests)
 
+    # Replay fixtures of the dekui 6e36dfb4 gameplay hooks (titles/mm3d/dekui).
+    add_executable(oot3d_mm3d_dekui_update_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/update_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_dekui_update_tests PRIVATE
+        oot3d_mm3d_single_screen)
+    oot3d_target_defaults(oot3d_mm3d_dekui_update_tests FOLDER Tests)
+
     add_executable(oot3d_mm3d_single_screen_tests EXCLUDE_FROM_ALL
         titles/mm3d/adapter/mm3d_single_screen_tests.cpp
     )
