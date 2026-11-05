@@ -281,7 +281,7 @@ void ShowFatalErrorForDemo(const std::string& title, const std::string& text) no
     (void)title;
     (void)text;
 #else
-    if (Ship::CrashHandler::DialogShown()) return;
+    if (Ship::CrashHandler::DialogShown() || Ship::CrashHandler::DialogsSuppressed()) return;
     // SDL shows a message box with or without SDL_Init.
     if (SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, title.c_str(), text.c_str(), nullptr) == 0) return;
 #ifdef _WIN32
