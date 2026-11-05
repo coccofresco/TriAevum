@@ -2243,6 +2243,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                     stats.WholeAotUnsupportedExits},
                    {"whole_aot_observable_exits",
                     [] {
+#if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
                       const auto report =
                           Oot3dNativeGame::Oot3dWholeAotPluginObservableExitReport();
                       nlohmann::json byPc = nlohmann::json::object();
@@ -2255,6 +2256,10 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                           {"thrown", report.Exits},
                           {"unwind_ns", report.UnwindNanoseconds},
                           {"by_pc", std::move(byPc)}};
+#else
+                      // Only the direct whole-AOT plugin observes these exits.
+                      return nlohmann::json(nullptr);
+#endif
                     }()},
                };
              }()},
