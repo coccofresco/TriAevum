@@ -145,7 +145,43 @@ static int BuildUberFamily(int argc, char** argv) {
     return 0;
 }
 
+// The native-fragment balance is not an uber decision: validate its actual
+// generated capture/body composition separately without changing old packs.
+static int CheckBalanceFamily() {
+    using namespace Fast::Extension;
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
+    options.SetOptimizationLevel(shaderc_optimization_level_performance);
+    unsigned modules=0;
+    for (const auto lighting : kOot3dPicaParametricLightings) {
+        if (lighting == kOot3dPicaParametricLightings[0]) continue; // No native lighting to capture.
+        for (bool integerTexture : {false,true}) {
+            Oot3dPicaGeneratedFragmentShader shader;
+            std::string error;
+            Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture, shader, &error), error);
+            PicaFragmentInstrumentationRequest request;
+            request.Source=shader.Source;request.Hooks=&shader.Hooks;
+            request.RequestedFeatures=PicaShaderInstrumentationFeature::NativePerPixelLighting |
+                PicaShaderInstrumentationFeature::FragmentLightingOperand |
+                PicaShaderInstrumentationFeature::FragmentLightingBalance;
+            const auto balanced=BuildPicaFragmentInstrumentationVariant(request);
+            Check(HasPicaShaderInstrumentationFeature(balanced.AppliedFeatures,
+                PicaShaderInstrumentationFeature::FragmentLightingBalance), "balance capture not composed");
+            const auto nri=Fast::Extension::BuildPicaNriFragmentShaderVariant(balanced.Source);
+            Check(nri.Applied,nri.Error);
+            const auto compiled=compiler.CompileGlslToSpv(nri.Source,shaderc_fragment_shader,"fragment_balance",options);
+            Check(compiled.GetCompilationStatus()==shaderc_compilation_status_success,compiled.GetErrorMessage());
+            ++modules;
+        }
+    }
+    Check(modules==4,"unexpected balance family size");
+    std::cout << "balance_fragment_checks=" << modules << '\n';
+    return 0;
+}
+
 int main(int argc, char** argv) try {
+    if (argc == 2 && std::string_view(argv[1]) == "--balance-check") return CheckBalanceFamily();
     if (argc > 1 && std::string_view(argv[1]) == "--uber") return BuildUberFamily(argc - 1, argv + 1);
     if (argc > 1 && std::string_view(argv[1]) == "--casters") return BuildCasterFamily(argc - 1, argv + 1);
     const bool temporal = argc > 1 && std::string_view(argv[1]) == "--temporal";

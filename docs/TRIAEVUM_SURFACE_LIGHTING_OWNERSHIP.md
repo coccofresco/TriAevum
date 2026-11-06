@@ -375,7 +375,14 @@ Verification (developer launch; owner's play config, Vanilla+ RomFS overlay;
   Field by the river varies run to run (the before exe twice gave two hashes:
   the river's wave phase), so it is not an identity gate.
 
-### Native fragment lights: light function and fallback (2026-11-06)
+### Native fragment lights: initial transfer contract (2026-11-06, historical)
+
+Superseded by [Environment profiles on native fragment lighting](NATIVE_FRAGMENT_ENVIRONMENT_PROFILES.md).
+All valid profile shapes now apply, including added ambient, key/fill/offsets,
+rim, fog and placed lights. Preservation retains ambient (not an extra opposite
+fill). Local-only draws accept ambient/rim/placed controls without acquiring the
+actor's scene-following key. The following records the initial restricted path,
+not the current F1 availability.
 
 A title whose scene is lit per pixel by native fragment lights
 (`TitleSession::NativeFragmentLighting`) takes a scene profile only in the

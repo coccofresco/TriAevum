@@ -1113,13 +1113,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting));
             const auto& surfaceEnvironment = (isolatedLighting || balanceFallback)
                 ? isolatedEnvironment : mFrameEnvironment;
+            const auto profileBinding = fragmentBalance
+                ? Renderer3ds::PicaFragmentProfileBinding(draw.LightBinding, draw.FragmentFeatures.FragmentLighting)
+                : draw.LightBinding;
             surfaceLighting = Renderer3ds::BuildPicaSurfaceLightingUniforms(
                 draw.TemporalVertexProgram.Hooks, booleanUniforms,
                 draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset),
-                draw.LightBinding, surfaceEnvironment,
+                profileBinding, surfaceEnvironment,
                 environmentWorldToView && mSurfaceLightingView ? &*mSurfaceLightingView : nullptr,
-                pointShadowHistory.Valid() ? &pointShadowAssignment : nullptr,
-                fragmentBalance.has_value());
+                pointShadowHistory.Valid() ? &pointShadowAssignment : nullptr);
+            if (surfaceLighting && fragmentBalance)
+                Renderer3ds::PreparePicaFragmentProfileSurface(*surfaceLighting, *fragmentBalance, surfaceEnvironment);
             if (!surfaceLighting || surfaceLighting->Control[0] != 0U) fragmentBalance.reset();
             if (surfaceLighting) {
                 if (!Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) ||
@@ -1428,7 +1432,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceLighting.has_value(),
             pbrOptions,
             reliefTexture,
-            surfaceLighting && (surfaceLighting->Control[3] & 2U) != 0U,
+            surfaceLighting && (fragmentBalance.has_value() || (surfaceLighting->Control[3] & 2U) != 0U),
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
             surfaceCandidate && surfaceDebug.ShadowCode(surfaceOrdinal) != 0U,
 #endif
