@@ -299,6 +299,14 @@ if(TRIAEVUM_TITLE_MM3D)
         oot3d_mm3d_single_screen)
     oot3d_target_defaults(oot3d_mm3d_dekui_update_tests FOLDER Tests)
 
+    # Tip 4f2692ed HUD fixtures (dekui S2): mirrored item-button backgrounds and the
+    # minimap's pending-quad discard. Header-only modules, no arguments.
+    add_executable(oot3d_mm3d_dekui_hud_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/hud_tests.cpp
+    )
+    target_include_directories(oot3d_mm3d_dekui_hud_tests PRIVATE titles/mm3d/dekui)
+    oot3d_target_defaults(oot3d_mm3d_dekui_hud_tests FOLDER Tests)
+
     # Message-archive language contract and prompt consumers (dekui S1). Optional argument:
     # the user's code.bin, to compare the guard words with original EUR v1.1.
     add_executable(oot3d_mm3d_dekui_language_tests EXCLUDE_FROM_ALL

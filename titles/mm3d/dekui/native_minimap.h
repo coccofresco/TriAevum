@@ -27,10 +27,17 @@ inline U32 Instruction(U32 pc, U32 word) {
     return word;
 }
 template<class Memory> bool CodeMatches(Memory& m) {
-    for (auto [at, value] : std::array<std::pair<U32,U32>,8>{{
+    for (auto [at, value] : std::array<std::pair<U32,U32>,12>{{
         {Before,0xe320f000}, {0x0059b4b8,0xebf41f18}, {After,0xe5940038}, // ref 0x59b348, 0xebf41fc7
         {0x00175ad4,Manager}, {0x00188348,0x727970}, {0x0036e25c,0x6890f4}, // ref 0x175c30, 0x1884a4, 0x36e294
-        {0x002a3144,0x6891ec}, {0x0036e6a4,0xebfb3b55}}}) { // ref 0x2a3290, 0x36e6dc, 0xebfb3bba
+        {0x002a3144,0x6891ec}, {0x0036e6a4,0xebfb3b55}, // ref 0x2a3290, 0x36e6dc, 0xebfb3bba
+        // S2 (tip pending-quad fix): the radar object's quad count +0x2C8 and capacity +0x2C4
+        // on vanilla v1.1. The prepare/draw reads the count (0x5E8C24 ldr r0,[r5,#0x2c8]) and
+        // stores it back after the draw (0x5E8F84 str r6,[r5,#0x2c8]); the reserve routine
+        // stores the capacity before reading the count (0x5F0C48 str r1,[r0,#0x2c4]; 0x5F0C4C
+        // ldr r6,[r0,#0x2c8]). Upstream's "retail 5E8F84" is this same store.
+        {0x005e8c24,0xe59502c8}, {0x005e8f84,0xe58562c8},
+        {0x005f0c48,0xe58012c4}, {0x005f0c4c,0xe59062c8}}}) {
         if (m.Read(at) != std::optional<U32>(value)) return false;
     }
     return true;
@@ -74,15 +81,18 @@ template<class Memory> float HeartsOpacity(Memory& m) {
 struct Entry { U32 object, priority; };
 struct Hook {
     bool armed = false;
+    bool suppress_draw = false;
     U32 owner = 0;
     std::vector<Entry> before;
     std::vector<std::pair<U32,U32>> zoom_restore;
     template<class Memory> void RestoreZoom(Memory& m){
         for(auto [at,bits]:zoom_restore)m.Write(at,bits);zoom_restore.clear();
     }
-    template<class Memory> void SmallGameplayMap(Memory& m){
+    template<class Memory> void SmallGameplayMap(Memory& m,U32 game){
         // Native map mode3 uses overview resource, overview scale+20, and
-        // header's signed center at+C/+E (original1AE848). Scope to this draw.
+        // header's signed center at+C/+E (original1AE848). The geometry builder
+        // also reads cached rotation at +28 independently of the mode byte.
+        // Clear it for this draw, then restore the Maps screen's state.
         if(m.Read(0x0036e268)!=std::optional<U32>(0x7781d8))return; // ref 0x36e2a0
         constexpr U32 state=0x6890f4,mode_word=0x7781d8+0x520;
         auto mode=m.Read(mode_word),header=m.Read(state),small=m.Read(state+0x20);
@@ -91,8 +101,36 @@ struct Hook {
         auto center=m.Read(*header+0xc);if(!center)return;
         const float scale=std::bit_cast<float>(*small);
         if(!std::isfinite(scale)||scale<=0||scale>10000)return;
-        const std::array<std::pair<U32,U32>,4> changes{{
+        // The player marker bypasses WorldToMap and reads cached +50/+52.
+        // Rebuild those coordinates using the same overview transform, rather
+        // than reusing the zoomed-mode anchor (160,180). Original 1AE848/1C0154.
+        const auto valid=[](U32 p,U32 size){return p>=0x100000 && !(p&3) && p<0x40000000-size;};
+        if(!valid(game,0xf0d8))return;
+        auto actor=m.Read(game+0x20dc),rooms=m.Read(*header),count=m.Read(*header+4);
+        auto floor=m.Read(state+0x54),yoffset=m.Read(state+0x5c),map_scale=m.Read(*header+0x10);
+        auto special=m.Read(game+0xf0d4),marker=m.Read(0x727970+0x834);
+        if(!actor||!valid(*actor,0x30)||!rooms||!count||!floor||!yoffset||!map_scale||!special||!marker)return;
+        const int room=static_cast<std::int8_t>(*floor&255);
+        if(room<0||unsigned(room)>=(*count&255)||!valid(*rooms,0x728*(room+1)))return;
+        const auto record=*rooms+0x728*room;
+        auto flags=m.Read(record),fixed=m.Read(record+4),px=m.Read(*actor+0x24),pz=m.Read(*actor+0x2c);
+        if(!flags||!fixed||!px||!pz)return;
+        float x=std::bit_cast<float>(*px),z=std::bit_cast<float>(*pz);
+        if(*flags&8) {
+            x=float(static_cast<std::int16_t>(*flags>>16));
+            z=float(static_cast<std::int16_t>(*fixed&0xffff));
+        } else if((*special>>16)&255) {x*=10.f;z*=10.f;}
+        const float factor=std::bit_cast<float>(*map_scale)*scale;
+        const float mx=160.f+(x-float(static_cast<std::int16_t>(*center&0xffff)))*factor;
+        const float my=120.f+(z-float(static_cast<std::int16_t>(*center>>16)))*factor+
+            float(static_cast<std::int8_t>((*yoffset>>16)&255));
+        if(!std::isfinite(mx)||!std::isfinite(my)||mx< -32768.f||mx>32767.f||my< -32768.f||my>32767.f)return;
+        const U32 anchor=U32(static_cast<std::uint16_t>(static_cast<std::int16_t>(mx)))|
+            (U32(static_cast<std::uint16_t>(static_cast<std::int16_t>(my)))<<16);
+        const std::array<std::pair<U32,U32>,7> changes{{
+            {state+0x50,anchor},{0x727970+0x834,*marker&0x00ffffff},
             {mode_word,(*mode&0x00ffffff)|0x03000000}, {state+0x1c,*small},
+            {state+0x28,std::bit_cast<U32>(0.f)},
             {state+0x2c,std::bit_cast<U32>(float(static_cast<std::int16_t>(*center&0xffff)))},
             {state+0x30,std::bit_cast<U32>(float(static_cast<std::int16_t>(*center>>16)))}}};
         for(auto [at,bits]:changes){auto old=m.Read(at);if(!old){zoom_restore.clear();return;}zoom_restore.push_back({at,*old});}
@@ -109,13 +147,15 @@ struct Hook {
         }
         return true;
     }
-    template<class Memory> void Begin(Memory& m, U32 screen, bool enabled) {
+    template<class Memory> void Begin(Memory& m, U32 screen, bool enabled, U32 game=0,
+                                     bool suppress=false) {
         RestoreZoom(m);
         armed = false;
+        suppress_draw = suppress;
         moved_quads.store(0);
         status.store(1);
         owner = screen;
-        if (enabled && Queue(m,6,before)) { armed = true;SmallGameplayMap(m); }
+        if (enabled && Queue(m,6,before)) { armed = true;SmallGameplayMap(m,game); }
     }
     template<class Memory> void End(Memory& m, U32 screen, bool enabled,
                                      float scale, float opacity, float right_edge) {
@@ -124,8 +164,8 @@ struct Hook {
         if (!run) return;
         status.store(3);
         if (!std::isfinite(scale) || !std::isfinite(opacity)) return;
-        scale=std::clamp(scale,.2f,.6f); opacity=std::clamp(opacity,.2f,1.f);
-        opacity *= HeartsOpacity(m);
+        scale=std::clamp(scale,.2f,.6f); opacity=std::clamp(opacity,0.f,1.f);
+        opacity *= HeartsOpacity(m)*HudAdjustments::Opacity();
         const float right=std::clamp(right_margin.load(),-64.f,120.f);
         const float bottom_inset=std::clamp(bottom_margin.load(),-64.f,120.f)+HudAdjustments::Bottom();
         if (!std::isfinite(right) || !std::isfinite(bottom_inset)) return;
@@ -155,7 +195,18 @@ struct Hook {
                 if (occurrences != (q==6 ? 1u : 0u)) return;
             }
         }
-        if(HudAdjustments::hide_minimap) {
+        if(HudAdjustments::hide_minimap||suppress_draw) {
+            // A removed drawable never reaches the native prepare/draw routine
+            // (retail 5E8B7C), which consumes its quad count at 5E8F84.
+            // Discard those pending quads too, or the shared radar buffer keeps
+            // small gameplay icons and appends them to the next full map draw.
+            // Validate every selected object before changing either buffer/queue.
+            for(const auto& e:selected) {
+                if(e.object<0x100000 || (e.object&3) || e.object>=0x3ffffc58)return;
+                const auto n=m.Read(e.object+0x2c8),cap=m.Read(e.object+0x2c4);
+                if(!n||!cap||*n>*cap||*cap>4096)return;
+            }
+            for(const auto& e:selected)m.Write(e.object+0x2c8,0);
             // Remove only this gameplay call's map/radar entries. Full map menus
             // use their own routing; unrelated lower-screen objects remain.
             for(unsigned i=0;i<retained.size();++i) {
@@ -215,7 +266,7 @@ struct Hook {
             }
         }
         const float player_scale=HudAdjustments::Scale(HudAdjustments::Minimap);
-        const float offset_x=right_edge-right-320.f*scale+map_right*scale*(1-player_scale)+HudAdjustments::X(HudAdjustments::Minimap);
+        const float offset_x=right_edge-right-320.f*scale+map_right*scale*(1-player_scale)+HudAdjustments::X(HudAdjustments::Minimap)+HudAdjustments::HorizontalPadding(HudAdjustments::Minimap);
         const float offset_y=240.f-bottom_inset-240.f*scale+map_bottom*scale*(1-player_scale)+HudAdjustments::Y(HudAdjustments::Minimap);
         scale*=player_scale;
         for (const auto& e:selected) {

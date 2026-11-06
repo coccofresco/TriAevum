@@ -37,6 +37,7 @@
 #include "double_time.h"
 #include "song_reset.h"
 #include "hud_buttons.h"
+#include "hud_item_background.h"
 #include "banners.h"
 #include "song_effect.h"
 #include "native_item_present.h"
@@ -107,6 +108,7 @@ private:
     Mm3dDekui::DoubleTime::Hook double_time_hook;
     Mm3dDekui::SongReset::Hook song_reset_hook;
     Mm3dDekui::HudButtons::Hook hud_buttons_hook;
+    Mm3dDekui::HudItemBackground::Hook hud_item_background_hook;
     Mm3dDekui::Banners::Hook banner_hook;
     Mm3dDekui::NativeItemPresent::Hook item_present_hook;
     Mm3dDekui::NativeStartup::Hook startup_hook;

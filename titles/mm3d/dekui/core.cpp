@@ -490,9 +490,15 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],&item_present_hook);
                 regs[2]=file_select_prompt_hook.Root(guest,file_select_hook,options_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive());
+                // Tip 4f2692ed: mirrored X/Y/I/II item-button backgrounds, the last Root
+                // (upstream: after DoubleTime's ShadeRoot, which our port does not have yet).
+                regs[2]=hud_item_background_hook.Root(guest,regs[4],regs[2],
+                    regs[2]!=regs[4]+8?regs[2]:regs[13]);
                 if(regs[2]!=regs[4]+8)regs[13]=regs[2];
                 break;
             case 3:
+                // Innermost scratch first: the last Root's frame is restored first.
+                if(const auto sp=hud_item_background_hook.scratch.End(guest))regs[13]=sp;
                 if(const auto sp=file_select_prompt_hook.End(guest))regs[13]=sp;
                 if(const auto sp=select_help_hook.scratch.End(guest))regs[13]=sp;
                 if(const auto sp=menu_help_hook.scratch.End(guest))regs[13]=sp;

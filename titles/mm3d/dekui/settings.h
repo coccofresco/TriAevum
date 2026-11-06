@@ -38,11 +38,14 @@ struct Settings {
     DoubleTime::Options double_time;
     SongReset::Options song_reset;
     HudButtons::Options hud_buttons;
-    HudAdjustments::Options player_hud;
+    HudAdjustments::Options player_hud=HudAdjustments::FreshDefaults();
     Banners::Options banners;
     bool banners_migrated=false;
     DungeonMap::Options dungeon_map;
-    NativeInventory::ButtonPose world_map_zoom_prompt{0,0,.8f},world_map_native_zoom;
+    // Retain retired individual dungeon poses for profile roundtrips only.
+    // Rendering uses dungeon_map.prompts for all four rows.
+    NativeInventory::ButtonPose world_map_zoom_prompt{0,0,.8f},world_map_native_zoom,
+        dungeon_map_zoom_prompt{0,-28,.69f},dungeon_map_move_prompt{0,-44,.69f};
     NativeFileSelect::Options file_select;
     NativeItemPresent::Options item_present;
     NativeItemPresent::Options mask_present;
@@ -67,7 +70,7 @@ struct Settings {
     bool disable_low_health_beep = false;
     bool disable_tatl_reminders = false;
     bool single_screen_text = true;
-    bool stick_click_controls = false;
+    bool stick_click_controls = true; // First launch only; legacy settings retain their controls.
     bool fix_bloom = true;
     bool disable_fog = false;
     bool hd_pictograph_photos = true;
@@ -99,7 +102,7 @@ struct Settings {
     float dpad_y = 0.f;
     float dpad_offset_x = 0.f, dpad_offset_y = 0.f;
     bool minimap = true;
-    float minimap_scale = .36f, minimap_opacity = .85f;
+    float minimap_scale = .36f, minimap_opacity = .75f;
     float minimap_right_margin = 8.f, minimap_bottom_margin = 8.f;
     std::vector<WidescreenProbe::Draw> fullscreen_draws;
     float scale = 1.f;

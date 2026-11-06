@@ -17,10 +17,18 @@ struct Options {
     bool side_panels=true,top_strip=true;
     ButtonPose top_panel{0,0,.3125f};
     float panel_darkness=0;
+    // Tip 4f2692ed settings schema (S2). Parsed and saved now; the arrows and the
+    // shared dungeon prompts consume them when DungeonMap moves to its tip in S3.
+    float arrow_scale=1;
+    std::array<std::array<float,2>,4> arrow_offsets{}; // up, down, left, right
+    OcarinaPrompt::Options prompts{true,0,0,1,1,20};
+    // Retained global transform from older profiles (parser-only roundtrip keys).
+    OcarinaPrompt::Group prompt_group;
     std::array<ButtonPose,2> panels{{{0,120,.35f},{288,120,.35f}}};
     std::array<GearMenu::Pose,Count> poses;
     Options() { for(auto& p:poses)p={40,0,1};poses[Model]=poses[Description]={0,0,1}; }
 };
+inline constexpr std::array<const char*,4> ArrowNames{"up","down","left","right"};
 inline std::atomic<bool> enabled{true},side_panels{true},top_strip{true};
 inline AtomicButtonPose top_panel{0,0,.3125f};
 inline std::atomic<float> panel_darkness{0};

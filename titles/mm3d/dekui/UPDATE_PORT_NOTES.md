@@ -149,6 +149,37 @@ Deliberate differences from tip, until their owning slice:
 - Not ported in S2: menu_help (tip conflicts and a new PC 0x5A58F4), world_map_prompt (its tip
   version needs DungeonMap's tip backgrounds, S3), file_select_input (host input, class c).
 
+Tip HUD (second S2 commit):
+- Settings: 588 -> 608 shipped keys (defaults/README.md) plus 10 parser-only keys
+  (`dungeon_map_buttons_*`, `dungeon_map_{zoom,move}_prompt_*`). A profile without
+  `player_hud_layout_version` stays version 0: no base scale, no padding, magic width 1,
+  mirror off, its own minimap opacity and controls. Missing dungeon prompt keys fall back to
+  the Notebook values. The dungeon-map arrow/prompt fields are parsed and saved in
+  `DungeonMap::Options` now and consumed in S3. `stick_click_controls` keeps a false Load
+  default; device routing belongs to our Input owner (S5).
+- hud_adjustments and player_hud at tip: base scale, left/right padding (+-100) and
+  top/bottom (+-40), magic width before MagicBorder clones the frame, one rupee/key pivot,
+  layout versions 0/1/2 with FreshDefaults / VersionOneDefaults, HUD opacity.
+- hud_item_background.h (new): mirrored X/Y/I/II backgrounds, last Root of the layout-draw
+  Root case and first End of its End case (upstream places it after DoubleTime's ShadeRoot,
+  which this port does not have). It needs no PC; the panes come from the Restoration HUD
+  layout the RomFS layer mounts. Its 0x1200-byte scratch sits under the same layout-draw SP
+  as OcarinaPrompt's 0x2400-byte scratch, which already runs there.
+- native_minimap at tip: the pending-quad discard for removed radar objects (stale icons in
+  the next full map draw), the suppress argument (always false until MenuBackdrop, S4), side
+  padding, HUD opacity, and the small-map overview marker rebuild from 6e36dfb4. Vanilla
+  v1.1 proof for the fields, now guard words: 0x5E8C24 `ldr r0,[r5,#0x2c8]` and 0x5E8F84
+  `str r6,[r5,#0x2c8]` in the radar prepare/draw (upstream's "retail 5E8F84"), 0x5F0C48
+  `str r1,[r0,#0x2c4]` / 0x5F0C4C `ldr r6,[r0,#0x2c8]` in the reserve routine.
+- Owner decisions (2026-11-06): no dekui FOV, widescreen or draw-distance control is added;
+  the renderer FOV multiplier, the window host and one renderer draw-distance setting own
+  those, and dekui's values stay internal bases (cutscene FOV 49).
+- Tests: `hud_tests.cpp` (`oot3d_mm3d_dekui_hud_tests`, standalone target `hud`), adapted from
+  tip player_hud_check/native_inventory_check: mirrored halves, all-or-nothing commit,
+  byte-for-byte End, nested and invalid inputs; pending quads under the hide option and the
+  transient suppression, no partial discard; small-map overview and restore. Settings tests
+  add the layout-version matrix, bounds, the dungeon prompt fallback and the parser-only keys.
+
 ## Renderer and frontend handoff
 
 Class (b) implementations remain with the title renderer: 60 Hz interpolation

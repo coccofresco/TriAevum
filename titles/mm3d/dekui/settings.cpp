@@ -219,6 +219,28 @@ bool Settings::LoadFromString(std::string_view text) {
     dungeon_map.top_panel={value("dungeon_map_top_panel_x",0,-1024,1024),value("dungeon_map_top_panel_y",0,-480,480),
         value("dungeon_map_top_panel_scale",.3125f,.1f,3)};
     dungeon_map.panel_darkness=value("dungeon_map_panel_darkness",0,0,1);
+    // Tip 4f2692ed (S2 schema, consumed in S3). Retired individual dungeon poses roundtrip only.
+    dungeon_map_move_prompt={value("dungeon_map_move_prompt_x",0,-400,400),
+        value("dungeon_map_move_prompt_y",-44,-240,240),value("dungeon_map_move_prompt_scale",.69f,.25f,2)};
+    dungeon_map_zoom_prompt={value("dungeon_map_zoom_prompt_x",0,-400,400),
+        value("dungeon_map_zoom_prompt_y",-28,-240,240),value("dungeon_map_zoom_prompt_scale",.69f,.25f,2)};
+    // The old dungeon hints borrowed Notebook scale/icon scale and the difference between
+    // its two Y values. Notebook X never affected them. Fall back only for missing keys;
+    // saving makes the map values independent.
+    dungeon_map.prompts={true,value("dungeon_map_prompts_x",0,-400,400),
+        value("dungeon_map_prompts_y",0,-240,240),
+        value("dungeon_map_prompts_scale",notebook_live.prompt_scale,.5f,2),
+        value("dungeon_map_prompts_icon_scale",notebook_live.prompt_icon_scale,.5f,2),
+        value("dungeon_map_prompts_spacing",notebook_live.prompt_y-notebook_live.map_prompt_y,-480,480)};
+    // New global adjustments start neutral; retain every existing local pose.
+    dungeon_map.prompt_group={value("dungeon_map_buttons_x",0,-400,400),
+        value("dungeon_map_buttons_y",0,-240,240),value("dungeon_map_buttons_scale",1,.5f,2),
+        value("dungeon_map_buttons_icon_scale",1,.5f,2)};
+    dungeon_map.arrow_scale=value("dungeon_map_arrows_scale",1,.1f,3);
+    for(unsigned i=0;i<4;++i) {
+        const auto key=std::string("dungeon_map_arrow_")+DungeonMap::ArrowNames[i]+"_";
+        dungeon_map.arrow_offsets[i]={value((key+"x"),0,-800,800),value((key+"y"),0,-480,480)};
+    }
     for(unsigned i=0;i<2;++i) {
         const auto key=std::string("dungeon_map_panel_")+std::to_string(i)+"_";const auto d=DungeonMap::Options{}.panels[i];
         dungeon_map.panels[i]={value((key+"x"),d.x,-512,512),
@@ -449,6 +471,11 @@ bool Settings::LoadFromString(std::string_view text) {
     player_hud.banner_darkness=value("player_hud_banner_darkness",0.f,0.f,1.f);
     player_hud.banner_y=int(value("player_hud_banner_y",0.f,-240.f,240.f));
     player_hud.hide_minimap=Boolean(object,"player_hud_hide_minimap",false);
+    // Tip 4f2692ed: a profile without player_hud_layout_version stays version 0 (its own
+    // sizes, base scale 0, mirror off); only the shipped defaults carry version 2.
+    const int hud_layout_version=Integer(object,"player_hud_layout_version",0);
+    player_hud.layout_version=hud_layout_version>=1&&hud_layout_version<=2?unsigned(hud_layout_version):0u;
+    player_hud.mirror_item_buttons=Boolean(object,"player_hud_mirror_item_buttons",false);
     for(unsigned i=0;i<6;++i) {
         const auto key=std::string("player_hud_button_")+HudAdjustments::ButtonKeys[i]+"_";
         player_hud.button_x[i]=int(value((key+"x"),0,-400,400));
@@ -458,9 +485,15 @@ bool Settings::LoadFromString(std::string_view text) {
     player_hud.heart_spacing=int(value("player_hud_heart_spacing",0,
         -HudAdjustments::HeartSpacingLimit,HudAdjustments::HeartSpacingLimit));
     player_hud.magic_height_steps=int(value("player_hud_magic_height",0,-10,10));
+    player_hud.magic_width=value("player_hud_magic_width",1.f,.5f,3.f);
+    // Existing profiles already encode their chosen size in player_hud_scale.
+    // Do not apply the new-install baseline on top of it.
+    player_hud.base_scale=int(value("player_hud_base_scale",0,-10,10));
     player_hud.overall=int(value("player_hud_scale",0,-10,10));
-    player_hud.top=int(value("player_hud_top_padding",0,0,40));
-    player_hud.bottom=int(value("player_hud_bottom_padding",0,0,40));
+    player_hud.top=int(value("player_hud_top_padding",0,-HudAdjustments::VerticalPaddingLimit,HudAdjustments::VerticalPaddingLimit));
+    player_hud.bottom=int(value("player_hud_bottom_padding",0,-HudAdjustments::VerticalPaddingLimit,HudAdjustments::VerticalPaddingLimit));
+    player_hud.left=int(value("player_hud_left_padding",0,-HudAdjustments::SidePaddingLimit,HudAdjustments::SidePaddingLimit));
+    player_hud.right=int(value("player_hud_right_padding",0,-HudAdjustments::SidePaddingLimit,HudAdjustments::SidePaddingLimit));
     for(unsigned i=0;i<HudAdjustments::Count;++i) {
         const auto key=std::string("player_hud_")+HudAdjustments::Keys[i]+"_scale";
         player_hud.elements[i]=int(value(key,0,-10,10));
@@ -497,6 +530,8 @@ bool Settings::LoadFromString(std::string_view text) {
     dialogue_indicator_y=value("dialogue_indicator_y",0.f,-64.f,64.f);
     double_prices = Boolean(object,"double_prices",false);
     price_multiplier = std::clamp(Integer(object,"price_multiplier",2),2,3);
+    // Existing profiles without this setting keep the original controls (true ships only
+    // in the fresh-install defaults). Device routing stays with our Input owner (S5).
     stick_click_controls = Boolean(object,"stick_click_controls",false);
     single_screen_text = Boolean(object,"single_screen_text",true);
     fix_bloom = Boolean(object,"fix_bloom",true);
@@ -609,6 +644,8 @@ bool Settings::Save(const std::filesystem::path& path) const {
     object["player_hud_banner_darkness"]=player_hud.banner_darkness;
     object["player_hud_banner_y"]=player_hud.banner_y;
     object["player_hud_hide_minimap"]=player_hud.hide_minimap;
+    object["player_hud_layout_version"]=int(player_hud.layout_version);
+    object["player_hud_mirror_item_buttons"]=player_hud.mirror_item_buttons;
     object["mute_music"]=mute_music;
     object["disable_low_health_beep"]=disable_low_health_beep;
     for(unsigned i=0;i<6;++i) {
@@ -618,9 +655,13 @@ bool Settings::Save(const std::filesystem::path& path) const {
     object["player_hud_hide_menu_prompts"]=player_hud.hide_menu_prompts;
     object["player_hud_heart_spacing"]=player_hud.heart_spacing;
     object["player_hud_magic_height"]=player_hud.magic_height_steps;
+    object["player_hud_magic_width"]=player_hud.magic_width;
+    object["player_hud_base_scale"]=player_hud.base_scale;
     object["player_hud_scale"]=player_hud.overall;
     object["player_hud_top_padding"]=player_hud.top;
     object["player_hud_bottom_padding"]=player_hud.bottom;
+    object["player_hud_left_padding"]=player_hud.left;
+    object["player_hud_right_padding"]=player_hud.right;
     for(unsigned i=0;i<HudAdjustments::Count;++i) {
         const auto prefix=std::string("player_hud_")+HudAdjustments::Keys[i]+"_";
         object[prefix+"scale"]=player_hud.elements[i];
@@ -668,6 +709,27 @@ bool Settings::Save(const std::filesystem::path& path) const {
     object["dungeon_map_top_panel_y"]=dungeon_map.top_panel.y;
     object["dungeon_map_top_panel_scale"]=dungeon_map.top_panel.scale;
     object["dungeon_map_panel_darkness"]=dungeon_map.panel_darkness;
+    object["dungeon_map_move_prompt_x"]=dungeon_map_move_prompt.x;
+    object["dungeon_map_move_prompt_y"]=dungeon_map_move_prompt.y;
+    object["dungeon_map_move_prompt_scale"]=dungeon_map_move_prompt.scale;
+    object["dungeon_map_zoom_prompt_x"]=dungeon_map_zoom_prompt.x;
+    object["dungeon_map_zoom_prompt_y"]=dungeon_map_zoom_prompt.y;
+    object["dungeon_map_zoom_prompt_scale"]=dungeon_map_zoom_prompt.scale;
+    object["dungeon_map_prompts_x"]=dungeon_map.prompts.x;
+    object["dungeon_map_prompts_y"]=dungeon_map.prompts.y;
+    object["dungeon_map_prompts_scale"]=dungeon_map.prompts.scale;
+    object["dungeon_map_prompts_icon_scale"]=dungeon_map.prompts.icon_scale;
+    object["dungeon_map_prompts_spacing"]=dungeon_map.prompts.spacing;
+    object["dungeon_map_buttons_x"]=dungeon_map.prompt_group.x;
+    object["dungeon_map_buttons_y"]=dungeon_map.prompt_group.y;
+    object["dungeon_map_buttons_scale"]=dungeon_map.prompt_group.scale;
+    object["dungeon_map_buttons_icon_scale"]=dungeon_map.prompt_group.icon_scale;
+    object["dungeon_map_arrows_scale"]=dungeon_map.arrow_scale;
+    for(unsigned i=0;i<4;++i) {
+        const auto key=std::string("dungeon_map_arrow_")+DungeonMap::ArrowNames[i]+"_";
+        object[key+"x"]=dungeon_map.arrow_offsets[i][0];
+        object[key+"y"]=dungeon_map.arrow_offsets[i][1];
+    }
     for(unsigned i=0;i<2;++i) {
         const auto key=std::string("dungeon_map_panel_")+std::to_string(i)+"_";const auto p=dungeon_map.panels[i];
         object[key+"x"]=p.x;object[key+"y"]=p.y;object[key+"scale"]=p.scale;
