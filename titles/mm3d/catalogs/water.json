@@ -1,0 +1,23 @@
+{
+  "title": "mm3d",
+  "revision": 1,
+  "directories": ["scenes", "actors"],
+  "suffixes": ["_info.zsi", ".gar", ".gar.lzs"],
+  "zsi_magic": "5a534909",
+  "cmb": {
+    "version": 10,
+    "header_bytes": 72,
+    "texture_chunk_offset": 48,
+    "texture_data_offset": 68
+  },
+  "water_rules": {
+    "exclude": ["kabe", "yuka", "hasira", "iwa", "kasumi", "mizuk", "mizuzou", "shadow", "hikari", "shibuki", "_awa", "kusa", "tree", "_ten", "water_bomb", "dekubaba_water", "torch4_water"],
+    "roles": [
+      {"mask": 8, "contains": ["uvwater"]},
+      {"mask": 1, "contains": ["_sea_", "taki_wt_"]},
+      {"mask": 4, "contains": ["_taki", "dokutaki", "waterfall"]},
+      {"mask": 2, "contains": ["river", "kawa"]},
+      {"mask": 1, "contains": ["water", "mizu", "wsea", "sea0"]}
+    ]
+  }
+}
