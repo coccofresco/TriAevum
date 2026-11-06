@@ -148,6 +148,25 @@ void Reader() {
         bool second_chain = false;
         for (const auto& [at, word] : L::Guards) second_chain |= at == 0x0013586c && word == 0xe1a04000;
         Check(second_chain, "second caller chain mov r4,r0 at 0x13586C is guarded");
+        // The call sites that connect the chain (S1 review): each one is guarded, and the
+        // loop below corrupts and removes each of them like every other guard word.
+        constexpr std::array<std::pair<U32, U32>, 8> CallSites{{
+            {0x0011e704, 0xeb029a2f}, {0x0011e710, 0xeb005b3d}, {0x0011ed40, 0xeb0298a0},
+            {0x0011ed44, 0xe1a04000}, {0x0011ed48, 0xeb005ac6}, {0x001355dc, 0xeb003f89},
+            {0x001359a8, 0xeb003e96}, {0x00145430, 0xeb005330},
+        }};
+        Check(L::Guards.size() == 22, "22 guard words (14 chain words + 8 call sites)");
+        for (const auto& site : CallSites) {
+            bool found = false;
+            for (const auto& guard : L::Guards) found |= guard == site;
+            Check(found, "call-site guard " + std::to_string(site.first));
+            // A bl that points elsewhere (offset +1) must reject, not only a flipped low bit.
+            Memory m; InstallGuards(m); InstallArchive(m, 0x100);
+            m.words[site.first] = site.second + 1; reject(m, "retargeted call site " + std::to_string(site.first));
+        }
+        for (std::size_t i = 0; i < L::Guards.size(); ++i)
+            for (std::size_t j = i + 1; j < L::Guards.size(); ++j)
+                Check(L::Guards[i].first != L::Guards[j].first, "guard addresses are distinct");
         for (std::size_t i = 0; i < L::Guards.size(); ++i) {
             Memory m; InstallGuards(m); InstallArchive(m, 0x100);
             const auto [at, word] = L::Guards[i];

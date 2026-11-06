@@ -81,10 +81,13 @@ strings are not used.
   Italian), `ArchiveRegion`, `ArchiveLanguage{valid, region, language, raw_mask}`,
   `FromRawMask` (USA 0x2/0x4/0x8, EUR 0x10/0x20/0x40/0x80/0x100; anything else is invalid and
   English), `UsaTableCode` (2/4/8, none for German and Italian) and `ReadArchiveLanguage`.
-  The reader checks 14 original EUR v1.1 words of the chain getter 0x1C4FC8 -> both caller
+  The reader checks 22 original EUR v1.1 words of the chain getter 0x1C4FC8 -> both caller
   chains (`mov r4,r0` at 0x13541C and 0x13586C, `add r0,r4,#0x38` at 0x1355D8/0x1359A4) ->
-  0x145408 -> reader 0x15A0F8 (`stm` at 0x15A134, "GMSG" pool 0x15A1E8) before it reads the
-  archive pointer 0x6B3744, then accepts only "GMSG", u16 version 1, u16 0 and a known mask.
+  0x145408 -> reader 0x15A0F8 (`stm` at 0x15A134, "GMSG" pool 0x15A1E8), including the eight
+  call-site words that connect it (`bl` getter at 0x11E704/0x11ED40, `bl` 0x13540C at 0x11E710,
+  `mov r4,r0` at 0x11ED44, `bl` 0x135868 at 0x11ED48, `bl` 0x145408 at 0x1355DC/0x1359A8, `bl`
+  0x15A0F8 at 0x145430), before it reads the archive pointer 0x6B3744, then accepts only "GMSG",
+  u16 version 1, u16 0 and a known mask.
   Upstream's raw 0x6B373C is not read.
 - `prompt_text.h` (new): consumers receive `PromptLanguage`; `Language(m) == 2` and
   `Translate(2, ...)` do not compile (negative `try_compile` in `host_services.cmake`, and the
@@ -101,6 +104,9 @@ strings are not used.
   prompt's label fits its 36-pixel slot only when translated; menu help adds the translated
   labels to its font alphabet only when translated. With an English archive (EUR 0x10, USA 0x2)
   or any rejected archive every consumer draws exactly what it drew before S1.
+  Live status: only the translated file-select pair prompt has been seen in game (German and
+  Italian boots). The translated notebook, menu-help, Items/Map arrow, world-map zoom and
+  ocarina paths are verified by fixtures only so far.
 - `MenuHelp::EquipLabel(PromptLanguage, bool)` is ported for the StickControls layout (S5).
 - Text tables keyed by USA codes (single_screen_text, prices, classic text) are untouched here;
   they move to `UsaTableCode` with their tip versions in S6/S7. Translation packs (S7) key by
