@@ -413,8 +413,12 @@ public:
       return fail("unreadable transition fields");
     return tx.Commit() || fail("MM3D write failed and was rolled back");
   }
+  // The runtime has already seen the transition end in the requested scene
+  // with the player present. An entrance cutscene (a boss lair's intro:
+  // Twinmold's runs past the 900-frame arrival window) is part of arriving,
+  // so the arrival does not wait for gameplay to resume.
   bool Arrived(const DevWarpObservation &o, uint16_t entrance, bool point) const override {
-    return o.Gameplay && o.Entrance == (point ? uint16_t(entrance & 0xFE0F) : entrance);
+    return o.Player && o.Entrance == (point ? uint16_t(entrance & 0xFE0F) : entrance);
   }
   // The clock runs during the transition: an arrival within this many units
   // (about 45 game minutes) of the requested time counts.

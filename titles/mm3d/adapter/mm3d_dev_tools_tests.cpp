@@ -456,5 +456,17 @@ int main() {
           runtime.Status().Message.c_str());
     std::filesystem::remove(path);
   }
+  {
+    // A boss lair's intro cutscene (no gameplay yet) still counts as arrived
+    // at the requested entrance; another entrance or no player does not.
+    DevWarpObservation o;
+    o.Player = true;
+    o.Gameplay = false;
+    o.Entrance = 0x6600;
+    Check(abi.Arrived(o, 0x6600, false), "arrival during the entrance cutscene");
+    Check(!abi.Arrived(o, 0x6610, false), "another spawn is not the arrival");
+    o.Player = false;
+    Check(!abi.Arrived(o, 0x6600, false), "no player, no arrival");
+  }
   std::cout << "MM3D developer ABI boundary checks passed\n";
 }
