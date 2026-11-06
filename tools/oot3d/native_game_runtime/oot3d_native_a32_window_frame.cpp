@@ -2260,10 +2260,11 @@ void NativeA32WindowSession::PresentVisualFrame(
                   presentedNativeLabels->ItemsLabels.clear();
               }
             }
-            frameActors = Oot3dNativeGame::CollectNativeActorInteractions(
-                process.Memory(),
-                sceneViewProbe.Stats().LastPlayStateAddress,
-                finished->Sequence);
+            frameActors = titleSession
+                ? titleSession->ActorInteractions(process.Memory(), finished->Sequence)
+                : Oot3dNativeGame::CollectNativeActorInteractions(
+                      process.Memory(), sceneViewProbe.Stats().LastPlayStateAddress,
+                      finished->Sequence);
             ++visualStats.SnapshotCount;
             suppressTopScreenBackdrop = relocatedFrontend;
             completedFrame =

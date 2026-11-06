@@ -12,6 +12,7 @@
 #include "oot3d_environment_time.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
+#include "fast/extension/grass_types.h"
 
 #include <nlohmann/json.hpp>
 
@@ -90,6 +91,17 @@ public:
   // The grass source and mask rules ({"Sources", "Masks"}) a configuration
   // older than grass rules takes, or none.
   [[nodiscard]] virtual std::optional<nlohmann::json> GrassRuleDefaults() const { return std::nullopt; }
+
+  // Optional independent authoring files below <config>/grass/<namespace>.
+  // Empty keeps the existing configuration storage (including OoT3D).
+  [[nodiscard]] virtual std::string_view GrassRuleNamespace() const { return {}; }
+  // Completed visual source frame: title reads its live native colliders.
+  // Values only cross this seam; the renderer sees no guest layout or ids.
+  [[nodiscard]] virtual std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
+      oot3d::recomp::a32::MemoryBus& memory, uint64_t sourceFrame) const {
+    (void)memory; (void)sourceFrame;
+    return {};
+  }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }
