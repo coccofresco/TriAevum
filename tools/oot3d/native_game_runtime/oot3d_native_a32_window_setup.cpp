@@ -150,6 +150,11 @@ void NativeA32WindowSession::Setup() {
   std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
             << " code_sha256=" << manifest->CodeBinSha256 << '\n';
   titleSession = Oot3dNativeGame::CreateTitleSession(titleAdapter);
+  // Static shadow actor catalogs are keyed by the title's own actor ids.
+  picaPresentationScheduler.SetStaticShadowActorPolicy(
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur ? Oot3dNativeGame::Oot3dStaticShadowActorPolicy()
+      : titleSession                                          ? titleSession->StaticShadowActors()
+                                                              : Oot3dNativeGame::StaticShadowActorPolicy{});
 #if defined(__SWITCH__)
   WriteSwitchBootStage("manifest_loaded");
 #endif

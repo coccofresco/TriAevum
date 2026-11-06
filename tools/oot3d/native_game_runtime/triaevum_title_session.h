@@ -10,6 +10,7 @@
 
 #include "native_scene_environment_state.h"
 #include "oot3d_environment_time.h"
+#include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
 
 #include <nlohmann/json.hpp>
@@ -82,6 +83,9 @@ public:
   // The shared renderer's native fragment lighting operand and lit shadow
   // receivers, which this title's shaders need.
   [[nodiscard]] virtual bool NativeFragmentLighting() const { return false; }
+  // The actor profiles (the title's own ids) whose rigid geometry may be
+  // cached in static shadow layers. None by default: every actor is dynamic.
+  [[nodiscard]] virtual StaticShadowActorPolicy StaticShadowActors() const { return {}; }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oot3d_native_pica_visual_frame.h"
+#include "oot3d_static_shadow_actor_catalog.h"
 #include "oot3d/renderer/pica_render_backend.h"
 
 #include <cstddef>
@@ -123,6 +124,11 @@ public:
   void SetNativeGameplayHudVisible(bool visible) noexcept {
     mNativeGameplayHudVisible = visible;
   }
+  // The running title's static shadow actor policy (its own actor ids). A
+  // scheduler that is never told keeps OoT3D's.
+  void SetStaticShadowActorPolicy(const StaticShadowActorPolicy &policy) noexcept {
+    mStaticShadowActors = policy;
+  }
   void Reset();
   Oot3dPicaPresentationSchedulerState CaptureState() const;
   bool RestoreState(Oot3dPicaPresentationSchedulerState state);
@@ -160,6 +166,7 @@ private:
   // Per sample draw: left out of this execution (HUD off).
   std::vector<bool> mOmittedDrawScratch;
   bool mNativeGameplayHudVisible = true;
+  StaticShadowActorPolicy mStaticShadowActors = Oot3dStaticShadowActorPolicy();
   std::map<SnapshotTarget, uint64_t> mSnapshotCompletions;
 };
 
