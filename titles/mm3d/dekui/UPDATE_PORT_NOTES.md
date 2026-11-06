@@ -92,7 +92,7 @@ strings are not used.
 - `prompt_text.h` (new): consumers receive `PromptLanguage`; `Language(m) == 2` and
   `Translate(2, ...)` do not compile (negative `try_compile` in `host_services.cmake`, and the
   standalone runner). The German and Italian columns are TriAevum's own, written with the
-  game's own German/Italian terms (Inventar/Strumenti, Karte/Mappa, Zeitplan/programma,
+  game's own German/Italian terms (Inventar, Karte/Mappa, Zeitplan/programma,
   Fall/evento, Wecker/Sveglia, Melodien/Melodie, Zoom +/-, Abbrechen/Annulla). Three labels the
   current consumers draw and upstream later renamed (`Song list`, `Zoom In`, `Zoom Out`) carry
   TriAevum French/Spanish too. Unknown labels and empty cells fall back to English.

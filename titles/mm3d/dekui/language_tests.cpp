@@ -209,9 +209,9 @@ void Strings() {
     }
     Check(T::Translate(PromptLanguage::German, "Not a prompt label") == "Not a prompt label", "unknown label stays English");
     Check(T::Translate(PromptLanguage::Italian, "ZR +") == "ZR +", "button glyph text is not translated");
-    // Our German and Italian (game terms: Inventar/Strumenti, Karte/Mappa, Wecker/Sveglia, Zoom +/-).
+    // Our German and Italian (game terms: Inventar, Karte/Mappa, Wecker/Sveglia, Zoom +/-).
     const std::array<std::array<std::string_view, 3>, 10> pinned{{
-        {"Back", "Zurück", "Indietro"}, {"Select", "Wählen", "Seleziona"}, {"Items", "Inventar", "Strumenti"},
+        {"Back", "Zurück", "Indietro"}, {"Select", "Wählen", "Seleziona"}, {"Items", "Inventar", "Oggetti"},
         {"Map", "Karte", "Mappa"}, {"Set alarm", "Wecker", "Sveglia"}, {"Zoom In", "Zoom +", "Zoom +"},
         {"Songs", "Melodien", "Melodie"}, {"Cancel", "Abbrechen", "Annulla"}, {"Change tab", "Seite wechseln", "Cambia schermo"},
         {"Equip to II", "Auf II legen", "Assegna a II"}}};
