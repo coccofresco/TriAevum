@@ -2,9 +2,9 @@
 
 Local-only branch `mm3d/parity-gp`, based on `18ef2d79`.
 
-The original qualification below is historical. See **Interior recalibration
-follow-up** for the updated ambient ledger, secondary-material-factor fix and
-its explicit visual-qualification gaps.
+The original qualification below is historical. See **Final dff87fdf recapture**
+for current images/numbers and the failed fresh-native Inn gate. The preceding
+recalibration record explains the ambient ledger and secondary-material fix.
 
 ## Implementation
 
@@ -71,7 +71,7 @@ Noon/field sunlit brightness stays roughly native and shadows are clearer.
 ambient gain 0.4 makes Inn/Woodfall substantially darker. Owner review is still
 needed; no scene-specific compensation or second look batch was introduced.
 
-## Interior recalibration follow-up
+## Interior recalibration follow-up (pre-final-capture record)
 
 Indoor and TimeFlows **day** now retain the exact native per-draw ambient
 (`nativeAmbientStrength=1`, added ambient zero), instead of removing 60% or
@@ -101,13 +101,48 @@ Woodfall native lost its swapchain before capture (`VK_ERROR_OUT_OF_DATE_KHR`),
 so there are only **five new images**. Its sheet explicitly reuses the previous
 native reference. Ambient-only deltas: Inn -4.74, Woodfall +2.20 (historical
 reference), Stone Tower -7.35; selected ROI losses remain visible in metrics.
-**All these pictures precede the structural secondary-factor fix. Final V3
-shelf appearance is not visually verified**, and no look acceptance is claimed.
+**All these pictures precede the structural secondary-factor fix. At that point
+V3 shelf appearance was not visually verified**, and no look acceptance was claimed.
 The run budget was not exceeded to hide this gap.
 
 Evidence: `W/analysis/parity/GP/captures/recal-1/INDEX.md` and
 `W/analysis/parity/GP/recal-1/` (diagnosis, captured input/TEV proof, receipts,
 post-fix binary hash, affected-build/compiler/unit/O6 logs).
+
+## Final dff87fdf recapture
+
+Used the unchanged, qualified `dff87fdf` developer executable, SHA-256
+`8c7445e941a4efa82e2c2409331b9d63677bd1560d785939654498a95c6dca48`.
+Only Inn, Woodfall and Stone Tower; one process at a time, six attempts, no
+retries, no extra outdoor/night/smoke captures or build/test runs.
+
+Five processes/images succeeded. **Inn native failed before rendering** because
+`analysis/parity/3/work5/state_inn.oot3dsav` could not be opened. The input was
+available for the later, never-attempted Inn profiles case, which succeeded.
+The failed native case was not repeated. Inn's comparison explicitly uses the
+previous native reference; Woodfall and Stone Tower are fresh pairs.
+
+| Location | RGB delta (8-bit) | Luma delta (8-bit) | Native reference |
+|---|---:|---:|---|
+| Inn | -4.72 | -6.13 | historical raw aggregate / JPEG |
+| Woodfall | -7.16 | -9.25 | fresh final-build image |
+| Stone Tower | -7.35 | -7.70 | fresh final-build image |
+
+The **final profile image visibly restores the shelf figure's colour/detail**,
+not the previous black silhouette. Its region is about -5.66 versus the prior
+-33.85 (historical-JPEG spatial comparison, approximate). Four captured prop-part
+records confirm applied V3 material-factor flag and Scene secondary gains=1.
+This is visual/profile-path verification, not a passed fresh-native Inn pair.
+
+Remaining look limits are explicit: Woodfall floor ROI -19.40 and Stone Tower
+floor -37.73 remain darker. Full-frame means do not prove every deficit belongs
+only to correct shadows; no blanket look approval. The fresh-native Inn process/
+capture gate remains **failed** under the no-retry instruction.
+
+Updated evidence: `W/analysis/parity/GP/captures/INDEX.md`,
+`captures/recal-2/INDEX.md`, lossless PNGs/annotated comparisons/metrics and
+`recal-2/runs/` receipts plus `material-factor-proof.json`. Earlier passed unit/
+compiler/O6 gates still apply to the unchanged code; none were gratuitously rerun.
 
 ## Remaining work
 
