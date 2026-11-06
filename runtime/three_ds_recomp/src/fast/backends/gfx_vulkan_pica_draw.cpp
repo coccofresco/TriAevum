@@ -1526,6 +1526,45 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     surfaceLighting ? surfaceLighting->Control[3] : 0U);
                 record.pop_back(); record += route;
             }
+            {
+                // The draw's native light slots and environment lights as the
+                // title classified them: scope (scene/local), origin, kind.
+                const auto kindName = [](Renderer3ds::PicaNativeLightSource::Type kind) {
+                    return kind == Renderer3ds::PicaNativeLightSource::Type::Directional ? "directional"
+                        : kind == Renderer3ds::PicaNativeLightSource::Type::Point      ? "point"
+                                                                                        : "none";
+                };
+                std::string lights = ",\"classifiedLights\":[";
+                for (size_t slot = 0; slot < draw.LightBinding.Sources.size(); ++slot) {
+                    const auto& source = draw.LightBinding.Sources[slot];
+                    char text[192];
+                    std::snprintf(text, sizeof(text),
+                                  "%s{\"slot\":%zu,\"kind\":\"%s\",\"scope\":\"%s\",\"origin\":\"%s\",\"id\":\"%llx\"}",
+                                  slot ? "," : "", slot, kindName(source.Kind),
+                                  Renderer3ds::PicaNativeLightScopeName(source.Scope),
+                                  Renderer3ds::PicaNativeLightOriginName(source.Origin),
+                                  static_cast<unsigned long long>(source.SourceIdentity));
+                    lights += text;
+                }
+                lights += "],\"environmentLights\":";
+                if (const auto& scene = draw.LightBinding.SceneDirectionals) {
+                    char text[160];
+                    std::snprintf(text, sizeof(text), "{\"count\":%u,\"scope\":\"%s\",\"bakedOutdoorRoom\":%d,\"ids\":[",
+                                  scene->Count, Renderer3ds::PicaNativeLightScopeName(scene->Scope),
+                                  scene->BakedOutdoorRoom ? 1 : 0);
+                    lights += text;
+                    for (uint32_t i = 0; i < std::min<uint32_t>(scene->Count, scene->Lights.size()); ++i) {
+                        std::snprintf(text, sizeof(text), "%s\"%llx\"", i ? "," : "",
+                                      static_cast<unsigned long long>(scene->Lights[i].SourceIdentity));
+                        lights += text;
+                    }
+                    lights += "]}";
+                } else {
+                    lights += "null";
+                }
+                record.pop_back();
+                record += lights + "}";
+            }
             if (waterSurface.WorldBounds.Available) {
                 const auto& b = waterSurface.WorldBounds;
                 char water[256];

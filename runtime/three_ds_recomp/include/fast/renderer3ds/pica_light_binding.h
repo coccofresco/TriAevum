@@ -15,6 +15,33 @@ namespace Fast::Renderer3ds {
 // Supplemental source data for the lights already selected by native code.
 // Slot order agrees with the captured vertex-light uniforms. It never adds a
 // light, replaces native enable flags, or refers back to live guest memory.
+// What a native light lights, decided by the title adapter from the light's
+// owner, never from scene IDs. Scene: the environment's sun/moon and ambient,
+// which a scene-wide lighting profile may replace. Local: every other light
+// (actor and room lights, lamps, companions, fixed object lights), which
+// stays native and additive. A light whose owner is not proved is Local.
+enum class PicaNativeLightScope : uint8_t { Local, Scene };
+enum class PicaNativeLightOrigin : uint8_t {
+    Unknown,                // owner not proved (treated as Local)
+    EnvironmentDirectional, // the environment's sun/moon records
+    EnvironmentAmbient,     // the environment's ambient term
+    Actor,                  // a light an actor registers
+    AuthoredRoom,           // a light listed by the authored room/scene header
+};
+[[nodiscard]] constexpr const char* PicaNativeLightScopeName(PicaNativeLightScope scope) noexcept {
+    return scope == PicaNativeLightScope::Scene ? "scene" : "local";
+}
+[[nodiscard]] constexpr const char* PicaNativeLightOriginName(PicaNativeLightOrigin origin) noexcept {
+    switch (origin) {
+    case PicaNativeLightOrigin::EnvironmentDirectional: return "environment-directional";
+    case PicaNativeLightOrigin::EnvironmentAmbient: return "environment-ambient";
+    case PicaNativeLightOrigin::Actor: return "actor";
+    case PicaNativeLightOrigin::AuthoredRoom: return "authored-room";
+    case PicaNativeLightOrigin::Unknown: break;
+    }
+    return "unknown";
+}
+
 struct PicaNativeLightSource {
     enum class Type : uint8_t { Unavailable, Directional, Point };
 
@@ -24,6 +51,9 @@ struct PicaNativeLightSource {
     std::array<float, 3> UnattenuatedColor{};
     std::array<float, 3> ReferenceColor{};
     float Radius = 0.0F;
+    // Function of the light (see PicaNativeLightScope). Defaults: Local, Unknown.
+    PicaNativeLightOrigin Origin = PicaNativeLightOrigin::Unknown;
+    PicaNativeLightScope Scope = PicaNativeLightScope::Local;
 
     bool operator==(const PicaNativeLightSource&) const = default;
 };
@@ -89,6 +119,9 @@ struct PicaSceneDirectionalLights {
     // environment's fixed light settings. The adapter decides it from the
     // authored room/scene headers; interiors and unknown rooms leave it off.
     bool BakedOutdoorRoom = false;
+    // The records are the environment's own (Scene) when the adapter proved
+    // their owner; otherwise they are treated as Local and kept native.
+    PicaNativeLightScope Scope = PicaNativeLightScope::Local;
     bool operator==(const PicaSceneDirectionalLights&) const = default;
 };
 
