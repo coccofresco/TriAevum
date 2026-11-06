@@ -50,8 +50,10 @@ struct Hook {
             if(detail&&(*detail&255)<=1) {
                 label=(*detail&255)?"Zoom Out":"Zoom In";
                 prompt.icon=prompt.text=0;prompt.texture=prompt.Parts(m);
-                source.Templates(m,map.helper,layout,"Zoom InOut");
-                if(!prompt.icon||!prompt.text)source.Templates(m,map.helper,map.panel,"Zoom InOut");
+                // Both labels' glyphs (the same set as "Zoom InOut" in English).
+                const std::string alphabet=std::string(PromptText::Get(m,"Zoom In"))+std::string(PromptText::Get(m,"Zoom Out"));
+                source.Templates(m,map.helper,layout,alphabet);
+                if(!prompt.icon||!prompt.text)source.Templates(m,map.helper,map.panel,alphabet);
                 auto all=prompt.scratch.Child(m,layout+8,"all");auto alpha=all?m.Read(all+0x134):std::optional<U32>{};
                 if(alpha&&prompt.icon&&prompt.text&&prompt.texture) {
                     const float a=std::bit_cast<float>(*alpha);
