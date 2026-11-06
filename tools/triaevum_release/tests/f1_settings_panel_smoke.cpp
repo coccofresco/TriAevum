@@ -1797,7 +1797,7 @@ void CheckDevToolsPanel() {
     Check(loggedPanelText.find("Debug Warp Screen Translation") == std::string::npos,
           "translation offered for a one-language title catalogue");
     EditText("##ZoneFilter", "stock");
-    Click("Stock Pot Inn##zone");
+    Click("Stock Pot Inn###zone");
     Check(warp->ArrivalOptions().SelectedZone == "stock-pot-inn", "zone selection not kept");
     Check(Find("Warp##Zone").Disabled, "zone warp offered outside gameplay");
     Click("Start here on launch");
