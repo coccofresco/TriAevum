@@ -133,3 +133,86 @@ Free camera, developer launch from the play quick save with
 applied` at the first main-camera update, the capture shows Kokiri Forest from
 600 units up looking down at the stump with Link out of view, 150 frames
 complete.
+
+## Majora's Mask 3D (Moonfall Curse)
+
+2026-11-06. MM3D plugs into the same runtime and tab through its title ABI
+(`titles/mm3d/adapter/mm3d_dev_tools.h`, `Mm3dDevTools`), in the same
+`TRIAEVUM_DEVELOPER_TOOLS` builds only; its settings live in
+`developer-tools-mm3d.json`. The donor is 2Ship2Harkinian (CC0-1.0), MM's
+counterpart of SoH.
+
+Catalogue: `titles/mm3d/dev_warp/generate_mm3d_dev_warp_catalog.py <2s2h root>
+titles/mm3d/adapter/mm3d_dev_warp_catalog.inc` reads only 2S2H files (their
+SHA-256 sit in the header): the scene table's human names in Better Map Select
+order, the spawns of each scene's entrance group from the decomp entrance
+table, and spawn names by meaning from the randomizer region exits
+("1: from South Clock Town (to lower)"). MM3D keeps the N64 groups; its own
+rows (34 added spawns, the empty N64 grotto slot 7, the telescope spawn that
+leads to MM3D scene 0x73, the two fishing-hole groups) are stated in the
+generator as indices. The runtime checks every row against MM3D's live entrance
+table (0x69FB44) as before. `test_generate_mm3d_dev_warp_catalog.py` checks the
+committed file and, with `TRIAEVUM_2S2H_ROOT`, regenerates it byte-identically.
+
+The tab adds, for a title that declares them:
+
+- **Zones**: 69 curated destinations by category (Clock Town, Termina Field,
+  the four regions and their temples, Ikana, the Moon, boss lairs, interiors,
+  mini-dungeons), each with a suggested day, time and form; Warp, and
+  **Start here on launch** (the boot zone, taken once when gameplay first
+  starts, after a file or a savestate loads; it replaces a boot warp point
+  and the reverse).
+- **Arrival**: Day (1-3), Time (06:00 ... 05:00) and Form (Human, Deku, Goron,
+  Zora, Fierce Deity), each keep, zone preset or a value. The Debug Warp
+  Screen's Warp applies them too (a preset keeps the value there).
+
+Arrival writes, in the same rollback transaction as the transition and before
+the trigger is published: day Common+0x14, time Common+0x20, form Common+0x26
+with the equipped mask Common+0x08 cleared. The new scene's Play_Init derives
+isNight (Common+0x0C; MM3D: night before 06:00 or from 18:00) and the sky from
+the time; eventDayCount stays, as 2S2H's map select. A day or time write is
+refused while nextDayTime (Common+0x36A0) is staged; Fierce Deity only in the
+boss lairs. After arrival the runtime checks day, time (within 0x800 units),
+isNight, form and mask, and fails the warp naming the field that differs. Each
+axis has its own gate in `Mm3dDevProof`; while a gate is off a zone's preset
+for it keeps the current value and an explicit value is refused.
+
+Agent hook: `TRIAEVUM_DEV_WARP=mm3d:<entrance>[:day=<1-3>][:time=<HHMM>][:form=<human|deku|goron|zora|deity>]`
+or `mm3d:zone=<id>[:...]` (an entrance keeps what it does not name, a zone
+takes its preset; `keep` overrides a preset). The log lines add the arrival
+request, position, yaw and "Day 2 12:00, Human, health 320" (16 per heart).
+
+"Launch directly into a zone" is a base savestate made from the 100% save plus
+the boot zone or the hook, e.g. `TRIAEVUM_DEV_WARP=mm3d:zone=stock-pot-inn` with
+`--load-state saves/states/sct_day1_idle.oot3dsav`: the warp is requested at
+the first gameplay frame and arrives about 145 guest frames later.
+
+Verification: `mm3d_dev_tools_tests` (fake guest): gates off refuse with zero
+writes, arrival writes precede the transition and roll back with it, the
+nextDayTime and Fierce Deity refusals, the arrival checks and the 06:00 night
+rule, zone/catalogue consistency, the hook grammar, the boot zone taken once,
+persistence beside SoH's keys, and an arrival whose time did not take failing.
+`oot3d_dev_warp_tests` stays at its 32 checks.
+
+Live, 2026-11-06, developer launch from `sct_day1_idle` (100% EUR save,
+Authentic preset, no input, each run under the crash/timeout watchdog), all
+requested at guest frame 1081, arrived at 1226-1227, settled 90 frames later:
+
+- `mm3d:zone=stock-pot-inn` with the gates off: Stock Pot Inn, current day,
+  time and form kept;
+- `mm3d:0xD620:time=2200`: North Clock Town at 22:00, night flag set, night sky
+  and the HUD clock at 10:02 PM;
+- `mm3d:0xD210:day=2:time=1200`: East Clock Town, day 2 at noon with day 2's
+  rain and no dawn card;
+- `mm3d:zone=deku-palace`: Deku Link with the Deku action labels;
+- `mm3d:zone=odolwas-lair:form=deity`: Fierce Deity in Odolwa's Lair (the B
+  button stays empty when the save never used the mask);
+- a persisted boot zone (Milk Bar, preset day 1 22:00) taken at the first
+  gameplay frame without any hook;
+- a boot warp point at East Clock Town spawn 1's place: respawnFlag -8 arrives
+  through spawn 0's entrance (0xD200) exactly at the point (742, 100, 240, yaw
+  0x4000, room 0), health 320 unchanged 90 frames later. Warp points, their
+  "+" and Boot are therefore enabled (`WarpPointRespawn`).
+
+Six zones carry an arrival receipt (`PROVEN_ZONES` in the generator); the
+others show "unverified" until a sweep records theirs.

@@ -27,7 +27,14 @@ struct Mm3dDevProof {
   bool TimeOfDay = false;
   bool PlayerForm = false;
 };
-inline constexpr Mm3dDevProof kMm3dDevProof{true, true, false, false, false, false};
+// 2026-11-06 receipts (developer launch from saves/states/sct_day1_idle, Authentic,
+// TRIAEVUM_DEV_WARP lines and RGB8 captures): time 22:00 in North Clock Town
+// (night flag, night sky, HUD 10:02 PM); day 2 noon in East Clock Town (day 2
+// rain, no dawn card); Deku form at Deku Palace (Deku HUD actions); Fierce Deity
+// in Odolwa's Lair; a boot warp point at East Clock Town spawn 1's place with
+// respawnFlag -8 arrives through spawn 0's entrance exactly at the point
+// (742,100,240, yaw 0x4000, room 0), health 320 unchanged 90 frames later.
+inline constexpr Mm3dDevProof kMm3dDevProof{true, true, true, true, true, true};
 
 namespace Mm3dDevAbi {
 inline constexpr uint32_t Common = 0x7751D8, ViewSlot = 0x656B5C, EntranceTable = 0x69FB44;

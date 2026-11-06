@@ -138,7 +138,9 @@ ZONES = [
 ]
 # Zones whose arrival has a reviewed live receipt (TRIAEVUM_DEV_WARP arrived
 # and settled from a base savestate). The others are listed as unverified.
-PROVEN_ZONES: set[str] = set()
+# 2026-11-06 (runs/mm3dwarp, from sct_day1_idle): r0, r1, r2, r3, r4, r6.
+PROVEN_ZONES: set[str] = {"stock-pot-inn", "north-clock-town", "east-clock-town", "deku-palace",
+                          "odolwas-lair", "milk-bar"}
 
 FORMS = {"deity": 0, "goron": 1, "zora": 2, "deku": 3, "human": 4}
 
