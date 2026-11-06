@@ -222,8 +222,10 @@ through `v110_address.h`; `world_map_prompt.h` by three-way merge (`W/tools/deku
   the dungeon zoom prompt plus "Move map" drawn by `world_map_prompt.h`.
 - Marker style (+0x834, byte +0x837): contract guards `MarkerStyleGuards` (getter 0x188338/
   0x188348, MapTransformUpdate 0x1AEB18..0x1AECB4 with pool 0x1AEBDC, reader 0x59C624, the
-  0x36E268 literal). The write is gated by `MarkerStyleConfirmed` until the T5 states confirm
-  `+0x837 = (mode == 3) ? 0 : 1` (W/tools/dekui/s3_marker_probe.py).
+  0x36E268 literal). The write is gated by `MarkerStyleConfirmed`, set after the required T5
+  confirmation of `+0x837 = (mode == 3) ? 0 : 1` (W/tools/dekui/s3_marker_probe.py): mode 1 -> 1
+  in four Woodfall Temple states (entrance and Map page), mode 3 -> 0 in two (after the A toggle
+  and after re-entry), all decoded offline from states taken with the write disabled.
 - ZoomFade clock: `world_map_prompt` gets `Core::GlobalTimeUs()`, the window setup's
   presentation clock (presentation frame count x 1/60 s), the same clock ItemsMapPrompt already
   uses; it is deterministic under `--fixed-delta-seconds`. Not proved to equal emulated guest

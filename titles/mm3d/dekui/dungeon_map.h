@@ -138,7 +138,10 @@ inline std::optional<U32> MarkerStyleWord(U32 style,U32 mode) {
 }
 // The plan's REQUIRED T5 check gates the write: wft_pause_map states decoded offline must show
 // +0x837 == 0 where the mode byte is 3 and 1 where it is 1 or 2 (W/tools/dekui/s3_marker_probe.py).
-inline constexpr bool MarkerStyleConfirmed=false;
+// Confirmed 2026-11-06 on six Woodfall Temple states (native build, no write): mode 1 -> 1 in
+// wft_entrance, wft_pause_map and two Map-page states; mode 3 -> 0 after the A toggle and after
+// re-entry (runs/s3-t5/states wft_live1_f130, wft_live1_f790).
+inline constexpr bool MarkerStyleConfirmed=true;
 inline std::atomic<bool> marker_style_write{MarkerStyleConfirmed};
 template<class M> std::optional<bool> Dungeon(M& m,U32 owner) {
     if(!enabled||!Pointer(owner,0x794))return {};
