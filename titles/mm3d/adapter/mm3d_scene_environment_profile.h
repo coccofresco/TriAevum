@@ -23,10 +23,14 @@
 // the profile never touches, and draws without native fragment lighting take
 // OoT3D's baked-reference path (native colour as the lit reference).
 //
-// Indoor keeps the native lighting: MM3D's interior room geometry has no
-// scene directional to transfer (its fragment lights are the ambient and
-// local lamps), so a profile would only change the actors under the fixed
-// interior lights against a native room. Unknown is native too.
+// Indoor takes the same base, as OoT3D's base applies to its interiors too
+// (owner amendment: static-light interiors use the equation OoT3D uses for
+// them). It acts by function there as well: MM3D's interior room geometry has
+// no scene directional among its fragment lights (only the ambient and local
+// lamps), so those draws keep their native lighting, while actors that carry
+// the environment's records take the key and its shadow. No interior shells
+// are requested until MM3D supplies them (P2.6). Unknown keeps the native
+// lighting: an unproved environment is never replaced.
 
 #include "oot3d_scene_environment.h"
 
@@ -39,11 +43,11 @@ inline constexpr float kMm3dBaseNativeAmbientStrength = 0.6F;
 [[nodiscard]] inline std::optional<SceneEnvironmentProfile> Mm3dBaseSceneEnvironmentProfile(
     SceneEnvironmentGroup group) {
   switch (group) {
+  case SceneEnvironmentGroup::Indoor:
   case SceneEnvironmentGroup::TimeFlows:
   case SceneEnvironmentGroup::TimeAtEntry:
   case SceneEnvironmentGroup::FixedTime:
     break;
-  case SceneEnvironmentGroup::Indoor:
   default:
     return std::nullopt;
   }

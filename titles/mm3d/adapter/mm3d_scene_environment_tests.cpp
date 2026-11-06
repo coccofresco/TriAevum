@@ -307,20 +307,30 @@ void TestEnvironmentGroupGuardsAndLatch() {
   }
   auto m = Fixture(); PutGroupGuards(m); PutGroupInputs(m, 3, 0, 0, 0, 1);
   Mm3dEnvironmentGroupLatch latch;
-  Check(!latch.Observe(m, play, 0x6F), "latch classified before guards were checked");
+  uint32_t frame = 10;
+  Check(!latch.Observe(m, play, 0x6F, frame), "latch classified before guards were checked");
   latch.SetGuardsHold(Mm3dEnvironmentGroupGuardsHold(m));
-  Check(latch.Observe(m, play, 0x6F) == SceneEnvironmentGroup::TimeFlows, "outdoor visit not latched");
+  Check(latch.Observe(m, play, 0x6F, ++frame) == SceneEnvironmentGroup::TimeFlows, "outdoor visit not latched");
   PutGroupInputs(m, 3, 1, 1, 1, 0); // next room is an interior
-  Check(latch.Observe(m, play, 0x6F) == SceneEnvironmentGroup::TimeFlows, "room change flipped the visit");
-  Check(latch.Observe(m, play, 0x61) == SceneEnvironmentGroup::Indoor, "new scene kept the old group");
+  Check(latch.Observe(m, play, 0x6F, ++frame) == SceneEnvironmentGroup::TimeFlows, "room change flipped the visit");
+  Check(latch.Observe(m, play, 0x6F, frame += 40) == SceneEnvironmentGroup::TimeFlows,
+        "a frame gap (pause, loading) flipped the visit");
+  // A new visit to the same scene, play state reallocated at the same
+  // address: its frame counter restarts, so the group is read again.
+  Check(latch.Observe(m, play, 0x6F, 2) == SceneEnvironmentGroup::Indoor, "same-scene new visit kept the old group");
+  frame = 3;
+  PutGroupInputs(m, 3, 0, 0, 0, 1);
+  Check(latch.Observe(m, play, 0x6F, ++frame) == SceneEnvironmentGroup::Indoor, "re-latched visit flipped");
+  PutGroupInputs(m, 3, 1, 1, 1, 0);
+  Check(latch.Observe(m, play, 0x61, ++frame) == SceneEnvironmentGroup::Indoor, "new scene kept the old group");
   Check(!latch.Current(play, 0x6F) && latch.Current(play, 0x61) == SceneEnvironmentGroup::Indoor,
         "current group not keyed by visit");
   PutGroupInputs(m, 3, 0, 0, 2, 1);
-  Check(!latch.Observe(m, play, 0x62), "unknown values latched");
+  Check(!latch.Observe(m, play, 0x62, ++frame), "unknown values latched");
   PutGroupInputs(m, 0, 0, 0, 0, 1);
-  Check(latch.Observe(m, play, 0x62) == SceneEnvironmentGroup::TimeAtEntry, "readable retry not latched");
+  Check(latch.Observe(m, play, 0x62, ++frame) == SceneEnvironmentGroup::TimeAtEntry, "readable retry not latched");
   latch.SetGuardsHold(false);
-  Check(!latch.Observe(m, play, 0x62), "failed guards kept a group");
+  Check(!latch.Observe(m, play, 0x62, ++frame), "failed guards kept a group");
 }
 } // namespace
 int main() try {

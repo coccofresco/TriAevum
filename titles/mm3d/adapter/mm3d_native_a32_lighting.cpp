@@ -317,7 +317,7 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         // Outdoor groups bake the environment's lights into the room colour,
         // whether they follow the clock or fixed light settings (OoT3D
         // oot3d_native_a32_lighting.cpp, same rule); Indoor and Unknown do not.
-        const auto group = mGroup.Observe(memory, play, current.State->SceneId);
+        const auto group = mGroup.Observe(memory, play, current.State->SceneId, frame);
         directionals.BakedOutdoorRoom = group && *group != SceneEnvironmentGroup::Indoor;
     }
     if (!directionals.Count) mSceneDirectionals.reset();

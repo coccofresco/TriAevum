@@ -1,6 +1,6 @@
 // MM3D's base scene environment per group (owner decision Q-P1 (b)): the
-// shape native fragment lights take, applied to the Scene lights only; Indoor
-// and unknown groups stay native. Exercised through the scene environment
+// shape native fragment lights take, applied to the Scene lights only, in
+// every known group (Indoor included, as OoT3D); unknown groups stay native. Exercised through the scene environment
 // runtime and the shared fragment-balance builder, with light bindings shaped
 // like the native ones of the P1.2 diagnosis (no ROM, process or GPU).
 #include "mm3d_scene_environment_profile.h"
@@ -63,9 +63,10 @@ struct Floor {
 int main() try {
   using Group = SceneEnvironmentGroup;
   // The base of each group.
-  for (Group group : {Group::TimeFlows, Group::TimeAtEntry, Group::FixedTime}) {
+  for (Group group : {Group::Indoor, Group::TimeFlows, Group::TimeAtEntry, Group::FixedTime}) {
     const auto base = Mm3dBaseSceneEnvironmentProfile(group);
-    Check(base.has_value(), "outdoor group without a base");
+    Check(base.has_value(), "known group without a base");
+    Check(*base == *Mm3dBaseSceneEnvironmentProfile(Group::TimeFlows), "groups differ in their base");
     Check(ValidateSceneEnvironment(*base).empty(), "base does not validate");
     const auto lighting = ResolveSceneEnvironment(*base, 0x6F, false);
     Check(R::PicaFragmentBalanceProfileSupported(lighting), "base is not the native fragment-light shape");
@@ -86,10 +87,9 @@ int main() try {
     Check(lighting.FogStrength == 1.0F && lighting.CasterFaces == R::ShadowCasterFaces::Native,
           "base changes fog or caster faces");
   }
-  Check(!Mm3dBaseSceneEnvironmentProfile(Group::Indoor), "Indoor is not native");
   Check(!Mm3dBaseSceneEnvironmentProfile(Group(7)), "an unknown group has a base");
 
-  // The runtime: TimeFlows takes the base, Indoor and unknown stay native.
+  // The runtime: TimeFlows and Indoor take the base, unknown stays native.
   const auto directory = std::filesystem::temp_directory_path() /
       ("mm3d-environment-base-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
   std::filesystem::create_directories(directory);
@@ -102,9 +102,14 @@ int main() try {
   Check(published.Enabled && R::PicaFragmentBalanceProfileSupported(published), "South Clock Town not on its base");
   const auto noon = published;
   runtime.ObserveScene(0x61, at(Group::Indoor, 2, false));
-  Check(!published.Enabled, "Stock Pot Inn not native");
+  Check(published.Enabled && R::PicaFragmentBalanceProfileSupported(published), "Stock Pot Inn not on its base");
+  const auto inn = published;
   runtime.ObserveScene(0x2D, at(std::nullopt, 3, false));
   Check(!published.Enabled, "unknown group not native");
+  // The snapshot reports what was published (the F1 status reads it).
+  Check(runtime.Snapshot().Published == published, "snapshot does not report the published environment");
+  runtime.ObserveScene(0x6F, at(Group::TimeFlows, 4, true));
+  Check(runtime.Snapshot().Published == published && published.Enabled, "snapshot lags the publication");
 
   // The base on a fragment-lit floor: the sun is the key, the opposite
   // record is removed, the lamp stays native, the ambient is a relative gain.
@@ -114,8 +119,7 @@ int main() try {
   Check(balance->Control[1] == 1U, "the sun is not the key");
   Check(balance->Gains[0] == std::array<float, 4>{0, 0, kMm3dBaseNativeAmbientStrength, 1},
         "the opposite scene record is not removed");
-  Check(balance->Gains[2] == std::array<float, 4>{1, 1, kMm3dBaseNativeAmbientStrength, 0},
-        "the lamp is not native");
+  Check(balance->Gains[2] == std::array<float, 4>{1, 1, 1, 0}, "the lamp is not native");
   Check(balance->Parameters[0] == kMm3dBaseNativeAmbientStrength, "scene ambient not a relative gain");
   // Unproved owners stay native.
   auto unproved = floor.Binding;
@@ -134,6 +138,10 @@ int main() try {
     lamps.Sources[i].Origin = R::PicaNativeLightOrigin::Actor;
   }
   Check(!R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, noon), "a room without a scene key changed");
+  Check(!R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, inn), "an inn wall changed under the Indoor base");
+  // An actor in the inn lit by the environment's records takes the key.
+  const auto actor = R::BuildPicaFragmentBalanceUniforms(true, floor.Layout, floor.Binding, inn);
+  Check(actor && actor->Control[1] == 1U, "an inn actor lit by the environment has no key");
 
   std::printf("mm3d scene environment profile tests passed: %d checks\n", gChecks);
   return 0;

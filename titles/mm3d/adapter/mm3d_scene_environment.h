@@ -204,16 +204,21 @@ template<class Memory>
   return in;
 }
 
-// One group per visit (play state and scene), the first readable class, as
-// OoT3D latches its authored class: a room change inside the visit never
-// flips it. Unknown (guards failed, unreadable or unknown values) is retried
-// every frame and never latched.
+// One group per visit, the first readable class, as OoT3D latches its
+// authored class: a room change inside the visit never flips it. A visit is
+// the play state, its scene and its frame counter running forward: a new
+// visit to the same scene in a play state reallocated at the same address
+// restarts the counter (the same rule as NativeSceneEnvironmentContinuity,
+// whose epoch makes the environment runtime select again). Unknown (guards
+// failed, unreadable or unknown values) is retried every frame and never
+// latched.
 class Mm3dEnvironmentGroupLatch {
 public:
   void SetGuardsHold(bool hold) noexcept { mGuardsHold = hold; mGroup.reset(); mPlay = 0; }
   template<class Memory>
-  std::optional<SceneEnvironmentGroup> Observe(Memory& memory, uint32_t play, uint16_t scene) {
-    if (play != mPlay || scene != mScene) { mPlay = play; mScene = scene; mGroup.reset(); }
+  std::optional<SceneEnvironmentGroup> Observe(Memory& memory, uint32_t play, uint16_t scene, uint32_t frame) {
+    if (play != mPlay || scene != mScene || frame < mFrame) { mPlay = play; mScene = scene; mGroup.reset(); }
+    mFrame = frame;
     if (!mGroup && mGuardsHold && play != 0U)
       if (const auto in = ReadMm3dEnvironmentGroupInputs(memory, play)) mGroup = ClassifyMm3dEnvironmentGroup(*in);
     return mGroup;
@@ -221,10 +226,10 @@ public:
   [[nodiscard]] std::optional<SceneEnvironmentGroup> Current(uint32_t play, uint16_t scene) const noexcept {
     return play != 0U && play == mPlay && scene == mScene ? mGroup : std::nullopt;
   }
-  void Reset() noexcept { mPlay = 0; mScene = 0; mGroup.reset(); }
+  void Reset() noexcept { mPlay = 0; mScene = 0; mFrame = 0; mGroup.reset(); }
 private:
   bool mGuardsHold = false;
-  uint32_t mPlay = 0;
+  uint32_t mPlay = 0, mFrame = 0;
   uint16_t mScene = 0;
   std::optional<SceneEnvironmentGroup> mGroup;
 };
