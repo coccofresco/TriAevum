@@ -150,6 +150,44 @@ void TestRecordedGameplay() {
         std::abs(direction-next.State->Player->Yaw)>3.0,
         "recorded movement axes changed or heading was shifted to prior displacement");
 }
+void TestRecordedNight() {
+  // Actual TRIAEVUM_MM3D_SCENE_TRACE receipt, host frame 0 of
+  // sct_day1_night.oot3dsav (South Clock Town, day 1, 20:06), code SHA
+  // 6eec27b1..., recorded 2026-11-06 (parity PM0 run ref_auth_sct_day1_night).
+  // Literals are independent of layout constants/Fixture().
+  struct Read { uint32_t Address, Width, Value; };
+  constexpr Read observed[] = {
+    {0x00656B5CU, 4U, 0x08045D38U},
+    {0x08045C7DU, 1U, 0x00000004U},
+    {0x08045FE8U, 4U, 0x08045B40U},
+    {0x08045C88U, 2U, 0x0000006FU},
+    {0x08045C78U, 4U, 0x000001B5U},
+    {0x007751E4U, 1U, 0x00000001U},
+    {0x007751ECU, 4U, 0x00000001U},
+    {0x007751F8U, 2U, 0x0000D650U},
+    {0x08047C1CU, 4U, 0x090A87E0U},
+    {0x090A87E0U, 2U, 0x00000000U},
+    {0x090A87E2U, 1U, 0x00000002U},
+    {0x090A8920U, 4U, 0x001F4E1CU},
+    {0x090A8924U, 4U, 0x001F4E0CU},
+    {0x090A8804U, 4U, 0xC32C6563U},
+    {0x090A8808U, 4U, 0x42C80000U},
+    {0x090A880CU, 4U, 0xC4C8602BU},
+    {0x090A88A2U, 2U, 0x0000E8F1U},
+  };
+  Memory m;
+  for (const auto& r : observed) m.Put(r.Address,r.Value,r.Width);
+  const auto night=CaptureMm3dSceneEnvironment(m);
+  Check(night.State && night.State->SceneId==0x6FU && night.State->ContextIdentity==0x08045B40U &&
+        night.State->GuestFrame==437U, "recorded night scene and owner rejected");
+  Check(night.State->Night==true && night.State->Day==1 && night.State->Clock==0xD650U,
+        "recorded night byte, day or clock not read as night");
+  Check(night.State->Player.has_value(), "recorded night player rejected");
+  Check(Mm3dSceneEnvironmentStillCurrent(m,*night.State), "recorded night owner failed lifetime check");
+  // The same sample with the byte at its daytime value is day.
+  m.Put(0x007751E4U,0U,1);
+  Check(CaptureMm3dSceneEnvironment(m).State->Night==false, "night byte 0 read as night");
+}
 void TestRejections() {
   for (uint32_t view : {0U,0x0072F5D0U,0x1F0U,0xFFFFFFFCU,play+0x1F9U}) {
     auto m=Fixture();m.Put(0x656B5CU,view);
@@ -210,7 +248,7 @@ void TestLifetimeAndStorage() {
 }
 } // namespace
 int main() try {
-  TestReadContract();TestRecordedGameplay();TestRejections();TestLifetimeAndStorage();
+  TestReadContract();TestRecordedGameplay();TestRecordedNight();TestRejections();TestLifetimeAndStorage();
   std::printf("MM3D scene environment guards passed: %d checks\n",checks);
   return 0;
 } catch(const std::exception& error) {
