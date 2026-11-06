@@ -214,5 +214,11 @@ requested at guest frame 1081, arrived at 1226-1227, settled 90 frames later:
   0x4000, room 0), health 320 unchanged 90 frames later. Warp points, their
   "+" and Boot are therefore enabled (`WarpPointRespawn`).
 
+The F1 actual-widget smoke (developer build with MM3D) drives the Zones and
+Arrival widgets (12,468 assertions). OoT3D regression on the same tree: its 32
+unit checks and a live Hyrule Field "Near Drawbridge" adult night warp from the
+play quick save (arrived in 70 guest frames, adult, night flag 1, health 48
+unchanged), Authentic preset.
+
 Six zones carry an arrival receipt (`PROVEN_ZONES` in the generator); the
 others show "unverified" until a sweep records theirs.
