@@ -216,6 +216,12 @@ void TestSceneSnapshots() {
     Require(first.WorldToView && (*first.WorldToView)[12]==-10,"view transpose wrong");
     probe.CaptureSceneLights(f.Play,f.Memory);
     Require(probe.CaptureRenderer(0,f.Memory).SceneDirectionals==first.SceneDirectionals,"same guest frame advanced continuity");
+    f.W16(f.Play+0x148U,0x61);
+    Require(!probe.CaptureRenderer(0,f.Memory).ScenePoints && !probe.CaptureRenderer(0,f.Memory).SceneDirectionals,
+            "same-frame scene change reused a stale source/catalog snapshot");
+    probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(probe.CaptureRenderer(0,f.Memory).ScenePoints!=nullptr,"same-frame new scene was not captured");
+    f.W16(f.Play+0x148U,0x6F);probe.CaptureSceneLights(f.Play,f.Memory);
     f.W32(f.Play+0x138U,2);f.Point(torch+4U,-1);probe.CaptureSceneLights(f.Play,f.Memory);
     const auto second=probe.CaptureRenderer(0,f.Memory);
     Require(!second.ScenePoints && first.ScenePoints->Lights[0].Radius==250,"dormant source selected or immutable snapshot lost");

@@ -277,7 +277,8 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         return;
     }
     const uint32_t frame = current.State->GuestFrame;
-    if (mHaveSnapshot && mSnapshotPlay == play && mSnapshotFrame == frame) return;
+    if (mHaveSnapshot && mSnapshotPlay == play && mSnapshotFrame == frame &&
+        mSnapshotScene == current.State->SceneId) return;
     const bool discontinuity = !mHaveSnapshot || mSnapshotPlay != play ||
         frame != mSnapshotFrame + 1U || mSnapshotScene != current.State->SceneId;
     if (discontinuity) {
@@ -463,7 +464,7 @@ Fast::Renderer3ds::PicaNativeLightBinding Mm3dNativeA32LightingProbe::CaptureRen
     result.WorldToView = CaptureWorldToView(memory);
     const auto current = CaptureMm3dSceneEnvironment(memory);
     const bool snapshotCurrent = mHaveSnapshot && current.State && current.Play == mSnapshotPlay &&
-        current.State->GuestFrame == mSnapshotFrame;
+        current.State->GuestFrame == mSnapshotFrame && current.State->SceneId == mSnapshotScene;
     // Each selected slot's function, from this frame's LightContext only; an
     // unproved owner (or a stale snapshot) stays Unknown and Local.
     for (auto& source : result.Sources) {
