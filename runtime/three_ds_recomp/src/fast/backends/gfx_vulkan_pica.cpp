@@ -1942,6 +1942,23 @@ void GfxRenderingAPIVulkan::PublishGlobalIlluminationStatus(Extension::GlobalIll
     Extension::GraphicsSettingsRuntime::Instance().PublishGlobalIlluminationStatus(std::move(status));
 }
 
+bool GfxRenderingAPIVulkan::UpscalerProviderAvailable(Extension::UpscalerProvider provider) const {
+    switch (provider) {
+        case Extension::UpscalerProvider::Nis:
+            return mNriUpscalerPass.Available();
+        case Extension::UpscalerProvider::Fsr:
+            return mNriUpscalerPass.FsrAvailable();
+        case Extension::UpscalerProvider::Dlss:
+#if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
+            if (mD3d12NgxProvider.Available()) return true;
+#endif
+            return mNriUpscalerPass.DlssAvailable();
+        case Extension::UpscalerProvider::Xess:
+            return false;
+    }
+    return false;
+}
+
 void GfxRenderingAPIVulkan::WithdrawFailedUpscaler(Extension::UpscalerProvider provider) {
     Extension::GraphicsCapability capability = Extension::GraphicsCapability::NriNisUpscaler;
     const char* name = "NIS";

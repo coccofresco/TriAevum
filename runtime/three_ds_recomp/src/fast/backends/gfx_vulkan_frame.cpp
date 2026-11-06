@@ -637,7 +637,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mAmbientOcclusionOutputValid = false;
     }
     const float requestedInternalResolutionScale =
-        Extension::ResolveInternalResolutionScale(graphicsSettings);
+        Extension::ResolveInternalResolutionScale(
+            graphicsSettings, UpscalerProviderAvailable(graphicsSettings.Upscaler));
     mSpatialAaMode = aaPolicy.SpatialAaMode;
     if (mVsyncEnabled != graphicsSettings.VSync) {
         mVsyncEnabled = graphicsSettings.VSync;

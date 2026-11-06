@@ -1347,6 +1347,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // The GI provider state last published to the settings runtime (F1).
     Extension::GlobalIlluminationProviderStatus mPublishedGlobalIlluminationStatus;
     void PublishGlobalIlluminationStatus(Extension::GlobalIlluminationMode mode);
+    // Whether the provider can execute (module loaded, device support): only
+    // such a provider is planned and sets the internal resolution scale.
+    [[nodiscard]] bool UpscalerProviderAvailable(Extension::UpscalerProvider provider) const;
     // A planned upscaler wrote no output and the display showed its input
     // unscaled: reported once per provider and cause, and a provider that is
     // no longer available is withdrawn from F1 (its capability).

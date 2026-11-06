@@ -499,22 +499,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         PublishGlobalIlluminationStatus(presentationSettings.Effects.GlobalIllumination.Mode);
         // Only a provider that can execute is planned: one that is missing or
         // was withdrawn after a failure leaves the display unscaled.
-        const bool upscalerAvailable = [&] {
-            switch (presentationSettings.Upscaler) {
-                case Extension::UpscalerProvider::Nis:
-                    return mNriUpscalerPass.Available();
-                case Extension::UpscalerProvider::Fsr:
-                    return mNriUpscalerPass.FsrAvailable();
-                case Extension::UpscalerProvider::Dlss:
-#if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
-                    if (mD3d12NgxProvider.Available()) return true;
-#endif
-                    return mNriUpscalerPass.DlssAvailable();
-                case Extension::UpscalerProvider::Xess:
-                    return false;
-            }
-            return false;
-        }();
+        const bool upscalerAvailable = UpscalerProviderAvailable(presentationSettings.Upscaler);
         // The drawn water's map of a scene target: rebuilt when the pieces on
         // screen change (their keys, in order); none without pieces this frame.
         const auto resolveWaterMap = [&](const NativePicaRenderTarget& target) -> const Renderer3ds::PicaWaterMap* {

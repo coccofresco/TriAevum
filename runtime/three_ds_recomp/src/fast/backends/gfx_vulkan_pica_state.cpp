@@ -860,8 +860,10 @@ bool GfxRenderingAPIVulkan::RestorePicaColorTargets(
         // the settings, so the targets are created at the settings' scale and
         // that frame keeps them. A legacy state at another scale is restored at
         // its own scale and the first frame replaces it, as any scale change.
+        const auto restoreSettings =
+            Extension::GraphicsSettingsRuntime::Instance().SnapshotForRendering().Value;
         const float settingsScale = Extension::ResolveInternalResolutionScale(
-            Extension::GraphicsSettingsRuntime::Instance().SnapshotForRendering().Value);
+            restoreSettings, UpscalerProviderAvailable(restoreSettings.Upscaler));
         float restoreScale = mInternalResolutionScale;
         if (guestExtent) {
             restoreScale = settingsScale;
