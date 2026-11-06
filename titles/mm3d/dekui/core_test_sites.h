@@ -8,7 +8,7 @@
 #include <cstdint>
 namespace Mm3dDekui::TestData {
 struct Site {std::uint32_t pc,word,replacement;const char* module;bool restoration_dependency;};
-inline constexpr std::array<Site,150> Sites{{
+inline constexpr std::array<Site,153> Sites{{
     {0x00104da4U,0xe1a04000U,0xefffff90U,"menu_page_switch",false},
     {0x0010fd2cU,0xe12fff32U,0xeffffe80U,"menu_memory",false},
     {0x0010fd50U,0xe5c40010U,0xeffffe81U,"menu_memory",false},
@@ -112,11 +112,14 @@ inline constexpr std::array<Site,150> Sites{{
     {0x0056dea0U,0xe1d508fcU,0xeffffe23U,"bomber_approach",false},
     {0x0056e290U,0xe3a0100fU,0xeffffe24U,"bomber_approach",false},
     {0x005945f0U,0x15d6000cU,0x1fffffa3U,"dungeon_map",false},
+    {0x00594644U,0xebf07902U,0xefffffa5U,"dungeon_map",false},
+    {0x00594d98U,0xe2850fd7U,0xefffffa7U,"dungeon_map",false},
     {0x00596d94U,0xe1a04000U,0xefffffa0U,"dungeon_map",false},
     {0x00596e28U,0x0bf430bcU,0x0fffffa1U,"dungeon_map",false},
     {0x00596e2cU,0xe5d4074cU,0xefffffa2U,"dungeon_map",false},
     {0x00596e5cU,0xe594001cU,0xefffffa4U,"dungeon_map",false},
     {0x0059747cU,0xebf1a414U,0xefffff97U,"menu_page_switch",false},
+    {0x00597774U,0x03a00001U,0x0fffffa6U,"dungeon_map",false},
     {0x00599a00U,0xe3100002U,0xe3100006U,"menu_close",false},
     {0x0059b4b4U,0xe320f000U,0xeffffffcU,"native_minimap",false},
     {0x0059b4bcU,0xe5940038U,0xeffffffdU,"native_minimap",false},

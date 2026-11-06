@@ -129,6 +129,8 @@ void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
         0x005A1020U, 0x005A1630U,                 // InventoryNavigation::Move (ref 0x5a0eb0, 0x5a14c0)
         0x001AD990U,                              // NativeItemPresent intro BL (ref 0x1adb90)
         Mm3dDekui::DungeonMap::WorldEnd,          // (ref 0x596ff4)
+        Mm3dDekui::DungeonMap::SetZoom,           // site 5 call target (ref 0x1b2c48)
+        Mm3dDekui::DungeonMap::OverviewCursorEnd, // site 7 skip target (ref 0x594b68)
         Mm3dDekui::DeathPenalties::NativeRespawn, // (ref 0x190a9c)
         Mm3dDekui::DeathPenalties::NativeMoonCrash, // (ref 0x1bfdc8)
         0x001BB118U,                              // MenuMemory / MenuPageSwitch tail (ref 0x1bb320)
