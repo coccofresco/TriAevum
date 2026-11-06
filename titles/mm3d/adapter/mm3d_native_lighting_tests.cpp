@@ -2,6 +2,7 @@
 #include "mm3d_pica_composition.h"
 #include "mm3d_title_contracts.h"
 #include "mm3d_lighting_hook_sites.h"
+#include "mm3d_local_light_sources.h"
 #include "oot3d_native_a32_memory.h"
 #include "fast/renderer3ds/pica_resolved_draw_stream.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
@@ -100,7 +101,27 @@ void TestAcceptedAndSelectedSources() {
     Require(probe.CaptureRenderer(f.Renderer,f.Memory).Sources[1].SourceIdentity==0,"generation reuse retained native source");
 }
 
+void TestLocalSourceGuards() {
+    Fixture f;
+    for (const auto& source : kMm3dLocalLightSources) {
+        f.W16(f.Actor,source.Actor); f.W8(f.Actor+2,source.Category);
+        f.W32(f.Actor+0x140,source.Update); f.W32(f.Actor+0x13C,source.Destroy);
+        for (const auto& guard : source.Guards) f.W32(guard[0],guard[1]);
+        Require(Mm3dLocalLightSourceProved(f.Memory,f.Actor,source.Info,source.Node),"proved source rejected");
+        for (const auto& guard : source.Guards) {
+            f.W32(guard[0],guard[1]^1U);
+            Require(!Mm3dLocalLightSourceProved(f.Memory,f.Actor,source.Info,source.Node),"corrupt source guard accepted");
+            f.W32(guard[0],guard[1]);
+        }
+        f.W32(f.Actor+0x140,source.Update+4);
+        Require(!Mm3dLocalLightSourceProved(f.Memory,f.Actor,source.Info,source.Node),"reused/other actor accepted");
+        f.W32(f.Actor+0x140,source.Update);
+        Require(!Mm3dLocalLightSourceProved(f.Memory,f.Actor,source.Info+4,source.Node),"wrong source offset accepted");
+    }
+}
+
 void TestSceneSnapshots() {
+    TestLocalSourceGuards();
     Fixture f; Mm3dNativeA32LightingProbe probe;
     probe.SetSupplementalPublication(true, true);
     const uint32_t sun=f.Play+0x86D0U,moon=f.Play+0x86E8U,torch=f.Actor+0x2B0U;
@@ -108,13 +129,17 @@ void TestSceneSnapshots() {
     f.W32(f.Play+0xA88U,f.Nodes);f.Link(f.Nodes,moon,f.Nodes+12U);f.Link(f.Nodes+12U,sun,f.Nodes+24U);
     f.Link(f.Nodes+24U,torch,0); f.Point(torch+4U,250);
     f.W16(f.Actor,0x2E);f.W8(f.Actor+2U,6);f.W32(f.Actor+0x2ACU,f.Nodes+24U);
+    f.W32(f.Actor+0x140U,0x4AA8D4); f.W32(f.Actor+0x13CU,0x467A08);
+    for (const auto& source : kMm3dLocalLightSources)
+        for (const auto& guard : source.Guards) f.W32(guard[0],guard[1]);
     f.W32(f.Play+0x20C0U+6U*12U,1);f.W32(f.Play+0x20C4U+6U*12U,f.Actor);
     probe.CaptureSceneLights(f.Play,f.Memory);
     const auto first=probe.CaptureRenderer(0,f.Memory);
     Require(first.SceneDirectionals && first.SceneDirectionals->Count==2,"linked environment not captured");
     Require(first.SceneDirectionals->Lights[0].SourceIdentity==sun+4U,"source identity is not params");
     Require(first.SceneDirectionals->Lights[0].SkyLight && first.SceneDirectionals->ShadowCasterIdentity==sun+4U,"clock/caster policy missing");
-    Require(first.ScenePoints && first.ScenePoints->Count==1 && first.ScenePoints->Lights[0].Group==2,"native torch duplicated or missing");
+    Require(first.ScenePoints && first.ScenePoints->Count==1 && first.ScenePoints->Lights[0].Group==2 &&
+            first.ScenePoints->Lights[0].ReplacesNativeLocal,"native torch duplicated or source proof missing");
     probe.SetSupplementalPublication(false,false);
     Require(!probe.CaptureRenderer(0,f.Memory).ScenePoints && !probe.CaptureRenderer(0,f.Memory).Water,"review gate leaked supplemental payload");
     probe.SetSupplementalPublication(true,true);

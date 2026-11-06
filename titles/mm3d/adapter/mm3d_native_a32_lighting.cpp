@@ -1,5 +1,6 @@
 #include "mm3d_native_a32_lighting.h"
 #include "mm3d_scene_environment.h"
+#include "mm3d_local_light_sources.h"
 #include "recomp/a32_runtime.h"
 
 #include <algorithm>
@@ -339,9 +340,11 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         light.SourceIdentity = info + 4U;
         light.Radius = std::max(0.0F, float(std::bit_cast<int16_t>(rawRadius)));
         light.Group = group;
+        light.ReplacesNativeLocal = Mm3dLocalLightSourceProved(memory, actor, offset, nodeOffset);
         // Registered by this actor through its own LightNode: local.
         mLightFunctions[light.SourceIdentity] = {PicaNativeLightOrigin::Actor, PicaNativeLightScope::Local};
-        if (points.Count < points.Lights.size()) points.Lights[points.Count++] = light;
+        if (light.ReplacesNativeLocal && points.Count < points.Lights.size())
+            points.Lights[points.Count++] = light;
     };
     for (uint32_t category = 0; category < 12U; ++category) {
         uint32_t count = 0, actor = 0;

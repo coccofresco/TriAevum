@@ -17,8 +17,8 @@ inline constexpr std::array kMm3dNativeLightingHookPcs{
 
 class Mm3dNativeA32LightingProbe {
   public:
-    // Review-stage point opt-in and water isolation switch. Fragment-point
-    // de-duplication requires acceptance before points are enabled by default.
+    // Supplemental payload isolation switches. Each point still needs title
+    // source proof and per-draw native-slot replacement admission.
     void SetSupplementalPublication(bool points, bool water) noexcept {
         mPublishPoints = points; mPublishWater = water;
     }
@@ -64,7 +64,7 @@ class Mm3dNativeA32LightingProbe {
     uint64_t mSceneLightFrames = 0;
     uint32_t mSnapshotPlay = 0, mSnapshotFrame = 0;
     bool mHaveSnapshot = false;
-    bool mPublishPoints = false, mPublishWater = true;
+    bool mPublishPoints = true, mPublishWater = true;
     struct ContinuityLight {
         uint64_t Identity = 0;
         std::array<float, 3> Direction{};

@@ -127,7 +127,7 @@ public:
         return value && *value && *value != '0';
       };
       mComposition.SetSupplementalPublication(
-          adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_POINTS"), !adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_NO_WATER"));
+          !adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_NO_POINTS"), !adapterProofFlag("TRIAEVUM_MM3D_ADAPTER_NO_WATER"));
 #endif
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
       // Which sites stayed off, for agents reading the log.
