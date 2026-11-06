@@ -1172,7 +1172,10 @@ void NativeA32WindowSession::Setup() {
     std::fprintf(stderr, "TRIAEVUM_DEV_FREECAM_TOUR poses=%zu out=%s\n", devTourPoses.size(),
                  devTourDirectory.string().c_str());
   }
-  if (const char *lab = std::getenv("TRIAEVUM_DEV_LAB"); oot3dDeveloperTools && lab != nullptr && *lab != '\0') {
+  // Another title with developer tools gets the lab's title-neutral ops only
+  // (its own warp script, captures, the F1 window): UpdateDevLab rejects the rest.
+  if (const char *lab = std::getenv("TRIAEVUM_DEV_LAB");
+      (oot3dDeveloperTools || devToolsTitle) && lab != nullptr && *lab != '\0') {
     devLab = std::make_unique<Oot3dNativeGame::DevLabChannel>(lab);
     std::fprintf(stderr, "TRIAEVUM_DEV_LAB %s\n", lab);
   }

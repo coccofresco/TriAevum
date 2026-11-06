@@ -100,10 +100,13 @@ struct Hook {
         float height=0,width=0;
         for(unsigned row=0;row<(single?1u:2u);++row) {
             float pen=0;
-            for(char c:labels[row]) {auto g=NotebookFont::Lookup(m,*font,unsigned(c),pen);if(!g)return root;glyphs[row].push_back(*g);pen+=g->advance;height=std::bit_cast<float>(g->words[9]);}
+            // Labels follow the active message archive (PromptText, S1); UTF-8 -> code points.
+            for(char32_t c:PromptText::Codes(PromptText::Get(m,labels[row]))) {auto g=NotebookFont::Lookup(m,*font,unsigned(c),pen);if(!g)return root;glyphs[row].push_back(*g);pen+=g->advance;height=std::bit_cast<float>(g->words[9]);}
+            if(!labels[row].empty()&&glyphs[row].empty())return root;
             width=std::max(width,pen);
         }
         if(height<=0||!std::isfinite(height))return root;
+        const bool translated=PromptText::Language(m)!=PromptText::PromptLanguage::English;
         std::array<U32,Size/4> words{};
         const auto put=[&](U32 at,U32 v){words[at/4]=v;};
         const auto number=[&](U32 at,float v){put(at,std::bit_cast<U32>(v));};
@@ -118,7 +121,9 @@ struct Hook {
         };
         if(!copy(0,root,0x140))return root;
         node(0,0,0,0,1);put(0x14,base+0x140);put(0x18,single?(flat?5:7):(map_mode||pair)?9:8);if(single)put(flat?0x150:0x158,root);else if(map_mode||pair)put(0x160,root);
-        const float font_scale=12/height;
+        // Upstream 4f2692ed fits the arrow prompt's label into its 36-pixel slot. English keeps
+        // the native 12-pixel size unchanged; translated labels shrink only when wider.
+        const float font_scale=translated&&single&&!flat?std::min(12/height,36.f/std::max(1.f,width)):12/height;
         const float right=(wide?400.f+(240.f*16/9-400)/2:400.f)-12+dx;
         const float icon_width=16*is,left=right-(single&&!flat?36.f:icon_width+4+width*font_scale)*s;
         for(unsigned row=0;row<(single?1u:2u);++row) {

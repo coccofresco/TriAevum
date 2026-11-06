@@ -114,8 +114,12 @@ std::vector<std::uint32_t> Mm3dSingleScreen::CandidatePcs() {
 void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
     // Where dekui's handlers branch into the middle of guest functions
     // (titles/mm3d/dekui: inventory navigation, item present, dungeon map,
-    // death penalties, menu memory and page switch, prices).
+    // death penalties, menu memory and page switch, prices, Bomber approach,
+    // owl introduction).
     patches.AddTargets({
+        0x0056E494U, // BomberApproach::ResetPC (reference 0x56e324)
+        0x0043FC50U, // OwlIntro::IntroReturn, native pop (reference 0x43faf8)
+        0x0058DA44U, // OwlIntro::Idle (reference 0x58d8d4)
         0x005A5850U, 0x005A58BCU,                 // InventoryNavigation::GearMove (ref 0x5a56e0, 0x5a574c)
         0x005A1020U, 0x005A1630U,                 // InventoryNavigation::Move (ref 0x5a0eb0, 0x5a14c0)
         0x001AD990U,                              // NativeItemPresent intro BL (ref 0x1adb90)

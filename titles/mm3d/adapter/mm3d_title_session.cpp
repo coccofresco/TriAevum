@@ -233,16 +233,16 @@ public:
 
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   void RunDevWarpScript(std::string_view script, DevWarpRuntime &devWarp) override {
-    // Stable encoded entrance, e.g. mm3d:0xD600. No OoT list-index ambiguity.
-    const std::string spec(script);
-    if (!spec.starts_with("mm3d:")) throw std::runtime_error("MM3D TRIAEVUM_DEV_WARP must be mm3d:<encoded entrance>");
-    size_t used = 0;
-    const auto entrance = std::stoul(spec.substr(5), &used, 0);
-    if (used != spec.size()-5 || entrance > 0xFFFF) throw std::runtime_error("Invalid MM3D entrance");
-    const auto entries = devWarp.Entrances();
-    const auto found = std::find_if(entries.begin(), entries.end(), [&](const auto& e) { return e.Entrance == entrance; });
-    if (found == entries.end()) throw std::runtime_error("MM3D entrance is absent from the catalog");
-    devWarp.WarpTo(*found, DevWarpAge::Child, std::nullopt);
+    // mm3d:<encoded entrance>[:day=..][:time=HHMM][:form=..] or
+    // mm3d:zone=<id>[:...]: stable encodings, no list-index ambiguity.
+    const auto parsed = ParseMm3dDevWarpScript(script, devWarp.Entrances(), devWarp.Zones());
+    std::string error;
+    if (!parsed.Zone.empty()) {
+      if (!devWarp.WarpToZone(parsed.Zone, parsed.Arrival, &error))
+        throw std::runtime_error("TRIAEVUM_DEV_WARP: " + error);
+      return;
+    }
+    devWarp.WarpTo(*devWarp.FindEntrance(*parsed.Entrance), parsed.Arrival);
   }
 #endif
 

@@ -46,4 +46,16 @@ if(WIN32)
     set_property(TARGET triaevum_f1_settings_smoke PROPERTY MSVC_RUNTIME_LIBRARY
         "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
+# Developer builds: the Dev Tools tab with MM3D's zones and arrival options.
+if(TRIAEVUM_DEVELOPER_TOOLS AND TRIAEVUM_TITLE_MM3D)
+    target_sources(triaevum_f1_settings_smoke PRIVATE
+        ../../oot3d/native_game_runtime/oot3d_dev_warp.cpp
+        ../../oot3d/native_game_runtime/oot3d_dev_tools_panel.cpp)
+    target_include_directories(triaevum_f1_settings_smoke PRIVATE
+        ${PROJECT_SOURCE_DIR}/tools/oot3d/native_game_runtime
+        ${PROJECT_SOURCE_DIR}/titles/mm3d/adapter
+        ${PROJECT_SOURCE_DIR}/tools/oot3d/decomp_support/include)
+    target_compile_definitions(triaevum_f1_settings_smoke PRIVATE
+        TRIAEVUM_DEVELOPER_TOOLS=1 TRIAEVUM_TITLE_MM3D=1)
+endif()
 set_property(TARGET triaevum_f1_settings_smoke PROPERTY FOLDER Tests)

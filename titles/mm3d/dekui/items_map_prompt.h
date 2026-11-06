@@ -64,7 +64,9 @@ struct Hook {
             if(!prompt.icon&&(*kind&65535)==6&&Pointer(*geo,0x7c))prompt.icon=node;
             if(!prompt.text&&(*kind&65535)==3&&Pointer(*geo,0x30c)) {
                 auto font=m.Read(*geo+0x28);
-                if(font&&std::all_of(label.begin(),label.end(),[&](char c){return bool(NotebookFont::Lookup(m,*font,c,0));}))prompt.text=node;
+                // The font must hold every glyph of the label in the active archive's language.
+                const auto codes=PromptText::Codes(PromptText::Get(m,label));
+                if(font&&!codes.empty()&&std::all_of(codes.begin(),codes.end(),[&](char32_t c){return bool(NotebookFont::Lookup(m,*font,c,0));}))prompt.text=node;
             }
         }
     }

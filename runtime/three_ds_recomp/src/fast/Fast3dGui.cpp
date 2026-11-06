@@ -378,6 +378,22 @@ void Fast3dGui::ToggleOot3dGraphicsWindow() {
 #endif
 }
 
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+void Fast3dGui::SetOot3dGraphicsWindowVisible(bool visible) {
+#ifdef ENABLE_OOT3D_VULKAN
+    if (mImpl.Backend != WindowBackend::FAST3D_SDL_OOT3D_VULKAN) {
+        return;
+    }
+    if (const auto settingsWindow = GetGuiWindow(Oot3dGraphicsWindowName()); settingsWindow != nullptr) {
+        if (visible) settingsWindow->Show();
+        else settingsWindow->Hide();
+    }
+#else
+    (void)visible;
+#endif
+}
+#endif
+
 void Fast3dGui::DrawMenu() {
     Ship::Gui::DrawMenu();
 #ifdef ENABLE_OOT3D_VULKAN

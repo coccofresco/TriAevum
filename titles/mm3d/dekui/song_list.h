@@ -6,7 +6,7 @@
 #include "notebook_prompt.h"
 namespace Mm3dDekui::SongList {
 using namespace NativeInventory;
-struct Options {bool enabled=true;float background_x=-230,spacing=16,column_spacing=62;GearMenu::Pose songs{24,12,.35f},staff{90,0,.8f};};
+struct Options {bool enabled=true;float background_x=-230,spacing=16,column_spacing=62,stone_darkness=0;GearMenu::Pose songs{24,12,.35f},staff{90,0,.8f},banner{24,0,1};float banner_width=62.3f,banner_height=10.f,panel_left=20.f,panel_right=90.3f,panel_darkness=0.f;std::array<float,3> panel_color{1.f,1.f,1.f};float panel_color_opacity=0.f;};
 inline std::atomic<bool> enabled{true};
 inline std::atomic<float> background_x{-230},spacing{16},column_spacing{62};
 inline GearMenu::AtomicPose songs,staff;

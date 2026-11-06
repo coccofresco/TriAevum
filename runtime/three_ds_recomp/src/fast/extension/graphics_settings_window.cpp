@@ -33,7 +33,21 @@ std::string& WindowTitle() {
     static std::string title = "OOT3D Graphics";
     return title;
 }
+
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+std::string& RequestedTab() {
+    static std::string name;
+    return name;
+}
+#endif
 } // namespace
+
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+void RequestGraphicsSettingsTab(std::string name) {
+    std::scoped_lock lock(PanelTabMutex());
+    RequestedTab() = std::move(name);
+}
+#endif
 
 void InstallGraphicsSettingsWindowTitle(std::string title) {
     std::scoped_lock lock(PanelTabMutex());
@@ -306,8 +320,18 @@ void GraphicsSettingsPanel::Draw() {
             DrawMaterialsTab();
             ImGui::EndTabItem();
         }
+        // A developer lab tab request; product builds have none.
+        std::string requested;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        {
+            std::scoped_lock lock(PanelTabMutex());
+            requested = std::exchange(RequestedTab(), {});
+        }
+#endif
         for (const auto& [name, tabs] : groups) {
-            if (!ImGui::BeginTabItem(name.c_str())) continue;
+            if (!ImGui::BeginTabItem(name.c_str(), nullptr,
+                                     name == requested ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None))
+                continue;
             if (tabs.size() == 1U && tabs.front()->Group() == nullptr) {
                 drawApplicationTab(tabs.front());
             } else if (ImGui::BeginTabBar(("##" + name + "Sections").c_str(), ImGuiTabBarFlags_FittingPolicyScroll)) {

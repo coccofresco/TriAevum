@@ -60,7 +60,9 @@ struct Fixture {
     WordMemory Memory = DifficultyCode();
     Fixture() {
         SingleScreen.Register(Patches);
-        Require(Patches.Verify(Memory) == 2U, "only the difficulty sites should apply");
+        // The health window guards two sites (damage ADD and, since 6e36dfb4,
+        // the defense reduction 16 bytes before it), plus the drop spawn.
+        Require(Patches.Verify(Memory) == 3U, "only the difficulty sites should apply");
     }
 };
 
@@ -119,6 +121,7 @@ void TestGuard() {
     singleScreen.Register(patches);
     auto memory = DifficultyCode();
     memory.Words[kDamagePc - 0x38U] ^= 1U;
+    // Both health-window sites (damage and defense) stay off; the spawn remains.
     Require(patches.Verify(memory) == 1U, "a site over different code was enabled");
 }
 

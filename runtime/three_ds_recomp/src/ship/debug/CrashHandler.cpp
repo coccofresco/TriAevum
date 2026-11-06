@@ -443,8 +443,14 @@ bool CrashHandler::DialogShown() noexcept {
 }
 
 bool CrashHandler::DialogsSuppressed() noexcept {
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    // Developer builds only: agents' automated runs log the crash and exit.
     const char* value = std::getenv("TRIAEVUM_CRASH_DIALOG");
     return value != nullptr && value[0] == '0' && value[1] == '\0';
+#else
+    // A product build always tells the player that it crashed.
+    return false;
+#endif
 }
 
 CrashHandler::CrashHandler() : mOutBuffer(std::make_unique<char[]>(gMaxBufferSize)) {

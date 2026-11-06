@@ -73,6 +73,12 @@ void ToggleGraphicsNativePresentation();
 // installs it before the GUI is created; the default is "OOT3D Graphics".
 void InstallGraphicsSettingsWindowTitle(std::string title);
 [[nodiscard]] std::string GraphicsSettingsWindowTitle();
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+// Selects the top-level tab of that name (an application tab or group) the
+// next time the window draws; the developer lab uses it to capture a tab.
+// Developer builds only: a product build has no lab and no such request.
+void RequestGraphicsSettingsTab(std::string name);
+#endif
 
 class GraphicsSettingsPanel final {
   public:

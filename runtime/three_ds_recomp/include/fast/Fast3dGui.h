@@ -67,6 +67,11 @@ class Fast3dGui : public Ship::Gui {
     Fast3dGui();
     Fast3dGui(std::vector<std::shared_ptr<Ship::GuiWindow>> guiWindows);
     ~Fast3dGui() override = default;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    /** @brief Shows or hides the consolidated settings window (developer lab captures of F1);
+     * developer builds only. */
+    void SetOot3dGraphicsWindowVisible(bool visible);
+#endif
 
     bool SupportsViewports() override;
 

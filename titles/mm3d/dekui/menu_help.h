@@ -7,6 +7,11 @@
 namespace Mm3dDekui::MenuHelp {
 using namespace NativeInventory;
 inline constexpr std::array<const char*,5> Labels{"Change tab","Choose","Return","Equip to I","Equip to II"};
+// Upstream 4f2692ed's direct-trigger label ("ZL - Equip to I"); it takes the normalized
+// PromptLanguage (S1). Its consumer, the stick-click layout, arrives with StickControls (S5).
+inline std::string EquipLabel(PromptText::PromptLanguage language,bool second) {
+    return std::string(second?"ZR - ":"ZL - ")+std::string(PromptText::Translate(language,second?Labels[4]:Labels[3]));
+}
 struct Options {
     bool enabled=true;
     ButtonPose pose{280,148,.8f};
@@ -39,7 +44,14 @@ struct Hook {
            std::find(inventory.routed.begin(),inventory.routed.end(),layout)==inventory.routed.end())return content;
         }
         auto& prompt=source.prompt;prompt.icon=prompt.text=0;prompt.texture=prompt.Parts(m);
-        const std::string_view alphabet=present?"ChooseCancel":"Change tabChooseReturnEquip to IIZR +/";
+        const auto language=PromptText::Language(m);
+        const bool translated=language!=PromptText::PromptLanguage::English;
+        std::string alphabet=present?"ChooseCancel":"Change tabChooseReturnEquip to IIZR +/";
+        // A translated archive also needs every translated label's glyphs in the font.
+        if(translated) {
+            for(const auto label:Labels)alphabet+=PromptText::Translate(language,label);
+            alphabet+=PromptText::Translate(language,"Cancel");
+        }
         source.Templates(m,inventory,layout,alphabet);
         if(!prompt.text&&source.description_panel==layout&&LayoutNamed(m,source.description,"MessageWindow"))
             source.Templates(m,inventory,source.description,alphabet);
@@ -52,10 +64,30 @@ struct Hook {
             x=group.x.load()+(present?present->transition_x:0),y=group.y.load();
         if(!std::isfinite(a)||a<=0||a>1||!std::isfinite(scale)||scale<.1f||scale>2||!std::isfinite(x)||!std::isfinite(y))return content;
         const bool across=!present&&horizontal.load();
-        const float gap=present?NativeItemPresent::help_spacing.load():spacing.load(),
+        float gap=present?NativeItemPresent::help_spacing.load():spacing.load(),
             inner=present?4:button_gap.load(),bs=present?1:button_scale.load(),ts=present?1:text_scale.load();
         if(!std::isfinite(gap)||gap<0||gap>100||!std::isfinite(inner)||inner<0||inner>40||
            !std::isfinite(bs)||bs<.25f||bs>3||!std::isfinite(ts)||ts<.25f||ts>3)return content;
+        // Upstream 4f2692ed: measure the translated row as a whole. Spend excess gaps before
+        // reducing text, and use one shared text size for every label. English is unchanged.
+        if(across&&translated) {
+            float text_width=0;
+            const auto measure=[&](std::string_view label) {
+                float width=0,height=0;
+                for(char32_t c:PromptText::Codes(PromptText::Translate(language,label))) {
+                    auto g=NotebookFont::Lookup(m,*font,c,0);if(!g)return false;
+                    width+=g->advance;height=std::bit_cast<float>(g->words[9]);
+                }
+                if(height<=0||!std::isfinite(height))return false;
+                text_width+=width*12*ts/height;return true;
+            };
+            for(unsigned i=0;i<3;++i)if(!measure(Labels[i]))return content;
+            if(!measure("/")||!measure(Labels[3])||!measure(Labels[4])||!measure("ZR +")||!measure("ZR +"))return content;
+            const float available=std::max(1.f,(396.f-x)/scale);
+            const float fixed=6*16*bs+9*inner;
+            gap=std::min(gap,std::max(0.f,(available-fixed-text_width)/4));
+            if(text_width>0)ts*=std::min(1.f,std::max(1.f,available-fixed-4*gap)/text_width);
+        }
         const float row_height=std::max(16*bs,12*ts);
         constexpr U32 Size=0x8000;
         if(sp<0x110000||(sp&7))return content;const U32 base=sp-Size;
@@ -96,8 +128,8 @@ struct Hook {
             };
             const auto text=[&](std::string_view label)->bool {
                 std::vector<NotebookFont::Glyph> glyphs;float pen=0,height=0;
-                for(char c:label){auto g=NotebookFont::Lookup(m,*font,c,pen);if(!g)return false;glyphs.push_back(*g);pen+=g->advance;height=std::bit_cast<float>(g->words[9]);}
-                if(height<=0||!std::isfinite(height)||glyphs.size()>16)return false;
+                for(char32_t c:PromptText::Codes(PromptText::Translate(language,label))){auto g=NotebookFont::Lookup(m,*font,c,pen);if(!g)return false;glyphs.push_back(*g);pen+=g->advance;height=std::bit_cast<float>(g->words[9]);}
+                if(glyphs.empty()||height<=0||!std::isfinite(height)||glyphs.size()>16)return false;
                 const float fs=12*ts/height;const U32 at=next;next+=0xb00;if(next>Size)return false;
                 const U32 records=at+0x900;
                 // Glyph records follow the two0x450-byte pane+geometry copies.

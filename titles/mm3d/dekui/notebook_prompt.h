@@ -4,6 +4,7 @@
 #include <string_view>
 #include "native_inventory.h"
 #include "notebook_font.h"
+#include "prompt_text.h"
 
 namespace Mm3dDekui::NotebookPrompt {
 using namespace NativeInventory;
@@ -16,7 +17,7 @@ inline std::atomic<unsigned> status{0};
 // Main resource registry, Restoration + HD HUD v110. Its address is unchanged
 // from retail; validate the init literal as well as both loaded texture IDs.
 constexpr U32 RegistryLiteral=0x0013acc0, Registry=0x7cdc9c; // ref 0x13ace8
-constexpr U32 ScratchSize=0x2800;
+constexpr U32 ScratchSize=0x3000; // 4f2692ed: room for translated labels
 constexpr std::string_view Label="Schedule details", MapLabel="View map", ScheduleLabel="View schedule";
 constexpr std::string_view AlarmLabel="Set alarm", EventsLabel="View events", ScheduleDetailsLabel="Event details";
 // Retail accessors 1C10C8/1C6260/18EFD0 relocate independently in the
@@ -106,10 +107,13 @@ struct Hook {
     template<class M> U32 Build(M& m,U32 layout,U32 owner,U32 sp,float alpha) {
         frames.emplace_back();status=1;
         const bool schedule=LayoutNamed(m,layout,"MenuSchedule");
-        const auto detail_label=schedule?ScheduleDetailsLabel:Label;
-        const auto map_label=schedule?AlarmLabel:MapLabel;
-        const auto page_label=schedule?EventsLabel:ScheduleLabel;
-        const std::string_view back_label=schedule?"Back":"Return";
+        // Labels follow the active message archive (PromptText, S1); glyph budgets as 4f2692ed.
+        const auto detail_label=PromptText::Codes(PromptText::Get(m,schedule?ScheduleDetailsLabel:Label));
+        const auto map_label=PromptText::Codes(PromptText::Get(m,schedule?AlarmLabel:MapLabel));
+        const auto page_label=PromptText::Codes(PromptText::Get(m,schedule?EventsLabel:ScheduleLabel));
+        const auto back_label=PromptText::Codes(PromptText::Get(m,schedule?"Back":"Return"));
+        if(detail_label.empty()||detail_label.size()>16||map_label.empty()||map_label.size()>9||
+           page_label.empty()||page_label.size()>18||back_label.empty()||back_label.size()>8)return layout+8;
         const bool show_a=enabled.load(),show_map=map_enabled.load(),show_schedule=schedule_enabled.load();
         if((!show_a&&!show_map&&!show_schedule)||alpha<=0)return layout+8;
         const float x=pose.x.load(),y=pose.y.load(),scale=pose.scale.load();
@@ -142,7 +146,7 @@ struct Hook {
         std::vector<NotebookFont::Glyph> map_glyphs(map_label.size());
         std::vector<NotebookFont::Glyph> schedule_glyphs(page_label.size());
         std::vector<NotebookFont::Glyph> back_glyphs(back_label.size());
-        float text_width=0,text_height=0,map_width=0;
+        float text_height=0,map_width=0;
         for(auto candidate:nodes) {
             auto geo=m.Read(candidate+0x28);if(!geo||!Pointer(*geo,0x30c))continue;
             auto kind=m.Read(*geo+4),font=m.Read(*geo+0x28);
@@ -154,7 +158,7 @@ struct Hook {
                 glyphs[i]=*glyph;pen+=glyph->advance;
             }
             if(valid) {
-                const auto lookup=[&](std::string_view label,auto& out,float& width) {
+                const auto lookup=[&](std::u32string_view label,auto& out,float& width) {
                     width=0;
                     for(unsigned i=0;i<label.size();++i) {
                         auto glyph=NotebookFont::Lookup(m,*font,unsigned(label[i]),width);
@@ -165,7 +169,7 @@ struct Hook {
                 valid=(!show_map||lookup(map_label,map_glyphs,map_width))&&
                     (!show_schedule||lookup(page_label,schedule_glyphs,map_width))&&lookup(back_label,back_glyphs,map_width);
             }
-            if(valid){text_node=candidate;text_geometry=*geo;text_width=pen;
+            if(valid){text_node=candidate;text_geometry=*geo;
                 text_height=std::bit_cast<float>(glyphs[0].words[9]);break;}
         }
         if(!text_node||text_height<=0)return layout+8;
@@ -191,7 +195,7 @@ struct Hook {
             for(U32 i=0;i<4;++i)number(offset+0x128+i*4,alpha);
         };
         constexpr U32 Children=0x140,Icon=0x180,IconGeometry=0x2c0,Text=0x340,TextGeometry=0x480,Glyphs=0x1d20;
-        static_assert(Glyphs+std::max(Label.size(),ScheduleDetailsLabel.size())*60<=ScratchSize);
+        static_assert(Glyphs+16*60<=0x2100); // next pane is BackText
         if(!copy(0,layout+8,0x140)||!copy(Icon,pict,0x140)||!copy(IconGeometry,*geometry,0x7c)||
            !copy(Text,text_node,0x140)||!copy(TextGeometry,text_geometry,0x30c))return layout+8;
         node(0,0,0,0);put(0x14,scratch+Children);
@@ -200,6 +204,13 @@ struct Hook {
         if(show_a){child(Icon);child(Text);}
         // Render at 12 native pixels high, using the textbox font's own advances.
         const float font_scale=12.f/text_height;
+        // 4f2692ed: a translated label shrinks to stay on screen; English keeps 12 pixels.
+        const auto fit=[&](const auto& gs,float left,float group_scale) {
+            float width=0;for(const auto& g:gs)width+=g.advance;
+            if(PromptText::Language(m)==PromptText::PromptLanguage::English)return font_scale;
+            const float available=std::max(1.f,400.f-left-(16.f*icons+4.f)*group_scale-4.f);
+            return std::min(font_scale,available/std::max(1.f,width*group_scale));
+        };
         const float left=x;
         node(Icon,scratch+IconGeometry,left,228.f+(y-20.f-8.f*icons)*scale);
         number(Icon+0xe0,scale*icons);number(Icon+0xf4,scale*icons);
@@ -210,7 +221,7 @@ struct Hook {
         number(IconGeometry+0x30,1.f/16);number(IconGeometry+0x34,1.f/8);put(IconGeometry+0x38,0);
         for(U32 c=0;c<16;++c)number(IconGeometry+0x3c+c*4,1.f);
         node(Text,scratch+TextGeometry,left+(16.f*icons+4.f)*scale,228.f+(y-26.f)*scale);
-        number(Text+0xe0,scale*font_scale);number(Text+0xf4,scale*font_scale);
+        number(Text+0xe0,scale*fit(glyphs,x,scale));number(Text+0xf4,scale*fit(glyphs,x,scale));
         // Native text renderer consumes these glyph records directly. Uniform
         // white (color index -1), existing font texture, no message ID changes.
         number(TextGeometry+0x34,0);number(TextGeometry+0x38,0);
@@ -221,7 +232,7 @@ struct Hook {
         if(show_map) {
             constexpr U32 MapText=0xb20,MapGeo=0xc60,MapGlyphs=0xf80;
             constexpr U32 MapIcon=0x11a0,MapIconGeo=0x12e0;
-            static_assert(MapGlyphs+AlarmLabel.size()*60<=MapIcon);
+            static_assert(MapGlyphs+9*60<=MapIcon);
             const float left=mx,cy=228.f+(my-20.f)*ms;
             const auto text=[&](U32 at,U32 geo,U32 records,const auto& gs,float tx,float ty,float fs) {
                 if(!copy(at,text_node,0x140)||!copy(geo,text_geometry,0x30c))return false;
@@ -234,7 +245,7 @@ struct Hook {
                 for(unsigned i=0;i<gs.size();++i)for(unsigned j=0;j<15;++j)put(records+i*60+j*4,gs[i].words[j]);
                 child(at);return true;
             };
-            if(!text(MapText,MapGeo,MapGlyphs,map_glyphs,left+(16.f*icons+4.f)*ms,cy-6.f*ms,font_scale))return layout+8;
+            if(!text(MapText,MapGeo,MapGlyphs,map_glyphs,left+(16.f*icons+4.f)*ms,cy-6.f*ms,fit(map_glyphs,left,ms)))return layout+8;
             // Clone the already prepared A geometry, changing only atlas cell:
             // native parts.ctxb X is x144,y0,16x16 (A is x112).
             for(U32 i=0;i<0x140;i+=4)put(MapIcon+i,words[(Icon+i)/4]);
@@ -246,9 +257,9 @@ struct Hook {
 
         }
         if(show_schedule) {
-            constexpr U32 MapText=0x1380,MapGeo=0x14c0,MapGlyphs=0x17e0;
+            constexpr U32 MapText=0x1380,MapGeo=0x14c0,MapGlyphs=0x2800;
             constexpr U32 MapIcon=0x1b40,MapIconGeo=0x1c80;
-            static_assert(MapGlyphs+ScheduleLabel.size()*60<=MapIcon);
+            static_assert(MapGlyphs+18*60<=ScratchSize);
             const float ms=scale;
             const float left=x,cy=228.f+(sy-20.f)*ms;
             const auto text=[&](U32 at,U32 geo,U32 records,const auto& gs,float tx,float ty,float fs) {
@@ -262,7 +273,7 @@ struct Hook {
                 for(unsigned i=0;i<gs.size();++i)for(unsigned j=0;j<15;++j)put(records+i*60+j*4,gs[i].words[j]);
                 child(at);return true;
             };
-            if(!text(MapText,MapGeo,MapGlyphs,schedule_glyphs,left+(16.f*icons+4.f)*ms,cy-6.f*ms,font_scale))return layout+8;
+            if(!text(MapText,MapGeo,MapGlyphs,schedule_glyphs,left+(16.f*icons+4.f)*ms,cy-6.f*ms,fit(schedule_glyphs,left,ms)))return layout+8;
             // Clone the already prepared A geometry, changing only atlas cell:
             // native parts.ctxb Y is x160,y0,16x16 (A is x112).
             for(U32 i=0;i<0x140;i+=4)put(MapIcon+i,words[(Icon+i)/4]);
@@ -275,11 +286,11 @@ struct Hook {
         }
         // B occupies the former bottom row; the other rows move up one step.
         constexpr U32 BackText=0x2100,BackIcon=0x2240,BackIconGeo=0x2380,BackGeo=0x800,BackGlyphs=0x2400;
-        static_assert(BackGlyphs+6*60<=ScratchSize);
+        static_assert(BackGlyphs+8*60<=0x2800); // schedule glyphs follow
         if(!copy(BackText,text_node,0x140)||!copy(BackGeo,text_geometry,0x30c))return layout+8;
         const float back_center=228.f+(y-20.f)*scale+(y*scale-my*ms);
         node(BackText,scratch+BackGeo,x+(16.f*icons+4.f)*scale,back_center-6.f*scale);
-        number(BackText+0xe0,scale*font_scale);number(BackText+0xf4,scale*font_scale);
+        number(BackText+0xe0,scale*fit(back_glyphs,x,scale));number(BackText+0xf4,scale*fit(back_glyphs,x,scale));
         number(BackGeo+0x34,0);number(BackGeo+0x38,0);
         put(BackGeo+0x118,words[(BackGeo+0x118)/4]&~0xff00u);
         put(BackGeo+0x2fc,scratch+BackGlyphs);
