@@ -124,7 +124,8 @@ int main() try {
   // Unproved owners stay native.
   auto unproved = floor.Binding;
   unproved.Sources[0].Scope = unproved.Sources[1].Scope = R::PicaNativeLightScope::Local;
-  Check(!R::BuildPicaFragmentBalanceUniforms(true, floor.Layout, unproved, noon), "unproved sun replaced");
+  const auto unprovedBalance=R::BuildPicaFragmentBalanceUniforms(true, floor.Layout, unproved, noon);
+  Check(unprovedBalance && unprovedBalance->Control[1]==8, "unproved sun replaced");
   // An inn wall: global ambient and three lamps, no scene directional.
   R::PicaFragmentLightingLayout wall;
   wall.SchemaVersion = R::kPicaFragmentLightingLayoutSchemaVersion;
@@ -137,12 +138,38 @@ int main() try {
     lamps.Sources[i].SourceIdentity = 0x99099c4U + i * 0x6000U;
     lamps.Sources[i].Origin = R::PicaNativeLightOrigin::Actor;
   }
-  Check(!R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, noon), "a room without a scene key changed");
-  Check(!R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, inn), "an inn wall changed under the Indoor base");
+  const auto wallBalance=R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, inn);
+  Check(wallBalance && wallBalance->Control[1]==8, "a local-only room acquired the actor key");
+  Check(wallBalance->Gains[0]==std::array<float,4>{1,1,1,0}, "inn lamp not native");
   // An actor in the inn lit by the environment's records takes the key.
   const auto actor = R::BuildPicaFragmentBalanceUniforms(true, floor.Layout, floor.Binding, inn);
   Check(actor && actor->Control[1] == 1U, "an inn actor lit by the environment has no key");
 
+  // Exercise the real shipped files through the real resource-default loader,
+  // not an equivalent hard-coded document. User files remain in a private dir.
+  const auto release=std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() /
+      "runtime/triaevum_resources/environments/mm3d";
+  SceneEnvironmentRuntime shipped(directory, [&](const auto& v) { published=v; }, release, Mm3dFallback());
+  uint64_t world=10;
+  for (Group group : {Group::Indoor, Group::FixedTime, Group::TimeAtEntry, Group::TimeFlows}) {
+    shipped.ObserveScene(0x6F, at(group, world++, true));
+    const auto snapshot=shipped.Snapshot();
+    Check(snapshot.Error.empty(), "shipped profile invalid");
+    Check(snapshot.Sources[0]==SceneEnvironmentSource::DefaultGroup, "shipped group did not beat fallback");
+    Check(snapshot.SourcePaths[0].parent_path()==release, "foreign title namespace");
+    Check(published.Enabled && published.Rim.Enabled, "shipped rim lost");
+    Check(R::PicaFragmentBalanceProfileSupported(published), "shipped shape refused");
+    Check(published.NativeLocalStrength==1, "shipped profile removes native local lamps");
+    Check(shipped.SetForcedNightWeight(1), "night force failed");
+    if (group==Group::TimeFlows || group==Group::TimeAtEntry) {
+      Check(shipped.Snapshot().Sources[1]==SceneEnvironmentSource::DefaultGroup, "night group missing");
+      Check(shipped.Snapshot().NightProfileExists, "night endpoint not loaded");
+      Check(published.AmbientColor[2]>published.AmbientColor[0], "night palette not loaded");
+    }
+    shipped.SetForcedNightWeight(std::nullopt);
+  }
+  // The release never writes a user profile just by loading its defaults.
+  Check(std::filesystem::is_empty(directory), "loading release defaults wrote user files");
   std::printf("mm3d scene environment profile tests passed: %d checks\n", gChecks);
   return 0;
 } catch (const std::exception &error) {
