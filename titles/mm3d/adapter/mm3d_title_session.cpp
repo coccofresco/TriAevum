@@ -10,6 +10,7 @@
 #include "mm3d_pica_composition.h"
 #include "mm3d_restoration.h"
 #include "mm3d_scene_environment.h"
+#include "mm3d_scene_environment_profile.h"
 #include "mm3d_single_screen.h"
 #include "mm3d_title_contracts.h"
 #include "oot3d_dev_warp.h"
@@ -233,6 +234,15 @@ public:
     }
     environmentTime = time;
     player = state.Player;
+    return true;
+  }
+
+  // Owner decision Q-P1 (b): the base profile per group, applied to the
+  // Scene lights only (mm3d_scene_environment_profile.h).
+  bool BaseSceneEnvironment(SceneEnvironmentGroup group, SceneEnvironmentProfile &profile) const override {
+    auto base = Mm3dBaseSceneEnvironmentProfile(group);
+    if (!base) return false;
+    profile = std::move(*base);
     return true;
   }
 

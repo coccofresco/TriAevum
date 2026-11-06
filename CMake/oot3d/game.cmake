@@ -526,6 +526,24 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         target_compile_definitions(triaevum_environment_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
         target_link_libraries(triaevum_environment_tests PRIVATE three_ds_recomp_runtime)
         oot3d_target_defaults(triaevum_environment_tests FOLDER Tests)
+        if(TRIAEVUM_TITLE_MM3D)
+            # MM3D's base scene environment per group on native fragment lights.
+            add_executable(mm3d_scene_environment_profile_tests EXCLUDE_FROM_ALL
+                titles/mm3d/adapter/mm3d_scene_environment_profile_tests.cpp
+                titles/oot3d/environment/oot3d_scene_environment.cpp
+                titles/oot3d/environment/oot3d_scene_environment_blend.cpp
+                titles/oot3d/environment/oot3d_scene_environment_codec.cpp
+                titles/oot3d/environment/oot3d_light_gizmo.cpp)
+            target_include_directories(mm3d_scene_environment_profile_tests PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter")
+            target_compile_definitions(mm3d_scene_environment_profile_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
+            target_link_libraries(mm3d_scene_environment_profile_tests PRIVATE three_ds_recomp_runtime)
+            oot3d_target_defaults(mm3d_scene_environment_profile_tests FOLDER Tests)
+        endif()
     endif()
     target_link_libraries(oot3d_native_game PRIVATE
         oot3d_native_a32_input
