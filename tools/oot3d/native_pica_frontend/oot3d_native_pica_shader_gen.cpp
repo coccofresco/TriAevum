@@ -183,13 +183,14 @@ struct CoordinateFeed {
 
 std::optional<std::array<CoordinateFeed, 2U>> ResolveCoordinateOutputFeed(
     const Oot3dPicaDrawPacket& packet,
-    const std::array<SemanticSource, 24U>& semantics) {
+    const std::array<SemanticSource, 24U>& semantics,
+    size_t begin = 0, size_t end = ~size_t{}) {
+    end = std::min(end, packet.VertexShader.ProgramWordCount);
     if (!semantics[12U].Present || !semantics[13U].Present) {
         return std::nullopt;
     }
     std::array<CoordinateFeed, 2U> result{};
-    for (size_t offset = 0U;
-         offset < packet.VertexShader.ProgramWordCount; ++offset) {
+    for (size_t offset = begin; offset < end; ++offset) {
         const auto instruction =
             DecodeArithmeticInstruction(packet, offset);
         if (!instruction.has_value() ||
@@ -240,11 +241,11 @@ struct MatrixFeed {
 
 std::optional<MatrixFeed> DecodeMatrixFeed(
     const Oot3dPicaDrawPacket& packet, size_t offset,
-    const CoordinateFeed& coordinate) {
+    const CoordinateFeed& coordinate, uint8_t addressRegister = 0U) {
     const auto instruction = DecodeArithmeticInstruction(packet, offset);
     if (!instruction.has_value() ||
         instruction->Opcode != nihstro::OpCode::Id::DP4 ||
-        instruction->AddressRegister != 0U ||
+        instruction->AddressRegister != addressRegister ||
         !IsRegister(instruction->Destination,
                     nihstro::RegisterType::Temporary,
                     coordinate.Temporary) ||
@@ -353,17 +354,16 @@ struct UniformComparison {
 
 std::optional<UniformComparison> DecodeEqualUniformComparison(
     const Oot3dPicaDrawPacket& packet, size_t offset,
-    uint8_t temporary) {
+    uint8_t temporary,
+    nihstro::Instruction::Common::CompareOpType::Op compare = nihstro::Instruction::Common::CompareOpType::Equal) {
     const auto instruction = DecodeArithmeticInstruction(packet, offset);
     if (!instruction.has_value() ||
         instruction->Opcode != nihstro::OpCode::Id::CMP ||
         instruction->AddressRegister != 0U ||
         SourceNegated(*instruction, 1U) ||
         SourceNegated(*instruction, 2U) ||
-        instruction->Instruction.common.compare_op.x.Value() !=
-            nihstro::Instruction::Common::CompareOpType::Equal ||
-        instruction->Instruction.common.compare_op.y.Value() !=
-            nihstro::Instruction::Common::CompareOpType::Equal) {
+        instruction->Instruction.common.compare_op.x.Value() != compare ||
+        instruction->Instruction.common.compare_op.y.Value() != compare) {
         return std::nullopt;
     }
     const auto source1Type = instruction->Source1.GetRegisterType();
@@ -655,6 +655,120 @@ DecodeCmbTextureCoordinate0Layout(
         }
     }
     return std::nullopt;
+}
+
+// Indexed affine UV subroutines with a uniform-dispatched model entry. The
+// guards keep other entries, generated/projected modes and nonzero row offsets
+// unavailable. All registers/uniforms come from instructions, not a title ID,
+// program hash, source-text pattern or asset name.
+std::optional<Oot3d::Renderer::PicaVertexTextureCoordinateLayout>
+DecodeIndexedAffineUv0(const Oot3dPicaDrawPacket& packet,
+                      const Oot3dPicaDecodedDrawState& state,
+                      const std::array<SemanticSource, 24U>& semantics) {
+    using Id = nihstro::OpCode::Id;
+    using Type = nihstro::RegisterType;
+    using Compare = nihstro::Instruction::Common::CompareOpType;
+    const auto count = packet.VertexShader.ProgramWordCount;
+    const auto at = [&](size_t i) { return nihstro::Instruction{packet.VertexShader.Program[i]}; };
+    const auto call = [&](size_t i) { return i < count && at(i).opcode.Value().EffectiveOpCode() == Id::CALL &&
+        size_t(at(i).flow_control.dest_offset.Value()) + at(i).flow_control.num_instructions.Value() <= count; };
+    const auto xBranch = [&](size_t i) { return i < count && at(i).opcode.Value().EffectiveOpCode() == Id::IFC &&
+        at(i).flow_control.op.Value() == nihstro::Instruction::FlowControlType::JustX && at(i).flow_control.refx.Value(); };
+    const size_t entry = state.ShaderInterface.VertexMainOffset;
+    if (state.ShaderInterface.GeometryShaderEnabled || entry + 4 >= count || !xBranch(entry + 2) || !call(entry + 3)) return {};
+    const auto root = DecodeUniformBroadcastMove(packet, entry, 0, 1);
+    const auto rootCompare = root ? DecodeEqualUniformComparison(packet, entry + 1, root->DestinationTemporary) : std::nullopt;
+    if (!rootCompare || at(entry + 2).flow_control.dest_offset.Value() != entry + 5 ||
+        at(entry + 4).opcode.Value().EffectiveOpCode() != Id::NOP) return {};
+    const auto rootEnd = size_t(at(entry + 2).flow_control.dest_offset.Value()) + at(entry + 2).flow_control.num_instructions.Value();
+    if (rootEnd + 1 >= count || at(rootEnd).opcode.Value().EffectiveOpCode() != Id::NOP ||
+        at(rootEnd + 1).opcode.Value().EffectiveOpCode() != Id::END) return {};
+    const size_t begin = at(entry + 3).flow_control.dest_offset.Value();
+    const size_t end = begin + at(entry + 3).flow_control.num_instructions.Value();
+    const auto feed = ResolveCoordinateOutputFeed(packet, semantics, begin, end);
+    if (!feed) return {};
+    for (size_t c = begin + 5; c + 4 < end; ++c) {
+        if (!call(c) || !xBranch(c - 3)) continue;
+        const auto mode = DecodeUniformBroadcastMove(packet, c - 5, 0, 1);
+        const auto minimum = mode ? DecodeEqualUniformComparison(packet, c - 4, mode->DestinationTemporary, Compare::LessEqual) : std::nullopt;
+        const auto selector = DecodeUniformBroadcastMove(packet, c - 2, 0, 1);
+        const auto slot = DecodeUniformBroadcastMove(packet, c - 1, 0, 1);
+        const auto output = DecodeArithmeticInstruction(packet, c + 4);
+        if (!mode || !minimum || !selector || !slot || !output || output->Opcode != Id::MOV ||
+            !IsRegister(output->Source1, Type::Temporary, (*feed)[0].Temporary) ||
+            !IsRegister(output->Destination, Type::Output, semantics[12].Register) ||
+            !output->Swizzle.DestComponentEnabled(semantics[12].Component) ||
+            !output->Swizzle.DestComponentEnabled(semantics[13].Component) ||
+            SourceNegated(*output, 1) || SourceComponent(*output, 1, semantics[12].Component) != (*feed)[0].Component ||
+            SourceComponent(*output, 1, semantics[13].Component) != (*feed)[1].Component) continue;
+        const size_t h = at(c).flow_control.dest_offset.Value(), he = h + at(c).flow_control.num_instructions.Value();
+        if (h + 7 >= he || !IsConditionalBranch(packet, h + 4, false, false) ||
+            !IsConditionalBranch(packet, h + 6, false, false)) continue;
+        const auto forbidden = DecodeEqualUniformComparison(packet, h, mode->DestinationTemporary);
+        const auto direct = DecodeEqualUniformComparison(packet, h + 5, mode->DestinationTemporary);
+        const auto mad = at(h + 1);
+        const auto mova = DecodeArithmeticInstruction(packet, h + 2);
+        if (!forbidden || !direct || mad.opcode.Value().EffectiveOpCode() != Id::MAD ||
+            mad.mad.operand_desc_id.Value() >= packet.VertexShader.SwizzleWordCount ||
+            mad.mad.address_register_index.Value() != 0 ||
+            !IsRegister(mad.mad.dest.Value(), Type::Temporary, slot->DestinationTemporary) ||
+            !IsRegister(mad.mad.GetSrc1(false), Type::Temporary, slot->DestinationTemporary) ||
+            mad.mad.GetSrc2(false).GetRegisterType() != Type::FloatUniform ||
+            !IsRegister(mad.mad.GetSrc3(false), Type::Temporary, slot->DestinationTemporary) ||
+            !mova || mova->Opcode != Id::MOVA || mova->AddressRegister != 0 ||
+            !IsRegister(mova->Source1, Type::Temporary, slot->DestinationTemporary) ||
+            SourceNegated(*mova, 1) || SourceComponent(*mova, 1, 0) != 0 ||
+            !mova->Swizzle.DestComponentEnabled(0)) continue;
+        const nihstro::SwizzlePattern sw{packet.VertexShader.Swizzles[mad.mad.operand_desc_id.Value()]};
+        if (sw.negate_src1.Value() || sw.negate_src2.Value() || sw.negate_src3.Value() ||
+            !sw.DestComponentEnabled(0) || sw.DestComponentEnabled(1) || sw.DestComponentEnabled(2) || sw.DestComponentEnabled(3) ||
+            uint8_t(sw.GetSelectorSrc1(0)) != 0 || uint8_t(sw.GetSelectorSrc3(0)) != 1 ||
+            at(h + 3).opcode.Value().EffectiveOpCode() != Id::NOP) continue;
+        const size_t d = at(h + 6).flow_control.dest_offset.Value();
+        if (d + 2 >= he || !call(d)) continue;
+        const auto u = DecodeMatrixFeed(packet, d + 1, (*feed)[0], 1);
+        const auto v = DecodeMatrixFeed(packet, d + 2, (*feed)[1], 1);
+        if (!u || !v || u->WorkingTemporary != v->WorkingTemporary) continue;
+        const size_t r = at(d).flow_control.dest_offset.Value(), re = r + at(d).flow_control.num_instructions.Value();
+        const auto compare = DecodeEqualUniformComparison(packet, r, selector->DestinationTemporary);
+        if (!compare || r + 3 >= re || !IsConditionalBranch(packet, r + 2, true, false)) continue;
+        const size_t second = at(r + 2).flow_control.dest_offset.Value();
+        if (second >= re || !IsConditionalBranch(packet, second, false, true)) continue;
+        const size_t third = at(second).flow_control.dest_offset.Value();
+        const size_t thirdEnd = third + at(second).flow_control.num_instructions.Value();
+        if (third >= re || thirdEnd > re) continue;
+        const std::array<std::optional<CoordinateSourceRoute>, 3> routes{
+            DecodeCoordinateSourceRoute(packet, r + 3, second, u->WorkingTemporary),
+            DecodeCoordinateSourceRoute(packet, second + 1, third, u->WorkingTemporary),
+            DecodeCoordinateSourceRoute(packet, third, thirdEnd, u->WorkingTemporary)};
+        if (!routes[0] || !routes[1] || !routes[2]) continue;
+        const auto homogeneous = routes[0]->HomogeneousUniform;
+        const auto component = routes[0]->HomogeneousComponent;
+        if (routes[1]->HomogeneousUniform != homogeneous || routes[2]->HomogeneousUniform != homogeneous ||
+            routes[1]->HomogeneousComponent != component || routes[2]->HomogeneousComponent != component ||
+            rootCompare->Uniform != slot->Uniform || rootCompare->Components[0] != slot->Component ||
+            rootCompare->Uniform != homogeneous || rootCompare->Components[1] != component ||
+            minimum->Uniform != homogeneous || minimum->Components[0] != component || minimum->Components[1] != component) continue;
+        const auto enabled = FindEnclosingBooleanUniform(packet, c - 5, begin);
+        if (!enabled) continue;
+        Oot3d::Renderer::PicaVertexTextureCoordinateLayout layout;
+        layout.Operation = Oot3d::Renderer::PicaVertexTextureCoordinateOperation::CmbAffine;
+        layout.EnableBooleanUniform = *enabled;
+        layout.SourceSelectorUniform = selector->Uniform; layout.SourceSelectorComponent = selector->Component;
+        layout.SourceSelectorConstantUniform = compare->Uniform; layout.SourceSelectorConstantComponents = compare->Components;
+        layout.CoordinateModeUniform = mode->Uniform; layout.CoordinateModeComponent = mode->Component;
+        layout.CoordinateModeConstantUniform = forbidden->Uniform; layout.CoordinateModeConstantComponents = forbidden->Components;
+        layout.MatrixRowUUniform = u->Uniform; layout.MatrixRowVUniform = v->Uniform;
+        layout.HomogeneousUniform = homogeneous; layout.HomogeneousComponent = component;
+        layout.SourceCount = 3;
+        for (size_t i = 0; i < 3; ++i) layout.Sources[i] = routes[i]->Layout;
+        auto& g = layout.AffineGuards; g.Version = 1;
+        g.RootMode = {root->Uniform, root->Component}; g.Zero = {slot->Uniform, slot->Component};
+        g.Stride = {uint8_t(mad.mad.GetSrc2(false).GetIndex()), uint8_t(sw.GetSelectorSrc2(0))};
+        for (size_t i = 0; i < 2; ++i) g.DirectModes[i] = {direct->Uniform, direct->Components[i]};
+        if (layout.Available()) return layout;
+    }
+    return {};
 }
 
 bool SameRegister(const nihstro::SourceRegister& left, const nihstro::SourceRegister& right) {
@@ -1382,8 +1496,8 @@ bool GenerateOot3dPicaVertexShader(
         hooks.Semantics |=
             PicaVertexShaderSemantic::ViewPositionOutput;
     }
-    const auto textureCoordinate0 =
-        DecodeCmbTextureCoordinate0Layout(packet, semantics);
+    auto textureCoordinate0 = DecodeCmbTextureCoordinate0Layout(packet, semantics);
+    if (!textureCoordinate0) textureCoordinate0 = DecodeIndexedAffineUv0(packet, state, semantics);
     if (textureCoordinate0.has_value()) {
         hooks.TextureCoordinates[0U] = *textureCoordinate0;
         hooks.Semantics |=
