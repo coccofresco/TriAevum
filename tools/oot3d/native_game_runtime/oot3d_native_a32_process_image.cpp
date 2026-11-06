@@ -135,12 +135,8 @@ ParseNativeA32ProcessImageManifest(const Json& document,
         // whose exheader is gone, has no program ID.
         if (validateHostFiles && source.contains("exheader_path") &&
             source.at("exheader_path").is_string()) {
-            const auto exheaderPath = ResolvePackagedInputPath(
-                result.ManifestPath, source.at("exheader_path").get<std::string>());
-            std::ifstream exheader(exheaderPath, std::ios::binary);
-            std::array<uint8_t, 0x208> head{};
-            if (exheader.read(reinterpret_cast<char*>(head.data()), head.size()))
-                result.ProgramId = ReadExheaderProgramId(head);
+            result.ProgramId = ReadExheaderProgramIdFile(ResolvePackagedInputPath(
+                result.ManifestPath, source.at("exheader_path").get<std::string>()));
         }
         if (validateHostFiles &&
             (!std::filesystem::is_regular_file(result.RomFsImagePath) ||

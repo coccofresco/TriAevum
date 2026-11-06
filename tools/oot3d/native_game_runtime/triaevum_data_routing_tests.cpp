@@ -95,8 +95,27 @@ void TestParser(const fs::path &root) {
         Expect(Oot3dNativeGame::ReadExheaderProgramId(exheader) == mm3dEur, "the exheader names its program id");
         Expect(!Oot3dNativeGame::ReadExheaderProgramId(std::span(exheader).first(0x207U)).has_value(),
                "a truncated exheader names none");
+        // The file the process image manifest names, as the window session
+        // reads it for the texture-pack folders.
+        const auto files = root / "exheader";
+        fs::create_directories(files);
+        const auto write = [&](const fs::path& path, std::span<const uint8_t> bytes) {
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        };
+        write(files / "exheader.bin", exheader);
+        write(files / "short.bin", std::span(exheader).first(0x207U));
+        Expect(Oot3dNativeGame::ReadExheaderProgramIdFile(files / "exheader.bin") == mm3dEur,
+               "the manifest's exheader file names its program id");
+        Expect(!Oot3dNativeGame::ReadExheaderProgramIdFile(files / "short.bin").has_value(),
+               "a short exheader file names none");
+        Expect(!Oot3dNativeGame::ReadExheaderProgramIdFile(files / "missing.bin").has_value(),
+               "a missing exheader file names none");
         exheader[0x206U] = 0x01U; // not an application title
         Expect(!Oot3dNativeGame::ReadExheaderProgramId(exheader).has_value(), "a system title id is refused");
+        write(files / "system.bin", exheader);
+        Expect(!Oot3dNativeGame::ReadExheaderProgramIdFile(files / "system.bin").has_value(),
+               "a system title's exheader file names none");
     }
 
     const auto data = root / "data";

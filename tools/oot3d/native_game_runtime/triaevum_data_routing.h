@@ -24,9 +24,11 @@
 // earlier locations, so launch profiles written before them still launch.
 // A later occurrence wins (command-line arguments follow the profile's).
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <span>
 #include <string>
@@ -71,6 +73,17 @@ bool ParseDataRoutingOption(int argc, char **argv, int &index, DataRouting &rout
     if ((id >> 32U) != 0x00040000U)
         return std::nullopt;
     return id;
+}
+
+// The process image manifest's exheader file (source.exheader_path): its
+// program ID, or none when the file is missing, shorter than the ACI's
+// program ID or not an application title's.
+[[nodiscard]] inline std::optional<uint64_t> ReadExheaderProgramIdFile(const std::filesystem::path& path) {
+    std::ifstream exheader(path, std::ios::binary);
+    std::array<uint8_t, 0x208U> head{};
+    if (!exheader.read(reinterpret_cast<char*>(head.data()), static_cast<std::streamsize>(head.size())))
+        return std::nullopt;
+    return ReadExheaderProgramId(head);
 }
 
 } // namespace Oot3dNativeGame
