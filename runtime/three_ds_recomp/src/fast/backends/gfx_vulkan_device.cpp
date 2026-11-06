@@ -651,11 +651,7 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
                  static_cast<unsigned long long>(copyTiming.Materializations),
                  static_cast<unsigned long long>(copyTiming.PrefixWaits),
                  static_cast<unsigned long long>(copyTiming.PeakLiveProducers));
-    // A session-only cache (title without prepared shaders) is not serialized.
-    const bool persistentNri = mTitleShaderPreparationPlan.PersistentPipelineCache;
-    if (!persistentNri)
-        std::fprintf(stderr, "TRIAEVUM_NRI_PIPELINE_CACHE_STORE result=session_only\n");
-    const auto nriData = persistentNri ? mNriPicaPipelineBridge.GetPipelineCacheData() : std::vector<uint8_t>{};
+    const auto nriData = mNriPicaPipelineBridge.GetPipelineCacheData();
     if (!nriData.empty()) {
         VkPhysicalDeviceProperties properties{};
         vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);

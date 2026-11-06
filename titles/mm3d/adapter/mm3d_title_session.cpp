@@ -43,10 +43,11 @@ public:
   // No MM3D shader corpus yet: no vertex-program family in the built-in uber
   // set, no fragment-family pack, no scenario corpus or Forge preparation
   // (PARITY_PLAN P7.1/P7.2). Return true once those exist: that restores
-  // always-available programs and the persistent NRI pipeline cache for MM3D
-  // (its program family and pass programs are then registered by the session
-  // next to OoT3D's).
+  // always-available programs for MM3D (its startup program family must then
+  // be prepared by the window session next to OoT3D's).
   bool PreparedShaders() const override { return false; }
+  // MM3D's own pipeline cache files, apart from OoT3D's.
+  std::string_view PipelineCacheNamespace() const override { return "mm3d"; }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {
     // MM3D's perspective frustum builder: the scene widens to the output
