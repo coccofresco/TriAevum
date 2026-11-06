@@ -1,6 +1,8 @@
 #include "oot3d_native_a32_process_image.h"
+#include "triaevum_data_routing.h"
 
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <limits>
 #include <set>
@@ -128,6 +130,17 @@ ParseNativeA32ProcessImageManifest(const Json& document,
             result.PageSize == 0 ||
             (result.PageSize & (result.PageSize - 1U)) != 0) {
             throw std::runtime_error("invalid code hash or process page size");
+        }
+        // The exheader is optional input: a manifest without one, or one
+        // whose exheader is gone, has no program ID.
+        if (validateHostFiles && source.contains("exheader_path") &&
+            source.at("exheader_path").is_string()) {
+            const auto exheaderPath = ResolvePackagedInputPath(
+                result.ManifestPath, source.at("exheader_path").get<std::string>());
+            std::ifstream exheader(exheaderPath, std::ios::binary);
+            std::array<uint8_t, 0x208> head{};
+            if (exheader.read(reinterpret_cast<char*>(head.data()), head.size()))
+                result.ProgramId = ReadExheaderProgramId(head);
         }
         if (validateHostFiles &&
             (!std::filesystem::is_regular_file(result.RomFsImagePath) ||

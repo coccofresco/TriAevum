@@ -86,6 +86,18 @@ void TestParser(const fs::path &root) {
     Expect(!ParseTitleId("0x04000000033500").has_value(), "a prefix is refused");
     Expect(!ParseTitleId("000400000003350G").has_value(), "a non-hex digit is refused");
     Expect(FormatTitleId(0x000400000003350AULL) == "000400000003350A", "title ids print upper case");
+    {
+        // The exheader's ACI program ID (MM3D EUR's, as its exheader carries it).
+        std::vector<uint8_t> exheader(0x400U, 0U);
+        const uint64_t mm3dEur = 0x0004000000125600ULL;
+        for (size_t index = 0; index < 8U; ++index)
+            exheader[0x200U + index] = static_cast<uint8_t>(mm3dEur >> (index * 8U));
+        Expect(Oot3dNativeGame::ReadExheaderProgramId(exheader) == mm3dEur, "the exheader names its program id");
+        Expect(!Oot3dNativeGame::ReadExheaderProgramId(std::span(exheader).first(0x207U)).has_value(),
+               "a truncated exheader names none");
+        exheader[0x206U] = 0x01U; // not an application title
+        Expect(!Oot3dNativeGame::ReadExheaderProgramId(exheader).has_value(), "a system title id is refused");
+    }
 
     const auto data = root / "data";
     int unparsed = 0;

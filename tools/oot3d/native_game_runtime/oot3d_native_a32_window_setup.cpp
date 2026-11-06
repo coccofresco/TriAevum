@@ -235,8 +235,10 @@ void NativeA32WindowSession::Setup() {
     const auto settingsDirectory = settingsPath.empty()
                                        ? std::filesystem::path{}
                                        : std::filesystem::absolute(settingsPath, settingsError).parent_path();
+    // Azahar names texture folders by the installed title's program ID:
+    // --title-id, else the one the process image's exheader carries.
     Oot3d::Renderer::AzaharTexturePackRuntime::Instance().SetHostDefaults({
-        .TitleId = launch.Routing.TitleId,
+        .TitleId = launch.Routing.TitleId ? launch.Routing.TitleId : manifest->ProgramId,
         .LoadDirectory = launch.Routing.TextureLoadDirectory,
         .DumpDirectory = launch.Routing.TextureDumpDirectory,
         .SettingsDirectory = settingsError ? std::filesystem::path{} : settingsDirectory,
