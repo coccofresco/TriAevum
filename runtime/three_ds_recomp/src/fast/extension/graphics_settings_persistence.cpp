@@ -29,6 +29,18 @@ std::optional<Json>& TitleGrassRules() {
     return rules;
 }
 
+std::vector<Json>& ForeignTitleGrassRuleSets() {
+    static std::vector<Json> sets;
+    return sets;
+}
+
+uint64_t GrassRuleSetHash(const Json& sources, const Json& masks) {
+    uint64_t hash = 1469598103934665603ULL;
+    for (const char c : sources.dump() + "|" + masks.dump())
+        hash = (hash ^ static_cast<unsigned char>(c)) * 1099511628211ULL;
+    return hash;
+}
+
 template <typename Enum>
 using EnumNames = std::initializer_list<std::pair<Enum, std::string_view>>;
 
@@ -2007,6 +2019,48 @@ GraphicsSettingsLoadResult DecodeGraphicsSettings(
                                      "grass source and mask rules replaced by the title's defaults", true});
         }
     }
+    // Rules another title's defaults wrote into this title's configuration
+    // (a build that installed them for every title): an unedited copy, its
+    // sources and its masks, is removed; an edited one is the user's.
+    {
+        std::vector<Json> foreign;
+        {
+            std::scoped_lock lock(TitleGrassRuleMutex());
+            foreign = ForeignTitleGrassRuleSets();
+        }
+        for (const auto& set : foreign) {
+            // Compare in the form this build writes: the set read as rules.
+            InteractiveGrassSettings normalized;
+            auto document = SerializeInteractiveGrassSettings(normalized);
+            document["Sources"] = set.value("Sources", Json::array());
+            document["Masks"] = set.value("Masks", Json::array());
+            GraphicsSettingsLoadResult scratch;
+            DeserializeInteractiveGrassSettings(document, normalized, "Graphics.Grass",
+                                                kGraphicsSettingsSchemaVersion, scratch);
+            const auto normalizedDocument = SerializeInteractiveGrassSettings(normalized);
+            const Json& sources = normalizedDocument["Sources"];
+            const Json& masks = normalizedDocument["Masks"];
+            if (sources.empty() && masks.empty()) continue;
+            const auto remove = [&](InteractiveGrassSettings& grass, const char* path) {
+                auto current = SerializeInteractiveGrassSettings(grass);
+                if (current["Sources"] != sources || current["Masks"] != masks) return;
+                current["Sources"] = Json::array();
+                current["Masks"] = Json::array();
+                DeserializeInteractiveGrassSettings(current, grass, path,
+                                                    kGraphicsSettingsSchemaVersion, result);
+                result.NeedsRewrite = true;
+                char hash[17];
+                std::snprintf(hash, sizeof(hash), "%016llx",
+                              static_cast<unsigned long long>(GrassRuleSetHash(sources, masks)));
+                result.Issues.push_back({std::string(path) + ".Sources",
+                                         std::string("another title's grass source and mask rules (set ") + hash +
+                                             ") removed",
+                                         true});
+            };
+            remove(result.Value.Grass, "Graphics.Grass");
+            remove(result.Value.GrassSavedPreset, "Graphics.GrassSavedPreset");
+        }
+    }
 
     if (const Json* effects =
             RequireObject(document, "Effects",
@@ -2427,13 +2481,19 @@ GraphicsSettingsLoadResult LoadGraphicsSettingsConfig(
 }
 
 void InstallTitleGrassRuleDefaults(const nlohmann::json& rules) {
+    InstallTitleGrassRuleDefaults(TitleGrassRuleDefaults{std::optional<Json>(std::in_place, rules), {}});
+}
+
+void InstallTitleGrassRuleDefaults(TitleGrassRuleDefaults defaults) {
     std::scoped_lock lock(TitleGrassRuleMutex());
-    TitleGrassRules() = rules;
+    TitleGrassRules() = std::move(defaults.Rules);
+    ForeignTitleGrassRuleSets() = std::move(defaults.ForeignRuleSets);
 }
 
 void ClearTitleGrassRuleDefaults() {
     std::scoped_lock lock(TitleGrassRuleMutex());
     TitleGrassRules().reset();
+    ForeignTitleGrassRuleSets().clear();
 }
 
 bool ShouldPersistGraphicsSettings(

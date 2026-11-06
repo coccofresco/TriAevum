@@ -106,9 +106,6 @@ bool OpenFolderInFileBrowser(const std::filesystem::path &folder, std::string *e
 } // namespace
 
 void NativeA32WindowSession::Setup() {
-  // Before any settings load: configurations older than schema 15 take the
-  // title's shipped grass source and mask rules.
-  Fast::Extension::InstallTitleGrassRuleDefaults(Oot3dNativeGame::Oot3dTitleGrassRuleDefaults());
   if (launch.Host.Renderer != "opengl" &&
       launch.Host.Renderer != "nri" &&
       launch.Host.Renderer != "vulkan") {
@@ -150,6 +147,17 @@ void NativeA32WindowSession::Setup() {
   std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
             << " code_sha256=" << manifest->CodeBinSha256 << '\n';
   titleSession = Oot3dNativeGame::CreateTitleSession(titleAdapter);
+  // Before any settings load: configurations older than schema 15 take the
+  // title's shipped grass source and mask rules. OoT3D's rules are keyed by
+  // its own textures; another title's configuration drops an unedited copy
+  // that builds installing them for every title wrote there.
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur) {
+    Fast::Extension::InstallTitleGrassRuleDefaults(Oot3dNativeGame::Oot3dTitleGrassRuleDefaults());
+  } else {
+    Fast::Extension::InstallTitleGrassRuleDefaults(Fast::Extension::TitleGrassRuleDefaults{
+        titleSession ? titleSession->GrassRuleDefaults() : std::nullopt,
+        {Oot3dNativeGame::Oot3dTitleGrassRuleDefaults()}});
+  }
   // Static shadow actor catalogs are keyed by the title's own actor ids.
   picaPresentationScheduler.SetStaticShadowActorPolicy(
       titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur ? Oot3dNativeGame::Oot3dStaticShadowActorPolicy()

@@ -86,6 +86,9 @@ public:
   // The actor profiles (the title's own ids) whose rigid geometry may be
   // cached in static shadow layers. None by default: every actor is dynamic.
   [[nodiscard]] virtual StaticShadowActorPolicy StaticShadowActors() const { return {}; }
+  // The grass source and mask rules ({"Sources", "Masks"}) a configuration
+  // older than grass rules takes, or none.
+  [[nodiscard]] virtual std::optional<nlohmann::json> GrassRuleDefaults() const { return std::nullopt; }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }

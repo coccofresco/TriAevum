@@ -972,6 +972,62 @@ TEST(Oot3dGraphicsSettingsPersistence,
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,
+     RemovesAnotherTitlesUneditedGrassRulesOnly) {
+    // Another title's shipped rules, written into this title's configuration
+    // by a build that installed them for every title.
+    auto document =
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
+    ASSERT_FALSE(document["Grass"]["Sources"].empty());
+    const nlohmann::json foreign = {
+        {"Sources", document["Grass"]["Sources"]},
+        {"Masks", document["Grass"].value("Masks", nlohmann::json::array())}};
+    document["Grass"]["Budget"]["DrawDistance"] = 1234.0;
+    document["GrassSavedPreset"] = document["Grass"];
+
+    // Without foreign sets nothing changes.
+    Fast::Extension::ClearTitleGrassRuleDefaults();
+    const auto untouched = Fast::Extension::DeserializeGraphicsSettings(document);
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(untouched.Value)["Grass"]["Sources"],
+              foreign["Sources"]);
+
+    Fast::Extension::InstallTitleGrassRuleDefaults(
+        Fast::Extension::TitleGrassRuleDefaults{std::nullopt, {foreign}});
+    const auto cleaned = Fast::Extension::DeserializeGraphicsSettings(document);
+    EXPECT_TRUE(cleaned.NeedsRewrite);
+    const auto saved = Fast::Extension::SerializeGraphicsSettings(cleaned.Value);
+    for (const char* block : {"Grass", "GrassSavedPreset"}) {
+        EXPECT_TRUE(saved[block]["Sources"].empty()) << block;
+        EXPECT_TRUE(saved[block]["Masks"].empty()) << block;
+        EXPECT_FLOAT_EQ(saved[block]["Budget"]["DrawDistance"].get<float>(), 1234.0F) << block;
+    }
+    EXPECT_TRUE(std::any_of(cleaned.Issues.begin(), cleaned.Issues.end(), [](const auto& issue) {
+        return issue.Corrected && issue.Message.find("another title's grass") != std::string::npos;
+    }));
+    // Loading the cleaned configuration again changes nothing more.
+    const auto again = Fast::Extension::DeserializeGraphicsSettings(saved);
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(again.Value)["Grass"], saved["Grass"]);
+
+    // Edited rules are the user's: one changed level keeps every rule.
+    auto edited = document;
+    edited["Grass"]["Sources"][0]["InputWhite"] = 0.375;
+    const auto kept = Fast::Extension::DeserializeGraphicsSettings(edited);
+    const auto keptSaved = Fast::Extension::SerializeGraphicsSettings(kept.Value);
+    EXPECT_EQ(keptSaved["Grass"]["Sources"].size(), foreign["Sources"].size());
+    EXPECT_FLOAT_EQ(keptSaved["Grass"]["Sources"][0]["InputWhite"].get<float>(), 0.375F);
+    // The unedited saved preset is still removed on its own.
+    EXPECT_TRUE(keptSaved["GrassSavedPreset"]["Sources"].empty());
+
+    // No pre-schema-15 rules installed: an old configuration keeps its own
+    // rules unless they are a foreign set.
+    auto old = edited;
+    old["SchemaVersion"] = 14U;
+    const auto oldLoaded = Fast::Extension::DeserializeGraphicsSettings(old);
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(oldLoaded.Value)["Grass"]["Sources"].size(),
+              foreign["Sources"].size());
+    Fast::Extension::ClearTitleGrassRuleDefaults();
+}
+
+TEST(Oot3dGraphicsSettingsPersistence,
      PreservesUnsupportedFutureSchema) {
     auto fallback = CompleteSettings();
     fallback.OutputWidth = 3440U;
