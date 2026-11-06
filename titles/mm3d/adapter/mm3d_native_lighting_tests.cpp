@@ -245,9 +245,83 @@ void TestDeferredQueueAndShadowScopes() {
     cursor(0x14000100U);s.r[14]=0x11EF3CU;observe(kMm3dRenderListVisitEntry);cursor(0x14000140U);observe(0x11EF3CU);
     tracker.TakeCommandListCompositionSpans(0,0,spans);Require(spans.empty(),"disabled observer emitted metadata");
 }
+
+// P1.0/P1.1: each selected light's function, and BakedOutdoorRoom from the
+// environment group, with guard words and Unknown fallback.
+void TestLightFunctionsAndGroup() {
+    Fixture f; Mm3dNativeA32LightingProbe probe; auto& s=f.State;
+    probe.SetSupplementalPublication(true,true);
+    const uint32_t sun=f.Play+0x86D0U,moon=f.Play+0x86E8U,torch=f.Actor+0x2B0U,lamp=f.Actor+0x8000U;
+    f.Direction(sun,120,20,220);f.Direction(moon,-120,-20,20);
+    f.W32(f.Play+0xA88U,f.Nodes);f.Link(f.Nodes,moon,f.Nodes+12U);f.Link(f.Nodes+12U,sun,f.Nodes+24U);
+    f.Link(f.Nodes+24U,torch,f.Nodes+36U);f.Link(f.Nodes+36U,lamp,0);
+    f.Point(torch+4U,250);f.Point(lamp+4U,300); // lamp: linked, owner not proved
+    f.W16(f.Actor,0x2E);f.W8(f.Actor+2U,6);f.W32(f.Actor+0x2ACU,f.Nodes+24U);
+    f.W32(f.Play+0x20C0U+6U*12U,1);f.W32(f.Play+0x20C4U+6U*12U,f.Actor);
+    // Outdoor, clock running (South Clock Town decode): TimeFlows.
+    f.W16(f.Play+0x86B2U,3);f.W8(f.Play+0x86C6U,0);f.W8(f.Play+0x86C7U,0);f.W8(f.Play+0x8704U,0);f.W8(f.Play+0xC528U,1);
+    Require(!probe.VerifyEnvironmentGroupGuards(f.Memory),"guards held on an image without the writers");
+    probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(!probe.EnvironmentGroup(f.Play,0x6F) && !probe.CaptureRenderer(0,f.Memory).SceneDirectionals->BakedOutdoorRoom,
+            "unknown group baked the room");
+    for (const auto& guard : Mm3dEnvironmentGroupLayout::Guards) f.W32(guard.Address,guard.Word);
+    Require(probe.VerifyEnvironmentGroupGuards(f.Memory),"writer guards rejected");
+    f.W32(f.Play+0x138U,2);probe.CaptureSceneLights(f.Play,f.Memory);
+    const auto scene=probe.CaptureRenderer(0,f.Memory);
+    Require(probe.EnvironmentGroup(f.Play,0x6F)==SceneEnvironmentGroup::TimeFlows,"outdoor clock scene not TimeFlows");
+    Require(scene.SceneDirectionals->BakedOutdoorRoom && scene.SceneDirectionals->Scope==PicaNativeLightScope::Scene,
+            "outdoor environment not baked/scene");
+    // Bind slot 0 to the sun, 1 to the actor torch, 2 to the unproved lamp.
+    const auto bind=[&](uint32_t slot,uint32_t params,bool point){
+        const uint32_t record=f.Owner+12U+slot*24U;
+        s.r[0]=f.Owner;s.r[1]=params;s.r[2]=record;s.r[3]=record;
+        probe.ObserveBlockEntry(point?0x40650CU:0x4648F4U,s,f.Memory);
+        f.W8(record,point?1:0);f.W8(record+1U,200);f.W8(record+2U,200);f.W8(record+3U,200);
+    };
+    s.r[0]=f.Owner;s.r[1]=f.Context;probe.ObserveBlockEntry(0x1EEAA8U,s,f.Memory);
+    bind(0,sun+4U,false);bind(1,torch+4U,true);bind(2,lamp+4U,true);
+    for (uint32_t slot=0;slot<3;++slot){
+        s.r[0]=f.Context+0x70U+slot*0x118U;s.r[1]=f.Owner+12U+slot*24U;s.r[5]=slot;s.r[8]=f.Context;
+        probe.ObserveBlockEntry(0x1EED64U,s,f.Memory);
+    }
+    const auto lit=probe.CaptureRenderer(f.Renderer,f.Memory);
+    Require(lit.Sources[0].SourceIdentity==sun+4U && lit.Sources[0].Scope==PicaNativeLightScope::Scene &&
+            lit.Sources[0].Origin==PicaNativeLightOrigin::EnvironmentDirectional,"sun slot not scene/environment");
+    Require(lit.Sources[1].SourceIdentity==torch+4U && lit.Sources[1].Scope==PicaNativeLightScope::Local &&
+            lit.Sources[1].Origin==PicaNativeLightOrigin::Actor,"actor torch not local/actor");
+    Require(lit.Sources[2].SourceIdentity==lamp+4U && lit.Sources[2].Scope==PicaNativeLightScope::Local &&
+            lit.Sources[2].Origin==PicaNativeLightOrigin::Unknown,"unproved owner not unknown/local");
+    Require(lit.Sources[3].Scope==PicaNativeLightScope::Local,"empty slot not local");
+    // A stale snapshot (next guest frame not captured) classifies nothing as scene.
+    f.W32(f.Play+0x138U,3);
+    const auto stale=probe.CaptureRenderer(f.Renderer,f.Memory);
+    Require(stale.Sources[0].Scope==PicaNativeLightScope::Local && stale.Sources[0].Origin==PicaNativeLightOrigin::Unknown,
+            "stale snapshot kept scene scope");
+    // A room change inside the visit never flips the latched group.
+    f.W8(f.Play+0x86C7U,1);probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(probe.EnvironmentGroup(f.Play,0x6F)==SceneEnvironmentGroup::TimeFlows,"latched group flipped in the visit");
+    // Another scene: Stock Pot Inn decode (sunDisabled, fixed lights, no sky) = Indoor, not baked.
+    f.W16(f.Play+0x148U,0x61);f.W8(f.Play+0x86C6U,1);f.W8(f.Play+0x8704U,1);f.W8(f.Play+0xC528U,0);
+    f.W32(f.Play+0x138U,4);probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(probe.EnvironmentGroup(f.Play,0x61)==SceneEnvironmentGroup::Indoor && !probe.EnvironmentGroup(f.Play,0x6F),
+            "new visit did not relatch");
+    Require(!probe.CaptureRenderer(0,f.Memory).SceneDirectionals->BakedOutdoorRoom,"interior baked as outdoor");
+    // Unknown values (lightMode 2) stay Unknown and are retried, never latched.
+    f.W16(f.Play+0x148U,0x62);f.W8(f.Play+0x8704U,2);f.W32(f.Play+0x138U,5);probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(!probe.EnvironmentGroup(f.Play,0x62),"unknown light mode classified");
+    f.W8(f.Play+0x8704U,1);f.W8(f.Play+0x86C7U,0);f.W8(f.Play+0x86C6U,0);f.W8(f.Play+0xC528U,2);
+    f.W32(f.Play+0x138U,6);probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(probe.EnvironmentGroup(f.Play,0x62)==SceneEnvironmentGroup::FixedTime &&
+            probe.CaptureRenderer(0,f.Memory).SceneDirectionals->BakedOutdoorRoom,"readable retry not latched as fixed outdoor");
+    // Guard corruption after mount: Unknown again.
+    f.W32(Mm3dEnvironmentGroupLayout::Guards[4].Address,0);
+    Require(!probe.VerifyEnvironmentGroupGuards(f.Memory) && !probe.EnvironmentGroup(f.Play,0x62),"corrupt guard kept group");
+    probe.Reset();
+}
 } // namespace
 int main() {
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
+    TestLightFunctionsAndGroup();
     std::cout << "mm3d_native_lighting_tests: ok\n";
 }

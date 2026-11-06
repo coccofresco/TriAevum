@@ -1,6 +1,7 @@
 #pragma once
 
 #include "oot3d_native_a32_lighting.h"
+#include "mm3d_scene_environment.h"
 
 namespace Oot3dNativeGame {
 
@@ -29,6 +30,13 @@ class Mm3dNativeA32LightingProbe {
         oot3d::recomp::a32::MemoryBus& memory);
     void CaptureSceneLights(uint32_t play, oot3d::recomp::a32::MemoryBus& memory);
     void Reset() noexcept;
+    // Once per mounted image: the environment-group writers are where the
+    // layout says (mm3d_scene_environment.h); otherwise the group stays Unknown.
+    bool VerifyEnvironmentGroupGuards(oot3d::recomp::a32::MemoryBus& memory);
+    // The visit's latched group, for the scene environment of this play state.
+    [[nodiscard]] std::optional<SceneEnvironmentGroup> EnvironmentGroup(uint32_t play, uint16_t scene) const noexcept {
+        return mGroup.Current(play, scene);
+    }
 
   private:
     struct BoundLights {
@@ -45,6 +53,14 @@ class Mm3dNativeA32LightingProbe {
     std::shared_ptr<const Fast::Renderer3ds::PicaScenePointLights> mScenePoints;
     std::shared_ptr<const Fast::Renderer3ds::PicaSceneDirectionalLights> mSceneDirectionals;
     std::shared_ptr<const Fast::Renderer3ds::PicaSceneWaterBodies> mWater;
+    // Function of each light still linked in this frame's LightContext,
+    // by source identity (LightInfo + 4); absent = Unknown, Local.
+    struct LightFunction {
+        Fast::Renderer3ds::PicaNativeLightOrigin Origin = Fast::Renderer3ds::PicaNativeLightOrigin::Unknown;
+        Fast::Renderer3ds::PicaNativeLightScope Scope = Fast::Renderer3ds::PicaNativeLightScope::Local;
+    };
+    std::unordered_map<uint64_t, LightFunction> mLightFunctions;
+    Mm3dEnvironmentGroupLatch mGroup;
     uint64_t mSceneLightFrames = 0;
     uint32_t mSnapshotPlay = 0, mSnapshotFrame = 0;
     bool mHaveSnapshot = false;

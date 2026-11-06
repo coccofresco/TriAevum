@@ -9,6 +9,7 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 
 namespace Oot3dNativeGame {
@@ -103,6 +104,9 @@ bool Mm3dNativePicaCompositionTracker::VerifyHooks(oot3d::recomp::a32::MemoryBus
             if (!memory.Read32(hook.Pc + 4U * i, &word) || word != hook.Words[i]) return false;
         }
     }
+    // Data guards only: a mismatch leaves the environment group Unknown.
+    if (!mLighting.VerifyEnvironmentGroupGuards(memory))
+        std::fprintf(stderr, "MM3D environment group: writer guard words differ; group stays unknown\n");
     mHooksVerified = true;
     return true;
 }

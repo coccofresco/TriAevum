@@ -2,6 +2,7 @@
 
 #include "mm3d_title_contracts.h"
 #include "native_scene_environment_state.h"
+#include "oot3d_environment_group.h"
 #include <array>
 #include <bit>
 #include <cmath>
@@ -122,6 +123,111 @@ Mm3dSceneEnvironmentCapture CaptureMm3dSceneEnvironment(Memory& memory) {
   out.Status = "play";
   return out;
 }
+
+// The environment group of a play visit, from the fields the authored scene
+// and room header commands write into the play state's EnvironmentContext
+// (play+0x86B0), read where the opaque pass begins. Writers, EUR/USA v1.1
+// code.bin SHA256 6eec27b1..., located by meaning through the scene command
+// table 0x00692758 (zeldaret-mm z_scene.c Scene_Command*):
+//   cmd 0x10 TimeSettings 0x0040C6B4: cmd[6] -> u16 env+0x02 sceneTimeSpeed
+//     (0xFF -> 0; 5 in the first cycle without the ocarina), 0x0040C73C..C750;
+//     hour/minute set the clock only, nothing in env keeps them.
+//   cmd 0x11 SkyboxSettings 0x004ECCB8: cmd[4]&3 -> play+0xC528 skyboxId
+//     (literal 0x004ECD5C), cmd[6] -> env+0x54 lightMode, 0x004ECCE8..CCEC.
+//   cmd 0x12 SkyboxDisables 0x004E65A8: cmd[4] -> env+0x16 skyboxDisabled,
+//     cmd[5] -> env+0x17 sunDisabled.
+// Room commands run after the scene's, so the fields hold the current room.
+// Classification mirrors OoT3D's NativeRoomIsInterior/ClassifyNativeEnvironmentGroup
+// on the same command bytes: sunDisabled, or fixed light settings (lightMode 1)
+// with no skybox, is Indoor; lightMode > 1 is not understood (Unknown). MM keeps
+// no record of a header-set hour, so outdoor groups are named by what the
+// lights do: lightMode 1 (fixed light settings with a sky) is FixedTime,
+// lightMode 0 with the clock stopped (speed 0) TimeAtEntry, with the clock
+// running TimeFlows. Offline decode (W/analysis/parity/P1/env_table.txt):
+// South/North/East Clock Town and Termina Field speed 3, lightMode 0, sky 1,
+// sun on = TimeFlows; Stock Pot Inn and Woodfall Temple sunDisabled 1,
+// lightMode 1, sky 0 = Indoor.
+namespace Mm3dEnvironmentGroupLayout {
+inline constexpr uint32_t Environment = 0x86B0U;
+inline constexpr uint32_t TimeSpeed = Environment + 0x02U;      // u16
+inline constexpr uint32_t SkyboxDisabled = Environment + 0x16U; // u8
+inline constexpr uint32_t SunDisabled = Environment + 0x17U;    // u8
+inline constexpr uint32_t LightMode = Environment + 0x54U;      // u8
+inline constexpr uint32_t SkyboxId = 0xC528U;                   // u8, play
+struct Guard { uint32_t Address, Word; };
+// The three writers' stores and the table entries that dispatch them. A
+// different image leaves the group Unknown; nothing else depends on it.
+inline constexpr std::array<Guard, 13> Guards{{
+    {0x00692798U, 0x0040C6B4U}, {0x0069279CU, 0x004ECCB8U}, {0x006927A0U, 0x004E65A8U},
+    {0x0040C73CU, 0xE5D20006U}, {0x0040C740U, 0xE2884C86U}, {0x0040C748U, 0x11C40BB2U},
+    {0x0040C750U, 0x01C46BB2U},
+    {0x004ECCD0U, 0xE59F2084U}, {0x004ECD5CU, 0x0000C528U}, {0x004ECCECU, 0xE5C01704U},
+    {0x004E65B0U, 0xE5C036C6U}, {0x004E65B8U, 0xE5C016C7U}, {0x004E65ACU, 0xE2810902U}}};
+} // namespace Mm3dEnvironmentGroupLayout
+
+struct Mm3dEnvironmentGroupInputs {
+  uint16_t TimeSpeed = 0;
+  uint8_t SkyboxDisabled = 0, SunDisabled = 0, LightMode = 0, SkyboxId = 0;
+  bool operator==(const Mm3dEnvironmentGroupInputs&) const = default;
+};
+
+[[nodiscard]] inline std::optional<SceneEnvironmentGroup> ClassifyMm3dEnvironmentGroup(
+    const Mm3dEnvironmentGroupInputs& in) noexcept {
+  // Booleans written from header bytes; anything else is not a header we know.
+  if (in.SunDisabled > 1U || in.SkyboxDisabled > 1U || in.LightMode > 1U || in.SkyboxId > 3U) return {};
+  if (in.SunDisabled != 0U || (in.LightMode == 1U && in.SkyboxId == 0U)) return SceneEnvironmentGroup::Indoor;
+  if (in.LightMode == 1U) return SceneEnvironmentGroup::FixedTime;
+  return in.TimeSpeed == 0U ? SceneEnvironmentGroup::TimeAtEntry : SceneEnvironmentGroup::TimeFlows;
+}
+
+template<class Memory>
+[[nodiscard]] bool Mm3dEnvironmentGroupGuardsHold(Memory& memory) {
+  for (const auto& guard : Mm3dEnvironmentGroupLayout::Guards) {
+    uint32_t word = 0;
+    if (!memory.Read32(guard.Address, &word) || word != guard.Word) return false;
+  }
+  return true;
+}
+
+template<class Memory>
+[[nodiscard]] std::optional<Mm3dEnvironmentGroupInputs> ReadMm3dEnvironmentGroupInputs(
+    Memory& memory, uint32_t play) {
+  using namespace Mm3dEnvironmentGroupLayout;
+  if (play == 0U || (play & 3U) != 0U ||
+      play > std::numeric_limits<uint32_t>::max() - Mm3dSceneEnvironmentLayout::ContextSize)
+    return {};
+  Mm3dEnvironmentGroupInputs in;
+  if (!memory.Read16(play + TimeSpeed, &in.TimeSpeed) || !memory.Read8(play + SkyboxDisabled, &in.SkyboxDisabled) ||
+      !memory.Read8(play + SunDisabled, &in.SunDisabled) || !memory.Read8(play + LightMode, &in.LightMode) ||
+      !memory.Read8(play + SkyboxId, &in.SkyboxId))
+    return {};
+  return in;
+}
+
+// One group per visit (play state and scene), the first readable class, as
+// OoT3D latches its authored class: a room change inside the visit never
+// flips it. Unknown (guards failed, unreadable or unknown values) is retried
+// every frame and never latched.
+class Mm3dEnvironmentGroupLatch {
+public:
+  void SetGuardsHold(bool hold) noexcept { mGuardsHold = hold; mGroup.reset(); mPlay = 0; }
+  template<class Memory>
+  std::optional<SceneEnvironmentGroup> Observe(Memory& memory, uint32_t play, uint16_t scene) {
+    if (play != mPlay || scene != mScene) { mPlay = play; mScene = scene; mGroup.reset(); }
+    if (!mGroup && mGuardsHold && play != 0U)
+      if (const auto in = ReadMm3dEnvironmentGroupInputs(memory, play)) mGroup = ClassifyMm3dEnvironmentGroup(*in);
+    return mGroup;
+  }
+  [[nodiscard]] std::optional<SceneEnvironmentGroup> Current(uint32_t play, uint16_t scene) const noexcept {
+    return play != 0U && play == mPlay && scene == mScene ? mGroup : std::nullopt;
+  }
+  void Reset() noexcept { mPlay = 0; mScene = 0; mGroup.reset(); }
+private:
+  bool mGuardsHold = false;
+  uint32_t mPlay = 0;
+  uint16_t mScene = 0;
+  std::optional<SceneEnvironmentGroup> mGroup;
+};
 
 // Lifetime check only, not a second scene/time/player sample. A menu or
 // teardown with no new opaque pass must not keep exposing the old profile.

@@ -269,7 +269,7 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
     using namespace Fast::Renderer3ds;
     const auto current = CaptureMm3dSceneEnvironment(memory);
     if (!current.State || current.Play != play) {
-        mScenePoints.reset(); mSceneDirectionals.reset(); mWater.reset();
+        mScenePoints.reset(); mSceneDirectionals.reset(); mWater.reset(); mLightFunctions.clear();
         mHaveSnapshot = false; mContinuityEnvironment.reset(); mShadowCaster.Reset();
         return;
     }
@@ -281,6 +281,7 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
     mHaveSnapshot = true; mSnapshotPlay = play; mSnapshotFrame = frame;
     ++mSceneLightFrames;
     std::unordered_set<uint32_t> infos, nodes;
+    mLightFunctions.clear();
     uint32_t node = 0;
     if (memory.Read32(play + 0xA88U, &node)) {
         for (uint32_t n = 0; node && n < 32U; ++n) {
@@ -302,9 +303,23 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
             light.DirectionTowardSource[axis] = float(std::bit_cast<int8_t>(b)) / 127.0F;
         }
         light.SourceIdentity = info + 4U; // same identity as accepted params
-        if (valid) directionals.Lights[directionals.Count++] = light;
+        if (valid) {
+            directionals.Lights[directionals.Count++] = light;
+            // The environment's own sun/moon records, still linked: scene-wide.
+            mLightFunctions[light.SourceIdentity] = {PicaNativeLightOrigin::EnvironmentDirectional,
+                                                     PicaNativeLightScope::Scene};
+        }
     }
+    // Only the environment's records are collected above.
+    if (directionals.Count) directionals.Scope = PicaNativeLightScope::Scene;
     ContinueSceneLights(directionals, play, ReadNativeEnvironmentState(play, memory));
+    {
+        // Outdoor groups bake the environment's lights into the room colour,
+        // whether they follow the clock or fixed light settings (OoT3D
+        // oot3d_native_a32_lighting.cpp, same rule); Indoor and Unknown do not.
+        const auto group = mGroup.Observe(memory, play, current.State->SceneId);
+        directionals.BakedOutdoorRoom = group && *group != SceneEnvironmentGroup::Indoor;
+    }
     if (!directionals.Count) mSceneDirectionals.reset();
     else if (!mSceneDirectionals || *mSceneDirectionals != directionals)
         mSceneDirectionals = std::make_shared<const PicaSceneDirectionalLights>(directionals);
@@ -324,6 +339,8 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         light.SourceIdentity = info + 4U;
         light.Radius = std::max(0.0F, float(std::bit_cast<int16_t>(rawRadius)));
         light.Group = group;
+        // Registered by this actor through its own LightNode: local.
+        mLightFunctions[light.SourceIdentity] = {PicaNativeLightOrigin::Actor, PicaNativeLightScope::Local};
         if (points.Count < points.Lights.size()) points.Lights[points.Count++] = light;
     };
     for (uint32_t category = 0; category < 12U; ++category) {
@@ -355,6 +372,12 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
     auto water = CaptureMm3dWaterBodies(play, memory);
     if (!water.Count) mWater.reset();
     else if (!mWater || *mWater != water) mWater = std::make_shared<const PicaSceneWaterBodies>(water);
+}
+
+bool Mm3dNativeA32LightingProbe::VerifyEnvironmentGroupGuards(Memory& memory) {
+    const bool hold = Mm3dEnvironmentGroupGuardsHold(memory);
+    mGroup.SetGuardsHold(hold);
+    return hold;
 }
 
 Fast::Renderer3ds::PicaSceneWaterBodies CaptureMm3dWaterBodies(uint32_t playState,
@@ -412,8 +435,20 @@ Fast::Renderer3ds::PicaNativeLightBinding Mm3dNativeA32LightingProbe::CaptureRen
     }
     result.WorldToView = CaptureWorldToView(memory);
     const auto current = CaptureMm3dSceneEnvironment(memory);
-    if (result.WorldToView && mHaveSnapshot && current.State && current.Play == mSnapshotPlay &&
-        current.State->GuestFrame == mSnapshotFrame) {
+    const bool snapshotCurrent = mHaveSnapshot && current.State && current.Play == mSnapshotPlay &&
+        current.State->GuestFrame == mSnapshotFrame;
+    // Each selected slot's function, from this frame's LightContext only; an
+    // unproved owner (or a stale snapshot) stays Unknown and Local.
+    for (auto& source : result.Sources) {
+        source.Origin = PicaNativeLightOrigin::Unknown;
+        source.Scope = PicaNativeLightScope::Local;
+        if (!snapshotCurrent || source.Kind == LightSource::Type::Unavailable) continue;
+        if (const auto found = mLightFunctions.find(source.SourceIdentity); found != mLightFunctions.end()) {
+            source.Origin = found->second.Origin;
+            source.Scope = found->second.Scope;
+        }
+    }
+    if (result.WorldToView && snapshotCurrent) {
         if (mPublishPoints) result.ScenePoints = mScenePoints;
         result.SceneDirectionals = mSceneDirectionals;
         if (mPublishWater) result.Water = mWater;
@@ -423,6 +458,7 @@ Fast::Renderer3ds::PicaNativeLightBinding Mm3dNativeA32LightingProbe::CaptureRen
 void Mm3dNativeA32LightingProbe::Reset() noexcept {
     mBoundLights.clear(); mRenderStates.clear(); mUploadOwners.clear();
     mScenePoints.reset(); mSceneDirectionals.reset(); mWater.reset(); mHaveSnapshot = false;
+    mLightFunctions.clear(); mGroup.Reset();
     mContinuityPlayState = 0; mContinuityEnvironment.reset(); mContinuityCount = 0;
     ++mContinuityEpoch; mShadowCaster.Reset();
 }

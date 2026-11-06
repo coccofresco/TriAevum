@@ -99,6 +99,10 @@ class Mm3dNativePicaCompositionTracker final
 
     void Reset() noexcept;
     [[nodiscard]] const Mm3dNativePicaCompositionStats& Stats() const noexcept;
+    // The environment group latched for this play visit (Unknown = nullopt).
+    [[nodiscard]] std::optional<SceneEnvironmentGroup> EnvironmentGroup(uint32_t play, uint16_t scene) const noexcept {
+        return mLighting.EnvironmentGroup(play, scene);
+    }
 
   private:
     struct QueueOwner {

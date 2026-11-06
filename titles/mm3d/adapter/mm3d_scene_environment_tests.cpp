@@ -4,6 +4,7 @@
 #include <bit>
 #include <cstdio>
 #include <map>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -246,9 +247,85 @@ void TestLifetimeAndStorage() {
   Check(oot==std::filesystem::path("config/environments"), "OoT legacy namespace moved");
   Check(mm==std::filesystem::path("config/environments/mm3d") && oot!=mm, "MM3D profiles share OoT namespace");
 }
+
+// P1.1: environment group from the env fields the scene/room header writers
+// set. Rows are the offline savestate decodes (W/analysis/parity/P1/env_table.txt;
+// synthetic images, no savestate in Git) plus the outdoor cases no state has.
+void PutGroupInputs(Memory& m, uint16_t speed, uint8_t skyDisabled, uint8_t sunDisabled,
+                    uint8_t lightMode, uint8_t skybox) {
+  m.Put(play + 0x86B2U, speed, 2); m.Put(play + 0x86C6U, skyDisabled, 1);
+  m.Put(play + 0x86C7U, sunDisabled, 1); m.Put(play + 0x8704U, lightMode, 1);
+  m.Put(play + 0xC528U, skybox, 1);
+}
+void PutGroupGuards(Memory& m) {
+  for (const auto& guard : Mm3dEnvironmentGroupLayout::Guards) m.Put(guard.Address, guard.Word);
+}
+void TestEnvironmentGroupDecode() {
+  struct Row { const char* State; uint16_t Speed; uint8_t Sky, Sun, Mode, Box; std::optional<SceneEnvironmentGroup> Group; };
+  using G = SceneEnvironmentGroup;
+  const Row rows[] = {
+    {"sct_day1_noon (0x6F)", 3, 0, 0, 0, 1, G::TimeFlows},
+    {"sct_day1_night (0x6F)", 3, 0, 0, 0, 1, G::TimeFlows},
+    {"nct_day1 (0x6E)", 3, 0, 0, 0, 1, G::TimeFlows},
+    {"ect_bombers (0x6C)", 3, 0, 0, 0, 1, G::TimeFlows},
+    {"state_field2 (0x2D)", 3, 0, 0, 0, 1, G::TimeFlows},
+    {"state_inn (0x61)", 3, 1, 1, 1, 0, G::Indoor},
+    {"wft_entrance (0x1B)", 3, 1, 1, 1, 0, G::Indoor},
+    {"sun disabled under a sky", 3, 0, 1, 0, 1, G::Indoor},
+    {"fixed lights, no sky", 0, 0, 0, 1, 0, G::Indoor},
+    {"fixed lights with a sky", 3, 0, 0, 1, 2, G::FixedTime},
+    {"clock stopped", 0, 0, 0, 0, 1, G::TimeAtEntry},
+    {"light mode 2", 3, 0, 0, 2, 1, std::nullopt},
+    {"sun byte 2", 3, 0, 2, 0, 1, std::nullopt},
+    {"skybox id 4", 3, 0, 0, 0, 4, std::nullopt},
+  };
+  for (const auto& row : rows) {
+    auto m = Fixture(); PutGroupGuards(m); PutGroupInputs(m, row.Speed, row.Sky, row.Sun, row.Mode, row.Box);
+    Check(Mm3dEnvironmentGroupGuardsHold(m), "fixture guards rejected");
+    const auto in = ReadMm3dEnvironmentGroupInputs(m, play);
+    Check(in.has_value() && ClassifyMm3dEnvironmentGroup(*in) == row.Group, row.State);
+    Check(ReadAt(m, play + 0x86B2U, 2) && !ReadAt(m, play + 0x86B2U, 1), "time speed must be read as u16");
+  }
+  // Speed is a halfword: a high byte alone still runs the clock.
+  auto m = Fixture(); PutGroupInputs(m, 0x100, 0, 0, 0, 1);
+  Check(ClassifyMm3dEnvironmentGroup(*ReadMm3dEnvironmentGroupInputs(m, play)) == G::TimeFlows, "u16 speed truncated");
+  // Unreadable field or bad context: no inputs, so Unknown.
+  m = Fixture(); PutGroupInputs(m, 3, 0, 0, 0, 1); m.Bytes.erase(play + 0xC528U);
+  Check(!ReadMm3dEnvironmentGroupInputs(m, play), "unreadable skybox id accepted");
+  Check(!ReadMm3dEnvironmentGroupInputs(m, 0U) && !ReadMm3dEnvironmentGroupInputs(m, play + 2U) &&
+        !ReadMm3dEnvironmentGroupInputs(m, UINT32_MAX - 3U), "bad play context accepted");
+}
+void TestEnvironmentGroupGuardsAndLatch() {
+  // Each guard word, corrupted or unmapped on its own, disables the group.
+  for (size_t i = 0; i < Mm3dEnvironmentGroupLayout::Guards.size(); ++i) {
+    auto m = Fixture(); PutGroupGuards(m);
+    m.Put(Mm3dEnvironmentGroupLayout::Guards[i].Address, Mm3dEnvironmentGroupLayout::Guards[i].Word ^ 1U);
+    Check(!Mm3dEnvironmentGroupGuardsHold(m), "corrupted guard word accepted");
+    m = Fixture(); PutGroupGuards(m);
+    m.Bytes.erase(Mm3dEnvironmentGroupLayout::Guards[i].Address);
+    Check(!Mm3dEnvironmentGroupGuardsHold(m), "unmapped guard word accepted");
+  }
+  auto m = Fixture(); PutGroupGuards(m); PutGroupInputs(m, 3, 0, 0, 0, 1);
+  Mm3dEnvironmentGroupLatch latch;
+  Check(!latch.Observe(m, play, 0x6F), "latch classified before guards were checked");
+  latch.SetGuardsHold(Mm3dEnvironmentGroupGuardsHold(m));
+  Check(latch.Observe(m, play, 0x6F) == SceneEnvironmentGroup::TimeFlows, "outdoor visit not latched");
+  PutGroupInputs(m, 3, 1, 1, 1, 0); // next room is an interior
+  Check(latch.Observe(m, play, 0x6F) == SceneEnvironmentGroup::TimeFlows, "room change flipped the visit");
+  Check(latch.Observe(m, play, 0x61) == SceneEnvironmentGroup::Indoor, "new scene kept the old group");
+  Check(!latch.Current(play, 0x6F) && latch.Current(play, 0x61) == SceneEnvironmentGroup::Indoor,
+        "current group not keyed by visit");
+  PutGroupInputs(m, 3, 0, 0, 2, 1);
+  Check(!latch.Observe(m, play, 0x62), "unknown values latched");
+  PutGroupInputs(m, 0, 0, 0, 0, 1);
+  Check(latch.Observe(m, play, 0x62) == SceneEnvironmentGroup::TimeAtEntry, "readable retry not latched");
+  latch.SetGuardsHold(false);
+  Check(!latch.Observe(m, play, 0x62), "failed guards kept a group");
+}
 } // namespace
 int main() try {
   TestReadContract();TestRecordedGameplay();TestRecordedNight();TestRejections();TestLifetimeAndStorage();
+  TestEnvironmentGroupDecode();TestEnvironmentGroupGuardsAndLatch();
   std::printf("MM3D scene environment guards passed: %d checks\n",checks);
   return 0;
 } catch(const std::exception& error) {
