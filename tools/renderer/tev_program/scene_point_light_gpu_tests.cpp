@@ -1,4 +1,5 @@
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include "fast/renderer3ds/pica_native_point_replacement.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
 #include "vulkan_compute_test.h"
 #include <algorithm>
@@ -355,6 +356,92 @@ void main() {
                     ++failures;
                 }
         std::cout << "Shadow lighting: " << shadows.size() << " GPU cases, " << failures << " total failures\n";
+        // Native-fragment Local replacement: production admission, uniform
+        // builder, pre-clamp recomposition and scene-point evaluator together.
+        // The shadow stub controls visibility only (atlas sampling has its own
+        // tests); it proves the dynamic term, not ambient, reads that value.
+        struct NativePointCase { PicaBalancedSurfaceUniforms Lighting; Vec4 Visibility{1,0,0,0}; };
+        std::array<NativePointCase, 5> nativePoints{};
+        for (size_t i = 0; i < nativePoints.size(); ++i) {
+            PicaFragmentLightingLayout layout;
+            layout.SchemaVersion = kPicaFragmentLightingLayoutSchemaVersion;
+            layout.ActiveLightCount = 1; layout.LightPermutation[0] = 0;
+            PicaNativeLightBinding binding;
+            auto& source = binding.Sources[0];
+            source.Kind = PicaNativeLightSource::Type::Point;
+            source.SourceIdentity = 42; source.Origin = PicaNativeLightOrigin::Actor;
+            auto points = std::make_shared<PicaScenePointLights>(); points->Count = 1;
+            points->Lights[0] = {42,{0,10,0},{1,0,0},20,2};
+            points->Lights[0].ReplacesNativeLocal = true;
+            binding.ScenePoints = points;
+            PicaEnvironmentLighting settings;
+            if (i == 4) settings.PointLights[2].Enabled = false;
+            const auto replacement = BuildPicaNativePointReplacement(true, layout, binding, settings, {});
+            auto& entry = nativePoints[i];
+            if (replacement) entry.Lighting.Balance = replacement->Balance;
+            else {
+                entry.Lighting.Balance.Control = {1,8,0,0};
+                entry.Lighting.Balance.Parameters[0] = 1;
+                entry.Lighting.Balance.Gains[0] = {1,1,1,0};
+            }
+            auto localHooks = hooks; localHooks.Surface.VertexLightsReconstructed = false;
+            auto uniforms = native;
+            if (i == 3) uniforms[8][0] = 0; // authored black material channel
+            auto view = BuildPicaSurfaceLightingView({1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1});
+            auto lighting = BuildPicaSurfaceLightingUniforms(localHooks, 0,
+                {reinterpret_cast<const uint8_t*>(uniforms.data()),sizeof(uniforms)},
+                binding, settings, &*view, nullptr, true);
+            if (!lighting) throw std::runtime_error("native-point builder rejected fixture");
+            entry.Lighting.Surface = *lighting;
+            if (i == 1) entry.Visibility[0] = 0;
+            if (i == 2) entry.Visibility[0] = .5F;
+        }
+        auto nativeDeclarations = std::regex_replace(PicaSurfaceLightingDeclarations(true,true),
+            std::regex(R"(layout\([^)]*\)\s*)"), "");
+        nativeDeclarations = std::regex_replace(nativeDeclarations, std::regex(R"(\bin\s+)"), "");
+        nativeDeclarations = std::regex_replace(nativeDeclarations, std::regex(R"(\buniform\b)"), "struct");
+        const auto nativeShader = "#version 450\nlayout(local_size_x=1) in;\nvec3 pica_view;\nvec4 pica_primary_color;\n" +
+            nativeDeclarations + R"glsl(
+struct NativePointCase { PicaSurfaceLighting lighting; vec4 visibility; };
+layout(set=0,binding=0,std430) readonly buffer Cases { NativePointCase cases[]; } inputs;
+layout(set=0,binding=1,std430) writeonly buffer Results { vec4 values[]; } outputs;
+float point_visibility;
+vec3 pica_surface_shadow(int slot) { return vec3(1); }
+float pica_point_shadow(float slot, vec3 to_fragment, float radius) { return point_visibility; }
+void main() {
+    uint index=gl_GlobalInvocationID.x;
+    pica_surface=inputs.cases[index].lighting;
+    point_visibility=inputs.cases[index].visibility.x;
+    pica_view=vec3(0); pica_surface_normal=vec3(0,1,0);
+    bool surface_water=false;
+    vec4 primary_fragment_color=vec4(1,.3,.3,.37);
+    vec4 secondary_fragment_color=vec4(.4,0,0,.63);
+    struct LP { uvec4 control; uvec4 lights[8]; };
+    LP lp; lp.control=uvec4(1,0,0,0); lp.lights[0]=uvec4(0);
+    struct FU { vec4 lighting_global_ambient; };
+    FU fragment_uniforms; fragment_uniforms.lighting_global_ambient=vec4(.1,.1,.1,0);
+)glsl" + std::string(kPicaFragmentBalanceCaptureBegin) + R"glsl(
+    balance_diffuse[0]=vec3(.8,0,0);
+    balance_ambient[0]=vec3(.2);
+    balance_combined[0]=balance_diffuse[0]+balance_ambient[0];
+    balance_specular[0]=vec3(.4,0,0);
+)glsl" + std::string(kPicaFragmentBalanceBody) + R"glsl(
+    outputs.values[index]=vec4(primary_fragment_color.rgb,primary_fragment_color.a);
+}
+)glsl";
+        std::array<Vec4, nativePoints.size()> nativeOutput{};
+        RunComputeTest(nativeShader, std::as_bytes(std::span(nativePoints)),
+            std::as_writable_bytes(std::span(nativeOutput)), nativePoints.size());
+        const std::array<float, nativePoints.size()> nativeExpected{.675F,.3F,.4875F,.3F,1};
+        for (size_t i=0;i<nativePoints.size();++i) {
+            const Vec4 expectedNative{nativeExpected[i],.3F,.3F,.37F};
+            for (size_t c=0;c<4;++c)
+                if (!std::isfinite(nativeOutput[i][c]) || std::abs(nativeOutput[i][c]-expectedNative[c])>2e-5F) {
+                    std::cerr << "native-point case=" << i << " channel=" << c << " actual=" << nativeOutput[i][c]
+                              << " expected=" << expectedNative[c] << '\n'; ++failures;
+                }
+        }
+        std::cout << "Native fragment points: " << nativePoints.size() << " GPU cases, " << failures << " total failures\n";
         return failures ? 1 : 0;
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

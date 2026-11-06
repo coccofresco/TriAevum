@@ -188,6 +188,15 @@ inline constexpr std::string_view kPicaFragmentBalanceBody=R"glsl(
             balance_ambient_sum += balance_ambient[slot]*gains.z;
             identity = identity && unchanged && all(equal(sg,vec3(1.0)));
         }
+        if ((pica_surface.balance_control.w & 2u) != 0u && pica_surface.control.y != 0u) {
+            // Only identity-proved Local sources enter this variant. Their
+            // native direct/specular terms were removed above, before clamp.
+            // Reuse the scene-point evaluator (including its cube shadow),
+            // with material reflectance once, as on vertex-lit receivers.
+            balance_primary += pica_surface_scene_point_primary(
+                pica_surface_unit(pica_surface_normal), false) * pica_surface.material_diffuse.rgb;
+            identity = false;
+        }
         balance_primary += fragment_uniforms.lighting_global_ambient.rgb * pica_surface.balance_parameters.x;
         balance_ambient_sum += fragment_uniforms.lighting_global_ambient.rgb * pica_surface.balance_parameters.x;
         pica_balance_ambient = balance_ambient_sum;

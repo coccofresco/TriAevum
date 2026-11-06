@@ -9,6 +9,7 @@
 #include "fast/extension/pica_directional_shadow_semantics.h"
 #include "fast/extension/resource_state_tracker.h"
 #include "fast/renderer3ds/pica_room_shadow_selection.h"
+#include "fast/renderer3ds/pica_native_point_replacement.h"
 #include "fast/renderer3ds/shadow_caster_stability_trace.h"
 #include "fast/renderer3ds/virtual_shadow_keyframes.h"
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
@@ -2109,9 +2110,19 @@ bool NriDirectionalShadowPass::ExecutePointMaps(const NriPointShadowExecuteDesc&
         DirectionalShadowMatrix viewToWorld;
         if (!camera && InvertDirectionalShadowMatrix(*draw.LightingWorldToView, viewToWorld))
             camera = ShadowVector{ viewToWorld[12], viewToWorld[13], viewToWorld[14] };
-        if (draw.ScenePoints) {
-            for (uint32_t light = 0; light < std::min<uint32_t>(draw.ScenePoints->Count, kMaximumPicaScenePointLights); ++light) {
-                const auto& point = draw.ScenePoints->Lights[light];
+        std::optional<PicaNativePointReplacement> nativePoints;
+        const PicaScenePointLights* scenePoints = draw.ScenePoints.get();
+        if (draw.NativeFragmentLighting.Enabled) {
+            PicaNativeLightBinding binding;
+            binding.Sources = draw.NativeLightSources;
+            binding.ScenePoints = draw.ScenePoints;
+            nativePoints = BuildPicaNativePointReplacement(true, draw.NativeFragmentLighting.Layout,
+                binding, environment, {});
+            scenePoints = nativePoints ? &nativePoints->Points : nullptr;
+        }
+        if (scenePoints) {
+            for (uint32_t light = 0; light < std::min<uint32_t>(scenePoints->Count, kMaximumPicaScenePointLights); ++light) {
+                const auto& point = scenePoints->Lights[light];
                 if (point.Group >= environment.PointLights.size()) continue;
                 const auto& group = environment.PointLights[point.Group];
                 if (!group.Enabled || group.Intensity <= 0.0F || point.Radius <= 0.0F || !point.CastsShadow) continue;
@@ -2119,7 +2130,10 @@ bool NriDirectionalShadowPass::ExecutePointMaps(const NriPointShadowExecuteDesc&
                                std::max({ point.Color[0], point.Color[1], point.Color[2] }) * group.Intensity });
             }
         }
-        if (!environment.Enabled || environment.NativeLocalStrength > 0.0F) {
+        // Native-fragment Lambert samples converted scene points, not raw
+        // native point slots. Do not render maps which that path cannot read.
+        if (!draw.NativeFragmentLighting.Enabled &&
+            (!environment.Enabled || environment.NativeLocalStrength > 0.0F)) {
             for (const auto& source : draw.NativeLightSources) {
                 if (source.Kind != PicaNativeLightSource::Type::Point || source.Radius <= 0.0F) continue;
                 const bool scenePoint = draw.ScenePoints &&

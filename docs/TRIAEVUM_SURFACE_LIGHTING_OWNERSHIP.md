@@ -442,3 +442,27 @@ Tests: `oot3d_pica_shader_pipeline_cache_tests` (light function, unproved
 owners, Local gain including the light's own ambient, draw routing, rim and
 fog off, unsupported shapes leave the frame native), `triaevum_environment_tests` (a title's base per environment
 group), `triaevum_f1_settings_smoke` (the marks on the actual widgets).
+
+### Identity-proved native Local points
+
+`PicaScenePointLight::ReplacesNativeLocal` is an explicit title proof, off
+by default. `BuildPicaNativePointReplacement` admits these sources by exact
+captured hardware-slot identity. Matching Unknown, Scene, unavailable or
+ambiguous slots keep their native light and omit the candidate. A native point
+without a tracked identity refuses conversion rather than guessing it is
+unrelated. Disabled groups keep native lighting, not darkness.
+
+The captured balance variant removes the matched native direct/specular term
+before clamp/TEV and adds the existing scene-point Lambert/cube-shadow term,
+with material diffuse exactly once. Native light ambient and native alpha stay
+native. A draw without a proved Scene key can convert Local points without
+acquiring a profile's scene ambient. Scene profile transfer remains separate.
+The shadow pass excludes raw native-fragment point maps the Lambert receiver
+cannot sample and admits converted candidates through the same ledger.
+
+This covers plain PerPixel and PerPixelPBR without an installed GGX material.
+Actual native-fragment GGX still keeps native Local light and omits replacement;
+that evaluator is **not yet qualified** for conversion. Legacy titles do not
+set the proof flag and retain their old shader sources and lighting behaviour.
+Numeric GPU probes exercise the production admission/uniform/recomposition
+path for replacement, shadows, authored black channels, alpha and Off.

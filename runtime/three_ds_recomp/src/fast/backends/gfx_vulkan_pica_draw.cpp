@@ -8,6 +8,7 @@
 #include "fast/extension/pica_rim_light.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/renderer3ds/pica_surface_emission.h"
+#include "fast/renderer3ds/pica_native_point_replacement.h"
 #include "fast/extension/grass_interaction_bridge.h"
 #include "fast/extension/grass_texture_twins.h"
 #include "fast/extension/grass_overlay_mask.h"
@@ -1009,6 +1010,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         std::optional<Renderer3ds::PicaSurfaceLightingUniforms> surfaceLighting;
         std::optional<Renderer3ds::PicaFragmentBalanceUniforms> fragmentBalance;
+        std::optional<Renderer3ds::PicaNativePointReplacement> pointReplacement;
         // Adapter capability: the draw's native fragment lights are scene
         // lights (shadow receivers, no second application of a scene light).
         bool nativeFragmentLitReceivers = false;
@@ -1099,13 +1101,32 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 NativePicaFragmentLightingOperand(),
                 draw.LightBinding.Water ? draw.LightBinding.Water->Count : 0U,
                 waterSurface.WorldBounds.Available, waterSurface.ReachesWater, waterSurface.WholeDraw);
-            if (balanceTitleDraw && draw.FragmentFeatures.FragmentLightingEnabled && balanceWaterEligible &&
+            const bool nativePointDraw = NativePicaFragmentLightingOperand() && !isolatedLighting &&
+                draw.FragmentFeatures.FragmentLightingEnabled;
+            const bool fragmentCapture = nativePointDraw && balanceWaterEligible &&
                 Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting) &&
                 draw.FragmentShaderHooks.ValidFor(draw.FragmentShaderSource) &&
                 draw.FragmentShaderHooks.NativeLightingCapture.Valid(draw.FragmentShaderSource.size(),
-                    draw.FragmentShaderHooks.Offset(Renderer3ds::PicaShaderHook::PicaLighting)))
+                    draw.FragmentShaderHooks.Offset(Renderer3ds::PicaShaderHook::PicaLighting));
+            auto surfaceBinding = draw.LightBinding;
+            if (nativePointDraw) {
+                // A native-fragment receiver must not receive a second copy of
+                // its Local light through the legacy supplemental path. Only
+                // the identity-proved ledger below can publish points here.
+                surfaceBinding.ScenePoints.reset();
+            }
+            if (balanceTitleDraw && fragmentCapture)
                 fragmentBalance = Renderer3ds::BuildPicaFragmentBalanceUniforms(true,
-                    draw.FragmentFeatures.FragmentLighting, draw.LightBinding, mFrameEnvironment);
+                    draw.FragmentFeatures.FragmentLighting, surfaceBinding, mFrameEnvironment);
+            if (fragmentCapture) {
+                pointReplacement = Renderer3ds::BuildPicaNativePointReplacement(true,
+                    draw.FragmentFeatures.FragmentLighting, draw.LightBinding, mFrameEnvironment, fragmentBalance);
+                if (pointReplacement) {
+                    fragmentBalance = pointReplacement->Balance;
+                    surfaceBinding.ScenePoints = std::make_shared<const Renderer3ds::PicaScenePointLights>(
+                        pointReplacement->Points);
+                }
+            }
             // An unqualified fragment-lit draw keeps the no-profile native
             // reference (pica_fragment_balance.h).
             const bool balanceFallback = Renderer3ds::PicaFragmentLitTitleDrawKeepsNative(
@@ -1116,7 +1137,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceLighting = Renderer3ds::BuildPicaSurfaceLightingUniforms(
                 draw.TemporalVertexProgram.Hooks, booleanUniforms,
                 draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset),
-                draw.LightBinding, surfaceEnvironment,
+                surfaceBinding, surfaceEnvironment,
                 environmentWorldToView && mSurfaceLightingView ? &*mSurfaceLightingView : nullptr,
                 pointShadowHistory.Valid() ? &pointShadowAssignment : nullptr,
                 fragmentBalance.has_value());
@@ -1358,6 +1379,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 resolvedReflectionMaterial.reset();
             }
         }
+        // Native-fragment GGX has its own native-light loop, not the captured
+        // Lambert recomposition. Until that evaluator qualifies replacement,
+        // keep its native Local light and omit the replacement on this draw.
+        if (pbrMaterial != nullptr && pointReplacement && surfaceLighting)
+            surfaceLighting->Control[1] = 0;
         if (graphicsSettings.Effects.SurfaceLighting == Extension::SurfaceLightingMode::NativePbr &&
             pbrMaterial == nullptr)
             surfaceLighting.reset();
@@ -1611,6 +1637,21 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     s.Lights[2].Diffuse[1], s.Lights[2].Diffuse[2], s.Lights[2].DirectionEnabled[3]);
                 record.pop_back();
                 record += material;
+            }
+            if (pointReplacement) {
+                char replacement[160];
+                std::snprintf(replacement, sizeof(replacement),
+                    ",\"pointReplacement\":{\"nativeSlotMask\":%u,\"points\":%u,\"ggxNativeFallback\":%u,\"ids\":[",
+                    pointReplacement->ReplacedSlots, pointReplacement->Points.Count, pbrMaterial ? 1U : 0U);
+                record.pop_back();
+                record += replacement;
+                for (uint32_t i = 0; i < pointReplacement->Points.Count; ++i) {
+                    char identity[32];
+                    std::snprintf(identity, sizeof(identity), "%s\"%llx\"", i ? "," : "",
+                        static_cast<unsigned long long>(pointReplacement->Points.Lights[i].SourceIdentity));
+                    record += identity;
+                }
+                record += "]}}";
             }
             if (fragmentBalance) {
                 char balance[256];
