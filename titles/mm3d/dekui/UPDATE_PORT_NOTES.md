@@ -192,6 +192,53 @@ Tip HUD (second S2 commit):
   transient suppression, no partial discard; small-map overview and restore. Settings tests
   add the layout-version matrix, bounds, the dungeon prompt fallback and the parser-only keys.
 
+## S3: dungeon map at tip 4f2692ed (2026-11-06)
+
+Modules at tip: `dungeon_map.h`, `world_map_prompt.h` (deferred from S2: it needs the tip
+DungeonMap backgrounds) and the new `message_layout.h` (the read-only description-plate reader;
+the `Panel` value type is declared there because `message_interpolation.h` is the renderer's).
+`dungeon_map.h` was rebuilt from the normalised tip file with every code address translated
+through `v110_address.h`; `world_map_prompt.h` by three-way merge (`W/tools/dekui/s2_merge.py`).
+
+- Sites (vanilla, no Restoration code): 5 = 0x594644 (ref 0x5944D4, relocated BL SetZoom,
+  EUR word ebf07902: RememberZoom, then SetZoom 0x1B2A54); 6 = 0x597774 (ref 0x597604, MOVEQ
+  r0,#1: EntryZoom, the SVC keeps EQ and the native BLEQ SetZoom follows); 7 = 0x594D98 (ref
+  0x594C28, displaced ADD r0,r5,#0x35C: OverviewCursorNext, OverviewCursorEnd 0x594CD8 only in
+  mode 3 on the dungeon page). The 14 ZoomGuards and 12 OverviewCursorGuards are the original
+  EUR words (relocated BLs re-encoded: 0x597778 0bf06cb5, 0x594CB4 ebf07627, 0x594CDC
+  ebf0761d), including the pools 0x1B2A74 = 0x6890F4 and 0x1B2A78 / 0x1B2570 = 0x7781D8.
+  New boundaries (registry v11): the six site/PC+4 words plus AddTargets SetZoom and
+  OverviewCursorEnd.
+- Data: 0x7781D8 (+0x520 mode word, mode = top byte) and 0x727970 (Radar) are identity
+  addresses proved by literals (0x1B2A78, 0x1B2570, 0x1AEBDC, 0x36E268 for the state; getter
+  literal 0x188348 for Radar). Upstream's 0x36E2A0 literal is 0x36E268 on v1.1; 0x6B36F8+0x2C is
+  0x6B3700+0x2C (message manager, as in file_select_prompt).
+- Behaviour: arrow scale and per-arrow offsets about each arrow's centre; the red arrow branch
+  drawn in the early pass before MessageWindow (layout 2), the rest in the late pass; the border
+  inserted first in layout 2 (queue scan now includes screen 2); side shadows split around the
+  map description plate (DescriptionBounds, remembered from the DialogueScale After site);
+  inner `bb_map_area_g` shadows hidden while zoomed (modes 1/2); A no longer filtered on the
+  dungeon page (still filtered on the world map), with the native touch Zoom buttons hidden and
+  the dungeon zoom prompt plus "Move map" drawn by `world_map_prompt.h`.
+- Marker style (+0x834, byte +0x837): contract guards `MarkerStyleGuards` (getter 0x188338/
+  0x188348, MapTransformUpdate 0x1AEB18..0x1AECB4 with pool 0x1AEBDC, reader 0x59C624, the
+  0x36E268 literal). The write is gated by `MarkerStyleConfirmed` until the T5 states confirm
+  `+0x837 = (mode == 3) ? 0 : 1` (W/tools/dekui/s3_marker_probe.py).
+- ZoomFade clock: `world_map_prompt` gets `Core::GlobalTimeUs()`, the window setup's
+  presentation clock (presentation frame count x 1/60 s), the same clock ItemsMapPrompt already
+  uses; it is deterministic under `--fixed-delta-seconds`. Not proved to equal emulated guest
+  time: the fade only sets the "Move map" prompt's 150 ms opacity ramp.
+- Not ported (class b): `InterpolationIdentity` / `dungeon_map_interpolation.h` (map pan
+  identity for 60 Hz interpolation), the `EffectCapture::MapShadow` diagnostic.
+- Tests: `dungeon_map_tests.cpp` (`oot3d_mm3d_dekui_dungeon_map_tests [code.bin]`, standalone
+  target `dungeon`): v110 translation of every address, branch targets, guard mutation against
+  the original image, the marker contract, sites 5/6/7 through `Core::CallSvc` (register
+  preservation, same game+scene recall vs a new scene or game, mode 2 never remembered, overview
+  skip only for mode 3 on the dungeon page, A filter), and the tip dungeon_side_panels_check
+  scenarios (side panels, screen-2 routing, early arrows, hidden zoom buttons and inner shadows,
+  marker restore on early exits, description exclusion, arrows). core_tests' code.bin manifest
+  has 153 sites.
+
 ## Renderer and frontend handoff
 
 Class (b) implementations remain with the title renderer: 60 Hz interpolation
@@ -212,7 +259,7 @@ per-file class (b)/(c) ledger is in `W/analysis/dekui/UPDATE_6e36dfb4.md`.
 
 ## Standalone validation
 
-`I:/Python/python.exe -B W/analysis/dekui/test_update_port.py settings|core|update|language`
+`I:/Python/python.exe -B W/analysis/dekui/test_update_port.py settings|core|update|language|hud|dungeon`
 runs one component; append `--clang-cl` for the application's clang-cl 22.1.6.
 Each invocation acquires the shared exclusive mkdir build lock and releases
 only its own lock. Outputs stay in `W/analysis/dekui/settings_build_update`;
