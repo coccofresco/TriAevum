@@ -83,3 +83,13 @@ sources, dormant-but-visible fairy variants, complete six-category material
 proof, installed GGX receivers, installer/Forge catalog routing, previous-room
 transition coverage and the final owner Off/On batch. The MM3D base profile,
 including ambient 0.6, is unchanged. Do not land this as full parity.
+
+Continuation gates: pipeline-cache69, foundation463+1 skipped, owning MM3D/native
+composition/environment tests, F1 widgets12491/2720 and Python catalogs7 MM+13
+OoT pass. At1a48f652 one targeted night run passes:43 exact native replacement
+draws plus12 catalog identities reach native-fragment receivers (14 points;
+4 point lights rendered,96 bound draws); trace ambient remains0.6. One rebuilt
+OoT3D Kokiri run is3/3 SHA-identical to cap-p13. The subsequent64725c3f
+same-frame scene invalidation fix is built/unit-tested, not game-rerun.
+No new product smoke or owner Off/On batch is claimed. Exact receipts and the
+still-pending capture index are in the local DL evidence directory.
