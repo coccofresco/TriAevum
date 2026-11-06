@@ -1125,23 +1125,34 @@ void NativeA32WindowSession::Setup() {
                            1000U));
   // The user's profiles beside the configuration; the release's defaults in
   // the runtime resources.
+  // A title without authored tuning keeps its native lighting (D1 of the
+  // alignment: OoT3D's base profile is OoT3D's), except in the groups whose
+  // base its session supplies.
+  Oot3dNativeGame::SceneEnvironmentFallback sceneEnvironmentBase(
+      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur
+          ? Oot3dNativeGame::BaseSceneEnvironmentProfile()
+          : Oot3dNativeGame::NativePreservingSceneEnvironmentProfile());
+  if (titleSession) {
+    for (size_t group = 0; group < sceneEnvironmentBase.Groups.size(); ++group) {
+      Oot3dNativeGame::SceneEnvironmentProfile profile;
+      if (titleSession->BaseSceneEnvironment(Oot3dNativeGame::SceneEnvironmentGroup(group), profile))
+        sceneEnvironmentBase.Groups[group] = std::move(profile);
+    }
+  }
   sceneEnvironment = std::make_shared<Oot3dNativeGame::SceneEnvironmentRuntime>(
       Oot3dNativeGame::TitleSceneEnvironmentDirectory(launch.Host.ConfigurationPath, titleAdapter),
       [](const Fast::Renderer3ds::PicaEnvironmentLighting& environment) {
         Fast::Extension::GraphicsSettingsRuntime::Instance().PublishSceneEnvironment(environment);
       },
       Oot3dNativeGame::TitleReleaseSceneEnvironmentDirectory(launch.Host.ResourceRoot, titleAdapter),
-      // A title without authored tuning keeps its native lighting (D1 of the
-      // alignment: OoT3D's base profile is OoT3D's).
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur
-          ? Oot3dNativeGame::BaseSceneEnvironmentProfile()
-          : Oot3dNativeGame::NativePreservingSceneEnvironmentProfile());
+      std::move(sceneEnvironmentBase));
   // F1 order: the scene lights join Lighting > Lights & Shadows; then
   // Controls, HUD and Game (Save states, Language) after the graphics tabs.
   // Only adapters with a typed scene provider expose scene profiles.
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur ||
       titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
-    applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(sceneEnvironment));
+    applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(
+        sceneEnvironment, {.NativeFragmentLighting = titleSession && titleSession->NativeFragmentLighting()}));
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // The developer tours, lab and emitter inventory drive OoT3D's guest

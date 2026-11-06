@@ -2337,9 +2337,11 @@ TEST(PicaFragmentBalance, SourceIdentityNotPermutationOrDirectionOwnsTheKey) {
     scene->Count=2;scene->ShadowCasterIdentity=134537748;
     scene->Lights[0]={134537748,{-0.265F,0.907F,0.151F},{220/255.F,195/255.F,180/255.F},true};
     scene->Lights[1]={134537772,{0.265F,-0.907F,-0.151F},{20/255.F,45/255.F,72/255.F},true};
+    scene->Scope=PicaNativeLightScope::Scene;
     PicaNativeLightBinding binding;binding.SceneDirectionals=scene;
     binding.Sources[0].Kind=binding.Sources[1].Kind=PicaNativeLightSource::Type::Directional;
     binding.Sources[0].SourceIdentity=134537772;binding.Sources[1].SourceIdentity=134537748;
+    binding.Sources[0].Scope=binding.Sources[1].Scope=PicaNativeLightScope::Scene;
     PicaEnvironmentLighting e;e.Enabled=true;e.KeyDirection=PicaEnvironmentKeyDirection::SceneMain;
     e.NativeDirectStrength=0;e.NativeLocalStrength=1;e.NativeAmbientStrength=.6F;
     e.AmbientIntensity=0;e.Lights[0].Intensity=1;
@@ -2367,6 +2369,118 @@ TEST(PicaFragmentBalance, SourceIdentityNotPermutationOrDirectionOwnsTheKey) {
     binding.Sources[1].Kind=PicaNativeLightSource::Type::Point;
     binding.Sources[1].SourceIdentity=134537748;
     EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,layout,binding,e));
+}
+
+namespace {
+// A clock-driven scene at night as its native fragment lights bind a floor
+// (values from the MM3D P1.2 diagnosis): slot 0 a lamp (point, an actor's
+// light), slot 1 the moon, slot 2 the opposite environment record.
+struct FragmentLitNightFixture {
+    Fast::Renderer3ds::PicaFragmentLightingLayout Layout;
+    Fast::Renderer3ds::PicaNativeLightBinding Binding;
+    Fast::Renderer3ds::PicaEnvironmentLighting Profile;
+    FragmentLitNightFixture() {
+        using namespace Fast::Renderer3ds;
+        Layout.SchemaVersion=kPicaFragmentLightingLayoutSchemaVersion;
+        Layout.ActiveLightCount=3;Layout.LightPermutation={0,1,2};
+        Layout.Lights[0].Directional=false;Layout.Lights[1].Directional=Layout.Lights[2].Directional=true;
+        auto scene=std::make_shared<PicaSceneDirectionalLights>();
+        scene->Count=2;scene->Scope=PicaNativeLightScope::Scene;
+        scene->Lights[0]={0x804e22cU,{0.2F,0.527F,0.82F},{88/255.F,76/255.F,138/255.F},true};
+        scene->Lights[1]={0x804e214U,{-0.2F,-0.527F,-0.82F},{42/255.F,90/255.F,56/255.F},true};
+        Binding.SceneDirectionals=scene;
+        Binding.Sources[0].Kind=PicaNativeLightSource::Type::Point;
+        Binding.Sources[0].SourceIdentity=0x9915f1cU;
+        Binding.Sources[0].Origin=PicaNativeLightOrigin::Actor;
+        Binding.Sources[1].SourceIdentity=0x804e22cU;
+        Binding.Sources[2].SourceIdentity=0x804e214U;
+        for(size_t i:{size_t(1),size_t(2)}) {
+            Binding.Sources[i].Kind=PicaNativeLightSource::Type::Directional;
+            Binding.Sources[i].Origin=PicaNativeLightOrigin::EnvironmentDirectional;
+            Binding.Sources[i].Scope=PicaNativeLightScope::Scene;
+        }
+        // The supported shape with OoT3D's base gains and local lights native.
+        Profile.Enabled=true;Profile.PreserveSceneBrightness=false;
+        Profile.KeyDirection=PicaEnvironmentKeyDirection::SceneMain;
+        Profile.NativeDirectStrength=0;Profile.NativeLocalStrength=1;Profile.NativeAmbientStrength=.6F;
+        Profile.AmbientIntensity=0;Profile.Lights[0].Intensity=1;Profile.Lights[0].Color={1,1,1};
+        Profile.Lights[1].Intensity=0;
+    }
+};
+} // namespace
+
+TEST(PicaFragmentBalance, LightFunctionDecidesWhatTheProfileReplaces) {
+    using namespace Fast::Renderer3ds;
+    using Gain=std::array<float,4>;
+    FragmentLitNightFixture f;
+    ASSERT_TRUE(PicaFragmentBalanceProfileSupported(f.Profile));
+    const auto out=BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,f.Profile);
+    ASSERT_TRUE(out);
+    EXPECT_EQ(out->Control[0],7U);
+    EXPECT_EQ(out->Control[1],1U); // The moon carries the key (and its shadow).
+    EXPECT_EQ(out->Control[2],0U);
+    // The lamp (Local) keeps its native light and stays additive.
+    EXPECT_EQ(out->Gains[0],(Gain{1,1,.6F,0}));
+    EXPECT_EQ(out->Gains[1],(Gain{0,0,.6F,2}));
+    EXPECT_EQ(out->Gains[2],(Gain{0,0,.6F,1})); // Native scene direct 0.
+    EXPECT_FLOAT_EQ(out->Parameters[0],.6F); // Relative gain on the native scene ambient.
+    // Unknown or unproved owners are Local: never replaced, and without a
+    // Scene key the draw keeps its native lighting.
+    auto unproved=f.Binding;
+    unproved.Sources[1].Scope=unproved.Sources[2].Scope=PicaNativeLightScope::Local;
+    EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,f.Layout,unproved,f.Profile));
+    // The other environment record, unproved, keeps its light; the key still moves.
+    auto partly=f.Binding;partly.Sources[2].Scope=PicaNativeLightScope::Local;
+    const auto kept=BuildPicaFragmentBalanceUniforms(true,f.Layout,partly,f.Profile);
+    ASSERT_TRUE(kept);
+    EXPECT_EQ(kept->Control[1],1U);
+    EXPECT_EQ(kept->Gains[2],(Gain{1,1,.6F,0}));
+    // Records whose owner the adapter did not prove are never Scene.
+    auto records=std::make_shared<PicaSceneDirectionalLights>(*f.Binding.SceneDirectionals);
+    records->Scope=PicaNativeLightScope::Local;
+    auto unprovedRecords=f.Binding;unprovedRecords.SceneDirectionals=records;
+    EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,f.Layout,unprovedRecords,f.Profile));
+    // A Scene slot that is none of the environment's records: native draw.
+    auto stray=f.Binding;stray.Sources[0].Scope=PicaNativeLightScope::Scene;
+    EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,f.Layout,stray,f.Profile));
+    // A local light dimmed by the user's own profile follows that gain.
+    auto dimmed=f.Profile;dimmed.NativeLocalStrength=.5F;
+    const auto half=BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,dimmed);
+    ASSERT_TRUE(half);
+    EXPECT_EQ(half->Gains[0],(Gain{.5F,.5F,.6F,0}));
+}
+
+TEST(PicaFragmentBalance, UnsupportedShapeLeavesTheFragmentLitFrameNative) {
+    using namespace Fast::Renderer3ds;
+    FragmentLitNightFixture f;
+    // Supported shape: unchanged, for both kinds of title.
+    EXPECT_EQ(PicaFragmentLitFrameEnvironment(f.Profile,true),f.Profile);
+    EXPECT_EQ(PicaFragmentLitFrameEnvironment(f.Profile,false),f.Profile);
+    // Authored shapes (added ambient, a turned key, native direct, a fill) on
+    // a title lit by native fragment lights: the whole frame is native, so the
+    // shadow light is the native one (no profile key, native direct 1, no
+    // environment: the profile-Off inputs of the shadow pass) and no draw
+    // builds a balance or a profile receiver.
+    for(int shape=0;shape<4;++shape) {
+        auto e=f.Profile;
+        if(shape==0) e.AmbientIntensity=.3F;
+        if(shape==1) e.KeyAzimuthOffset=.5F;
+        if(shape==2) e.NativeDirectStrength=1;
+        if(shape==3) e.Lights[1].Intensity=.4F;
+        ASSERT_FALSE(PicaFragmentBalanceProfileSupported(e));
+        const auto frame=PicaFragmentLitFrameEnvironment(e,true);
+        EXPECT_FALSE(frame.Enabled);
+        // The profile-Off inputs (GraphicsSettingsRuntime::SnapshotForRendering):
+        // only the settings independent of the override stay.
+        PicaEnvironmentLighting native;
+        native.ScopeIdentity=e.ScopeIdentity;native.PointLights=e.PointLights;native.CasterFaces=e.CasterFaces;
+        EXPECT_EQ(frame,native);
+        EXPECT_FALSE(BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,frame));
+        // Another title keeps its profile exactly.
+        EXPECT_EQ(PicaFragmentLitFrameEnvironment(e,false),e);
+    }
+    auto off=f.Profile;off.Enabled=false;
+    EXPECT_EQ(PicaFragmentLitFrameEnvironment(off,true),off);
 }
 
 TEST(PicaFragmentBalance, ExplicitProfileAndFractionalAmbientEndpoints) {

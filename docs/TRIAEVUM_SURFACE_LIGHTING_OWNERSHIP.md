@@ -374,3 +374,51 @@ Verification (developer launch; owner's play config, Vanilla+ RomFS overlay;
   (2 states), Mido's house (dev warp) and the courtyard with its moat. Hyrule
   Field by the river varies run to run (the before exe twice gave two hashes:
   the river's wave phase), so it is not an identity gate.
+
+### Native fragment lights: light function and fallback (2026-11-06)
+
+A title whose scene is lit per pixel by native fragment lights
+(`TitleSession::NativeFragmentLighting`) takes a scene profile only in the
+transfer shape of `PicaFragmentBalanceProfileSupported`: a white 1x key that
+follows the main scene light, native scene direct 0, no added ambient, fill or
+placed lights, native ambient and local gains in [0, 1].
+
+- **Light function.** The title adapter classifies each native light slot
+  (`PicaNativeLightSource::Scope`). The balance builder replaces only Scene
+  slots that are one of the environment's own directionals
+  (`PicaSceneDirectionalLights::Scope` Scene): the main one becomes the key and
+  casts the shadow, the others follow the native direct policy (removed, or
+  retained as reference fill when brightness is preserved). Local and Unknown
+  slots (lamps, actor and room lights, unproved owners) keep their native light
+  at the profile's local gain. A Scene slot without such a record, or a draw
+  without a Scene key, keeps its native lighting. The scene ambient is the
+  draw's native global ambient, scaled by the native ambient gain: a relative
+  gain that keeps the title's own room/actor balance.
+- **Per-vertex information.** The balance recomposes only the fragment primary
+  colour before the native clamp and TEV, so a vertex colour the TEV combiner
+  multiplies later (baked shading, fake AO, tint) is unchanged. Draws of such a
+  title without native fragment lighting take the profile through the ordinary
+  vertex-lighting equations, including the baked-reference path
+  (`BAKED_SURFACE_LIGHTING.md`), in the full scene-lighting model; with the
+  Native model they stay native as before.
+- **Unsupported shapes.** `PicaFragmentLitFrameEnvironment` turns any other
+  shape into the profile-Off inputs for the whole frame (scope, scene
+  point-light groups and caster faces stay). The shadow light, caster
+  selection, receiver matching, rim and placed lights then follow the native
+  environment exactly as with the profile Off, instead of a key no fragment-lit
+  receiver can match (shadows that vanished under an authored shape) or a
+  native moon shadow subtracted under a profile that changes nothing else
+  (darker moonlit surfaces).
+- **F1.** For such a title the Scene lights panel says whether the profile is
+  applied and marks the controls the contract does not apply (added ambient,
+  native scene direct, fog contribution, rim, key tint/intensity/offsets,
+  fill, fallback directions, placed lights) as unavailable with the reason.
+  A control holding an unsupported value stays editable so it can be set back
+  (capability-safe Off), and "Use the supported shape" sets them back at once.
+- **Titles without native fragment lighting** are unchanged: the frame
+  environment, the builder's inputs and every shader source are the same.
+
+Tests: `oot3d_pica_shader_pipeline_cache_tests` (light function, unproved
+owners, Local gain, unsupported shapes leave the frame native, supported shape
+unchanged), `triaevum_environment_tests` (a title's base per environment
+group), `triaevum_f1_settings_smoke` (the marks on the actual widgets).

@@ -37,6 +37,7 @@ class NativeA32SceneViewProbe;
 class Oot3dPicaCommandListCompositionProvider;
 struct NativeA32SceneViewSnapshot;
 struct Oot3dPicaViewportState;
+struct SceneEnvironmentProfile;
 
 // The latest perspective frustum a title's builder produced (s0..s5), before
 // the presentation policy widens it.
@@ -118,6 +119,15 @@ public:
     (void)snapshot;
     (void)time;
     (void)player;
+    return false;
+  }
+
+  // The title's base scene environment of a group: the profile a scene of
+  // that group takes when neither the user nor the release has a file for it
+  // (false keeps the session's fallback for that group).
+  virtual bool BaseSceneEnvironment(SceneEnvironmentGroup group, SceneEnvironmentProfile &profile) const {
+    (void)group;
+    (void)profile;
     return false;
   }
 

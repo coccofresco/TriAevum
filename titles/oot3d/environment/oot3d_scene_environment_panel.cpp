@@ -1,6 +1,8 @@
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/settings_panel_widgets.h"
+#include "fast/renderer3ds/pica_fragment_balance.h"
 #include "oot3d_scene_environment.h"
+#include "oot3d_scene_environment_codec.h"
 #include "oot3d_native_a32_scene_view.h"
 #include <algorithm>
 #include <cstdio>
@@ -12,8 +14,8 @@ namespace Oot3dNativeGame {
 namespace {
 class EnvironmentPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
 public:
-  explicit EnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime)
-      : mRuntime(std::move(runtime)) {}
+  EnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime, SceneEnvironmentPanelOptions options)
+      : mRuntime(std::move(runtime)), mOptions(options) {}
   // A section of Lighting > Lights & Shadows, above the shadow settings.
   const char *Label() const noexcept override { return "Scene lights"; }
   const char *Group() const noexcept override {
@@ -93,23 +95,51 @@ private:
           "Inactive: needs the Modern lighting model, F2 native override off "
           "and a supported renderer.");
     ImGui::BeginDisabled(!value.Enabled || !supported);
+    if (mOptions.NativeFragmentLighting && value.Enabled) {
+      const bool applies = Fast::Renderer3ds::PicaFragmentBalanceProfileSupported(
+          ResolveSceneEnvironment(value, *state.SceneId, state.EditingNight));
+      ImGui::TextWrapped(applies
+          ? "Applied to the native fragment lights: the sun or moon becomes the key light and casts the "
+            "shadows, the native ambient is scaled, and lamps and other local lights stay native."
+          : "Not applied: this game is lit by native fragment lights, which take only a white 1x key "
+            "following the main scene light, no native scene direct, no added ambient, fill or placed "
+            "lights. Lighting and shadows stay native until the marked controls are set back.");
+      if (!applies) {
+        if (ImGui::Button("Use the supported shape")) {
+          UseSupportedFragmentShape(value);
+          changed = true;
+        }
+        if (!value.PlacedLights.empty()) {
+          ImGui::SameLine();
+          ImGui::TextUnformatted("(removes the placed lights)");
+        }
+      }
+    }
     changed |= ImGui::Checkbox("Preserve scene brightness", &value.PreserveSceneBrightness);
     ImGui::TextWrapped(
         "Keep the native ambient reference and authored unlit color when native lights are off. "
         "Added lights still add illumination; this is not automatic exposure.");
+    ImGui::BeginDisabled(Locked(value.AmbientIntensity == 0.0F));
     changed |= ImGui::ColorEdit3("Ambient color", value.AmbientColor.data(),
                                  ImGuiColorEditFlags_Float);
     changed |=
         ImGui::SliderFloat("Ambient intensity", &value.AmbientIntensity, 0.0F,
                            2.0F, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::EndDisabled();
+    FragmentNote("added ambient (Native ambient contribution scales the game's own).");
     ImGui::TextWrapped(
         "Ambient is uniform, without direction. Colors are linear RGB.");
+    ImGui::BeginDisabled(Locked(value.NativeDirectStrength == 0.0F));
     changed |= ImGui::SliderFloat("Native scene direct contribution",
                                   &value.NativeDirectStrength, 0.0F, 2.0F,
                                   "%.2fx", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::EndDisabled();
+    FragmentNote("native scene direct (the main scene light is the key light; the other one follows "
+                 "Preserve scene brightness).");
     changed |= ImGui::SliderFloat("Native local contribution",
                                   &value.NativeLocalStrength, 0.0F, 2.0F,
                                   "%.2fx", ImGuiSliderFlags_AlwaysClamp);
+    if (value.NativeLocalStrength > 1.0F) FragmentNote("native local contribution above 1x.");
     ImGui::TextWrapped(
         "Scene direct uses the game's two environment directions on world and actors. "
         "Local keeps other native per-draw lights separate. Neither controls the added key/fill or fairy lights.");
@@ -118,11 +148,19 @@ private:
                                   &value.NativeAmbientStrength, 0.0F, 2.0F,
                                   "%.2fx", ImGuiSliderFlags_AlwaysClamp);
     ImGui::EndDisabled();
+    if (!value.PreserveSceneBrightness && value.NativeAmbientStrength > 1.0F)
+      FragmentNote("native ambient contribution above 1x.");
+    ImGui::BeginDisabled(Locked(value.FogStrength == 1.0F));
     changed |=
         ImGui::SliderFloat("Native fog contribution", &value.FogStrength, 0.0F,
                            1.0F, "%.2fx", ImGuiSliderFlags_AlwaysClamp);
+    ImGui::EndDisabled();
+    FragmentNote("fog contribution (the game's fog stays native).");
     ImGui::SeparatorText("Rim light");
+    ImGui::BeginDisabled(Locked(!value.Rim.Enabled));
     changed |= ImGui::Checkbox("Enable rim light", &value.Rim.Enabled);
+    ImGui::EndDisabled();
+    FragmentNote("rim light (it does not reach native fragment-lit surfaces).");
     ImGui::BeginDisabled(!value.Rim.Enabled);
     int rimSource = static_cast<int>(value.Rim.Source);
     if (ImGui::Combo("Rim source", &rimSource, "Independent\0Scene lights\0")) {
@@ -159,14 +197,25 @@ private:
           continue;
         auto &light = value.Lights[i];
         ImGui::PushID(static_cast<int>(i));
+        // Native fragment lights: the key is the main scene light, white and
+        // 1x; the fill is off.
+        const bool white = light.Color == std::array<float, 3>{1.0F, 1.0F, 1.0F};
+        ImGui::BeginDisabled(Locked(i == 0 ? white : true));
         changed |= ImGui::ColorEdit3("Light color", light.Color.data(),
                                      ImGuiColorEditFlags_Float);
+        ImGui::EndDisabled();
+        ImGui::BeginDisabled(Locked(light.Intensity == (i == 0 ? 1.0F : 0.0F)));
         changed |=
             ImGui::SliderFloat("Light intensity", &light.Intensity, 0.0F, 4.0F,
                                "%.2f", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::EndDisabled();
+        FragmentNote(i == 0 ? "key tint and intensity other than white 1x."
+                            : "fill light (it would add a light the native fragment lights do not have).");
         using KeyDirection = Fast::Renderer3ds::PicaEnvironmentKeyDirection;
         const bool scene = i == 0 && value.KeyDirection != KeyDirection::Authored;
         if (i == 0) {
+          ImGui::BeginDisabled(Locked(value.KeyDirection == KeyDirection::SceneMain &&
+                                      value.KeyAzimuthOffset == 0.0F && value.KeyElevationOffset == 0.0F));
           const char *directions[] = {"Manual", "Main scene light",
                                       "Ambient light orientation"};
           int direction = static_cast<int>(value.KeyDirection);
@@ -183,6 +232,8 @@ private:
                                           -90.0F, 90.0F, "%.1f deg",
                                           ImGuiSliderFlags_AlwaysClamp);
           }
+          ImGui::EndDisabled();
+          FragmentNote("a key that does not follow the main scene light unturned.");
           ImGui::TextWrapped(
               value.KeyDirection == KeyDirection::SceneMain
                   ? "Follows the scene's main light (the strongest environment light "
@@ -196,6 +247,9 @@ private:
                     "and brightness, tinted and scaled as above."
                   : "Uses the azimuth and elevation below.");
         }
+        // Without a main scene light a fragment-lit draw keeps its native
+        // lighting, so neither direction is used there.
+        ImGui::BeginDisabled(Locked(true));
         changed |=
             ImGui::SliderFloat(scene ? "Fallback azimuth" : "Azimuth",
                                &light.Azimuth, -180.0F, 180.0F,
@@ -204,6 +258,7 @@ private:
             ImGui::SliderFloat(scene ? "Fallback elevation" : "Elevation",
                                &light.Elevation, -90.0F, 90.0F,
                                "%.1f deg", ImGuiSliderFlags_AlwaysClamp);
+        ImGui::EndDisabled();
         if (scene)
           ImGui::TextWrapped("The fallback direction applies while the scene has "
                              "no environment light.");
@@ -247,9 +302,10 @@ private:
       ImGui::EndDisabled();
       ImGui::PopID();
     }
-    ImGui::BeginDisabled(!value.Enabled || !supported);
+    ImGui::BeginDisabled(!value.Enabled || !supported || Locked(value.PlacedLights.empty()));
     changed |= DrawPlacedLights(value, state);
     ImGui::EndDisabled();
+    FragmentNote("placed lights (remove them to apply the profile).");
     ImGui::SeparatorText("Shadows");
     ImGui::BeginDisabled(!supported);
     int faces = static_cast<int>(value.CasterFaces);
@@ -285,6 +341,31 @@ private:
 
 private:
   uint64_t mGroupActionRevision = 0;
+  // A control the native fragment-light contract does not apply: unavailable
+  // while it holds the supported value, still editable otherwise so it can be
+  // set back (capability-safe Off).
+  [[nodiscard]] bool Locked(bool atSupportedValue) const {
+    return mOptions.NativeFragmentLighting && atSupportedValue;
+  }
+  void FragmentNote(const char *what) const {
+    if (!mOptions.NativeFragmentLighting) return;
+    ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+    ImGui::TextWrapped("Unavailable with native fragment lights: %s", what);
+    ImGui::PopStyleColor();
+  }
+  // The supported shape for native fragment lights, keeping every other value.
+  static void UseSupportedFragmentShape(SceneEnvironmentProfile &value) {
+    value.KeyDirection = Fast::Renderer3ds::PicaEnvironmentKeyDirection::SceneMain;
+    value.KeyAzimuthOffset = value.KeyElevationOffset = 0.0F;
+    value.NativeDirectStrength = 0.0F;
+    value.AmbientIntensity = 0.0F;
+    value.NativeAmbientStrength = std::clamp(value.NativeAmbientStrength, 0.0F, 1.0F);
+    value.NativeLocalStrength = std::clamp(value.NativeLocalStrength, 0.0F, 1.0F);
+    value.Lights[0].Color = {1.0F, 1.0F, 1.0F};
+    value.Lights[0].Intensity = 1.0F;
+    value.Lights[1].Intensity = 0.0F;
+    value.PlacedLights.clear();
+  }
   void DrawGroupActions(const SceneEnvironmentSnapshot& state) {
     ImGui::TextWrapped("Day: scene's own > group standard > base. Night: scene's own > group standard > day result. "
                        "A scene with its own day profile can still inherit the group's night standard.");
@@ -579,10 +660,12 @@ private:
     }
   }
   std::shared_ptr<SceneEnvironmentRuntime> mRuntime;
+  SceneEnvironmentPanelOptions mOptions;
 };
 } // namespace
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
-CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime) {
-  return std::make_shared<EnvironmentPanel>(std::move(runtime));
+CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime,
+                            SceneEnvironmentPanelOptions options) {
+  return std::make_shared<EnvironmentPanel>(std::move(runtime), options);
 }
 } // namespace Oot3dNativeGame

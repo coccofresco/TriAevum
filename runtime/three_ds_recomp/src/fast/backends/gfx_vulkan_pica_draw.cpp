@@ -1106,9 +1106,16 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     draw.FragmentShaderHooks.Offset(Renderer3ds::PicaShaderHook::PicaLighting)))
                 fragmentBalance = Renderer3ds::BuildPicaFragmentBalanceUniforms(true,
                     draw.FragmentFeatures.FragmentLighting, draw.LightBinding, mFrameEnvironment);
-            // An unqualified MM fragment profile must not fall back to adding
+            // An unqualified fragment-lit draw must not fall back to adding
             // the old demo key. Keep the no-profile native reference instead.
-            const auto& surfaceEnvironment = (isolatedLighting || (balanceTitleDraw && !fragmentBalance))
+            // A draw of such a title without native fragment lighting (vertex
+            // lit or baked room colour) takes the profile through the same
+            // vertex-lighting equations as every other title, including the
+            // baked-reference path, in the full scene-lighting model only.
+            const bool balanceFallback = balanceTitleDraw && !fragmentBalance &&
+                (draw.FragmentFeatures.FragmentLightingEnabled ||
+                 !Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting));
+            const auto& surfaceEnvironment = (isolatedLighting || balanceFallback)
                 ? isolatedEnvironment : mFrameEnvironment;
             surfaceLighting = Renderer3ds::BuildPicaSurfaceLightingUniforms(
                 draw.TemporalVertexProgram.Hooks, booleanUniforms,

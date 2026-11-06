@@ -65,11 +65,15 @@ SceneEnvironmentProfile NativePreservingSceneEnvironmentProfile() {
 
 SceneEnvironmentRuntime::SceneEnvironmentRuntime(std::filesystem::path directory, Publisher publish,
                                                  std::filesystem::path defaults,
-                                                 SceneEnvironmentProfile fallback)
+                                                 SceneEnvironmentFallback fallback)
     : mDirectory(std::move(directory)), mDefaults(std::move(defaults)), mFallback(std::move(fallback)),
       mPublish(std::move(publish)) {
-  if (const auto errors = ValidateSceneEnvironment(mFallback); !errors.empty())
+  if (const auto errors = ValidateSceneEnvironment(mFallback.Unknown); !errors.empty())
     throw std::invalid_argument(DescribeSceneEnvironmentErrors(errors));
+  for (const auto& group : mFallback.Groups)
+    if (group)
+      if (const auto errors = ValidateSceneEnvironment(*group); !errors.empty())
+        throw std::invalid_argument(DescribeSceneEnvironmentErrors(errors));
   if (const char* value = std::getenv("TRIAEVUM_ENVIRONMENT_NIGHT_WEIGHT")) {
     char* end = nullptr;
     const float weight = std::strtof(value, &end);
@@ -341,7 +345,7 @@ bool SceneEnvironmentRuntime::LoadSlotLocked(bool night) {
     return false;
   }
   auto profile = file.Document.Profile ? *file.Document.Profile
-      : night ? mDrafts[0].Profile : mFallback;
+      : night ? mDrafts[0].Profile : mFallback.For(mState.Group);
   draft = {profile, profile, {}, own, !night || file.Exists, std::hash<std::string>{}(file.Text),
            night && !file.Exists ? SceneEnvironmentSource::Day : source,
            file.Exists ? path : std::filesystem::path{}};

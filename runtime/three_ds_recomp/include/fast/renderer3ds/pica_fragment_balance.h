@@ -35,6 +35,33 @@ inline bool PicaFragmentBalanceProfileSupported(const PicaEnvironmentLighting& e
         e.PlacedLightCount==0;
 }
 
+// The environment a title whose scene lighting is native fragment lighting
+// renders a frame with. A profile in the supported shape applies as it is.
+// Any other shape applies nowhere: its draws keep native lighting, so the
+// shadow light, caster selection, receiver matching, rim and placed lights
+// follow the native environment too, exactly as with the profile Off (the
+// settings that are independent of it stay: scope, scene point-light groups,
+// caster faces), instead of a key that no fragment-lit receiver can match.
+// Other titles are unchanged.
+[[nodiscard]] inline PicaEnvironmentLighting PicaFragmentLitFrameEnvironment(
+    const PicaEnvironmentLighting& e, bool nativeFragmentLighting) noexcept {
+    if (!nativeFragmentLighting || !e.Enabled || PicaFragmentBalanceProfileSupported(e)) return e;
+    PicaEnvironmentLighting off;
+    off.ScopeIdentity = e.ScopeIdentity;
+    off.PointLights = e.PointLights;
+    off.CasterFaces = e.CasterFaces;
+    return off;
+}
+
+// The light's function decides what the profile replaces. A slot the title
+// adapter classified as Scene must be one of the environment's own
+// directionals (records whose owner it proved: PicaSceneDirectionalLights
+// Scope Scene). The main one becomes the key; the others follow the native
+// direct policy. Every other slot (Local or Unknown: lamps, actor and room
+// lights) keeps its native light at the profile's local gain, and an
+// environment record the adapter did not prove is never replaced. A Scene
+// slot without such a record keeps the whole draw native instead of guessing
+// which term it was.
 inline std::optional<PicaFragmentBalanceUniforms> BuildPicaFragmentBalanceUniforms(
     bool capability, const PicaFragmentLightingLayout& layout,
     const PicaNativeLightBinding& binding, const PicaEnvironmentLighting& e) noexcept {
@@ -72,8 +99,12 @@ inline std::optional<PicaFragmentBalanceUniforms> BuildPicaFragmentBalanceUnifor
         const bool directional=layout.Lights[i].Directional;
         if (directional != (source.Kind==PicaNativeLightSource::Type::Directional)) return std::nullopt;
         const PicaSceneDirectionalLight* nativeScene=nullptr;
-        for (uint32_t j=0;j<scene.Count;++j)
-            if (scene.Lights[j].SourceIdentity==source.SourceIdentity) nativeScene=&scene.Lights[j];
+        if (source.Scope==PicaNativeLightScope::Scene) {
+            if (scene.Scope!=PicaNativeLightScope::Scene) return std::nullopt;
+            for (uint32_t j=0;j<scene.Count;++j)
+                if (scene.Lights[j].SourceIdentity==source.SourceIdentity) nativeScene=&scene.Lights[j];
+            if (!nativeScene) return std::nullopt;
+        }
         if (nativeScene && !directional) return std::nullopt;
         auto& gain=out.Gains[i];
         gain={e.NativeLocalStrength,e.NativeLocalStrength,ambient,0};

@@ -686,6 +686,47 @@ int main() try {
           "OoT3D lost its release scene default");
     std::filesystem::remove_all(directory);
   }
+  // A title's base per environment group: a scene without files takes its
+  // group's base, an unknown group or a group without its own takes the
+  // shared fallback; a group that becomes known later reloads an unedited
+  // slot; files keep precedence; an invalid base is refused.
+  {
+    const auto user=directory/"group-base";
+    std::filesystem::create_directories(user);
+    SceneEnvironmentFallback base(NativePreservingSceneEnvironmentProfile());
+    auto outdoor=NativePreservingSceneEnvironmentProfile();
+    outdoor.Enabled=true;outdoor.NativeDirectStrength=0;outdoor.NativeAmbientStrength=0.6F;
+    outdoor.PreserveSceneBrightness=false;outdoor.Lights[0].Intensity=1;
+    base.Groups[size_t(SceneEnvironmentGroup::TimeFlows)]=outdoor;
+    Check(base.For(std::nullopt)==base.Unknown && base.For(SceneEnvironmentGroup::Indoor)==base.Unknown &&
+              base.For(SceneEnvironmentGroup::TimeFlows)==outdoor,"group base lookup");
+    Fast::Renderer3ds::PicaEnvironmentLighting published;
+    SceneEnvironmentRuntime runtime(user,[&](const auto& v){published=v;},{},base);
+    const auto at=[](std::optional<SceneEnvironmentGroup> group,uint64_t world){
+      SceneEnvironmentTime t;t.Group=group;t.AuthoredScene=world;return t;};
+    runtime.ObserveScene(0x6F,at(SceneEnvironmentGroup::TimeFlows,1));
+    Check(runtime.Snapshot().Profile==outdoor && runtime.Snapshot().Sources[0]==SceneEnvironmentSource::Base &&
+              published.Enabled,"group base not applied");
+    runtime.ObserveScene(0x61,at(SceneEnvironmentGroup::Indoor,2));
+    Check(runtime.Snapshot().Profile==base.Unknown && !published.Enabled,"group without base not native");
+    runtime.ObserveScene(0x2D,at(std::nullopt,3));
+    Check(runtime.Snapshot().Profile==base.Unknown && !published.Enabled,"unknown group not native");
+    runtime.ObserveScene(0x2D,at(SceneEnvironmentGroup::TimeFlows,3));
+    Check(runtime.Snapshot().Profile==outdoor && published.Enabled,"late group did not take its base");
+    auto own=outdoor;own.NativeAmbientStrength=0.25F;
+    Write(user/"scene-0050.environment.json",
+          FormatSceneEnvironment(EncodeSceneEnvironment(own,0x50,false)));
+    runtime.ObserveScene(0x50,at(SceneEnvironmentGroup::TimeFlows,4));
+    Check(runtime.Snapshot().Profile==own && runtime.Snapshot().Sources[0]==SceneEnvironmentSource::Scene,
+          "scene file lost precedence over the group base");
+    auto invalid=base;
+    invalid.Groups[size_t(SceneEnvironmentGroup::FixedTime)]=outdoor;
+    invalid.Groups[size_t(SceneEnvironmentGroup::FixedTime)]->NativeAmbientStrength=std::nanf("");
+    bool refused=false;
+    try { SceneEnvironmentRuntime bad(user,[](const auto&){},{},invalid); } catch (const std::invalid_argument&) { refused=true; }
+    Check(refused,"invalid group base accepted");
+    std::filesystem::remove_all(directory);
+  }
   std::printf("scene environment tests passed: %d checks\n", gChecks);
   return 0;
 } catch (const std::exception &error) {

@@ -2,6 +2,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
 #include "fast/extension/grass_stage_profile.h"
+#include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/renderer3ds/pica_surface_emission.h"
 #include "fast/backends/startup_checkpoints.h"
@@ -398,26 +399,30 @@ void GfxRenderingAPIVulkan::StartFrame() {
     Renderer3ds::PicaSurfaceDebug::Instance().BeginFrame();
 #endif
     const auto& nextGraphicsSettings = graphicsSnapshot.Value;
-    if (mFrameEnvironment != graphicsSnapshot.Environment) {
-      if (!Renderer3ds::ContinuousPicaEnvironmentChange(mFrameEnvironment, graphicsSnapshot.Environment)) {
+    // A title lit by native fragment lights applies only the profile shape
+    // its draws support; any other shape leaves the whole frame native.
+    const auto nextEnvironment = Renderer3ds::PicaFragmentLitFrameEnvironment(
+        graphicsSnapshot.Environment, NativePicaFragmentLightingOperand());
+    if (mFrameEnvironment != nextEnvironment) {
+      if (!Renderer3ds::ContinuousPicaEnvironmentChange(mFrameEnvironment, nextEnvironment)) {
         mTemporalAaPass.ResetHistory();
         mTaaOutputValid = false;
         // Never use a previous scene/sun's depth map for a new lighting direction.
-        if (mFrameEnvironment.ContinuityEpoch != graphicsSnapshot.Environment.ContinuityEpoch ||
-            mFrameEnvironment.ScopeIdentity != graphicsSnapshot.Environment.ScopeIdentity ||
-            mFrameEnvironment.Enabled != graphicsSnapshot.Environment.Enabled ||
-            mFrameEnvironment.KeyDirection != graphicsSnapshot.Environment.KeyDirection ||
-            mFrameEnvironment.KeyAzimuthOffset != graphicsSnapshot.Environment.KeyAzimuthOffset ||
-            mFrameEnvironment.KeyElevationOffset != graphicsSnapshot.Environment.KeyElevationOffset ||
-            mFrameEnvironment.CasterFaces != graphicsSnapshot.Environment.CasterFaces ||
+        if (mFrameEnvironment.ContinuityEpoch != nextEnvironment.ContinuityEpoch ||
+            mFrameEnvironment.ScopeIdentity != nextEnvironment.ScopeIdentity ||
+            mFrameEnvironment.Enabled != nextEnvironment.Enabled ||
+            mFrameEnvironment.KeyDirection != nextEnvironment.KeyDirection ||
+            mFrameEnvironment.KeyAzimuthOffset != nextEnvironment.KeyAzimuthOffset ||
+            mFrameEnvironment.KeyElevationOffset != nextEnvironment.KeyElevationOffset ||
+            mFrameEnvironment.CasterFaces != nextEnvironment.CasterFaces ||
             mFrameEnvironment.Lights[0].DirectionTowardSource !=
-                graphicsSnapshot.Environment.Lights[0].DirectionTowardSource)
+                nextEnvironment.Lights[0].DirectionTowardSource)
             mNriDirectionalShadowPass.InvalidateHistory();
       }
         // Continuous profile motion uses VirtualShadowKeyframes' existing
         // page budget/dissolve, just like the moving native sun. Do not reset
         // its construction (or TAA history) for every interpolated sample.
-        mFrameEnvironment = graphicsSnapshot.Environment;
+        mFrameEnvironment = nextEnvironment;
     }
     if (mFrameGraphicsSettings.Effects.DirectionalShadows.Mode != nextGraphicsSettings.Effects.DirectionalShadows.Mode ||
         mFrameGraphicsSettings.Effects.PointShadows.Mode != nextGraphicsSettings.Effects.PointShadows.Mode ||

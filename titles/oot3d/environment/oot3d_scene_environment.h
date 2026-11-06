@@ -96,6 +96,21 @@ struct SceneEnvironmentProfile {
 // A title without authored tuning: disabled, native gains one, no added light.
 [[nodiscard]] SceneEnvironmentProfile NativePreservingSceneEnvironmentProfile();
 
+// The base profile a slot takes when no file resolves: one profile for every
+// group (OoT3D's tuned intro lights, a title's native-preserving profile), or
+// a title's own base per environment group. A group without its own, and a
+// scene whose group is unknown, take Unknown.
+struct SceneEnvironmentFallback {
+  SceneEnvironmentProfile Unknown;
+  std::array<std::optional<SceneEnvironmentProfile>, kEnvironmentGroupIds.size()> Groups{};
+  SceneEnvironmentFallback(SceneEnvironmentProfile profile = BaseSceneEnvironmentProfile())
+      : Unknown(std::move(profile)) {}
+  [[nodiscard]] const SceneEnvironmentProfile &For(std::optional<SceneEnvironmentGroup> group) const {
+    if (group && size_t(*group) < Groups.size() && Groups[size_t(*group)]) return *Groups[size_t(*group)];
+    return Unknown;
+  }
+};
+
 // Profile RGB is already linear and is interpolated directly. Directions/
 // rotations take the shortest angular route. Placed
 // lights match by index, with stable blend identities and missing lights faded.
@@ -144,10 +159,11 @@ public:
   // user's group file, the default group file, then the base profile; edits
   // are always saved to `directory`.
   // `fallback`: the base profile when no file resolves (OoT3D's tuned intro
-  // lights, or a title's native-preserving profile).
+  // lights, a title's native-preserving profile, or a title's base per
+  // environment group). Every profile must validate.
   SceneEnvironmentRuntime(std::filesystem::path directory, Publisher publish,
                           std::filesystem::path defaults = {},
-                          SceneEnvironmentProfile fallback = BaseSceneEnvironmentProfile());
+                          SceneEnvironmentFallback fallback = BaseSceneEnvironmentProfile());
   // Time selects the blend, never the editable draft. Scene changes reload.
   void ObserveScene(std::optional<uint16_t> scene, SceneEnvironmentTime time = {},
                     std::optional<ScenePlayerPlacement> player = std::nullopt);
@@ -204,7 +220,7 @@ private:
   void SelectLocked(std::optional<uint16_t> scene);
   std::filesystem::path mDirectory;
   std::filesystem::path mDefaults;
-  const SceneEnvironmentProfile mFallback;
+  const SceneEnvironmentFallback mFallback;
   Publisher mPublish;
   mutable std::mutex mMutex;
   SceneEnvironmentSnapshot mState;
@@ -236,7 +252,15 @@ private:
   uint64_t mRevision = 0;
 };
 
+// What the title's renderer can apply. NativeFragmentLighting: its scene is
+// lit by native fragment lights, which take a profile only in the supported
+// shape (Fast::Renderer3ds::PicaFragmentBalanceProfileSupported); the panel
+// marks the other controls unavailable and says why.
+struct SceneEnvironmentPanelOptions {
+  bool NativeFragmentLighting = false;
+};
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
-CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime);
+CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime,
+                            SceneEnvironmentPanelOptions options = {});
 
 } // namespace Oot3dNativeGame
