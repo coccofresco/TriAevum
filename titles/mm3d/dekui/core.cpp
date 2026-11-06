@@ -578,7 +578,10 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
             auto& map_memory=memory;
             const auto screen=cpu.Regs()[4];
             if (swi==Mm3dDekui::NativeMinimap::BeforeSVC) {
-                minimap_hook.Begin(map_memory,screen,Mm3dDekui::Minimap::enabled.load());
+                // r0 = the game (PlayState) at the Before site, as upstream 6e36dfb4 passes it:
+                // the small gameplay map rebuilds the player marker from it and stays native
+                // (zoomed) without it. The suppress argument waits for MenuBackdrop (S4).
+                minimap_hook.Begin(map_memory,screen,Mm3dDekui::Minimap::enabled.load(),cpu.Regs()[0]);
             } else {
                 minimap_hook.End(map_memory,screen,Mm3dDekui::Minimap::enabled.load(),
                     Mm3dDekui::Minimap::scale.load(),Mm3dDekui::Minimap::opacity.load(),
