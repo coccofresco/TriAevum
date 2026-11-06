@@ -99,6 +99,8 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
         ImGui::BeginDisabled(availability.Known && !availability.Available);
         if (arrival.BootZone == zone.Id) name += "  [Boot]";
         if (!zone.Proven) name += "  (unverified)";
+        // "##zone": the Debug Warp Screen lists scenes of the same name.
+        name += "##zone";
         ImGui::PushID(zone.Id);
         if (ImGui::Selectable(name.c_str(), selected == &zone)) {
           arrival.SelectedZone = zone.Id;
@@ -153,7 +155,7 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
       auto &value = arrival.Arrival[axis];
       ImGui::PushID(definition.Id);
       ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0F);
-      if (ImGui::BeginCombo(definition.Label, ValueLabel(axis, value).c_str())) {
+      if (ImGui::BeginCombo(definition.Label, ValueLabel(axis, value).c_str(), ImGuiComboFlags_HeightLarge)) {
         if (ImGui::Selectable("keep", value == kDevWarpKeep)) value = kDevWarpKeep;
         Tooltip("Leave the current value as it is.");
         if (ImGui::Selectable("zone preset", value == kDevWarpPreset)) value = kDevWarpPreset;

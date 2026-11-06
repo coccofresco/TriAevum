@@ -7,6 +7,10 @@
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
 #include "triaevum_audio_settings_panel.h"
+#if defined(TRIAEVUM_DEVELOPER_TOOLS) && defined(TRIAEVUM_TITLE_MM3D)
+#include "oot3d_dev_tools_panel.h"
+#include "mm3d_dev_tools.h"
+#endif
 #include "ship/audio/AudioOutputPolicy.h"
 #include "three_ds_touch_overlay_settings.h"
 #include "oot3d_scene_environment.h"
@@ -1772,6 +1776,58 @@ const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext*, ImGuiID id) {
     return it == items.end() ? nullptr : it->second.Label.c_str();
 }
 
+
+#if defined(TRIAEVUM_DEVELOPER_TOOLS) && defined(TRIAEVUM_TITLE_MM3D)
+// Dev Tools (docs/TRIAEVUM_DEVELOPER_WARP.md): MM3D's Zones and Arrival
+// sections drive the shared runtime (filter, select, boot zone, an arrival
+// value persisted by axis id); Warp waits for gameplay; OoT3D's tab keeps its
+// Child/Adult and Day/Night and shows neither section.
+void CheckDevToolsPanel() {
+    using namespace Oot3dNativeGame;
+    const auto path = std::filesystem::temp_directory_path() / "triaevum_f1_smoke_developer-tools-mm3d.json";
+    std::filesystem::remove(path);
+    auto warp = std::make_shared<DevWarpRuntime>(path, std::make_shared<Mm3dDevTools>());
+    InstallGraphicsSettingsPanelTabs({CreateDevToolsPanel(warp, "en")});
+    size = ImVec2(760, 680);
+    Frame(); Frame();
+    Click("Dev Tools");
+    Frame(true);
+    Check(loggedPanelText.find("Zones") != std::string::npos, "MM3D Zones section missing");
+    Check(loggedPanelText.find("Arrival") != std::string::npos, "MM3D Arrival section missing");
+    Check(loggedPanelText.find("Debug Warp Screen Translation") == std::string::npos,
+          "translation offered for a one-language title catalogue");
+    EditText("##ZoneFilter", "stock");
+    Click("Stock Pot Inn##zone");
+    Check(warp->ArrivalOptions().SelectedZone == "stock-pot-inn", "zone selection not kept");
+    Check(Find("Warp##Zone").Disabled, "zone warp offered outside gameplay");
+    Click("Start here on launch");
+    Check(warp->ArrivalOptions().BootZone == "stock-pot-inn", "boot zone not set");
+    Select("Time", "22:00");
+    Check(warp->ArrivalOptions().Arrival[1] == 0xEAAB, "arrival time not applied");
+    Click("Clear launch zone");
+    Check(warp->ArrivalOptions().BootZone.empty(), "boot zone not cleared");
+    Check(warp->StorageError().empty(), "dev tools storage error: " + warp->StorageError());
+    {
+        std::ifstream stream(path);
+        const auto document = nlohmann::json::parse(stream);
+        Check(document["Arrival"]["time"] == 0xEAAB && document["Zones"]["Selected"] == "stock-pot-inn" &&
+                  document.contains("WarpPoints"),
+              "MM3D dev tools not persisted beside SoH's keys");
+    }
+    std::filesystem::remove(path);
+    auto oot = std::make_shared<DevWarpRuntime>(std::filesystem::path{});
+    InstallGraphicsSettingsPanelTabs({CreateDevToolsPanel(oot, "en")});
+    Frame(); Frame();
+    Click("Dev Tools");
+    Frame(true);
+    Check(loggedPanelText.find("Zones") == std::string::npos && loggedPanelText.find("Arrival") == std::string::npos,
+          "OoT3D Dev Tools gained title sections");
+    Find("Adult");
+    Find("Night");
+    InstallGraphicsSettingsPanelTabs({});
+}
+#endif
+
 int main(int argc, char** argv) try {
     PresentationSettingsTransaction delayedConfirmation(500);
     PresentationSettingsValue previousDisplay;
@@ -3034,6 +3090,9 @@ int main(int argc, char** argv) try {
     CheckSavestatePanel();
     CheckAudioPanel();
     CheckPhotoModePanel();
+#if defined(TRIAEVUM_DEVELOPER_TOOLS) && defined(TRIAEVUM_TITLE_MM3D)
+    CheckDevToolsPanel();
+#endif
     CheckSceneEnvironmentCodec();
     CheckSceneEnvironment();
     CheckMm3dSceneEnvironment();
