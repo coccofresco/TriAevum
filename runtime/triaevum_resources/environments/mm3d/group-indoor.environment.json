@@ -33,7 +33,7 @@
   "keyLightAzimuthOffset": 0.0,
   "keyLightDirection": "scene_main",
   "keyLightElevationOffset": 0.0,
-  "nativeAmbientStrength": 0.4,
+  "nativeAmbientStrength": 1.0,
   "nativeDirectStrength": 0.0,
   "nativeLocalStrength": 1.0,
   "pointLights": [

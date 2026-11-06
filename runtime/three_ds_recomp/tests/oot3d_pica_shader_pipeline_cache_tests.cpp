@@ -2511,6 +2511,59 @@ TEST(PicaFragmentBalance, AdditionsHaveOneOwnerAndLocalOnlyRoomsDoNotAcquireTheA
     EXPECT_TRUE(BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,f.Profile));
 }
 
+TEST(PicaFragmentBalance, NativeSecondaryMaterialProductSurvivesPrimaryReplacement) {
+    using namespace Fast::Renderer3ds;
+    // Native TEV: FPRI*T0, then *VTX x2, then *FSEC x4. This is a
+    // material product, NOT an additive specular highlight. Removing the
+    // secondary Scene response blacks it even with unit native ambient.
+    PicaTevProgram tev;
+    for (auto& stage:tev.Stages) stage[0]=15;
+    tev.Stages[0]={0x31,0,1,0};
+    tev.Stages[1]={0x0f,0,1,1};
+    tev.Stages[2]={0x2f,0,1,2};
+    ASSERT_TRUE(PicaFragmentSecondaryMaterialFactor(tev));
+    FragmentLitNightFixture f;f.Profile.NativeDirectStrength=0;f.Profile.NativeLocalStrength=.4F;
+    auto balance=BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,f.Profile);
+    ASSERT_TRUE(balance);
+    ApplyPicaFragmentSecondaryMaterialFactor(*balance,tev);
+    EXPECT_EQ(balance->Control[2],1U);
+    EXPECT_FLOAT_EQ(balance->Gains[1][0],0); // Native diffuse still replaced.
+    EXPECT_FLOAT_EQ(balance->Gains[1][1],1); // Scene secondary is a material factor.
+    EXPECT_FLOAT_EQ(balance->Gains[0][1],.4F); // Native local control still works.
+    PicaTevInputs inputs;
+    inputs.Primary={.5F,.5F,.5F,1};inputs.Textures[0]={.5F,.5F,.5F,1};
+    inputs.PrimaryFragment={.25F,.25F,.25F,1};
+    inputs.SecondaryFragment={.4F,.4F,.4F,1};
+    const auto native=EvaluatePicaTevProgram(tev,inputs);
+    EXPECT_GT(native[0],0.19F);
+    auto lost=inputs;lost.SecondaryFragment={0,0,0,1};
+    EXPECT_FLOAT_EQ(EvaluatePicaTevProgram(tev,lost)[0],0);
+    auto restored=inputs;
+    for (size_t c=0;c<3;++c) restored.SecondaryFragment[c]*=balance->Gains[1][1];
+    EXPECT_EQ(EvaluatePicaTevProgram(tev,restored),native);
+    // Follow the delayed combiner buffer, not just immediate PREVIOUS.
+    auto buffered=tev;buffered.Control[0]=1U<<8;buffered.Stages[2][0]=0x2d;
+    EXPECT_TRUE(PicaFragmentSecondaryMaterialFactor(buffered));
+    // Additive, inverted, alpha-only and overwritten secondary dependencies
+    // must retain the old policy; an outdoor highlight is not a multiplier.
+    auto additive=tev;additive.Stages[2][2]=2;
+    EXPECT_FALSE(PicaFragmentSecondaryMaterialFactor(additive));
+    auto additiveBalance=BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,f.Profile);
+    ASSERT_TRUE(additiveBalance);
+    ApplyPicaFragmentSecondaryMaterialFactor(*additiveBalance,additive);
+    EXPECT_EQ(additiveBalance->Control[2],0U);
+    EXPECT_FLOAT_EQ(additiveBalance->Gains[1][1],0); // Old additive/outdoor policy unchanged.
+    auto inverted=tev;inverted.Stages[2][1]=0x10;
+    EXPECT_FALSE(PicaFragmentSecondaryMaterialFactor(inverted));
+    auto scalar=tev;scalar.Stages[2][1]=0x20;
+    EXPECT_FALSE(PicaFragmentSecondaryMaterialFactor(scalar));
+    auto overwritten=tev;overwritten.Stages[5][0]=3;
+    EXPECT_FALSE(PicaFragmentSecondaryMaterialFactor(overwritten));
+    auto primaryOnly=tev;primaryOnly.Stages[2][0]=15;primaryOnly.Stages[2][2]=0;
+    EXPECT_FALSE(PicaFragmentSecondaryMaterialFactor(primaryOnly));
+    EXPECT_NE(kPicaFragmentBalanceBody.find("balance_control.z & 1u"),std::string_view::npos);
+}
+
 TEST(PicaFragmentBalance, UnqualifiedFragmentLitDrawKeepsTheNativeReference) {
     using Fast::Renderer3ds::PicaFragmentLitTitleDrawKeepsNative;
     // Arguments: title draw under a profile, balanced, fragment lit, full model.

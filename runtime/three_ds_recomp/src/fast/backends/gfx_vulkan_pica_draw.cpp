@@ -1106,6 +1106,16 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     draw.FragmentShaderHooks.Offset(Renderer3ds::PicaShaderHook::PicaLighting)))
                 fragmentBalance = Renderer3ds::BuildPicaFragmentBalanceUniforms(true,
                     draw.FragmentFeatures.FragmentLighting, draw.LightBinding, mFrameEnvironment);
+            if (fragmentBalance) {
+                Renderer3ds::PicaTevProgram tev{};
+                if (draw.FragmentUniformBytes.size() < Extension::kPicaPackedFragmentTevProgramOffset + sizeof(tev))
+                    fragmentBalance.reset(); // Unknown material composition keeps the native draw.
+                else {
+                    std::memcpy(&tev, draw.FragmentUniformBytes.data() +
+                        Extension::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
+                    Renderer3ds::ApplyPicaFragmentSecondaryMaterialFactor(*fragmentBalance, tev);
+                }
+            }
             // An unqualified fragment-lit draw keeps the no-profile native
             // reference (pica_fragment_balance.h).
             const bool balanceFallback = Renderer3ds::PicaFragmentLitTitleDrawKeepsNative(
@@ -1619,7 +1629,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (fragmentBalance) {
                 char balance[256];
                 std::snprintf(balance,sizeof(balance),
-                    ",\"fragmentBalance\":%u,\"balanceKeyIndex\":%u,\"referenceFillMask\":%u,\"balanceGlobalAmbientGain\":%.9g}",
+                    ",\"fragmentBalance\":%u,\"balanceKeyIndex\":%u,\"secondaryMaterialFactor\":%u,\"balanceGlobalAmbientGain\":%.9g}",
                     fragmentBalanceApplied?1U:0U,fragmentBalance->Control[1],fragmentBalance->Control[2],
                     static_cast<double>(fragmentBalance->Parameters[0]));
                 record.pop_back();record+=balance;

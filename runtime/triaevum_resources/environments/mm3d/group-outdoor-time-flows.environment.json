@@ -4,7 +4,7 @@
     1.0,
     1.0
   ],
-  "ambientIntensity": 0.3,
+  "ambientIntensity": 0.0,
   "directionalLights": [
     {
       "azimuth": -89.2,
@@ -33,7 +33,7 @@
   "keyLightAzimuthOffset": 0.0,
   "keyLightDirection": "scene_main",
   "keyLightElevationOffset": 0.0,
-  "nativeAmbientStrength": 0.3,
+  "nativeAmbientStrength": 1.0,
   "nativeDirectStrength": 0.0,
   "nativeLocalStrength": 1.0,
   "pointLights": [

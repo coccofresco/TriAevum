@@ -1,13 +1,15 @@
 #pragma once
 #include "fast/renderer3ds/pica_surface_lighting.h"
 #include "fast/renderer3ds/pica_native_state.h"
+#include "fast/renderer3ds/pica_tev_program.h"
 #include <cstddef>
 
 namespace Fast::Renderer3ds {
 // Appended ONLY for the new applied variant at the existing surface binding16.
 // The plain surface payload (sizeof(PicaSurfaceLightingUniforms)) and every old descriptor range remain unchanged.
 struct alignas(16) PicaFragmentBalanceUniforms {
-    // active native-index mask, proved main native index (8 = absent), reserved, preserve
+    // active native-index mask, proved main native index (8 = absent),
+    // secondary material-factor bit, preserve
     std::array<uint32_t,4> Control{};
     // Per native index: diffuse gain, specular gain, ambient gain, source class.
     // class0 local/unknown, class1 scene direct, class2 proved main source.
@@ -39,6 +41,40 @@ inline bool PicaFragmentBalanceProfileSupported(const PicaEnvironmentLighting& e
         for (float d : light.DirectionTowardSource) if (!std::isfinite(d)) return false;
     }
     return true;
+}
+
+// A product of native primary AND secondary RGB uses secondary as a material
+// factor, not an additive highlight. Replacing primary with the profile must
+// not zero that factor. Prove only direct RGB product/replay chains; no actor,
+// texture, colour, normal or title identity participates. Other operations
+// conservatively lose the proof (an additive secondary is NOT a factor).
+[[nodiscard]] constexpr bool PicaFragmentSecondaryMaterialFactor(const PicaTevProgram& program) noexcept {
+    uint32_t previous=0, buffer=0, nextBuffer=0;
+    for (size_t stage=0;stage<program.Stages.size();++stage) {
+        const auto& words=program.Stages[stage];
+        const auto operand=[&](uint32_t input) {
+            if (((words[1]>>(4*input))&15U)!=0) return 0U;
+            uint32_t source=(words[0]>>(4*input))&15U;
+            if (stage==0 && input<2 && source==15) source=(words[0]>>8)&15U;
+            if (source==15) return previous;
+            if (source==13) return buffer;
+            return source==1 ? 1U : source==2 ? 2U : 0U;
+        };
+        const uint32_t op=words[2]&15U;
+        const uint32_t factors=op==0 ? operand(0) : op==1 ? operand(0)|operand(1) : 0U;
+        previous=factors;
+        buffer=nextBuffer;
+        if (stage<4 && (program.Control[0]&(1U<<(8+stage)))) nextBuffer=factors;
+    }
+    return previous==3U;
+}
+
+inline void ApplyPicaFragmentSecondaryMaterialFactor(PicaFragmentBalanceUniforms& balance,
+    const PicaTevProgram& program) noexcept {
+    balance.Control[2]=PicaFragmentSecondaryMaterialFactor(program) ? 1U : 0U;
+    if (balance.Control[2]!=0)
+        for (auto& gain:balance.Gains)
+            if (gain[3]!=0) gain[1]=1; // Captured Scene material factor, not another key.
 }
 
 // Profiles now apply ambient, keys, rim, fog and placed lights on native
@@ -204,7 +240,11 @@ inline constexpr std::string_view kPicaFragmentBalanceBody=R"glsl(
             vec4 gains=pica_surface.balance_gains[i];
             vec3 dg=vec3(gains.x), sg=vec3(gains.y);
             vec3 visibility=pica_surface_shadow(int(i));
-            dg*=visibility; sg*=visibility;
+            dg*=visibility;
+            // A Scene secondary material factor must not shadow the primary
+            // response a second time. Local-light gains/visibility still apply.
+            if ((pica_surface.balance_control.z & 1u) == 0u || gains.w == 0.0)
+                sg*=visibility;
             bool unchanged=all(equal(dg,vec3(1.0))) && gains.z==1.0;
             balance_primary += unchanged ? balance_combined[slot] :
                 balance_diffuse[slot]*dg + balance_ambient[slot]*gains.z;

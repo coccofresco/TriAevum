@@ -2,6 +2,10 @@
 
 Local-only branch `mm3d/parity-gp`, based on `18ef2d79`.
 
+The original qualification below is historical. See **Interior recalibration
+follow-up** for the updated ambient ledger, secondary-material-factor fix and
+its explicit visual-qualification gaps.
+
 ## Implementation
 
 - `84150bb7`: design before code, `docs/NATIVE_FRAGMENT_ENVIRONMENT_PROFILES.md`.
@@ -66,6 +70,44 @@ Noon/field sunlit brightness stays roughly native and shadows are clearer.
 **Indoor look calibration is not final/accepted:** OoT3D's starting indoor
 ambient gain 0.4 makes Inn/Woodfall substantially darker. Owner review is still
 needed; no scene-specific compensation or second look batch was introduced.
+
+## Interior recalibration follow-up
+
+Indoor and TimeFlows **day** now retain the exact native per-draw ambient
+(`nativeAmbientStrength=1`, added ambient zero), instead of removing 60% or
+replacing a draw-dependent budget with a constant material term. Key, local,
+rim, fog and shadow settings and all night files remain unchanged. TimeFlows
+is shared: the noon/field example's ambient changes from 0.224 to native 0.247;
+no byte-identical outdoor-profile output or new outdoor capture is claimed.
+
+The one requested three-location batch exposed the shelf figure's actual
+failure: its native TEV multiplies `FPRI * texture * vertex tint * FSEC`.
+The profile zeroed Scene secondary while replacing only primary with Lambert,
+so ambient could not unblack the material. A structural TEV proof now retains
+captured Scene secondary/LUT material factors, without shadowing them twice;
+Local secondary still follows its native-local control. Additive, inverted,
+alpha-only, overwritten and primary-only cases keep the old policy. No actor,
+texture or scene exception; no guessed MM3D identity from N64 tables. Only the
+balance variant advances to V3; OoT3D's capability-false route is unchanged.
+
+Affected gates passed: pipeline **69**, real-file MM3D profile **110** checks,
+production balance shader compiler **4** variants, actual-widget O6 **12516**
+and **2720** assertions. No broad unit matrix/pack regeneration, O2, O7 product
+qualification or additional game smoke was rerun. Current host-build-gp is back
+to **developer/tests ON**, not the historical O7 product configuration.
+
+Exactly **six new attempts**, no retries. All processes exited zero, but
+Woodfall native lost its swapchain before capture (`VK_ERROR_OUT_OF_DATE_KHR`),
+so there are only **five new images**. Its sheet explicitly reuses the previous
+native reference. Ambient-only deltas: Inn -4.74, Woodfall +2.20 (historical
+reference), Stone Tower -7.35; selected ROI losses remain visible in metrics.
+**All these pictures precede the structural secondary-factor fix. Final V3
+shelf appearance is not visually verified**, and no look acceptance is claimed.
+The run budget was not exceeded to hide this gap.
+
+Evidence: `W/analysis/parity/GP/captures/recal-1/INDEX.md` and
+`W/analysis/parity/GP/recal-1/` (diagnosis, captured input/TEV proof, receipts,
+post-fix binary hash, affected-build/compiler/unit/O6 logs).
 
 ## Remaining work
 
