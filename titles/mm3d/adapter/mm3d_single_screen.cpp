@@ -3,6 +3,7 @@
 #include "core.h"
 #include "settings.h"
 #include "mm3d_a32_substitute.h"
+#include "mm3d_layout_stack_probe.h"
 #include "mm3d_restoration.h"
 
 #include <cstdio>
@@ -69,10 +70,14 @@ class StateCpu final : public Mm3dDekui::Cpu {
 
 constexpr std::uint32_t kThumbBit = 0x20U;
 
+static_assert(Mm3dLayoutStackProbe::kRootPc == Mm3dDekui::NativeInventory::PCs[2] &&
+              Mm3dLayoutStackProbe::kEndPc == Mm3dDekui::NativeInventory::PCs[3]);
+
 } // namespace
 
 Mm3dSingleScreen::Mm3dSingleScreen(std::function<std::int64_t()> globalTimeUs)
-    : mCore(std::make_unique<Mm3dDekui::Core>(Mm3dDekui::HostFacts{std::move(globalTimeUs), {}})) {}
+    : mCore(std::make_unique<Mm3dDekui::Core>(Mm3dDekui::HostFacts{std::move(globalTimeUs), {}})),
+      mStackProbe(Mm3dLayoutStackProbe::FromEnvironment()) {}
 
 Mm3dSingleScreen::~Mm3dSingleScreen() = default;
 
@@ -161,10 +166,20 @@ void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
                 return pc + 4U;
             }
             state.r[15] = pc + 4U;
+            if (mStackProbe != nullptr) {
+                if (pc == Mm3dLayoutStackProbe::kRootPc) {
+                    mStackProbe->BeforeRoot(state, bus);
+                } else if (pc == Mm3dLayoutStackProbe::kEndPc) {
+                    mStackProbe->BeforeEnd(state, bus);
+                }
+            }
             {
                 StateCpu cpu(state);
                 BusMemory memory(bus, mRestoration);
                 mCore->CallSvc(replacement & 0x00FFFFFFU, cpu, memory);
+            }
+            if (mStackProbe != nullptr && pc == Mm3dLayoutStackProbe::kRootPc) {
+                mStackProbe->AfterRoot(state, bus, mCore->HudItemBackgroundScratchSp());
             }
             // dekui leaves Thumb as the CPSR T bit; the A32 runtime keeps it
             // in the PC.

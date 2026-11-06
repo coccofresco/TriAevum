@@ -165,6 +165,18 @@ Tip HUD (second S2 commit):
   which this port does not have). It needs no PC; the panes come from the Restoration HUD
   layout the RomFS layer mounts. Its 0x1200-byte scratch sits under the same layout-draw SP
   as OcarinaPrompt's 0x2400-byte scratch, which already runs there.
+  Proofs (S2): the layer's `Joker.Main.New.gar` (setup fingerprint e08af793...) holds `Hud2`
+  (`all`/`item_button_g`/`item_icon_set`), `HudItemIconSet` (`all`, the four `icon_item_*_g`
+  groups, each with its `icon_*_base`) and `ItemIconBase` (one pane `bb00_ybtn`); the vanilla
+  RomFS has no such archive (work-tree checker `tools/dekui/prove_hud_item_panes.py`). Stack:
+  the developer probe `TRIAEVUM_MM3D_SP_PROBE=<file>` (adapter `mm3d_layout_stack_probe.h`)
+  logs, at the Root/End PCs 0x1262C8/0x1262D4, SP before/after the Root chain, the mapped stack
+  range and the native draw's depth below the lowered SP (pattern fill, untouched words
+  restored). Cold boot to gameplay: every layout is drawn on the main thread (TLS 0x1FF82000,
+  stack 0x0FFC0000-0x10000000, exheader 0x40000); `Hud2` committed 348/348 times, SP at Root
+  0x0FFFF448, largest chain 0x3600 (MagicBorder 0x2400 + HudItemBackground 0x1200), deepest
+  native draw 0x428 bytes, least headroom left 0x3BA20 bytes. A savestate restores no
+  Restoration session, so `Hud2` (and these buttons) only appear after a cold boot.
 - native_minimap at tip: the pending-quad discard for removed radar objects (stale icons in
   the next full map draw), the suppress argument (always false until MenuBackdrop, S4), side
   padding, HUD opacity, and the small-map overview marker rebuild from 6e36dfb4. Vanilla

@@ -67,6 +67,12 @@ public:
     // Continue at r15 afterwards; unknown SVCs are inert, for caller routing.
     void CallSvc(U32 swi,Cpu&,Memory&);
     static std::vector<U32> CandidatePcs();
+    // Diagnostics: the SP HudItemBackground's innermost open Root committed
+    // its scratch under, 0 when that Root did not commit (read-only).
+    U32 HudItemBackgroundScratchSp() const {
+        const auto& frames=hud_item_background_hook.scratch.frames;
+        return frames.empty()?0:frames.back().sp;
+    }
     HostFacts host;
 private:
     std::int64_t GlobalTimeUs() const { return host.global_time_us ? host.global_time_us() : 0; }

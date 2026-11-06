@@ -16,6 +16,7 @@ class Core;
 namespace Oot3dNativeGame {
 
 class Mm3dRestorationPort;
+class Mm3dLayoutStackProbe;
 
 // Majora's Mask 3D's single-screen mode: mm3d-dekui's guest side
 // (titles/mm3d/dekui, ported onto the vanilla v1.1 code.bin) run the way
@@ -56,6 +57,8 @@ class Mm3dSingleScreen {
     std::unique_ptr<Mm3dDekui::Core> mCore;
     std::map<std::uint32_t, std::uint32_t> mReplacements;
     Mm3dRestorationPort* mRestoration = nullptr;
+    // TRIAEVUM_MM3D_SP_PROBE developer diagnostic; null otherwise.
+    std::unique_ptr<Mm3dLayoutStackProbe> mStackProbe;
 };
 
 } // namespace Oot3dNativeGame
