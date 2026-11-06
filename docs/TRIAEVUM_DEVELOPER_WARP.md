@@ -167,12 +167,17 @@ The tab adds, for a title that declares them:
   Screen's Warp applies them too (a preset keeps the value there).
 
 Arrival writes, in the same rollback transaction as the transition and before
-the trigger is published: day Common+0x14, time Common+0x20, form Common+0x26
-with the equipped mask Common+0x08 cleared. The new scene's Play_Init derives
-isNight (Common+0x0C; MM3D: night before 06:00 or from 18:00) and the sky from
-the time; eventDayCount stays, as 2S2H's map select. A day or time write is
-refused while nextDayTime (Common+0x36A0) is staged; Fierce Deity only in the
-boss lairs. After arrival the runtime checks day, time (within 0x800 units),
+the trigger is published: day Common+0x14, form Common+0x26 with the equipped
+mask Common+0x08 cleared, and the time staged in nextDayTime (Common+0x36A0),
+the Sun's Song reload path: the new scene's Play_Init copies it into the time
+(Common+0x20) and the sky time before it derives isNight (Common+0x0C; MM3D:
+night before 06:00 or from 18:00) and before the actors initialise. The scene
+being left keeps its time: written straight into the time, its day/night actor
+(En_Test4) saw a 06:00 crossing from night and ran "Dawn of a new day" (the
+moon crash on day 3). Play_Init advances the day when nextDayTime is exactly
+noon, so noon is staged as 0x8001. eventDayCount stays, as 2S2H's map select. A
+day or time write is refused while nextDayTime is staged; Fierce Deity only in
+the boss lairs. After arrival the runtime checks day, time (within 0x800 units),
 isNight, form and mask, and fails the warp naming the field that differs. Each
 axis has its own gate in `Mm3dDevProof`; while a gate is off a zone's preset
 for it keeps the current value and an explicit value is refused.
@@ -220,5 +225,41 @@ unit checks and a live Hyrule Field "Near Drawbridge" adult night warp from the
 play quick save (arrived in 70 guest frames, adult, night flag 1, health 48
 unchanged), Authentic preset.
 
-Six zones carry an arrival receipt (`PROVEN_ZONES` in the generator); the
-others show "unverified" until a sweep records theirs.
+### Live sweep (2026-11)
+
+The developer lab drives MM3D too (`TRIAEVUM_DEV_LAB`, title-neutral ops
+only): `{"op":"script","script":"mm3d:zone=deku-palace"}` runs the title's
+TRIAEVUM_DEV_WARP script, the same WarpTo/WarpToZone requests as the tab's Warp
+buttons, and acknowledges once settled with the scene, entrance and arrival
+state; `{"op":"panel","tab":"Dev Tools"}` shows F1 on that tab so a lab
+`capture` records it (the capture includes ImGui). The MM3D work tree's
+`tools/devwarp_verify.py` runs a plan through `run_safe.sh` (its watchdog and
+GPU lock): one warp after another from `sct_day1_idle`, a fresh process after a
+fault or a warp that never left a cutscene, one rgb8 JPEG per warp with the
+expected place and the observed result burned in.
+
+Results (`analysis/devwarp/verify_2026-11`, `summary.tsv` per entry):
+
+- Options: every day, every time choice and every form, Fierce Deity in the
+  five lairs, keep on all three axes, and the Fierce Deity refusal outside the
+  lairs: all as requested.
+- Zones: all 69 arrived at their entrance with their preset and are proven.
+  Clock Tower Rooftop arrives in the final-night scene (Skull Kid's dialogue);
+  Pirates' Fortress (interior) is guarded (the guards stop Link at once); the
+  Moon sets its own clock (07:45), so its zone keeps the day and time.
+- All 490 destinations, each with day 1, 12:00 and Human: 468 settled; 6
+  arrived in scenes that set their own clock (Cutscene Scene 0-2 and 4, the
+  Moon 0-1); Deku Palace 4 ("from Deku Shrine") ends in Deku Shrine (spawn 0)
+  instead, twice, not yet explained; 15 end MM3D's title process (svcBreak at 0x14C210 or
+  a guest dispatch exit), each reproduced alone in a fresh process. Those 15
+  are `MM3D_REFUSED` in the generator: shown disabled with the fault, refused
+  by Apply before any write and so by the hook.
+- Spawn names checked by meaning on the Termina Field and South Clock Town
+  sets (each "from X" faces the exit to X).
+
+Two fixes came from the sweep: the time staging above (night-to-day warps
+arrived on the next day at 06:01 or after a "Dawn of" reload), and an arrival
+during an entrance cutscene (Twinmold's intro outlasts the 900-frame window)
+now counts, as the title requires only the entrance and the player. The
+Inverted Stone Tower zone uses spawn 1 (spawn 0 is the flip from the upright
+tower and lands back on it).
