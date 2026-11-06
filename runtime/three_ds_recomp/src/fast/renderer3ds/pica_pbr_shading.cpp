@@ -299,6 +299,30 @@ constexpr std::string_view kPbrNativeLoopEnd = R"glsl(
     pbr_ambient += fragment_uniforms.lighting_global_ambient.rgb;
     pbr_ambient = pica_surface_resolved_ambient(pbr_ambient);
 )glsl";
+// Balanced native GGX shares the same source/slot ledger as Lambert, but
+// evaluates the surviving terms with GGX. Native light ambient is retained
+// independently of direct/specular replacement; global ambient is scaled once.
+constexpr std::string_view kPbrBalancedNativeLoopEnd = R"glsl(
+        vec4 gains = pica_surface.balance_gains[i];
+        vec3 diffuse, specular;
+        pbr_ggx(pbr_normal, pbr_view, l, pbr_albedo, pbr_f0, pbr_roughness, pbr_metallic,
+                two_sided, diffuse, specular);
+        vec3 rim = pbr_albedo * pica_surface_rim_weight(pbr_normal, pbr_view, l);
+        if ((flags & 16u) != 0u) {
+            if ((pbr_material.native_control.w & 2u) != 0u) diffuse *= pica_shadow_factor.rgb;
+            if ((pbr_material.native_control.w & 4u) != 0u) specular *= pica_shadow_factor.rgb;
+            if ((pbr_material.native_control.w & 6u) != 0u) rim *= pica_shadow_factor.rgb;
+        }
+        vec3 radiance = fragment_uniforms.lighting_diffuse[i].rgb;
+        pbr_direct += (diffuse * gains.x + specular * gains.y + rim * gains.x) *
+            radiance * attenuation * pica_surface_shadow(int(i));
+        pbr_gi_native += diffuse * gains.x * radiance * attenuation * pica_surface_shadow(int(i)) *
+            ((flags & 1u) != 0u ? pica_surface.gi_sources.x : pica_surface.gi_sources.z);
+        pbr_ambient += fragment_uniforms.lighting_ambient[i].rgb * attenuation * gains.z;
+    }
+    pbr_ambient += fragment_uniforms.lighting_global_ambient.rgb * pica_surface.balance_parameters.x;
+    pica_balance_ambient = pbr_ambient;
+)glsl";
 constexpr std::string_view kPbrSurfaceLoop = R"glsl(
     if (pica_surface.control.x != 0u) {
         for (int slot = 0; pbr_native_direct && slot < 3; ++slot) {
@@ -567,6 +591,8 @@ PicaPbrUberShader BuildPicaPbrUberShader(
 
 std::optional<PicaPbrShader> BuildPicaPbrShader(
     const PicaShaderHookLayout& hooks, const PicaPbrShaderOptions& options) {
+    if ((options.PreserveNativeUnlit && (options.NativeFragmentLighting || options.NativeBalance)) ||
+        (options.NativeBalance && !options.NativeFragmentLighting)) return std::nullopt;
     const auto* sample = hooks.TextureSample(options.TextureSlot);
     if (sample == nullptr || sample->Coordinate > 2U ||
         (sample->Operation != PicaTextureCoordinateOperation::NativeVFlip &&
@@ -607,20 +633,34 @@ std::optional<PicaPbrShader> BuildPicaPbrShader(
     result.ShadingBody += kPbrShadingMaterial;
     if (options.SeamSoftening) result.ShadingBody += kPbrSeamEmission;
     result.ShadingBody += kPbrShadingAccumulators;
-    result.ShadingBody += options.NativeFragmentLighting
-        ? kPbrUnlitReferenceNative
-        : kPbrUnlitReferenceSurface;
+    result.ShadingBody += options.PreserveNativeUnlit
+        ? "    bool pbr_baked_reference = false; bool pbr_unlit_reference = true;\n"
+        : options.NativeFragmentLighting ? kPbrUnlitReferenceNative : kPbrUnlitReferenceSurface;
     result.ShadingBody += kPbrNativeFlags;
     if (options.NativeFragmentLighting) {
+        if (options.NativeBalance)
+            result.ShadingBody += "    pbr_native_direct = true; pbr_native_ambient = true;\n";
         result.ShadingBody += kPbrNativeLoopBegin;
         if (options.NativeAttenuationLuts) {
             result.ShadingBody += kPbrNativeAttenuation;
         }
-        result.ShadingBody += kPbrNativeLoopEnd;
+        result.ShadingBody += options.NativeBalance ? kPbrBalancedNativeLoopEnd : kPbrNativeLoopEnd;
     } else {
         result.ShadingBody += kPbrSurfaceLoop;
+        if (options.PreserveNativeUnlit)
+            result.ShadingBody += "    pbr_direct = pbr_albedo; pbr_ambient = vec3(0.0);\n";
     }
-    result.ShadingBody += kPbrShadingEnd;
+    std::string ending{kPbrShadingEnd};
+    if (options.NativeFragmentLighting && options.NativeBalance) {
+        // Per-slot gains already own native direct. Do not multiply surviving
+        // Local GGX by the scene profile's native-direct (normally zero).
+        const std::string nativeScale = "float pbr_native_scale = pica_surface.control.x != 0u || pbr_material.native_control.x != 0u\n"
+            "                ? pica_surface.environment_parameters.x : pica_surface.environment_parameters.y;";
+        const auto at = ending.find(nativeScale);
+        if (at == std::string::npos) throw std::logic_error("missing native GGX gain site");
+        ending.replace(at, nativeScale.size(), "float pbr_native_scale = 1.0;");
+    }
+    result.ShadingBody += ending;
     result.DiagnosticOutput = kPbrDiagnostic;
     return result;
 }

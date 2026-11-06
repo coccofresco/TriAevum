@@ -640,9 +640,15 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
         result.Hooks.Offset(PicaShaderHook::AfterNativeTev) <= request.Source.size() &&
         result.Hooks.Has(PicaShaderSemantic::PrimaryColorInput) &&
         result.Hooks.Has(PicaShaderSemantic::ViewVector);
+    auto pbrOptions = request.Pbr;
+    pbrOptions.NativeBalance = pbrOptions.NativeBalance && pbrOptions.NativeFragmentLighting &&
+        HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
+            PicaShaderInstrumentationFeature::FragmentLightingBalance) &&
+        result.Hooks.NativeLightingCapture.Valid(request.Source.size(),
+            result.Hooks.Offset(PicaShaderHook::PicaLighting));
     const auto pbr = surfaceLighting && HasPicaShaderInstrumentationFeature(
         request.RequestedFeatures, PicaShaderInstrumentationFeature::PbrMaterial)
-        ? Renderer3ds::BuildPicaPbrShader(result.Hooks, request.Pbr) : std::nullopt;
+        ? Renderer3ds::BuildPicaPbrShader(result.Hooks, pbrOptions) : std::nullopt;
     using Decision = PicaEffectDecisions;
     auto& decisions = result.Decisions;
     if (AnalyzePicaFragmentOutputContract(request.Source).Depth ==
@@ -651,7 +657,8 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
     const bool fragmentOperand = surfaceLighting && !pbr &&
         HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
             PicaShaderInstrumentationFeature::FragmentLightingOperand);
-    const bool fragmentBalance = fragmentOperand &&
+    const bool pbrBalance = pbr && pbrOptions.NativeBalance;
+    const bool fragmentBalance = (fragmentOperand || pbrBalance) &&
         HasPicaShaderInstrumentationFeature(request.RequestedFeatures,
             PicaShaderInstrumentationFeature::FragmentLightingBalance) &&
         result.Hooks.NativeLightingCapture.Valid(request.Source.size(),
@@ -661,6 +668,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             PicaShaderInstrumentationFeature::NativeFragmentLitShadows);
     if (surfaceLighting) {
         decisions.FragmentLightingOperand = fragmentOperand;
+        decisions.PbrNativeBalance = pbrBalance && fragmentBalance;
         decisions.NativeFragmentLitShadows = nativeFragmentShadows;
         decisions.Set(Decision::SurfaceLighting);
         declarations += Renderer3ds::PicaSurfaceLightingDeclarations(fragmentOperand, fragmentBalance);
@@ -697,7 +705,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_FRAGMENT_IRRADIANCE_V1");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
         }
-        if (fragmentBalance) {
+        if (fragmentBalance && !pbrBalance) {
             const auto& sites=result.Hooks.NativeLightingCapture;
             insertions.push_back({sites.Begin, std::string(Renderer3ds::kPicaFragmentBalanceCaptureBegin)});
             insertions.push_back({sites.Diffuse, std::string(Renderer3ds::kPicaFragmentBalanceCaptureDiffuse)});
@@ -709,7 +717,13 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_SHADOW_V1");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::NativeFragmentLitShadows;
         }
+        if (fragmentBalance && pbrBalance) {
+            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_GGX_NATIVE_BALANCE_V1");
+            result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
+        }
         if (pbr) {
+            if (pbrOptions.PreserveNativeUnlit)
+                result.FragmentKey=SaltedVariantKey(result.FragmentKey,"PICA_NATIVE_UNLIT_PBR_V1");
             declarations += pbr->Declarations;
             insertions.push_back({tevEnd, pbr->ShadingBody});
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_PBR_GGX_V12_GI_SOURCES");
@@ -722,6 +736,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             decisions.Set(Decision::Pbr);
             decisions.PbrCoordinate = sample->Coordinate;
             decisions.PbrProjected = sample->Operation == PicaTextureCoordinateOperation::ProjectedNativeVFlip;
+            decisions.PbrNativeUnlit = pbrOptions.PreserveNativeUnlit;
             decisions.PbrNativeLighting = request.Pbr.NativeFragmentLighting;
             decisions.PbrAttenuationLuts = request.Pbr.NativeAttenuationLuts;
             decisions.PbrSeams = request.Pbr.SeamSoftening;

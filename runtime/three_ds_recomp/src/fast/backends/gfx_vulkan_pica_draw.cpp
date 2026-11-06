@@ -1354,6 +1354,14 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (pbrMaterial != nullptr) {
                 pbrOptions.TextureSlot = selectedSlot;
                 pbrOptions.NativeFragmentLighting = draw.FragmentFeatures.FragmentLightingEnabled;
+                if (NativePicaFragmentLightingOperand() && pbrOptions.NativeFragmentLighting &&
+                    draw.FragmentUniformBytes.size() >= Extension::kPicaPackedFragmentTevProgramOffset +
+                        sizeof(Renderer3ds::PicaTevProgram)) {
+                    Renderer3ds::PicaTevProgram tev{};
+                    std::memcpy(&tev,draw.FragmentUniformBytes.data()+Extension::kPicaPackedFragmentTevProgramOffset,sizeof(tev));
+                    pbrOptions.PreserveNativeUnlit = !Renderer3ds::PicaTevUsesFragmentLighting(tev);
+                    if (pbrOptions.PreserveNativeUnlit) pbrOptions.NativeFragmentLighting = false;
+                }
                 const auto& layout = draw.FragmentFeatures.FragmentLighting;
                 for (size_t slot = 0; slot < layout.ActiveLightCount; ++slot) {
                     const auto& light = layout.Lights[layout.LightPermutation[slot]];
@@ -1379,11 +1387,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 resolvedReflectionMaterial.reset();
             }
         }
-        // Native-fragment GGX has its own native-light loop, not the captured
-        // Lambert recomposition. Until that evaluator qualifies replacement,
-        // keep its native Local light and omit the replacement on this draw.
-        if (pbrMaterial != nullptr && pointReplacement && surfaceLighting)
-            surfaceLighting->Control[1] = 0;
+        // Installed native-fragment GGX consumes the same proved slot gains,
+        // retaining native ambient while evaluating surviving/replacement
+        // radiance once with its GGX BRDF and the existing cube visibility.
+        pbrOptions.NativeBalance = pbrMaterial != nullptr && pbrOptions.NativeFragmentLighting &&
+            fragmentBalance.has_value();
         if (graphicsSettings.Effects.SurfaceLighting == Extension::SurfaceLightingMode::NativePbr &&
             pbrMaterial == nullptr)
             surfaceLighting.reset();
@@ -1472,9 +1480,16 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                                             graphicsSettings, mFrameGraphicsSettingsRevision, shaderVariant);
         const bool fragmentBalanceApplied = fragmentBalance && Extension::HasPicaShaderInstrumentationFeature(
             shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingBalance);
+        if (pointReplacement && !fragmentBalanceApplied) {
+            // A fallback shader (or a TEV-unlit material) cannot suppress the
+            // native counterpart. Never leave its supplemental copy enabled.
+            if (surfaceLighting) surfaceLighting->Control[1] = 0;
+            pointReplacement.reset();
+        }
         if (surfaceLighting && !Extension::HasPicaShaderInstrumentationFeature(
                 shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand))
-            Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting);
+            Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting,
+                pbrOptions.NativeBalance || pbrOptions.PreserveNativeUnlit);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
         if (surfaceCandidate && surfaceDebug.Tracing()) {
             // One candidate: its native colour computation and what Modern did.
@@ -1626,9 +1641,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 const auto& s = *surfaceLighting;
                 char material[512];
                 std::snprintf(material, sizeof(material),
-                    ",\"materialDiffuse\":[%.3f,%.3f,%.3f],\"materialAmbient\":[%.3f,%.3f,%.3f],"
+                    ",\"pbrInstalled\":%u,\"pbrNativeBalance\":%u,\"pbrNativeUnlit\":%u,"
+                    "\"materialDiffuse\":[%.3f,%.3f,%.3f],\"materialAmbient\":[%.3f,%.3f,%.3f],"
                     "\"resolvedAmbient\":[%.3f,%.3f,%.3f],\"nativeLights\":[[%.3f,%.3f,%.3f,%.0f],"
                     "[%.3f,%.3f,%.3f,%.0f],[%.3f,%.3f,%.3f,%.0f]]}",
+                    shaderVariant.Decisions.Has(Extension::PicaEffectDecisions::Pbr) ? 1U : 0U,
+                    shaderVariant.Decisions.PbrNativeBalance ? 1U : 0U,
+                    shaderVariant.Decisions.PbrNativeUnlit ? 1U : 0U,
                     s.MaterialDiffuse[0], s.MaterialDiffuse[1], s.MaterialDiffuse[2], s.MaterialAmbient[0],
                     s.MaterialAmbient[1], s.MaterialAmbient[2], s.ResolvedAmbient[0], s.ResolvedAmbient[1],
                     s.ResolvedAmbient[2], s.Lights[0].Diffuse[0], s.Lights[0].Diffuse[1], s.Lights[0].Diffuse[2],
@@ -1642,7 +1661,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 char replacement[160];
                 std::snprintf(replacement, sizeof(replacement),
                     ",\"pointReplacement\":{\"nativeSlotMask\":%u,\"points\":%u,\"ggxNativeFallback\":%u,\"ids\":[",
-                    pointReplacement->ReplacedSlots, pointReplacement->Points.Count, pbrMaterial ? 1U : 0U);
+                    pointReplacement->ReplacedSlots, pointReplacement->Points.Count,
+                     pbrMaterial && !pbrOptions.NativeBalance ? 1U : 0U);
                 record.pop_back();
                 record += replacement;
                 for (uint32_t i = 0; i < pointReplacement->Points.Count; ++i) {

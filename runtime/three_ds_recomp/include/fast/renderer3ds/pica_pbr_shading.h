@@ -32,6 +32,10 @@ struct PicaPbrShaderOptions {
     bool NativeFragmentLighting = false;
     bool NativeAttenuationLuts = false;
     bool SeamSoftening = false;
+    // Uses the identity-proved per-hardware-slot balance. Kept out of legacy
+    // supersets so their shader text and uniform ABI remain unchanged.
+    bool NativeBalance = false;
+    bool PreserveNativeUnlit = false;
 };
 
 struct PicaPbrShader {

@@ -183,7 +183,8 @@ std::optional<PicaSurfaceLightingView> BuildPicaSurfaceLightingView(
 
 // Once the actual variant is known, restore the legacy material-weighted
 // inputs for PBR. A requested PBR mode with no material still uses Lambert.
-void FoldPicaSurfaceMaterialForPbr(PicaSurfaceLightingUniforms& uniforms) noexcept;
+void FoldPicaSurfaceMaterialForPbr(PicaSurfaceLightingUniforms& uniforms,
+                                  bool preserveBlackDiffuse = false) noexcept;
 
 // Removes the scene directional lights a draw's native per-pixel (fragment)
 // lighting already applies: those with the direction (view space, toward

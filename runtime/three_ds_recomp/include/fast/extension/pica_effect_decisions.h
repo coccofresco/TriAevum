@@ -80,6 +80,8 @@ struct PicaEffectDecisions {
     uint8_t PbrCoordinate = 0;
     bool PbrProjected = false;
     bool PbrNativeLighting = false;
+    bool PbrNativeBalance = false;
+    bool PbrNativeUnlit = false;
     bool PbrAttenuationLuts = false;
     bool PbrSeams = false;
     // Guide locations (bit N = location N) the specialized program declares.

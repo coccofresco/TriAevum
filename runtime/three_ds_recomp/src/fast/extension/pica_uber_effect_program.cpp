@@ -162,7 +162,7 @@ bool PicaUberEffectSupports(const PicaEffectDecisions& decisions,
                             const PicaUberEffectProgramRequest& request) noexcept {
     // Never bind a legacy superset to raw-irradiance uniforms. The backend
     // already completes the specialized program when no superset covers it.
-    if (decisions.FragmentLightingOperand) return false;
+    if (decisions.FragmentLightingOperand || decisions.PbrNativeBalance || decisions.PbrNativeUnlit) return false;
     if (decisions.NativeFragmentLitShadows) return false;
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     if (decisions.ShadowProbe) return false;

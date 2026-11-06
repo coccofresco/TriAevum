@@ -122,7 +122,9 @@ Json EncodePicaVariantRequest(uint64_t canonicalPipelineId, uint32_t effectsId, 
          {{"slot", request.Pbr.TextureSlot},
           {"native_lighting", request.Pbr.NativeFragmentLighting},
           {"native_luts", request.Pbr.NativeAttenuationLuts},
-          {"seam_softening", request.Pbr.SeamSoftening}}},
+          {"seam_softening", request.Pbr.SeamSoftening},
+          {"native_balance", request.Pbr.NativeBalance},
+          {"preserve_native_unlit", request.Pbr.PreserveNativeUnlit}}},
         {"relief", request.ReliefTexture},
         {"witness",
          {{"canonical_vertex", EncodeIdentity(witness.CanonicalVertex)},
@@ -186,6 +188,8 @@ bool DecodePicaVariantRequest(const Json& line, PicaVariantRequestRecord& record
         request.Pbr.NativeFragmentLighting = pbr.at("native_lighting").get<bool>();
         request.Pbr.NativeAttenuationLuts = pbr.at("native_luts").get<bool>();
         request.Pbr.SeamSoftening = pbr.at("seam_softening").get<bool>();
+        request.Pbr.NativeBalance = pbr.value("native_balance", false);
+        request.Pbr.PreserveNativeUnlit = pbr.value("preserve_native_unlit", false);
         request.ReliefTexture = line.at("relief").get<uint8_t>();
         const auto& witness = line.at("witness");
         auto& out = decoded.Witness;
@@ -374,7 +378,9 @@ void PicaVariantRequestRecorder::Observe(uint64_t canonicalPipelineId, const Pic
                                  (request.Pbr.NativeFragmentLighting ? 1024U : 0U) |
                                  (request.Pbr.NativeAttenuationLuts ? 2048U : 0U) |
                                  (request.Pbr.SeamSoftening ? 4096U : 0U) |
-                                 (request.ReflectionProfile.has_value() ? 8192U : 0U)));
+                                 (request.ReflectionProfile.has_value() ? 8192U : 0U) |
+                                  (request.Pbr.NativeBalance ? 16384U : 0U) |
+                                  (request.Pbr.PreserveNativeUnlit ? 32768U : 0U)));
     append(request.Pbr.TextureSlot);
     append(request.ReliefTexture);
     if (request.ReflectionProfile.has_value()) {

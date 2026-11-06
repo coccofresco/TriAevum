@@ -183,6 +183,33 @@ uint8_t PicaTevMaterialTextureMask(const PicaTevProgram& program) noexcept {
     return previous;
 }
 
+bool PicaTevUsesFragmentLighting(const PicaTevProgram& program) noexcept {
+    std::array<bool,2> previous{}, buffer{}, next{};
+    for (size_t stage=0;stage<program.Stages.size();++stage) {
+        const auto& w=program.Stages[stage];std::array<bool,2> output{};
+        const auto rgbOperation=w[2]&15U;
+        for (uint32_t channel=0;channel<2;++channel) {
+            if (channel==1 && rgbOperation==7U) {output[1]=output[0];continue;}
+            const auto operation=(w[2]>>(channel*16))&15U;
+            if (operation>9U) return true; // unsupported semantic stays native
+            const auto count=operation==0?1U:(operation==4||operation==8||operation==9)?3U:2U;
+            for(uint32_t i=0;i<count;++i) {
+                auto source=(w[0]>>(channel*16+i*4))&15U;
+                if(stage==0 && i<2 && source==15)source=(w[0]>>(channel*16+8))&15U;
+                if(source>=7 && source<=12)return true;
+                const auto operand=channel==1 ? (w[1]>>(12+i*4))&7U : (w[1]>>(i*4))&15U;
+                const bool fromAlpha=channel==1 ? operand<2 : (operand==2 || operand==3);
+                output[channel] |= source==1 || source==2 ||
+                    (source==13 && buffer[fromAlpha]) || (source==15 && previous[fromAlpha]);
+            }
+        }
+        previous=output;buffer=next;
+        if(stage<4)for(uint32_t c=0;c<2;++c)
+            if(program.Control[0]&(1U<<(8+stage+c*4)))next[c]=output[c];
+    }
+    return previous[0];
+}
+
 std::string_view PicaTevProgramGlsl() noexcept {
     return R"glsl(
 struct PicaTevProgram {

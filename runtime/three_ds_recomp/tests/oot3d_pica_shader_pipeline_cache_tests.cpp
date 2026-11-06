@@ -9,6 +9,8 @@
 #include "fast/extension/pica_rim_light.h"
 #include "fast/extension/pica_uber_effect_program.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include "fast/renderer3ds/pica_pbr_shading.h"
+#include "fast/renderer3ds/pica_tev_program.h"
 
 #include <gtest/gtest.h>
 #ifdef OOT3D_PIPELINE_CACHE_HAS_SHADERC
@@ -2451,6 +2453,44 @@ TEST(PicaFragmentBalance, LightFunctionDecidesWhatTheProfileReplaces) {
     ASSERT_TRUE(half);
     EXPECT_EQ(half->Gains[0],(Gain{.5F,.5F,.5F,0}));
     EXPECT_EQ(half->Gains[1],(Gain{0,0,.6F,2})); // Scene slots keep the scene ambient gain.
+}
+
+TEST(PicaNativePointReplacement, InstalledGgxAndUnlitAppearanceHaveSeparatePrograms) {
+    using namespace Fast::Renderer3ds;
+    PicaShaderHookLayout hooks;hooks.SampledTextureMask=1;
+    hooks.TextureSamples[0]={0,PicaTextureCoordinateOperation::NativeVFlip};
+    PicaPbrShaderOptions options;options.TextureSlot=0;options.NativeFragmentLighting=true;
+    const auto legacy=BuildPicaPbrShader(hooks,options);ASSERT_TRUE(legacy);
+    options.NativeBalance=true;const auto balanced=BuildPicaPbrShader(hooks,options);ASSERT_TRUE(balanced);
+    EXPECT_EQ(legacy->ShadingBody.find("balance_gains"),std::string::npos);
+    EXPECT_NE(balanced->ShadingBody.find("balance_gains[i]"),std::string::npos);
+    EXPECT_NE(balanced->ShadingBody.find("float pbr_native_scale = 1.0;"),std::string::npos);
+    EXPECT_NE(balanced->ShadingBody.find("pica_surface_scene_point(int(slot)"),std::string::npos);
+    options.NativeFragmentLighting=false;options.NativeBalance=false;options.PreserveNativeUnlit=true;
+    const auto unlit=BuildPicaPbrShader(hooks,options);ASSERT_TRUE(unlit);
+    EXPECT_NE(unlit->ShadingBody.find("pbr_unlit_reference = true"),std::string::npos);
+    EXPECT_NE(unlit->ShadingBody.find("pbr_direct = pbr_albedo; pbr_ambient = vec3(0.0)"),std::string::npos);
+    PicaSurfaceLightingUniforms surface;surface.Control={0,1,0,2};surface.MaterialAmbient={1,1,1,0};
+    surface.ScenePoints[0].Color={1,1,1,-1};FoldPicaSurfaceMaterialForPbr(surface,true);
+    EXPECT_EQ(surface.ScenePoints[0].Color,(std::array<float,4>{0,0,0,-1}));
+}
+
+TEST(PicaNativePointReplacement, FinalTevRgbDependencyIncludesAlphaAndOverwrite) {
+    using namespace Fast::Renderer3ds;
+    PicaTevProgram tev{};
+    for(auto& stage:tev.Stages)stage[0]=0x000F000F;
+    tev.Stages[0][0]=0x00010001;
+    EXPECT_TRUE(PicaTevUsesFragmentLighting(tev));
+    tev.Stages[5][0]=0x00030003;EXPECT_FALSE(PicaTevUsesFragmentLighting(tev));
+    tev.Stages[5][0]=0x000F000F;tev.Stages[5][1]=2;
+    EXPECT_TRUE(PicaTevUsesFragmentLighting(tev));
+    tev.Stages[0][0]=0x00030001;EXPECT_FALSE(PicaTevUsesFragmentLighting(tev));
+    // Alpha can read previous RGB, then feed a later RGB alpha operand.
+    tev.Stages[1][1]=2U<<12;EXPECT_TRUE(PicaTevUsesFragmentLighting(tev));
+    tev.Stages[1][1]=0;
+    tev.Stages[0][2]=7;EXPECT_TRUE(PicaTevUsesFragmentLighting(tev));
+    tev.Stages[0][2]=0;tev.Stages[5][0]=7;
+    EXPECT_TRUE(PicaTevUsesFragmentLighting(tev)); // unknown selectors fail closed
 }
 
 TEST(PicaNativePointReplacement, IndependentEmissionNeedsSeparatePositiveProof) {

@@ -135,7 +135,9 @@ PicaShaderInstrumentationFeature ResolvePicaDrawInstrumentationFeatures(
         if (request.FragmentLightingOperand && UsesFullSceneLighting(effects.SurfaceLighting))
             features |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
         if (request.FragmentLightingOperand && request.FragmentLightingBalance &&
-            UsesFullSceneLighting(effects.SurfaceLighting) && request.Pbr.TextureSlot >= 3U &&
+            UsesFullSceneLighting(effects.SurfaceLighting) &&
+            (request.Pbr.TextureSlot >= 3U || (UsesPbrMaterials(effects.SurfaceLighting) &&
+                request.Pbr.NativeFragmentLighting && request.Pbr.NativeBalance)) &&
             request.FragmentShaderHooks.NativeLightingCapture.Valid(request.FragmentShaderSource.size(),
                 request.FragmentShaderHooks.Offset(PicaShaderHook::PicaLighting)))
             features |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
@@ -259,7 +261,8 @@ InstrumentationKey BuildInstrumentationKey(
     key.DepthCompare = static_cast<uint8_t>(request.Draw.DepthCompare);
     if (HasPicaShaderInstrumentationFeature(requestedFeatures, PicaShaderInstrumentationFeature::PbrMaterial))
         key.PbrState = request.Pbr.TextureSlot | (request.Pbr.NativeFragmentLighting ? 4U : 0U) |
-            (request.Pbr.NativeAttenuationLuts ? 8U : 0U) | (request.Pbr.SeamSoftening ? 16U : 0U);
+            (request.Pbr.NativeAttenuationLuts ? 8U : 0U) | (request.Pbr.SeamSoftening ? 16U : 0U) |
+            (request.Pbr.NativeBalance ? 32U : 0U) | (request.Pbr.PreserveNativeUnlit ? 64U : 0U);
     if (HasPicaShaderInstrumentationFeature(requestedFeatures,
                                             PicaShaderInstrumentationFeature::NormalGuideTextureRelief))
         key.ReliefTexture = request.ReliefTexture;

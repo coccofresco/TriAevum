@@ -333,11 +333,11 @@ std::optional<PicaSurfaceLightingUniforms> BuildPicaSurfaceLightingUniforms(
     return result;
 }
 
-void FoldPicaSurfaceMaterialForPbr(PicaSurfaceLightingUniforms& u) noexcept {
+void FoldPicaSurfaceMaterialForPbr(PicaSurfaceLightingUniforms& u, bool preserveBlackDiffuse) noexcept {
     if ((u.Control[3] & 2U) == 0U) return;
     const bool hasDiffuse = std::any_of(u.MaterialDiffuse.begin(), u.MaterialDiffuse.begin() + 3,
         [](float value) { return value != 0.0F; });
-    const auto& reflectance = hasDiffuse ? u.MaterialDiffuse : u.MaterialAmbient;
+    const auto& reflectance = (preserveBlackDiffuse || hasDiffuse) ? u.MaterialDiffuse : u.MaterialAmbient;
     const auto fold = [&](auto& color) {
         for (size_t channel = 0; channel < 3; ++channel) color[channel] *= reflectance[channel];
     };

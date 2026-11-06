@@ -24,6 +24,9 @@ PicaTevDecodeError DecodePicaTevProgram(std::span<const uint32_t> registers,
 // Alpha-only/scalar operands and overwritten stages are not albedo candidates.
 // Bit three denotes the procedural texture; physical samplers occupy bits 0–2.
 [[nodiscard]] uint8_t PicaTevMaterialTextureMask(const PicaTevProgram& program) noexcept;
+// Exact final-RGB dependency, including alpha operands, buffers and DOT3_RGBA.
+// Appearance/routing only: absence does not classify a material as a light.
+[[nodiscard]] bool PicaTevUsesFragmentLighting(const PicaTevProgram& program) noexcept;
 
 // The combiner's inputs, as PicaTevProgramGlsl's PicaTevInputs.
 struct PicaTevInputs {

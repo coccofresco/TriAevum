@@ -279,7 +279,7 @@ set_property(TARGET oot3d_pica_shader_pipeline_cache_tests
 target_include_directories(oot3d_pica_shader_pipeline_cache_tests
     PRIVATE ../include)
 target_link_libraries(oot3d_pica_shader_pipeline_cache_tests
-    PRIVATE gtest_main)
+    PRIVATE gtest_main ThreeDsRecomp::TevProgram)
 if(TARGET three_ds_recomp_shaderc)
     target_link_libraries(oot3d_pica_shader_pipeline_cache_tests
         PRIVATE three_ds_recomp_shaderc)
