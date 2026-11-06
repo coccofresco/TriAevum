@@ -2905,6 +2905,30 @@ TEST(Oot3dRenderResolution,
     EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, true), 0.5F);
 }
 
+TEST(Oot3dAntiAliasingFramePolicy,
+     MissingUpscalerProviderResolvesAsAntiAliasingOff) {
+    using namespace Fast::Extension;
+    GraphicsSettings settings;
+    settings.AntiAliasing = AntiAliasingMode::Upscaler;
+    settings.Upscaler = UpscalerProvider::Dlss;
+    settings.UpscalerMode = UpscalerQuality::UltraPerformance;
+    AntiAliasingFrameCapabilities capabilities;
+    const auto available = ResolveAntiAliasingFramePolicy(settings, capabilities);
+    EXPECT_TRUE(available.TemporalJitter);
+    EXPECT_TRUE(available.PresentationUpscaler);
+    capabilities.UpscalerAvailable = false;
+    const auto missing = ResolveAntiAliasingFramePolicy(settings, capabilities);
+    settings.AntiAliasing = AntiAliasingMode::Off;
+    const auto off = ResolveAntiAliasingFramePolicy(settings, capabilities);
+    EXPECT_FALSE(missing.TemporalJitter);
+    EXPECT_FALSE(missing.TemporalMotion);
+    EXPECT_FALSE(missing.PresentationWorldSurface);
+    EXPECT_FALSE(missing.PresentationUpscaler);
+    EXPECT_EQ(missing.TemporalJitterPhases, off.TemporalJitterPhases);
+    EXPECT_EQ(missing.SpatialAaMode, off.SpatialAaMode);
+    EXPECT_EQ(missing.MsaaSamples, off.MsaaSamples);
+}
+
 TEST(Oot3dRenderResolution,
      MissingUpscalerProviderKeepsUserScale) {
     using namespace Fast::Extension;
