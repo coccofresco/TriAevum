@@ -1212,6 +1212,7 @@ name = "forge-assets"
 version = "0.1.0"
 dependencies = [
  "forge-base",
+ "serde",
  "serde_json",
  "tempfile",
 ]

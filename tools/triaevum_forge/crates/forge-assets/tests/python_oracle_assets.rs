@@ -151,7 +151,11 @@ fn derived_assets_match_python() {
         let data_root = rust_data.join(index.to_string());
         match case["kind"].as_str().unwrap() {
             "water_catalog" => {
-                let (payload, summary) = water::build_catalog(&oracle.path(case, "romfs"), &cancel).unwrap();
+                let (payload, summary) = match case.get("profile") {
+                    Some(profile) => water::build_catalog_with_profile(&oracle.path(case, "romfs"), profile, &cancel),
+                    None => water::build_catalog(&oracle.path(case, "romfs"), &cancel),
+                }
+                .unwrap();
                 oracle.expect_bytes(&label, &payload, &oracle.path(case, "expected"));
                 oracle.expect_value(&label, &summary, &case["summary"]);
             }

@@ -13,6 +13,7 @@
 
 mod catalog_cache;
 mod fnv;
+mod model_catalog;
 mod pymath;
 mod pyvalue;
 mod romfs;
