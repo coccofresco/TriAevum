@@ -401,6 +401,11 @@ struct GraphicsSettings {
     uint8_t Anisotropy = 1;
     InteractiveGrassSettings Grass;
     InteractiveGrassSettings GrassSavedPreset;
+    // Unedited grass rule sets another title removed from this configuration
+    // ("<Grass|GrassSavedPreset>/<set hash>", graphics_settings_persistence.h):
+    // the title that ships the set restores it where the block's rules are
+    // still empty. Host-owned, like the rules.
+    std::vector<std::string> RemovedTitleGrassRules;
     EffectsSettings Effects;
     TexturePackSettings TexturePacks;
 };

@@ -653,6 +653,39 @@ int main() try {
     Check(legacy.Snapshot().Profile==BaseSceneEnvironmentProfile(),"OoT default changed");
     std::filesystem::remove_all(directory);
   }
+  // The release's defaults are title-scoped like the user's profiles: OoT3D's
+  // shipped scene-0055 (Ganon's Castle) must not apply to MM3D's scene 0x55
+  // (Music Box House), and OoT3D keeps reading its shipped root.
+  {
+    const auto resources=directory/"resources";
+    Check(TitleReleaseSceneEnvironmentDirectory({},TitleAdapter::Mm3d).empty() &&
+          TitleReleaseSceneEnvironmentDirectory({},TitleAdapter::Oot3dEur).empty(),
+          "no resource root named release defaults");
+    const auto ootDefaults=TitleReleaseSceneEnvironmentDirectory(resources,TitleAdapter::Oot3dEur);
+    const auto mmDefaults=TitleReleaseSceneEnvironmentDirectory(resources,TitleAdapter::Mm3d);
+    Check(ootDefaults==resources/"environments" && mmDefaults==resources/"environments"/"mm3d",
+          "release default namespaces moved");
+    std::filesystem::create_directories(ootDefaults);
+    Write(ootDefaults/"scene-0055.environment.json",Profile(0.95F,false));
+    const auto config=directory/"settings.json";
+    const auto mmUser=TitleSceneEnvironmentDirectory(config,TitleAdapter::Mm3d);
+    const auto ootUser=TitleSceneEnvironmentDirectory(config,TitleAdapter::Oot3dEur);
+    std::filesystem::create_directories(mmUser);
+    const auto fallback=NativePreservingSceneEnvironmentProfile();
+    Fast::Renderer3ds::PicaEnvironmentLighting published;
+    SceneEnvironmentTime clock;clock.TimeDriven=true;clock.Clock=0x8000;clock.AuthoredScene=10;
+    SceneEnvironmentRuntime mm(mmUser,[&](const auto& v){published=v;},mmDefaults,fallback);
+    mm.ObserveScene(0x55,clock);
+    Check(mm.Snapshot().Profile==fallback && mm.Snapshot().Sources[0]==SceneEnvironmentSource::Base &&
+              !published.Enabled,
+          "MM3D took OoT3D's release scene default");
+    SceneEnvironmentRuntime oot(ootUser,[](const auto&){},ootDefaults);
+    oot.ObserveScene(0x55,{true,0x8000,false});
+    Check(oot.Snapshot().Sources[0]==SceneEnvironmentSource::DefaultScene &&
+              std::abs(oot.Snapshot().Profile.AmbientIntensity-0.95F)<1e-6F,
+          "OoT3D lost its release scene default");
+    std::filesystem::remove_all(directory);
+  }
   std::printf("scene environment tests passed: %d checks\n", gChecks);
   return 0;
 } catch (const std::exception &error) {

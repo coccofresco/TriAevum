@@ -4,6 +4,8 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 
 namespace {
 
@@ -969,6 +971,176 @@ TEST(Oot3dGraphicsSettingsPersistence,
               ownHash);
     EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(withoutTitle.Value)["Grass"]["Sources"][0]["Target"]["Rgba8Hash"],
               ownHash);
+}
+
+TEST(Oot3dGraphicsSettingsPersistence,
+     RemovesAnotherTitlesUneditedGrassRulesOnly) {
+    // Another title's shipped rules, written into this title's configuration
+    // by a build that installed them for every title.
+    auto document =
+        Fast::Extension::SerializeGraphicsSettings(CompleteSettings());
+    ASSERT_FALSE(document["Grass"]["Sources"].empty());
+    const nlohmann::json foreign = {
+        {"Sources", document["Grass"]["Sources"]},
+        {"Masks", document["Grass"].value("Masks", nlohmann::json::array())}};
+    document["Grass"]["Budget"]["DrawDistance"] = 1234.0;
+    document["GrassSavedPreset"] = document["Grass"];
+
+    // Without foreign sets nothing changes.
+    Fast::Extension::ClearTitleGrassRuleDefaults();
+    const auto untouched = Fast::Extension::DeserializeGraphicsSettings(document);
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(untouched.Value)["Grass"]["Sources"],
+              foreign["Sources"]);
+
+    Fast::Extension::InstallTitleGrassRuleDefaults(
+        Fast::Extension::TitleGrassRuleDefaults{std::nullopt, {foreign}});
+    const auto cleaned = Fast::Extension::DeserializeGraphicsSettings(document);
+    EXPECT_TRUE(cleaned.NeedsRewrite);
+    const auto saved = Fast::Extension::SerializeGraphicsSettings(cleaned.Value);
+    for (const char* block : {"Grass", "GrassSavedPreset"}) {
+        EXPECT_TRUE(saved[block]["Sources"].empty()) << block;
+        EXPECT_TRUE(saved[block]["Masks"].empty()) << block;
+        EXPECT_FLOAT_EQ(saved[block]["Budget"]["DrawDistance"].get<float>(), 1234.0F) << block;
+    }
+    EXPECT_TRUE(std::any_of(cleaned.Issues.begin(), cleaned.Issues.end(), [](const auto& issue) {
+        return issue.Corrected && issue.Message.find("another title's grass") != std::string::npos;
+    }));
+    // Loading the cleaned configuration again changes nothing more.
+    const auto again = Fast::Extension::DeserializeGraphicsSettings(saved);
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(again.Value)["Grass"], saved["Grass"]);
+
+    // Edited rules are the user's: one changed level keeps every rule.
+    auto edited = document;
+    edited["Grass"]["Sources"][0]["InputWhite"] = 0.375;
+    const auto kept = Fast::Extension::DeserializeGraphicsSettings(edited);
+    const auto keptSaved = Fast::Extension::SerializeGraphicsSettings(kept.Value);
+    EXPECT_EQ(keptSaved["Grass"]["Sources"].size(), foreign["Sources"].size());
+    EXPECT_FLOAT_EQ(keptSaved["Grass"]["Sources"][0]["InputWhite"].get<float>(), 0.375F);
+    // The unedited saved preset is still removed on its own.
+    EXPECT_TRUE(keptSaved["GrassSavedPreset"]["Sources"].empty());
+
+    // No pre-schema-15 rules installed: an old configuration keeps its own
+    // rules unless they are a foreign set.
+    auto old = edited;
+    old["SchemaVersion"] = 14U;
+    const auto oldLoaded = Fast::Extension::DeserializeGraphicsSettings(old);
+    EXPECT_EQ(Fast::Extension::SerializeGraphicsSettings(oldLoaded.Value)["Grass"]["Sources"].size(),
+              foreign["Sources"].size());
+    Fast::Extension::ClearTitleGrassRuleDefaults();
+}
+
+TEST(Oot3dGraphicsSettingsPersistence,
+     TitlesSharingOneConfigurationFileEachKeepTheirGrassRules) {
+    using namespace Fast::Extension;
+    // One configuration file, as a developer launch without --config uses
+    // for every title: OoT3D's shipped rules in both grass blocks.
+    auto settings = CompleteSettings();
+    settings.GrassSavedPreset = settings.Grass;
+    const auto written = SerializeGraphicsSettings(settings);
+    ASSERT_FALSE(written["Grass"]["Sources"].empty());
+    const nlohmann::json oot3dRules = {
+        {"Sources", written["Grass"]["Sources"]},
+        {"Masks", written["Grass"].value("Masks", nlohmann::json::array())}};
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("triaevum_shared_grass_rules_" + std::to_string(::testing::UnitTest::GetInstance()->random_seed()) +
+                       ".json");
+    {
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file << nlohmann::json{{"Graphics", written}, {"Input", {{"Keep", true}}}}.dump(2);
+    }
+    // What the runtime does with the file: load the root, rewrite the
+    // Graphics block when the load asks for it.
+    const auto launch = [&](TitleGrassRuleDefaults title) {
+        InstallTitleGrassRuleDefaults(std::move(title));
+        nlohmann::json root;
+        {
+            std::ifstream file(path, std::ios::binary);
+            file >> root;
+        }
+        auto loaded = LoadGraphicsSettingsConfig(root);
+        if (loaded.NeedsRewrite) {
+            root["Graphics"] = SerializeGraphicsSettings(loaded.Value);
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            file << root.dump(2);
+        }
+        return loaded;
+    };
+    const TitleGrassRuleDefaults mm3d{std::nullopt, {oot3dRules}};
+    const TitleGrassRuleDefaults oot3d{std::optional<nlohmann::json>(std::in_place, oot3dRules), {}};
+    const auto rulesOf = [](const GraphicsSettingsLoadResult& loaded, const char* block) {
+        const auto document = SerializeGraphicsSettings(loaded.Value);
+        return nlohmann::json{{"Sources", document[block]["Sources"]}, {"Masks", document[block]["Masks"]}};
+    };
+    const nlohmann::json none = {{"Sources", nlohmann::json::array()}, {"Masks", nlohmann::json::array()}};
+
+    // MM3D: OoT3D's rules are not its own.
+    const auto mm3dFirst = launch(mm3d);
+    EXPECT_TRUE(mm3dFirst.NeedsRewrite);
+    for (const char* block : {"Grass", "GrassSavedPreset"}) EXPECT_EQ(rulesOf(mm3dFirst, block), none) << block;
+    EXPECT_EQ(mm3dFirst.Value.RemovedTitleGrassRules.size(), 2U);
+
+    // OoT3D on the same file gets them back, in both blocks, and the record
+    // is settled; the rest of the file is kept.
+    const auto oot3dFirst = launch(oot3d);
+    EXPECT_TRUE(oot3dFirst.NeedsRewrite);
+    for (const char* block : {"Grass", "GrassSavedPreset"}) EXPECT_EQ(rulesOf(oot3dFirst, block), oot3dRules) << block;
+    EXPECT_TRUE(oot3dFirst.Value.RemovedTitleGrassRules.empty());
+    EXPECT_TRUE(std::any_of(oot3dFirst.Issues.begin(), oot3dFirst.Issues.end(), [](const auto& issue) {
+        return issue.Corrected && issue.Message.find("restored") != std::string::npos;
+    }));
+    {
+        nlohmann::json root;
+        std::ifstream file(path, std::ios::binary);
+        file >> root;
+        EXPECT_FALSE(root["Graphics"].contains("RemovedTitleGrassRules"));
+        EXPECT_EQ(root["Input"]["Keep"], true);
+    }
+    // A second OoT3D launch has nothing to change.
+    const auto oot3dSecond = launch(oot3d);
+    EXPECT_FALSE(oot3dSecond.NeedsRewrite);
+    EXPECT_EQ(rulesOf(oot3dSecond, "Grass"), oot3dRules);
+
+    // Alternating titles: each load leaves the rules in its own form.
+    const auto mm3dSecond = launch(mm3d);
+    EXPECT_EQ(rulesOf(mm3dSecond, "Grass"), none);
+
+    // Rules the user writes while MM3D runs are the user's: OoT3D keeps
+    // them; the untouched saved preset still gets OoT3D's back.
+    {
+        nlohmann::json root;
+        {
+            std::ifstream file(path, std::ios::binary);
+            file >> root;
+        }
+        auto userRule = oot3dRules["Sources"][0];
+        userRule["InputWhite"] = 0.375;
+        root["Graphics"]["Grass"]["Sources"] = nlohmann::json::array({userRule});
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file << root.dump(2);
+    }
+    const auto oot3dAfterEdit = launch(oot3d);
+    const auto edited = rulesOf(oot3dAfterEdit, "Grass");
+    ASSERT_EQ(edited["Sources"].size(), 1U);
+    EXPECT_FLOAT_EQ(edited["Sources"][0]["InputWhite"].get<float>(), 0.375F);
+    EXPECT_EQ(rulesOf(oot3dAfterEdit, "GrassSavedPreset"), oot3dRules);
+    EXPECT_TRUE(oot3dAfterEdit.Value.RemovedTitleGrassRules.empty());
+
+    // Rules a user removed without another title are not brought back.
+    auto cleared = written;
+    cleared["Grass"]["Sources"] = nlohmann::json::array();
+    cleared["Grass"]["Masks"] = nlohmann::json::array();
+    InstallTitleGrassRuleDefaults(oot3d);
+    const auto userCleared = DeserializeGraphicsSettings(cleared);
+    EXPECT_EQ(rulesOf(userCleared, "Grass"), none);
+
+    // The record is host-owned: applying a preset keeps it.
+    auto withRecord = mm3dSecond.Value;
+    EXPECT_EQ(GraphicsSettingsService::PresetForCurrent(GraphicsPreset::Enhanced, withRecord).RemovedTitleGrassRules,
+              withRecord.RemovedTitleGrassRules);
+
+    ClearTitleGrassRuleDefaults();
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
 }
 
 TEST(Oot3dGraphicsSettingsPersistence,

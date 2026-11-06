@@ -265,6 +265,9 @@ bool WithOot3dPicaVulkanDrawView(
         plan.Composition.IsolatedLighting,
         plan.Composition.TemporalIdentity,
         Oot3dNativeGame::StaticShadowCacheEligibleActor(
+            overrides != nullptr && overrides->StaticShadowActors != nullptr
+                ? *overrides->StaticShadowActors
+                : Oot3dNativeGame::Oot3dStaticShadowActorPolicy(),
             plan.Composition.NativeActorGeometry,
             plan.Composition.NativeActorIdentity),
     };

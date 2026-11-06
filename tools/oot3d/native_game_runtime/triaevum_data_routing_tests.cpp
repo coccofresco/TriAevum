@@ -86,6 +86,37 @@ void TestParser(const fs::path &root) {
     Expect(!ParseTitleId("0x04000000033500").has_value(), "a prefix is refused");
     Expect(!ParseTitleId("000400000003350G").has_value(), "a non-hex digit is refused");
     Expect(FormatTitleId(0x000400000003350AULL) == "000400000003350A", "title ids print upper case");
+    {
+        // The exheader's ACI program ID (MM3D EUR's, as its exheader carries it).
+        std::vector<uint8_t> exheader(0x400U, 0U);
+        const uint64_t mm3dEur = 0x0004000000125600ULL;
+        for (size_t index = 0; index < 8U; ++index)
+            exheader[0x200U + index] = static_cast<uint8_t>(mm3dEur >> (index * 8U));
+        Expect(Oot3dNativeGame::ReadExheaderProgramId(exheader) == mm3dEur, "the exheader names its program id");
+        Expect(!Oot3dNativeGame::ReadExheaderProgramId(std::span(exheader).first(0x207U)).has_value(),
+               "a truncated exheader names none");
+        // The file the process image manifest names, as the window session
+        // reads it for the texture-pack folders.
+        const auto files = root / "exheader";
+        fs::create_directories(files);
+        const auto write = [&](const fs::path& path, std::span<const uint8_t> bytes) {
+            std::ofstream file(path, std::ios::binary | std::ios::trunc);
+            file.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        };
+        write(files / "exheader.bin", exheader);
+        write(files / "short.bin", std::span(exheader).first(0x207U));
+        Expect(Oot3dNativeGame::ReadExheaderProgramIdFile(files / "exheader.bin") == mm3dEur,
+               "the manifest's exheader file names its program id");
+        Expect(!Oot3dNativeGame::ReadExheaderProgramIdFile(files / "short.bin").has_value(),
+               "a short exheader file names none");
+        Expect(!Oot3dNativeGame::ReadExheaderProgramIdFile(files / "missing.bin").has_value(),
+               "a missing exheader file names none");
+        exheader[0x206U] = 0x01U; // not an application title
+        Expect(!Oot3dNativeGame::ReadExheaderProgramId(exheader).has_value(), "a system title id is refused");
+        write(files / "system.bin", exheader);
+        Expect(!Oot3dNativeGame::ReadExheaderProgramIdFile(files / "system.bin").has_value(),
+               "a system title's exheader file names none");
+    }
 
     const auto data = root / "data";
     int unparsed = 0;

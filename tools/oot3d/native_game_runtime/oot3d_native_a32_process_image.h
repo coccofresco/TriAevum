@@ -54,6 +54,10 @@ struct NativeA32ProcessImageManifest {
     uint32_t HeapBaseAddress = 0;
     size_t HeapSize = 0;
     NativeA32PrimaryThreadConfig PrimaryThread;
+    // The program ID (title ID) the image's exheader names, when the manifest
+    // names a readable exheader of an application title
+    // (ReadExheaderProgramId).
+    std::optional<uint64_t> ProgramId;
 };
 
 std::optional<NativeA32ProcessImageManifest>

@@ -19,10 +19,13 @@ struct RenderExtent {
 inline constexpr float kMinimumUpscalerRenderScale = 1.0F / 3.0F;
 
 // An upscaler renders its output divided by its quality's factor, so its
-// output is the display extent, never larger.
+// output is the display extent, never larger. Only a provider that can run
+// changes the scale: a selected upscaler whose provider is missing (no module,
+// no device support) is never planned, so the display is shown unscaled and
+// the frame renders at the user's own scale, as with no upscaler.
 [[nodiscard]] inline float ResolveInternalResolutionScale(
-    const GraphicsSettings& settings) {
-    if (settings.AntiAliasing == AntiAliasingMode::Upscaler)
+    const GraphicsSettings& settings, bool upscalerProviderAvailable) {
+    if (settings.AntiAliasing == AntiAliasingMode::Upscaler && upscalerProviderAvailable)
         return std::clamp(1.0F / UpscalerScalingFactor(settings.UpscalerMode),
                           kMinimumUpscalerRenderScale, 1.0F);
     return std::clamp(settings.InternalResolutionScale, 0.5F, 2.0F);

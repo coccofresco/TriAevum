@@ -200,6 +200,7 @@ bool Oot3dPicaPresentationScheduler::Execute(
             .TemporalIdentity = draw.Composition.TemporalIdentity,
             .StaticShadowCacheEligible =
                 Oot3dNativeGame::StaticShadowCacheEligibleActor(
+                    mStaticShadowActors,
                     draw.Composition.NativeActorGeometry,
                     draw.Composition.NativeActorIdentity),
         },
@@ -271,7 +272,8 @@ bool Oot3dPicaPresentationScheduler::Execute(
         continue;
       }
       const auto &drawView = sample.Draws[index];
-      const auto overrides = drawView.Overrides();
+      auto overrides = drawView.Overrides();
+      overrides.StaticShadowActors = &mStaticShadowActors;
       if (!PrepareOot3dPicaVulkanSequenceDraw(backend, *drawView.BasePlan,
                                               error, renderTargetNamespace,
                                               &overrides)) {
@@ -352,7 +354,8 @@ bool Oot3dPicaPresentationScheduler::Execute(
         return false;
       }
     }
-    const auto overrides = drawView.Overrides();
+    auto overrides = drawView.Overrides();
+    overrides.StaticShadowActors = &mStaticShadowActors;
     if (!mOmittedDrawScratch[drawIndex]) {
       OptionalTimer timer(mTimings.Enabled, mTimings.DrawSubmissionSeconds);
       Oot3dPicaVulkanDrawBridgeTiming bridgeTiming;

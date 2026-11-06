@@ -15,6 +15,8 @@
 
 namespace Oot3dNativeGame {
 
+struct StaticShadowActorPolicy;
+
 enum class Oot3dPicaVertexInputRate : uint8_t {
     PerVertex,
     PerInstance,
@@ -156,6 +158,9 @@ struct Oot3dPicaVulkanDrawOverrides {
     const Oot3dPicaViewportState* Viewport = nullptr;
     const std::array<float, 4>* BlendConstantColor = nullptr;
     const std::vector<Oot3dPicaVulkanVertexBinding>* VertexBindings = nullptr;
+    // The drawing title's static shadow actor policy; null keeps OoT3D's
+    // (the single-title paths that never install one).
+    const StaticShadowActorPolicy* StaticShadowActors = nullptr;
 };
 
 struct Oot3dPicaVulkanCachedShaderSource {

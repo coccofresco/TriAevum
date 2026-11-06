@@ -68,6 +68,34 @@ inline constexpr uint16_t kStaticShadowExcludedActorProfiles[] = {0x0000U, 0x001
     return false;
 }
 
+// A title's static shadow policy: its catalogued actor profiles and the
+// profiles that must stay dynamic. Actor ids are the title's own (another
+// title reuses the same numbers for unrelated actors), so a title's draw
+// identities are matched only against the policy its session installs. The
+// default policy is empty: every actor is a dynamic caster.
+struct StaticShadowActorPolicy {
+    std::span<const StaticShadowActorProfile> Catalog;
+    std::span<const uint16_t> Excluded;
+
+    [[nodiscard]] constexpr bool Eligible(bool nativeActorGeometry, uint64_t actorIdentity) const noexcept {
+        if (!nativeActorGeometry || actorIdentity == 0U || (actorIdentity >> 48U) != 0U)
+            return false;
+        const auto id = static_cast<uint16_t>(actorIdentity >> 32U);
+        for (const uint16_t excluded : Excluded)
+            if (excluded == id)
+                return false;
+        for (const auto& entry : Catalog)
+            if (entry.Id == id)
+                return true;
+        return false;
+    }
+};
+
+// OoT3D's policy: the catalog above with its player and horse exclusions.
+[[nodiscard]] constexpr StaticShadowActorPolicy Oot3dStaticShadowActorPolicy() noexcept {
+    return {StaticShadowActorCatalog(), std::span<const uint16_t>(kStaticShadowExcludedActorProfiles)};
+}
+
 // Diagnostic A/B only: TRIAEVUM_STATIC_SHADOW_CATALOG=0 makes every actor
 // dynamic again in the same executable (captures and timings).
 [[nodiscard]] inline bool StaticShadowActorCatalogEnabled() noexcept {
@@ -78,9 +106,11 @@ inline constexpr uint16_t kStaticShadowExcludedActorProfiles[] = {0x0000U, 0x001
     return enabled;
 }
 
-// The adapter's conversion points use this one.
-[[nodiscard]] inline bool StaticShadowCacheEligibleActor(bool nativeActorGeometry, uint64_t actorIdentity) noexcept {
-    return StaticShadowActorCatalogEnabled() && IsStaticShadowCacheEligibleActor(nativeActorGeometry, actorIdentity);
+// The adapter's conversion points use this one, with the policy of the
+// title that drew the actor.
+[[nodiscard]] inline bool StaticShadowCacheEligibleActor(const StaticShadowActorPolicy& policy,
+                                                         bool nativeActorGeometry, uint64_t actorIdentity) noexcept {
+    return StaticShadowActorCatalogEnabled() && policy.Eligible(nativeActorGeometry, actorIdentity);
 }
 
 namespace StaticShadowActorCatalogDetail {
@@ -95,6 +125,10 @@ namespace StaticShadowActorCatalogDetail {
     return true;
 }
 static_assert(CatalogIsValid(), "static shadow actor catalog: sorted unique ids, no excluded profiles");
+static_assert(Oot3dStaticShadowActorPolicy().Eligible(true, uint64_t{StaticShadowActorCatalog()[0].Id} << 32U | 0x1000U) &&
+                  !Oot3dStaticShadowActorPolicy().Eligible(true, 0x1000U) &&
+                  !StaticShadowActorPolicy{}.Eligible(true, uint64_t{StaticShadowActorCatalog()[0].Id} << 32U | 0x1000U),
+              "static shadow actor policy: OoT3D's matches its catalog, the default matches nothing");
 } // namespace StaticShadowActorCatalogDetail
 
 } // namespace Oot3dNativeGame

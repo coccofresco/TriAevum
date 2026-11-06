@@ -11,6 +11,10 @@ struct AntiAliasingFrameCapabilities {
     bool Msaa2x = false;
     bool Msaa4x = false;
     bool Msaa8x = false;
+    // The selected upscaler's provider can execute. One that cannot is never
+    // planned, so the frame is resolved as with anti-aliasing Off: no jitter,
+    // no motion and no presentation stages are requested for it.
+    bool UpscalerAvailable = true;
 };
 
 struct AntiAliasingFramePolicy {
@@ -37,6 +41,11 @@ ResolveAntiAliasingFramePolicy(
     const AntiAliasingFrameCapabilities& capabilities,
     bool forceTaa = false, bool forceMotion = false) {
     AntiAliasingFramePolicy policy;
+    if (settings.AntiAliasing == AntiAliasingMode::Upscaler && !capabilities.UpscalerAvailable) {
+        auto withoutUpscaler = settings;
+        withoutUpscaler.AntiAliasing = AntiAliasingMode::Off;
+        return ResolveAntiAliasingFramePolicy(withoutUpscaler, capabilities, forceTaa, forceMotion);
+    }
     const bool temporalUpscaler =
         settings.AntiAliasing == AntiAliasingMode::Upscaler &&
         IsTemporalUpscaler(settings.Upscaler);

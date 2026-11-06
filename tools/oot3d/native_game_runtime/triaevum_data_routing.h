@@ -24,9 +24,13 @@
 // earlier locations, so launch profiles written before them still launch.
 // A later occurrence wins (command-line arguments follow the profile's).
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -55,5 +59,31 @@ bool ParseDataRoutingOption(int argc, char **argv, int &index, DataRouting &rout
 [[nodiscard]] std::optional<uint64_t> ParseTitleId(std::string_view text);
 // 16 upper-case hexadecimal digits, as Azahar names its folders.
 [[nodiscard]] std::string FormatTitleId(uint64_t titleId);
+
+// Without --title-id the installed game's program ID comes from its process
+// image: the program ID of a CTR exheader, the ACI's, little-endian at 0x200.
+// Only an application title's (high word 0x00040000) is accepted.
+[[nodiscard]] inline std::optional<uint64_t> ReadExheaderProgramId(std::span<const uint8_t> exheader) noexcept {
+    constexpr size_t kAciProgramIdOffset = 0x200U;
+    if (exheader.size() < kAciProgramIdOffset + 8U)
+        return std::nullopt;
+    uint64_t id = 0;
+    for (size_t index = 0; index < 8U; ++index)
+        id |= uint64_t{exheader[kAciProgramIdOffset + index]} << (index * 8U);
+    if ((id >> 32U) != 0x00040000U)
+        return std::nullopt;
+    return id;
+}
+
+// The process image manifest's exheader file (source.exheader_path): its
+// program ID, or none when the file is missing, shorter than the ACI's
+// program ID or not an application title's.
+[[nodiscard]] inline std::optional<uint64_t> ReadExheaderProgramIdFile(const std::filesystem::path& path) {
+    std::ifstream exheader(path, std::ios::binary);
+    std::array<uint8_t, 0x208U> head{};
+    if (!exheader.read(reinterpret_cast<char*>(head.data()), static_cast<std::streamsize>(head.size())))
+        return std::nullopt;
+    return ReadExheaderProgramId(head);
+}
 
 } // namespace Oot3dNativeGame

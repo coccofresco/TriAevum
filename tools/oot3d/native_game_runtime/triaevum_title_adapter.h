@@ -106,4 +106,16 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
     return adapter == TitleAdapter::Oot3dEur ? root : root / TitleAdapterName(adapter);
 }
 
+// The release's default profiles in the runtime resources, in the same title
+// namespace: OoT3D keeps <resources>/environments (its shipped files), every
+// other title reads <resources>/environments/<stable adapter key>, so a scene
+// number another title shares never takes OoT3D's profile. No resource root:
+// no release defaults.
+[[nodiscard]] inline std::filesystem::path TitleReleaseSceneEnvironmentDirectory(
+    const std::filesystem::path& resourceRoot, TitleAdapter adapter) {
+    if (resourceRoot.empty()) return {};
+    auto root = resourceRoot / "environments";
+    return adapter == TitleAdapter::Oot3dEur ? root : root / TitleAdapterName(adapter);
+}
+
 } // namespace Oot3dNativeGame

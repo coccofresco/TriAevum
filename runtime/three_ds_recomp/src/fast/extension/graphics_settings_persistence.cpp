@@ -29,6 +29,18 @@ std::optional<Json>& TitleGrassRules() {
     return rules;
 }
 
+std::vector<Json>& ForeignTitleGrassRuleSets() {
+    static std::vector<Json> sets;
+    return sets;
+}
+
+uint64_t GrassRuleSetHash(const Json& sources, const Json& masks) {
+    uint64_t hash = 1469598103934665603ULL;
+    for (const char c : sources.dump() + "|" + masks.dump())
+        hash = (hash ^ static_cast<unsigned char>(c)) * 1099511628211ULL;
+    return hash;
+}
+
 template <typename Enum>
 using EnumNames = std::initializer_list<std::pair<Enum, std::string_view>>;
 
@@ -1549,7 +1561,7 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
     const auto& effects = settings.Effects;
     const auto& directionalShadows = effects.DirectionalShadows;
     const auto& toon = effects.ToonStyle;
-    return {
+    Json document = {
         {"SchemaVersion", kGraphicsSettingsSchemaVersion},
         {"Preset", EnumName(settings.Preset, kPresetNames)},
         {"Window",
@@ -1755,9 +1767,38 @@ SerializeGraphicsSettings(const GraphicsSettings& settings) {
               }},
          }},
     };
+    // Written only while a removal is recorded: other configurations are
+    // unchanged.
+    if (!settings.RemovedTitleGrassRules.empty()) document["RemovedTitleGrassRules"] = settings.RemovedTitleGrassRules;
+    return document;
 }
 
 namespace {
+// Another title's (or this title's own) shipped rule set, {"Sources",
+// "Masks"}, in the form this build writes rules.
+Json NormalizedGrassRuleSet(const Json& set) {
+    InteractiveGrassSettings normalized;
+    auto document = SerializeInteractiveGrassSettings(normalized);
+    document["Sources"] = set.value("Sources", Json::array());
+    document["Masks"] = set.value("Masks", Json::array());
+    GraphicsSettingsLoadResult scratch;
+    DeserializeInteractiveGrassSettings(document, normalized, "Graphics.Grass", kGraphicsSettingsSchemaVersion,
+                                        scratch);
+    auto written = SerializeInteractiveGrassSettings(normalized);
+    return {{"Sources", written["Sources"]}, {"Masks", written["Masks"]}};
+}
+
+std::string GrassRuleSetHashName(const Json& normalizedSet) {
+    char hash[17];
+    std::snprintf(hash, sizeof(hash), "%016llx",
+                  static_cast<unsigned long long>(GrassRuleSetHash(normalizedSet["Sources"], normalizedSet["Masks"])));
+    return hash;
+}
+
+std::string RemovedGrassRuleEntry(std::string_view block, std::string_view hash) {
+    return std::string(block) + "/" + std::string(hash);
+}
+
 GraphicsSettingsLoadResult DecodeGraphicsSettings(
     const nlohmann::json& document, GraphicsSettings fallback, bool normalize) {
     GraphicsSettingsLoadResult result;
@@ -1959,6 +2000,21 @@ GraphicsSettingsLoadResult DecodeGraphicsSettings(
         result.Value.TexturePacks = {};
     }
 
+    // Added without a schema change: absent, no removal is recorded.
+    if (const Json* removed = FindMember(document, "RemovedTitleGrassRules")) {
+        result.Value.RemovedTitleGrassRules.clear();
+        if (!removed->is_array()) {
+            Correct(result, "Graphics.RemovedTitleGrassRules", "invalid removal record dropped");
+        } else {
+            for (const auto& entry : *removed) {
+                if (entry.is_string() && !entry.get_ref<const std::string&>().empty()) {
+                    result.Value.RemovedTitleGrassRules.push_back(entry.get<std::string>());
+                } else {
+                    Correct(result, "Graphics.RemovedTitleGrassRules", "invalid removal record entry dropped");
+                }
+            }
+        }
+    }
     if (const Json* grass =
             RequireObject(document, "Grass", "Graphics.Grass",
                           result)) {
@@ -2005,6 +2061,78 @@ GraphicsSettingsLoadResult DecodeGraphicsSettings(
             result.NeedsRewrite = true;
             result.Issues.push_back({"Graphics.Grass.Sources",
                                      "grass source and mask rules replaced by the title's defaults", true});
+        }
+    }
+    // A title's own shipped rules that another title removed from this
+    // configuration (the file is shared by both): where the block's rules
+    // are still empty they are restored; where the user has since written
+    // rules there, those are kept. Either way the record is settled.
+    {
+        std::optional<Json> own;
+        {
+            std::scoped_lock lock(TitleGrassRuleMutex());
+            own = TitleGrassRules();
+        }
+        auto& removed = result.Value.RemovedTitleGrassRules;
+        if (own.has_value() && !removed.empty()) {
+            const auto set = NormalizedGrassRuleSet(*own);
+            const auto hash = GrassRuleSetHashName(set);
+            const auto restore = [&](InteractiveGrassSettings& grass, std::string_view block, const char* path) {
+                const auto entry = RemovedGrassRuleEntry(block, hash);
+                const auto found = std::find(removed.begin(), removed.end(), entry);
+                if (found == removed.end()) return;
+                removed.erase(found);
+                result.NeedsRewrite = true;
+                auto current = SerializeInteractiveGrassSettings(grass);
+                if (!current["Sources"].empty() || !current["Masks"].empty()) return;
+                if (set["Sources"].empty() && set["Masks"].empty()) return;
+                current["Sources"] = set["Sources"];
+                current["Masks"] = set["Masks"];
+                DeserializeInteractiveGrassSettings(current, grass, path, kGraphicsSettingsSchemaVersion, result);
+                result.Issues.push_back({std::string(path) + ".Sources",
+                                         "the title's grass source and mask rules (set " + hash +
+                                             "), removed by another title, restored",
+                                         true});
+            };
+            restore(result.Value.Grass, "Grass", "Graphics.Grass");
+            restore(result.Value.GrassSavedPreset, "GrassSavedPreset", "Graphics.GrassSavedPreset");
+        }
+    }
+    // Rules another title's defaults wrote into this title's configuration
+    // (a build that installed them for every title, or a file both titles
+    // use): an unedited copy, its sources and its masks, is removed and the
+    // removal recorded, so that the title owning the set restores it when it
+    // loads the file; an edited one is the user's.
+    {
+        std::vector<Json> foreign;
+        {
+            std::scoped_lock lock(TitleGrassRuleMutex());
+            foreign = ForeignTitleGrassRuleSets();
+        }
+        for (const auto& foreignSet : foreign) {
+            // Compare in the form this build writes: the set read as rules.
+            const auto set = NormalizedGrassRuleSet(foreignSet);
+            const Json& sources = set["Sources"];
+            const Json& masks = set["Masks"];
+            if (sources.empty() && masks.empty()) continue;
+            const auto hash = GrassRuleSetHashName(set);
+            const auto remove = [&](InteractiveGrassSettings& grass, std::string_view block, const char* path) {
+                auto current = SerializeInteractiveGrassSettings(grass);
+                if (current["Sources"] != sources || current["Masks"] != masks) return;
+                current["Sources"] = Json::array();
+                current["Masks"] = Json::array();
+                DeserializeInteractiveGrassSettings(current, grass, path,
+                                                    kGraphicsSettingsSchemaVersion, result);
+                result.NeedsRewrite = true;
+                auto& removed = result.Value.RemovedTitleGrassRules;
+                const auto entry = RemovedGrassRuleEntry(block, hash);
+                if (std::find(removed.begin(), removed.end(), entry) == removed.end()) removed.push_back(entry);
+                result.Issues.push_back({std::string(path) + ".Sources",
+                                         "another title's grass source and mask rules (set " + hash + ") removed",
+                                         true});
+            };
+            remove(result.Value.Grass, "Grass", "Graphics.Grass");
+            remove(result.Value.GrassSavedPreset, "GrassSavedPreset", "Graphics.GrassSavedPreset");
         }
     }
 
@@ -2427,13 +2555,19 @@ GraphicsSettingsLoadResult LoadGraphicsSettingsConfig(
 }
 
 void InstallTitleGrassRuleDefaults(const nlohmann::json& rules) {
+    InstallTitleGrassRuleDefaults(TitleGrassRuleDefaults{std::optional<Json>(std::in_place, rules), {}});
+}
+
+void InstallTitleGrassRuleDefaults(TitleGrassRuleDefaults defaults) {
     std::scoped_lock lock(TitleGrassRuleMutex());
-    TitleGrassRules() = rules;
+    TitleGrassRules() = std::move(defaults.Rules);
+    ForeignTitleGrassRuleSets() = std::move(defaults.ForeignRuleSets);
 }
 
 void ClearTitleGrassRuleDefaults() {
     std::scoped_lock lock(TitleGrassRuleMutex());
     TitleGrassRules().reset();
+    ForeignTitleGrassRuleSets().clear();
 }
 
 bool ShouldPersistGraphicsSettings(

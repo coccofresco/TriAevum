@@ -4,7 +4,8 @@
 #include "fast/extension/graphics_settings.h"
 
 #include <cstdint>
-#include <nlohmann/json_fwd.hpp>
+#include <nlohmann/json.hpp>
+#include <optional>
 #include <vector>
 
 namespace Fast::Extension {
@@ -59,6 +60,26 @@ SerializeGraphicsSettings(const GraphicsSettings& settings);
 // in Grass and GrassSavedPreset; every other grass setting (quality, budget,
 // performance, generation, appearance, interaction, wind) is kept.
 void InstallTitleGrassRuleDefaults(const nlohmann::json& rules);
+// The running title's grass rule defaults. Rules: what a "Graphics" block
+// older than schema 15 takes (none: it keeps its own). ForeignRuleSets: other
+// titles' shipped rule sets ({"Sources", "Masks"}) that builds which installed
+// one title's defaults for every title wrote into this title's
+// configurations; a block whose Grass (or GrassSavedPreset) holds exactly one
+// of them, sources and masks unedited, has them removed on load and is
+// rewritten. Edited rules are the user's and are kept.
+//
+// One configuration file can serve both titles (a developer launch without
+// --config uses the working directory's file for every title). A removal is
+// therefore recorded in the "Graphics" block (GraphicsSettings::RemovedTitleGrassRules,
+// "RemovedTitleGrassRules", "<block>/<set hash>"), and the title whose Rules
+// are that set restores them on its next load where the block's sources and
+// masks are still empty; rules the user wrote there in the meantime are kept.
+// With a shared file each title's load leaves the grass rules in its own form.
+struct TitleGrassRuleDefaults {
+    std::optional<nlohmann::json> Rules;
+    std::vector<nlohmann::json> ForeignRuleSets;
+};
+void InstallTitleGrassRuleDefaults(TitleGrassRuleDefaults defaults);
 void ClearTitleGrassRuleDefaults();
 
 // Central guard used by every runtime save site. Automated environment

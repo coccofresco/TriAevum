@@ -16,8 +16,10 @@ namespace Mm3dSceneEnvironmentLayout {
 // Restoration donor ABI plus MM3D code SHA 6eec27b1... live proof:
 // 1233 positive South Clock Town samples validate the scene/player/owner
 // reads; unobstructed walk deltas validate signed heading axes. Other scenes
-// and owner loss/restore still need integration coverage. The supplied
-// double-time run cancelled at 06:15: it does NOT validate night switching.
+// and owner loss/restore still need integration coverage. Night: a live
+// gameplay night sample (South Clock Town, day 1, 20:06) reads the night byte
+// as 1 with the same owner checks (mm3d_scene_environment_tests, recorded
+// night receipt); the double-time transition itself is not exercised.
 inline constexpr uint32_t ContextSize = 0x11030U;
 inline constexpr uint32_t Frame = 0x138U, StateType = 0x13DU, Scene = 0x148U;
 inline constexpr uint8_t PlayStateType = 4U;
@@ -28,9 +30,9 @@ static_assert(PlayerHead == 0x20DCU);
 inline constexpr uint32_t ActorSize = 0x1F8U;
 inline constexpr uint32_t ActorId = 0U, ActorCategory = 2U, ActorPosition = 0x24U;
 inline constexpr uint32_t ActorYaw = 0xC2U, ActorCalc = 0x140U, ActorDraw = 0x144U;
-// engine.h documents this CommonData address. Donor is_night is a bool;
-// live captures confirm daytime zero only. Keep night acceptance pending a
-// real gameplay 0->1 transition; the proof trace must retain the raw byte.
+// engine.h documents this CommonData address. Donor is_night is a bool:
+// live captures read 0 by day and 1 at night (the proof trace retains the
+// raw byte); any other value is not a night.
 inline constexpr uint32_t Common = 0x7751D8U;
 inline constexpr uint32_t Night = 0xCU, Day = 0x14U, Clock = 0x20U;
 } // namespace Mm3dSceneEnvironmentLayout

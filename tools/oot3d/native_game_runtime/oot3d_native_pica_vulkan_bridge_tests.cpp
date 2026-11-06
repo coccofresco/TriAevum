@@ -296,6 +296,34 @@ int main() {
             Require(actorBackend.DrawComposition.StaticShadowCacheEligible,
                     "draw bridge lost catalogued static shadow cache eligibility");
         }
+        // Another title reuses OoT3D's actor ids for unrelated actors (MM3D's
+        // 0x009D is En_Daiku): its draws are matched only against the policy
+        // its session installs, which is empty until it has a catalog.
+        const bool collides = [] {
+            for (const auto& entry : Oot3dNativeGame::StaticShadowActorCatalog())
+                if (entry.Id == 0x009DU) return true;
+            return false;
+        }();
+        Require(collides, "the collision fixture id left OoT3D's catalog");
+        const Oot3dNativeGame::StaticShadowActorPolicy otherTitle{};
+        Require(!otherTitle.Eligible(true, (uint64_t{0x009DU} << 32U) | 0x08000000U),
+                "an empty title policy made a catalogued OoT3D id eligible");
+        Require(Oot3dNativeGame::Oot3dStaticShadowActorPolicy().Eligible(true, (uint64_t{0x009DU} << 32U) | 0x08000000U),
+                "OoT3D's policy lost a catalogued id");
+        for (const bool oot3d : {true, false}) {
+            RecordingBackend titleBackend;
+            auto actorPlan = plan;
+            actorPlan.Composition.NativeActorGeometry = true;
+            actorPlan.Composition.NativeActorIdentity = (uint64_t{0x009DU} << 32U) | 0x08000000U;
+            const auto policy = oot3d ? Oot3dNativeGame::Oot3dStaticShadowActorPolicy() : otherTitle;
+            Oot3dNativeGame::Oot3dPicaVulkanDrawOverrides overrides;
+            overrides.StaticShadowActors = &policy;
+            Require(Oot3dNativeGame::SubmitOot3dPicaVulkanDrawPlan(titleBackend, actorPlan, &error, 9, &overrides),
+                    error);
+            Require(titleBackend.DrawComposition.StaticShadowCacheEligible == oot3d,
+                    oot3d ? "OoT3D's installed policy lost eligibility"
+                          : "another title's draw took OoT3D's static shadow catalog");
+        }
     }
     float packedDiffuse = 0.0F;
     float packedGlobalAmbient = 0.0F;

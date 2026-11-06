@@ -482,7 +482,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mNativePicaDepthResolveMode != VK_RESOLVE_MODE_NONE,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_2_BIT) != 0U,
         (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_4_BIT) != 0U,
-        (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_8_BIT) != 0U};
+        (mNativePicaSupportedSampleCounts & VK_SAMPLE_COUNT_8_BIT) != 0U,
+        UpscalerProviderAvailable(graphicsSettings.Upscaler)};
     const auto aaPolicy = Extension::ResolveAntiAliasingFramePolicy(
         graphicsSettings, aaCapabilities,
         taaEnvironment != nullptr &&
@@ -637,7 +638,8 @@ void GfxRenderingAPIVulkan::StartFrame() {
         mAmbientOcclusionOutputValid = false;
     }
     const float requestedInternalResolutionScale =
-        Extension::ResolveInternalResolutionScale(graphicsSettings);
+        Extension::ResolveInternalResolutionScale(
+            graphicsSettings, UpscalerProviderAvailable(graphicsSettings.Upscaler));
     mSpatialAaMode = aaPolicy.SpatialAaMode;
     if (mVsyncEnabled != graphicsSettings.VSync) {
         mVsyncEnabled = graphicsSettings.VSync;

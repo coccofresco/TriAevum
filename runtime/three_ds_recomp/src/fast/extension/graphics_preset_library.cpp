@@ -39,6 +39,8 @@ nlohmann::json PresetDocument(const GraphicsSettings& settings) {
         const nlohmann::json::json_pointer pointer{std::string(path)};
         if (document.contains(pointer)) document[pointer.parent_pointer()].erase(pointer.back());
     }
+    // Host-owned as well, but written only while a removal is recorded.
+    document.erase("RemovedTitleGrassRules");
     return document;
 }
 

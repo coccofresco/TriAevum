@@ -2873,12 +2873,12 @@ TEST(Oot3dRenderResolution,
     using namespace Fast::Extension;
     GraphicsSettings settings;
     settings.InternalResolutionScale = 1.75F;
-    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings), 1.75F);
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, true), 1.75F);
 
     settings.AntiAliasing = AntiAliasingMode::Upscaler;
     settings.UpscalerMode = UpscalerQuality::Performance;
     EXPECT_FLOAT_EQ(
-        ResolveInternalResolutionScale(settings),
+        ResolveInternalResolutionScale(settings, true),
         1.0F / UpscalerScalingFactor(UpscalerQuality::Performance));
     EXPECT_FLOAT_EQ(settings.InternalResolutionScale, 1.75F);
 
@@ -2889,7 +2889,7 @@ TEST(Oot3dRenderResolution,
                                 UpscalerQuality::UltraPerformance }) {
         settings.UpscalerMode = quality;
         const auto render = ResolveNativePicaRenderExtent({480U, 400U}, {3840U, 2160U},
-                                                          ResolveInternalResolutionScale(settings));
+                                                          ResolveInternalResolutionScale(settings, true));
         // The top-screen target is at the presented density: its transfer
         // copies, so the upscaler reads the whole target extent.
         const auto contract = ResolveUpscalerContractFromRender(UpscalerProvider::Dlss, quality, render.Width,
@@ -2898,11 +2898,63 @@ TEST(Oot3dRenderResolution,
         EXPECT_NEAR(double(contract.Output.Height), 3840.0, 2.0) << int(quality);
     }
     settings.UpscalerMode = UpscalerQuality::UltraPerformance;
-    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings), 1.0F / 3.0F);
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, true), 1.0F / 3.0F);
     // The user's own scale keeps its range.
     settings.AntiAliasing = AntiAliasingMode::Taa;
     settings.InternalResolutionScale = 0.25F;
-    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings), 0.5F);
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, true), 0.5F);
+}
+
+TEST(Oot3dAntiAliasingFramePolicy,
+     MissingUpscalerProviderResolvesAsAntiAliasingOff) {
+    using namespace Fast::Extension;
+    GraphicsSettings settings;
+    settings.AntiAliasing = AntiAliasingMode::Upscaler;
+    settings.Upscaler = UpscalerProvider::Dlss;
+    settings.UpscalerMode = UpscalerQuality::UltraPerformance;
+    AntiAliasingFrameCapabilities capabilities;
+    const auto available = ResolveAntiAliasingFramePolicy(settings, capabilities);
+    EXPECT_TRUE(available.TemporalJitter);
+    EXPECT_TRUE(available.PresentationUpscaler);
+    capabilities.UpscalerAvailable = false;
+    const auto missing = ResolveAntiAliasingFramePolicy(settings, capabilities);
+    settings.AntiAliasing = AntiAliasingMode::Off;
+    const auto off = ResolveAntiAliasingFramePolicy(settings, capabilities);
+    EXPECT_FALSE(missing.TemporalJitter);
+    EXPECT_FALSE(missing.TemporalMotion);
+    EXPECT_FALSE(missing.PresentationWorldSurface);
+    EXPECT_FALSE(missing.PresentationUpscaler);
+    EXPECT_EQ(missing.TemporalJitterPhases, off.TemporalJitterPhases);
+    EXPECT_EQ(missing.SpatialAaMode, off.SpatialAaMode);
+    EXPECT_EQ(missing.MsaaSamples, off.MsaaSamples);
+}
+
+TEST(Oot3dRenderResolution,
+     MissingUpscalerProviderKeepsUserScale) {
+    using namespace Fast::Extension;
+    // A selected upscaler whose provider cannot run (its module is missing)
+    // is never planned, so the display is not upscaled: the frame keeps the
+    // user's scale instead of rendering a third of it and stretching that.
+    GraphicsSettings settings;
+    settings.AntiAliasing = AntiAliasingMode::Upscaler;
+    settings.Upscaler = UpscalerProvider::Dlss;
+    settings.UpscalerMode = UpscalerQuality::UltraPerformance;
+    settings.InternalResolutionScale = 1.0F;
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, false), 1.0F);
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, true), 1.0F / 3.0F);
+    settings.InternalResolutionScale = 1.5F;
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, false), 1.5F);
+    // Without an upscaler, availability changes nothing.
+    settings.AntiAliasing = AntiAliasingMode::Off;
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, true), 1.5F);
+    EXPECT_FLOAT_EQ(ResolveInternalResolutionScale(settings, false), 1.5F);
+    settings.AntiAliasing = AntiAliasingMode::Upscaler;
+    settings.InternalResolutionScale = 1.0F;
+    const auto off = ResolveNativePicaRenderExtent({480U, 400U}, {1280U, 720U}, 1.0F);
+    const auto unavailable = ResolveNativePicaRenderExtent({480U, 400U}, {1280U, 720U},
+                                                           ResolveInternalResolutionScale(settings, false));
+    EXPECT_EQ(unavailable.Width, off.Width);
+    EXPECT_EQ(unavailable.Height, off.Height);
 }
 
 TEST(Oot3dAntiAliasingFramePolicy,
