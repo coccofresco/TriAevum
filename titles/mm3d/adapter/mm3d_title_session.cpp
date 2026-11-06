@@ -40,6 +40,13 @@ public:
   const char *GameName() const override { return "Majora's Mask 3D"; }
   Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
   bool NativeFragmentLighting() const override { return true; }
+  // No MM3D shader corpus yet: no vertex-program family in the built-in uber
+  // set, no fragment-family pack, no scenario corpus or Forge preparation
+  // (PARITY_PLAN P7.1/P7.2). Return true once those exist: that restores
+  // always-available programs and the persistent NRI pipeline cache for MM3D
+  // (its program family and pass programs are then registered by the session
+  // next to OoT3D's).
+  bool PreparedShaders() const override { return false; }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {
     // MM3D's perspective frustum builder: the scene widens to the output

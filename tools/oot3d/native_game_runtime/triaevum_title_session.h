@@ -82,6 +82,14 @@ public:
   // The shared renderer's native fragment lighting operand and lit shadow
   // receivers, which this title's shaders need.
   [[nodiscard]] virtual bool NativeFragmentLighting() const { return false; }
+  // Whether the title has prepared shaders: a vertex-program family and
+  // fragment-family packs built in, and a scenario corpus and Forge
+  // preparation behind the persistent pipeline cache
+  // (fast/renderer3ds/title_shader_preparation.h). Without them the renderer
+  // uses no always-available programs and keeps its NRI pipeline cache in
+  // memory; every program a draw uses is still compiled when the draw needs
+  // it. OoT3D (no session) has them.
+  [[nodiscard]] virtual bool PreparedShaders() const { return false; }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }
@@ -131,5 +139,12 @@ public:
 // adapter needs none (OoT3D EUR, generic titles). Throws when the title's
 // adapter is not part of this build.
 std::unique_ptr<TitleSession> CreateTitleSession(TitleAdapter adapter);
+
+// Whether the running title has prepared shaders (TitleSession::PreparedShaders):
+// its session says so; OoT3D's adapter, still wired into the window session
+// itself, has them; a generic title has none.
+[[nodiscard]] inline bool TitlePreparedShaders(TitleAdapter adapter, const TitleSession *session) {
+  return session != nullptr ? session->PreparedShaders() : adapter == TitleAdapter::Oot3dEur;
+}
 
 } // namespace Oot3dNativeGame

@@ -8,6 +8,7 @@
 #include "triaevum_host_audio.h"
 #include "oot3d_savestate_migration.h"
 #include "fast/extension/graphics_settings_persistence.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
 
@@ -1276,6 +1277,9 @@ void NativeA32WindowSession::Setup() {
   if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {
     Fast::Extension::InstallGraphicsSettingsWindowTitle(title);
   }
+  // The renderer reads it when the context starts it.
+  Fast::Renderer3ds::InstallTitleShaderPreparation(
+      {Oot3dNativeGame::TitlePreparedShaders(titleAdapter, titleSession.get())});
   InitContextForDemo(hostArgs);
   // What the title itself provides to the graphics settings: the effects
   // that need a scene view, and the scene FOV, stay inactive without it.
@@ -1324,14 +1328,15 @@ void NativeA32WindowSession::Setup() {
   alwaysAvailablePrograms =
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
-  if (programPreparation != nullptr)
+  // The title pass programs and the startup program family (vertex programs,
+  // effect supersets) are OoT3D's, built from its vertex family: another
+  // title's draws never match them, so registering or preparing them would
+  // only cost that guest at startup. Its draws prepare their own programs.
+  const bool oot3dPrograms = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
+  if (programPreparation != nullptr && oot3dPrograms)
     programPreparation->RegisterTitlePassPrograms(
         Oot3dNativeGame::NativePicaTitlePassPrograms());
-  // The startup program family (vertex programs, effect supersets) is
-  // OoT3D's: another title's draws never match it, so preparing it would
-  // only hold that guest at startup. Its draws prepare their own programs.
-  if (programPreparation != nullptr &&
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
+  if (programPreparation != nullptr && oot3dPrograms &&
       (launch.PicaParametricTev || alwaysAvailablePrograms)) {
     programPreparation->PrepareNativePicaPrograms(
         Oot3dNativeGame::NativePicaVertexProgramFamily());

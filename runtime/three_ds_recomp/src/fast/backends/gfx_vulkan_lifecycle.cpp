@@ -135,6 +135,8 @@ void GfxRenderingAPIVulkan::Init() {
     mDiagnostics.ReloadFromEnvironment();
     mValidationTelemetry.Reset();
     ConfigureNativePicaAotShaders();
+    mTitleShaderPreparationPlan =
+        Renderer3ds::ResolveTitleShaderPreparationPlan(Renderer3ds::InstalledTitleShaderPreparation());
     {
         const char* value = std::getenv("TRIAEVUM_SHADER_PREPARATION");
         // Every draw has an always-available program: specialized programs
@@ -280,17 +282,23 @@ void GfxRenderingAPIVulkan::Init() {
         VkPhysicalDeviceProperties properties{};
         vkGetPhysicalDeviceProperties(mPhysicalDevice, &properties);
         std::vector<uint8_t> data;
-        LoadPipelineCacheData(VulkanPipelineCachePath(true),
-                              MakePipelineCacheHeader(properties), data,
-                              kMaximumNriPipelineCacheBytes);
+        // A title without prepared shaders never matches the cache file (it
+        // holds the prepared title's pipelines) and would replace it: its
+        // cache lives in memory for the session.
+        const bool persistent = mTitleShaderPreparationPlan.PersistentPipelineCache;
+        if (persistent)
+            LoadPipelineCacheData(VulkanPipelineCachePath(true),
+                                  MakePipelineCacheHeader(properties), data,
+                                  kMaximumNriPipelineCacheBytes);
         const bool initialized = mNriPicaPipelineBridge.InitializePipelineCache(data);
-        SPDLOG_INFO("NRI PICA pipeline cache: initialized={}, accepted {} bytes", initialized,
-                    mNriPicaPipelineBridge.PipelineStatistics().InitialCacheBytes);
+        SPDLOG_INFO("NRI PICA pipeline cache: initialized={}, accepted {} bytes, {}", initialized,
+                    mNriPicaPipelineBridge.PipelineStatistics().InitialCacheBytes,
+                    persistent ? "persistent" : "session only");
         // Pipelines compiled this session reach the disk while it runs, not
         // only at a clean shutdown (TRIAEVUM_NRI_PIPELINE_CACHE_FLUSH=0 keeps
         // the shutdown-only store for comparisons).
         if (const char* flush = std::getenv("TRIAEVUM_NRI_PIPELINE_CACHE_FLUSH");
-            initialized && (flush == nullptr || std::string_view(flush) != "0")) {
+            persistent && initialized && (flush == nullptr || std::string_view(flush) != "0")) {
             mNriPipelineCacheFlusher.Start(
                 VulkanPipelineCachePath(true), MakePipelineCacheHeader(properties), kMaximumNriPipelineCacheBytes,
                 [this] { return mNriPicaPipelineBridge.GetPipelineCacheData(); });
@@ -310,6 +318,18 @@ void GfxRenderingAPIVulkan::Init() {
         // No prepared parts to link: specialized programs complete instead.
         mNativePicaPreparationMode = NativePicaPreparationMode::Complete;
     }
+    if ((mNativePicaPreparationMode == NativePicaPreparationMode::Hybrid ||
+         mNativePicaPreparationMode == NativePicaPreparationMode::Uber) &&
+        !mTitleShaderPreparationPlan.AlwaysAvailablePrograms) {
+        // The title has no program family to link always-available programs
+        // from: its draws complete their specialized programs. Applied after
+        // device creation, so the pipeline library policy stays as negotiated.
+        mNativePicaPreparationMode = NativePicaPreparationMode::Complete;
+    }
+    std::fprintf(stderr, "TRIAEVUM_TITLE_SHADER_PREPARATION prepared=%u pipeline_cache=%s always_available=%u\n",
+        unsigned(Renderer3ds::InstalledTitleShaderPreparation().Prepared),
+        mTitleShaderPreparationPlan.PersistentPipelineCache ? "persistent" : "session",
+        unsigned(mTitleShaderPreparationPlan.AlwaysAvailablePrograms));
     if (mNativePicaPreparationMode != NativePicaPreparationMode::Synchronous && !mPreparationQueue) {
         const unsigned hardware = std::max(1U, std::thread::hardware_concurrency());
         mPreparationQueue = std::make_unique<Renderer3ds::PicaPreparationQueue>(

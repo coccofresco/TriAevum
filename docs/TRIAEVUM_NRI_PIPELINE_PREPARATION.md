@@ -85,6 +85,17 @@ drawable; only the recording backend consumes it.
 - Driver cache data remains local. The portable pack is not a driver cache.
 - Do not prepare concurrently with gameplay writing the same cache: atomic
   writes prevent partial files, but last-writer-wins can discard additions.
+- 2026-11-06: the file is per directory, not per title, and only a title with
+  prepared shaders (`TitleSession::PreparedShaders`, OoT3D) loads, flushes and
+  stores it (`fast/renderer3ds/title_shader_preparation.h`). A title without
+  them (MM3D until its corpus exists, generic titles) never matches the
+  prepared title's pipelines and its store would replace them: its cache is
+  session-only (`TRIAEVUM_NRI_PIPELINE_CACHE_STORE result=session_only`), and
+  its draws complete their specialized programs (preparation mode `complete`,
+  no always-available programs to link). `TRIAEVUM_TITLE_SHADER_PREPARATION`
+  prints the decision. The content-addressed SPIR-V and pass-shader caches are
+  unaffected: their entries are per program and serve the title's own next
+  launch.
 
 The helper now wraps a Vulkan device using the live renderer's shared
 `renderer3ds/pica_vulkan_device_profile.h`: application/API contract and enabled

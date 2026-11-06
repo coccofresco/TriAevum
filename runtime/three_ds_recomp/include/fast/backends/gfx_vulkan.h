@@ -14,6 +14,7 @@
 #include "fast/renderer3ds/pica_program_preparation.h"
 #include "fast/renderer3ds/pica_preparation_queue.h"
 #include "fast/renderer3ds/pipeline_cache_flusher.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "fast/renderer3ds/pica_texture_copy_plan.h"
 #include "fast/renderer3ds/pica_shadow_geometry.h"
 #include "fast/renderer3ds/pica_ui_canvas.h"
@@ -1862,6 +1863,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // Persists the NRI pipeline cache while the session runs; stopped before
     // the final store at shutdown.
     Renderer3ds::PipelineCacheFlusher mNriPipelineCacheFlusher;
+    // What the title's shader preparation lets startup do
+    // (fast/renderer3ds/title_shader_preparation.h), read at Init.
+    Renderer3ds::TitleShaderPreparationPlan mTitleShaderPreparationPlan{};
     // Per-frame vertex/upload arena sizing evidence, summarized at shutdown.
     VkDeviceSize mPeakFrameVertexBytes = 0;
     uint32_t mFrameVertexArenaGrowths = 0;

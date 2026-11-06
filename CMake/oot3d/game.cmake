@@ -73,6 +73,14 @@ add_executable(triaevum_presentation_clock_tests EXCLUDE_FROM_ALL
 target_link_libraries(triaevum_presentation_clock_tests PRIVATE oot3d_native_game_runtime)
 oot3d_target_defaults(triaevum_presentation_clock_tests NO_WARNING_OVERRIDE FOLDER Tests)
 
+# Which titles start the renderer with prepared shaders (title session capability).
+add_executable(triaevum_title_shader_preparation_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_title_shader_preparation_tests.cpp)
+target_include_directories(triaevum_title_shader_preparation_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/runtime/three_ds_recomp/include")
+target_link_libraries(triaevum_title_shader_preparation_tests PRIVATE oot3d_native_game_runtime)
+oot3d_target_defaults(triaevum_title_shader_preparation_tests FOLDER Tests)
+
 add_executable(oot3d_native_audio_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_audio_tests.cpp
 )
