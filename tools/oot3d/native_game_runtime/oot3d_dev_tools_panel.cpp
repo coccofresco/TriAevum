@@ -4,7 +4,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
+#include <cstdio>
+#include <cstring>
 #include <span>
+#include <string>
 
 namespace Oot3dNativeGame {
 namespace {
@@ -20,11 +24,18 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     auto options = mWarp->Options();
     const auto status = mWarp->Status();
     ImGui::SeparatorText("Warping");
+    // A title with curated zones and arrival options (MM3D): zones first.
+    auto arrival = mWarp->ArrivalOptions();
+    if (!mWarp->Zones().empty()) DrawZones(arrival, status);
+    if (!mWarp->Axes().empty()) DrawArrival(arrival);
+    if (!mWarp->Zones().empty() || !mWarp->Axes().empty()) mWarp->SetArrivalOptions(arrival);
     ImGui::Checkbox("Better Debug Warp Screen", &options.Better);
     Tooltip("Optimized Debug Warp Screen, with the added ability to chose entrances and time of day.");
-    ImGui::Checkbox("Debug Warp Screen Translation", &options.Translation);
-    Tooltip("Translate the Debug Warp Screen based on the game language.");
-    DrawWarpScreen(options, status);
+    if (!mWarp->HasTitleAbi()) {
+      ImGui::Checkbox("Debug Warp Screen Translation", &options.Translation);
+      Tooltip("Translate the Debug Warp Screen based on the game language.");
+    }
+    DrawWarpScreen(options, status, arrival.Arrival);
     mWarp->SetOptions(options);
     DrawWarpPoints(status);
     if (!mWarp->StorageError().empty())
@@ -36,13 +47,157 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) ImGui::SetTooltip("%s", text);
   }
 
+  // The label of an axis value: Keep, the zone preset, a choice or the raw value.
+  std::string ValueLabel(size_t axis, int32_t value) const {
+    if (value == kDevWarpKeep) return "keep";
+    if (value == kDevWarpPreset) return "zone preset";
+    const auto axes = mWarp->Axes();
+    if (axis < axes.size())
+      for (const auto &choice : axes[axis].Choices)
+        if (choice.Value == value) return choice.Label;
+    char text[16];
+    std::snprintf(text, sizeof(text), "0x%04X", static_cast<unsigned>(value));
+    return text;
+  }
+
+  std::string PresetText(const DevWarpZone &zone) const {
+    std::string text;
+    const auto axes = mWarp->Axes();
+    for (size_t axis = 0; axis < axes.size() && axis < kDevWarpMaxAxes; ++axis) {
+      if (zone.Preset[axis] == kDevWarpKeep) continue;
+      if (!text.empty()) text += ", ";
+      text += ValueLabel(axis, zone.Preset[axis]);
+    }
+    return text.empty() ? "keeps day, time, form" : text;
+  }
+
+  void DrawZones(DevWarpArrivalOptions &arrival, const DevWarpStatus &status) {
+    ImGui::SeparatorText("Zones");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputTextWithHint("##ZoneFilter", "Filter zones...", mFilter.data(), mFilter.size());
+    std::string filter(mFilter.data());
+    std::transform(filter.begin(), filter.end(), filter.begin(), [](unsigned char c) { return std::tolower(c); });
+    const auto zones = mWarp->Zones();
+    const DevWarpZone *selected = mWarp->FindZone(arrival.SelectedZone);
+    if (ImGui::BeginChild("##Zones", ImVec2(-FLT_MIN, ImGui::GetTextLineHeightWithSpacing() * 12.0F),
+                          ImGuiChildFlags_Borders)) {
+      const char *category = nullptr;
+      bool open = false;
+      for (const auto &zone : zones) {
+        std::string name(zone.Name);
+        std::string lower = name + " " + zone.Category;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+        if (!filter.empty() && lower.find(filter) == std::string::npos) continue;
+        if (category == nullptr || std::strcmp(category, zone.Category) != 0) {
+          category = zone.Category;
+          ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+          open = ImGui::CollapsingHeader(category) || !filter.empty();
+        }
+        if (!open) continue;
+        const auto *row = mWarp->FindEntrance(zone.Entrance);
+        const auto availability = row != nullptr ? mWarp->Check(*row) : DevWarpAvailability{true, false, "no catalog row"};
+        ImGui::BeginDisabled(availability.Known && !availability.Available);
+        if (arrival.BootZone == zone.Id) name += "  [Boot]";
+        if (!zone.Proven) name += "  (unverified)";
+        // "###zone": the ID ignores the visible text, so a zone keeps its
+        // identity when its [Boot] or (unverified) mark changes; PushID(Id)
+        // scopes it per zone (the Debug Warp Screen lists scenes of the same name).
+        name += "###zone";
+        ImGui::PushID(zone.Id);
+        if (ImGui::Selectable(name.c_str(), selected == &zone)) {
+          arrival.SelectedZone = zone.Id;
+          selected = &zone;
+        }
+        ImGui::PopID();
+        ImGui::EndDisabled();
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+          char entrance[16];
+          std::snprintf(entrance, sizeof(entrance), "0x%04X", zone.Entrance);
+          std::string tip = std::string("Entrance ") + entrance + ": " + PresetText(zone);
+          if (*zone.Note) tip += "\n" + std::string(zone.Note);
+          if (!zone.Proven) tip += "\nArrival not yet verified in game.";
+          if (!availability.Reason.empty()) tip += "\n" + availability.Reason;
+          ImGui::SetTooltip("%s", tip.c_str());
+        }
+      }
+    }
+    ImGui::EndChild();
+    if (selected == nullptr) {
+      ImGui::TextDisabled("Select a zone.");
+      return;
+    }
+    const auto *row = mWarp->FindEntrance(selected->Entrance);
+    const auto availability = row != nullptr ? mWarp->Check(*row) : DevWarpAvailability{true, false, "no catalog row"};
+    const auto resolved = mWarp->Resolve(arrival.Arrival, selected);
+    const auto arrivalError = mWarp->ArrivalError(resolved);
+    const bool gameplay = status.Observation.Gameplay;
+    ImGui::BeginDisabled(!gameplay || (availability.Known && !availability.Available) || !arrivalError.empty());
+    if (ImGui::Button("Warp##Zone")) {
+      mZoneError.clear();
+      if (!mWarp->WarpToZone(selected->Id, arrival.Arrival, &mZoneError) && mZoneError.empty())
+        mZoneError = "The zone warp was not queued.";
+    }
+    ImGui::EndDisabled();
+    if (!gameplay) Tooltip("Warps start from normal gameplay: load a file first.");
+    else if (!availability.Reason.empty()) Tooltip(availability.Reason.c_str());
+    else if (!arrivalError.empty()) Tooltip(arrivalError.c_str());
+    const auto zoneWarning = mWarp->ArrivalWarning(selected->Entrance, resolved);
+    ImGui::SameLine();
+    const bool boot = arrival.BootZone == selected->Id;
+    if (ImGui::Button(boot ? "Clear launch zone" : "Start here on launch")) arrival.BootZone = boot ? "" : selected->Id;
+    Tooltip("Warp to this zone, with the arrival options below, when gameplay first starts in a session "
+            "(after loading a file or a savestate). Replaces a boot warp point.");
+    ImGui::SameLine();
+    ImGui::TextDisabled("%s", PresetText(*selected).c_str());
+    if (!zoneWarning.empty()) WarningText(zoneWarning);
+    if (!mZoneError.empty()) {
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.45F, 0.35F, 1.0F));
+      ImGui::TextWrapped("%s", mZoneError.c_str());
+      ImGui::PopStyleColor();
+    }
+  }
+
+  static void WarningText(const std::string &warning) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.8F, 0.3F, 1.0F));
+    ImGui::TextWrapped("Warning: %s", warning.c_str());
+    ImGui::PopStyleColor();
+  }
+
+  void DrawArrival(DevWarpArrivalOptions &arrival) {
+    ImGui::SeparatorText("Arrival");
+    const auto axes = mWarp->Axes();
+    for (size_t axis = 0; axis < axes.size() && axis < kDevWarpMaxAxes; ++axis) {
+      const auto &definition = axes[axis];
+      auto &value = arrival.Arrival[axis];
+      ImGui::PushID(definition.Id);
+      ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0F);
+      if (ImGui::BeginCombo(definition.Label, ValueLabel(axis, value).c_str(), ImGuiComboFlags_HeightLarge)) {
+        if (ImGui::Selectable("keep", value == kDevWarpKeep)) value = kDevWarpKeep;
+        Tooltip("Leave the current value as it is.");
+        if (ImGui::Selectable("zone preset", value == kDevWarpPreset)) value = kDevWarpPreset;
+        Tooltip("The selected zone's suggestion (keep on the Debug Warp Screen).");
+        ImGui::BeginDisabled(!definition.Proven);
+        for (const auto &choice : definition.Choices) {
+          if (ImGui::Selectable(choice.Label, value == choice.Value)) value = choice.Value;
+        }
+        ImGui::EndDisabled();
+        ImGui::EndCombo();
+      }
+      if (!definition.Proven) {
+        ImGui::SameLine();
+        ImGui::TextDisabled("(%s)", definition.Pending);
+      }
+      ImGui::PopID();
+    }
+  }
+
   template <class T> const char *Name(const T &entry, bool translate) const {
     if (translate && mLanguage == "de") return entry.German;
     if (translate && mLanguage == "fr") return entry.French;
     return entry.English;
   }
 
-  void DrawWarpScreen(DevWarpScreenOptions &options, const DevWarpStatus &status) {
+  void DrawWarpScreen(DevWarpScreenOptions &options, const DevWarpStatus &status, const DevWarpSelection &arrival) {
     ImGui::SeparatorText("Debug Warp Screen");
     const bool translate = options.Translation;
     const DevWarpEntrance *target = nullptr;
@@ -91,7 +246,8 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
       ImGui::SameLine();
       ImGui::RadioButton("Night", &night, 1);
       options.Night = night != 0;
-      } else ImGui::TextDisabled("Current day, time and form are preserved.");
+      } else if (mWarp->Axes().empty()) ImGui::TextDisabled("Current day, time and form are preserved.");
+      else ImGui::TextDisabled("Arrival options apply; a zone preset keeps the current value here.");
     } else {
       const auto scenes = mWarp->VanillaEntrances();
       options.VanillaScene = std::clamp(options.VanillaScene, 0, static_cast<int>(scenes.size()) - 1);
@@ -118,14 +274,23 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     }
     const auto availability = mWarp->Check(*target);
     const bool gameplay = status.Observation.Gameplay;
-    ImGui::BeginDisabled(!gameplay || (availability.Known && !availability.Available));
+    const auto arrivalError = mWarp->ArrivalError(mWarp->Resolve(arrival, nullptr));
+    const bool titleArrival = mWarp->HasTitleAbi() && !mWarp->Axes().empty();
+    ImGui::BeginDisabled(!gameplay || (availability.Known && !availability.Available) ||
+                         (titleArrival && !arrivalError.empty()));
     if (ImGui::Button("Warp")) {
+      if (titleArrival) mWarp->WarpTo(*target, arrival);
       // The vanilla screen keeps the current time of day, as SoH's does.
-      mWarp->WarpTo(*target, options.Age, options.Better && !mWarp->HasTitleAbi() ? std::optional<bool>(options.Night) : std::nullopt);
+      else mWarp->WarpTo(*target, options.Age, options.Better && !mWarp->HasTitleAbi() ? std::optional<bool>(options.Night) : std::nullopt);
     }
     ImGui::EndDisabled();
     if (!gameplay) Tooltip("Warps start from normal gameplay: load a file first.");
     else if (!availability.Reason.empty()) Tooltip(availability.Reason.c_str());
+    else if (titleArrival && !arrivalError.empty()) Tooltip(arrivalError.c_str());
+    if (titleArrival) {
+      const auto warning = mWarp->ArrivalWarning(target->Entrance, mWarp->Resolve(arrival, nullptr));
+      if (!warning.empty()) WarningText(warning);
+    }
     if (!status.Message.empty()) {
       const bool failed = status.Phase == DevWarpPhase::Failed;
       ImGui::PushStyleColor(ImGuiCol_Text, failed ? ImVec4(1.0F, 0.45F, 0.35F, 1.0F)
@@ -133,9 +298,12 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
       ImGui::TextWrapped("%s", status.Message.c_str());
       ImGui::PopStyleColor();
     }
-    if (mWarp->HasTitleAbi() && status.Observation.PlayState)
-      ImGui::TextDisabled("Scene %d, room %u, entrance 0x%04X", status.Observation.Scene,
-                          status.Observation.Room, status.Observation.Entrance);
+    if (mWarp->HasTitleAbi() && status.Observation.PlayState) {
+      const auto state = mWarp->Describe(status.Observation);
+      ImGui::TextDisabled("Scene %d, room %u, entrance 0x%04X%s%s", status.Observation.Scene,
+                          status.Observation.Room, status.Observation.Entrance, state.empty() ? "" : ", ",
+                          state.c_str());
+    }
     else if (status.Observation.PlayState)
       ImGui::TextDisabled("Scene %d, room %u, entrance 0x%04X, %s", status.Observation.Scene, status.Observation.Room,
                           status.Observation.Entrance, status.Observation.Age == 0 ? "adult" : "child");
@@ -181,6 +349,9 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
   std::shared_ptr<DevWarpRuntime> mWarp;
   std::string mLanguage;
   std::array<char, 64> mName{};
+  std::array<char, 64> mFilter{};
+  // Why the last zone Warp was not queued (shown below the button).
+  std::string mZoneError;
 };
 
 } // namespace
