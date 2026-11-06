@@ -262,14 +262,20 @@ int main() {
     g.Put(Common + 0x08, uint8_t{0x16}); // Goron Mask equipped
     std::string error;
     Check(proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{2, 0xEAAB, FormZora, -1}, &error), error.c_str());
-    Check(g.Get<int32_t>(Common + 0x14) == 2 && g.Get<uint16_t>(Common + 0x20) == 0xEAAB &&
+    Check(g.Get<int32_t>(Common + 0x14) == 2 && g.Get<uint16_t>(Common + 0x36A0) == 0xEAAB &&
               g.Get<uint8_t>(Common + 0x26) == FormZora && g.Get<uint8_t>(Common + 0x08) == 0,
-          "day, time, form written and the mask cleared");
+          "day and form written, time staged in nextDayTime, the mask cleared");
+    Check(g.Get<uint16_t>(Common + 0x20) == 0x4000,
+          "the scene being left keeps its time (its En_Test4 must not see a dawn)");
     Check(g.writes.back() == Fake::P + 0xC529, "trigger still published last");
     const auto position = [&](uint32_t a) { return std::find(g.writes.begin(), g.writes.end(), a) - g.writes.begin(); };
     Check(position(Common + 0x14) < position(Fake::P + 0xC52E) && position(Common + 0x26) < position(Fake::P + 0xC52E),
           "arrival fields precede the transition fields");
     Check(g.Get<int32_t>(Common + 0x18) == 0, "eventDayCount untouched");
+    Fake noon;
+    Check(proven.Apply(noon, Fake::P, 0xD600, nullptr, DevWarpSelection{-1, 0x8000, -1, -1}, &error) &&
+              noon.Get<uint16_t>(Common + 0x36A0) == 0x8001,
+          "noon is staged one unit later (nextDayTime 0x8000 would advance the day)");
   }
   {
     Fake g;
@@ -423,7 +429,7 @@ int main() {
     runtime.Advance(g, 0, 1);
     Check(runtime.Status().Phase == DevWarpPhase::Requested, "boot zone requested at first gameplay");
     Check(g.Get<uint16_t>(Fake::P + 0xC52E) == 0xD620 && g.Get<int32_t>(Common + 0x14) == 1 &&
-              g.Get<uint16_t>(Common + 0x20) == 0xEAAB && g.Get<uint8_t>(Common + 0x26) == FormHuman,
+              g.Get<uint16_t>(Common + 0x36A0) == 0xEAAB && g.Get<uint8_t>(Common + 0x26) == FormHuman,
           "boot zone: preset day, overridden time, kept form");
     // The native transition: busy, then North Clock Town with the player.
     g.Put(Fake::P + 0xC529, uint8_t{0});
@@ -433,11 +439,15 @@ int main() {
     g.Put(Common + 0x3518, uint32_t{0xD620});
     g.Put(Fake::P + 0x148, int16_t{0x6E});
     g.Put(Common + 0x0C, uint8_t{1});
+    // Play_Init: the staged time becomes the time; nextDayTime counts down.
+    g.Put(Common + 0x20, g.Get<uint16_t>(Common + 0x36A0));
+    g.Put(Common + 0x36A0, uint16_t{0xFFFD});
     runtime.Advance(g, 0, 3);
     Check(runtime.Status().Phase == DevWarpPhase::Arrived, runtime.Status().Message.c_str());
     for (uint64_t frame = 4; frame < 200; ++frame)
       runtime.Advance(g, 0, frame);
     Check(runtime.Status().Phase == DevWarpPhase::Arrived, "the boot zone is taken once");
+    g.Put(Common + 0x36A0, uint16_t{0xFFFF}); // the sfx countdown ended
     runtime.SetBootPoint("anything");
     Check(runtime.ArrivalOptions().BootZone.empty(), "a boot point clears the boot zone");
     // An arrival whose time did not take is reported as failed.

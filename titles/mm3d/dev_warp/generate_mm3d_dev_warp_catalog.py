@@ -101,7 +101,9 @@ ZONES = [
     ("Ikana", "Ikana Graveyard", "IKANA_GRAVEYARD", 0, 1, "2200", None, ""),
     ("Ikana", "Ikana Canyon", "IKANA_CANYON", 0, 1, "1200", None, ""),
     ("Ikana", "Stone Tower", "STONE_TOWER", 0, 1, "1200", None, ""),
-    ("Ikana", "Inverted Stone Tower", "STONE_TOWER_INVERTED", 0, 1, "1200", None, ""),
+    # Spawn 0 is the flip from the upright tower (it plays the flip and lands
+    # back upright at Stone Tower spawn 1); spawn 1 is beside the inverted temple.
+    ("Ikana", "Inverted Stone Tower", "STONE_TOWER_INVERTED", 1, 1, "1200", None, ""),
     ("Ikana", "Stone Tower Temple", "STONE_TOWER_TEMPLE", 0, None, None, None, ""),
     ("Ikana", "Stone Tower Temple (inverted)", "STONE_TOWER_TEMPLE_INVERTED", 0, None, None, None, ""),
     ("Ikana", "Ancient Castle of Ikana", "IKANA_CASTLE", 1, None, None, None, ""),

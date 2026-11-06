@@ -659,7 +659,7 @@ inline constexpr DevWarpZone kMm3dDevZones[]{
   {"ikana-graveyard", "Ikana", "Ikana Graveyard", "", 0x8000, {1, 0xEAAB, -1, -1}, false},
   {"ikana-canyon", "Ikana", "Ikana Canyon", "", 0x2000, {1, 0x8000, -1, -1}, false},
   {"stone-tower", "Ikana", "Stone Tower", "", 0xAA00, {1, 0x8000, -1, -1}, false},
-  {"inverted-stone-tower", "Ikana", "Inverted Stone Tower", "", 0xAC00, {1, 0x8000, -1, -1}, false},
+  {"inverted-stone-tower", "Ikana", "Inverted Stone Tower", "", 0xAC10, {1, 0x8000, -1, -1}, false},
   {"stone-tower-temple", "Ikana", "Stone Tower Temple", "", 0x2600, {-1, -1, -1, -1}, false},
   {"stone-tower-temple-inverted", "Ikana", "Stone Tower Temple (inverted)", "", 0x2A00, {-1, -1, -1, -1}, false},
   {"ancient-castle-of-ikana", "Ikana", "Ancient Castle of Ikana", "", 0x3410, {-1, -1, -1, -1}, false},

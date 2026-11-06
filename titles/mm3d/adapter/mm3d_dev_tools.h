@@ -100,6 +100,8 @@ inline constexpr uint32_t Day = Common + 0x14;           // s32 1..3 (4 = after 
 inline constexpr uint32_t Time = Common + 0x20;          // u16, 0x0000 midnight, 0x8000 noon
 inline constexpr uint32_t Form = Common + 0x26;          // u8: 0 Fierce Deity, 1 Goron, 2 Zora, 3 Deku, 4 Human
 inline constexpr uint32_t NextDayTime = Common + 0x36A0; // u16, 0xFFFF none
+// Play_Init: nextDayTime == 0x8000 (NEXT_TIME_DAY) also advances day and eventDayCount.
+inline constexpr uint16_t NoonAdvancesDay = 0x8000;
 inline constexpr uint32_t Health = Common + 0x13C;       // u16, 16 per heart (Restoration PlayerData)
 enum : int32_t { FormDeity = 0, FormGoron = 1, FormZora = 2, FormDeku = 3, FormHuman = 4 };
 // MM3D Play_Init: night when (time - 06:00) mod 24 h >= 12 h, i.e. before 06:00
@@ -386,10 +388,17 @@ public:
     if ((day != kDevWarpKeep || time != kDevWarpKeep) && (!Read(g, NextDayTime, nextDayTime) || nextDayTime != 0xFFFF))
       return fail("MM3D has a staged day change (nextDayTime)");
     Transaction tx(g);
-    // The arrival options, written before the transition is published; the
-    // new scene's Play_Init derives isNight and the sky from the time.
+    // The arrival options, written before the transition is published.
     // eventDayCount stays as it is (2S2H's map select does the same).
-    if ((day != kDevWarpKeep && !tx.Add(Day, day)) || (time != kDevWarpKeep && !tx.Add(Time, uint16_t(time))) ||
+    // The time is staged in nextDayTime, as the Sun's Song reload does: the
+    // new scene's Play_Init copies it into the time and the sky time before
+    // isNight and the actors initialise, so the scene being left never sees it. Written straight into the time, the leaving scene's
+    // day/night actor (En_Test4) saw a 06:00 crossing from night and ran
+    // "Dawn of a new day" (a moon crash on day 3). Play_Init advances the day
+    // when nextDayTime is exactly noon (Sun's Song to day), so noon is staged
+    // one clock unit later.
+    const uint16_t staged = uint16_t(time) == NoonAdvancesDay ? uint16_t(NoonAdvancesDay + 1) : uint16_t(time);
+    if ((day != kDevWarpKeep && !tx.Add(Day, day)) || (time != kDevWarpKeep && !tx.Add(NextDayTime, staged)) ||
         (form != kDevWarpKeep && (!tx.Add(Form, uint8_t(form)) || !tx.Add(EquippedMask, uint8_t{0}))))
       return fail("unreadable arrival fields");
     int32_t respawn = 0;
