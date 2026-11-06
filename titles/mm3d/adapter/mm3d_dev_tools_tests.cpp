@@ -467,6 +467,23 @@ int main() {
     std::filesystem::remove(path);
   }
   {
+    // Destinations the live sweep saw fault the title: disabled with the
+    // reason, and refused before any write.
+    Fake g;
+    Mm3dDevTools proven({true, true, false, true, true, true});
+    const auto &row = Entrance(0x3A10);
+    std::vector<uint32_t> table(65536, UINT32_MAX);
+    table[0x3A10] = uint32_t(row.Scene) | (uint32_t(row.Spawn) << 8);
+    const auto availability = proven.Check(row, table);
+    Check(availability.Known && !availability.Available && availability.Reason.find("svcBreak") != std::string::npos,
+          "a refused destination is shown disabled with its fault");
+    std::string error;
+    Check(!proven.Apply(g, Fake::P, 0x3A10, nullptr, kDevWarpKeepAll, &error) && g.writes.empty() &&
+              error.find("faults MM3D") != std::string::npos,
+          "a refused destination is refused without writes");
+    Check(std::size(kMm3dDevRefused) == 15, "the sweep's fifteen faulting destinations");
+  }
+  {
     // A boss lair's intro cutscene (no gameplay yet) still counts as arrived
     // at the requested entrance; another entrance or no player does not.
     DevWarpObservation o;

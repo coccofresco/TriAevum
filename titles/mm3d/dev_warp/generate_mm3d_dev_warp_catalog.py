@@ -107,7 +107,9 @@ ZONES = [
     ("Ikana", "Stone Tower Temple", "STONE_TOWER_TEMPLE", 0, None, None, None, ""),
     ("Ikana", "Stone Tower Temple (inverted)", "STONE_TOWER_TEMPLE_INVERTED", 0, None, None, None, ""),
     ("Ikana", "Ancient Castle of Ikana", "IKANA_CASTLE", 1, None, None, None, ""),
-    ("Moon", "The Moon", "THE_MOON", 0, 3, "0000", None, "Normally reached from the rooftop; check the arrival."),
+    # The Moon sets its own clock on arrival (07:45 observed), so it keeps the
+    # day and time instead of a preset the arrival check would then reject.
+    ("Moon", "The Moon", "THE_MOON", 0, None, None, None, "Normally reached from the rooftop; the Moon sets its own clock."),
     ("Moon", "Moon Deku Trial", "MOON_DEKU_TRIAL", 0, None, None, "deku", ""),
     ("Moon", "Moon Goron Trial", "MOON_GORON_TRIAL", 0, None, None, "goron", ""),
     ("Moon", "Moon Zora Trial", "MOON_ZORA_TRIAL", 0, None, None, "zora", ""),
@@ -140,9 +142,35 @@ ZONES = [
 ]
 # Zones whose arrival has a reviewed live receipt (TRIAEVUM_DEV_WARP arrived
 # and settled from a base savestate). The others are listed as unverified.
-# 2026-11-06 (runs/mm3dwarp, from sct_day1_idle): r0, r1, r2, r3, r4, r6.
-PROVEN_ZONES: set[str] = {"stock-pot-inn", "north-clock-town", "east-clock-town", "deku-palace",
-                          "odolwas-lair", "milk-bar"}
+# 2026-11-06 (runs/mm3dwarp, from sct_day1_idle): r0, r1, r2, r3, r4, r6; then
+# the lab sweep analysis/devwarp/verify_2026-11 (zones, zones_retry, fixcheck):
+# every zone arrived at its entrance with its preset, one JPEG each. All
+# zones are therefore proven (PROVEN_ZONES, after slug() below).
+
+# Destinations that end MM3D's title process when warped to directly from
+# gameplay in this build (live sweep 2026-11, analysis/devwarp/verify_2026-11:
+# each fault reproduced alone in a fresh process from sct_day1_idle). They stay
+# in the list, disabled with the reason, and the hook refuses them.
+# entrance -> fault signature.
+_BREAK = "Faults MM3D when warped to directly (svcBreak at 0x14C210, live sweep 2026-11)."
+_EXIT = "Faults MM3D when warped to directly (guest dispatch exit at {}, live sweep 2026-11)."
+MM3D_REFUSED: dict[int, str] = {
+    0x0020: _EXIT.format("0x1F4A14"),  # Mayor's Residence spawn 2
+    0x1510: _EXIT.format("0x1F4A14"),  # Lone Peak Shrine & Grottos spawn 17 (MM3D row)
+    0x1C30: _EXIT.format("0x14CD3C"),  # Cutscene Scene spawns 3, 5-9
+    0x1C50: _EXIT.format("0x14CD3C"),
+    0x1C60: _EXIT.format("0x1F4A14"),
+    0x1C70: _EXIT.format("0x14CD3C"),
+    0x1C80: _EXIT.format("0x14CD3C"),
+    0x1C90: _BREAK,
+    0x2C20: _EXIT.format("0x1F4A14"),  # Clock Tower Rooftop spawn 2
+    0x3A10: _BREAK,                    # Town Shooting Gallery spawn 1
+    0x40D0: _EXIT.format("0x1F4A14"),  # Pirates' Fortress Interior spawns 13-14
+    0x40E0: _BREAK,
+    0x9E20: _EXIT.format("0x1F4A14"),  # Deku Shrine spawn 2
+    0xD2C0: _BREAK,                    # East Clock Town spawn 12
+    0xDA20: _EXIT.format("0x2FF543"),  # Laundry Pool spawn 2
+}
 
 FORMS = {"deity": 0, "goron": 1, "zora": 2, "deku": 3, "human": 4}
 
@@ -157,6 +185,9 @@ def clock(hhmm: str) -> int:
 
 def slug(text: str) -> str:
     return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", text.lower().replace("'", ""))).strip("-")
+
+
+PROVEN_ZONES: set[str] = {slug(zone[1]) for zone in ZONES}
 
 
 def c_string(text: str) -> str:
@@ -354,7 +385,16 @@ def build(root: Path) -> tuple[str, dict]:
         out.append(f"  {{{c_string(zone_id)}, {c_string(category)}, {c_string(name)}, {c_string(note)}, "
                    f"0x{entrance:04X}, {{{values}}}, {'true' if proven else 'false'}}},")
     out.append("};")
-    summary = {"entrances": len(rows), "scenes": len(scene_rows), "zones": len(zones),
+    unknown_refused = set(MM3D_REFUSED) - set(by_entrance)
+    if unknown_refused:
+        raise ValueError(f"refused entrances not in the catalog: {sorted(unknown_refused)}")
+    out.append("// Destinations that fault MM3D's title when warped to directly (live sweep):")
+    out.append("// shown disabled with the reason; the hook refuses them.")
+    out.append("inline constexpr Mm3dDevRefusal kMm3dDevRefused[]{")
+    for entrance, reason in sorted(MM3D_REFUSED.items()):
+        out.append(f"  {{0x{entrance:04X}, {c_string(reason)}}},")
+    out.append("};")
+    summary = {"entrances": len(rows), "refused": len(MM3D_REFUSED), "scenes": len(scene_rows), "zones": len(zones),
                "named": sum(1 for label, *_ in rows if not label.endswith(": spawn"))}
     return "\n".join(out) + "\n", summary
 

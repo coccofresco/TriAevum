@@ -173,7 +173,20 @@ inline bool Finite(const std::array<float, 3> &v) {
 }
 } // namespace Mm3dDevAbi
 
+// A catalogue destination that faults MM3D's title when warped to directly.
+struct Mm3dDevRefusal {
+  uint16_t Entrance;
+  const char *Reason;
+};
+
 #include "mm3d_dev_warp_catalog.inc"
+
+inline const Mm3dDevRefusal *FindMm3dDevRefusal(uint16_t entrance) {
+  for (const auto &refusal : kMm3dDevRefused)
+    if (refusal.Entrance == entrance)
+      return &refusal;
+  return nullptr;
+}
 
 // The arrival axes, in selection order.
 enum Mm3dDevAxis : size_t { kMm3dAxisDay = 0, kMm3dAxisTime = 1, kMm3dAxisForm = 2 };
@@ -343,6 +356,8 @@ public:
       return {true, false, "MM3D entrance table does not match this destination."};
     if (!mProof.SceneTransition)
       return {true, false, "Scene warps are awaiting gameplay validation."};
+    if (const auto *refusal = FindMm3dDevRefusal(e.Entrance))
+      return {true, false, refusal->Reason};
     return {true, true, {}};
   }
   bool Apply(DevWarpGuest &g, uint32_t p, uint16_t entrance, const DevWarpPoint *point,
@@ -366,6 +381,8 @@ public:
       return fail(mAxes[kMm3dAxisForm].Proven ? "MM3D form must be 0-4" : "MM3D form writes are awaiting proof");
     if (point && !point->UseSceneEntrance && !mProof.WarpPointRespawn)
       return fail("MM3D point-respawn proof pending");
+    if (FindMm3dDevRefusal(entrance) != nullptr)
+      return fail("this destination faults MM3D when warped to directly");
     DevWarpObservation o;
     int16_t busy = -1;
     uint32_t player = 0, row = 0;
