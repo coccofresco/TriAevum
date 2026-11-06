@@ -9,6 +9,14 @@
 namespace Mm3dDekui::Music {
 using U32 = std::uint32_t;
 inline std::atomic<bool> muted{false};
+inline std::atomic<bool> disable_low_health_beep{false};
+// Project Restoration game/sound.h: NA_SE_SY_HITPOINT_ALARM.
+constexpr U32 LowHealthAlarm=0x01000787;
+template<class M> bool IsLowHealthAlarm(M& m,U32 sound) {
+    if(sound<0x100000||sound>0x3fffff50||(sound&3))return false;
+    return m.Read(sound+0xac)==LowHealthAlarm;
+}
+
 
 // USA Restoration v110: BasicSound::UpdateParam's final volume command.
 // Original USA Rev1: 0x5d3fec. The sound is r4, command r5, gain s16.
@@ -75,6 +83,6 @@ template<class M> bool ShouldMute(M& m,U32 sound) {
 }
 template<class M> void Store(M& m,U32 sound,U32 command,U32 volume_bits) {
     // Replay VSTR s16,[r5,#0x14], without changing any ARM/VFP register or flag.
-    m.Write(command+0x14,ShouldMute(m,sound)?0u:volume_bits);
+    m.Write(command+0x14,(ShouldMute(m,sound)||(disable_low_health_beep.load()&&IsLowHealthAlarm(m,sound)))?0u:volume_bits);
 }
 }

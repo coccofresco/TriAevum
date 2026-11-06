@@ -7,6 +7,19 @@ namespace Mm3dDekui {
 U32 Core::Instruction(Memory& memory,U32 pc,U32 word) {
 
     if (pc >= 0x007cf000U) return word; // ref appended Restoration range
+    if(VegetationDrawDistance::Instruction(pc,word)!=word&&VegetationDrawDistance::CodeMatches(memory,pc))
+        return VegetationDrawDistance::Instruction(pc,word);
+    if(TatlReminders::Instruction(pc,word)!=word && TatlReminders::CodeMatches(memory))
+        return TatlReminders::Instruction(pc,word);
+    if(BomberApproach::Instruction(pc,word)!=word && BomberApproach::CodeMatches(memory))
+        return BomberApproach::Instruction(pc,word);
+    if(OwlIntro::Instruction(pc,word)!=word && OwlIntro::CodeMatches(memory))
+        return OwlIntro::Instruction(pc,word);
+    if(ActorDrawDistance::Instruction(pc,word)!=word && ActorDrawDistance::CodeMatches(memory,pc))
+        return ActorDrawDistance::Instruction(pc,word);
+    if(PropDrawDistance::Instruction(pc,word)!=word && PropDrawDistance::CodeMatches(memory,pc))
+        return PropDrawDistance::Instruction(pc,word);
+
 
         if(Mm3dDekui::MinimapShortcut::Instruction(pc,word)!=word) {
             auto& code=memory;
@@ -181,6 +194,34 @@ U32 Core::Instruction(Memory& memory,U32 pc,U32 word) {
 }
 
 void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
+
+    auto& r=cpu.Regs();
+    if(swi>=VegetationDrawDistance::FirstSVC&&swi<VegetationDrawDistance::FirstSVC+VegetationDrawDistance::Hooks.size()) {
+        VegetationDrawDistance::Load(memory,swi-VegetationDrawDistance::FirstSVC,r,cpu.ExtRegs(),PropDrawDistance::multiplier.load());return;
+    }
+    if(swi==Difficulty::DefenseSVC) {
+        r[4]=Difficulty::DefenseDelta(r[4],r[1],cpu.Cpsr(),Difficulty::weaker_enhanced_defense.load());return;
+    }
+    if(swi==TatlReminders::SVC) {r[4]=TatlReminders::Request(memory,r[0],r[1]);return;}
+    if(swi==BomberApproach::FirstSVC) {
+        const auto word=memory.Read(r[5]+0x8c);
+        if(word)r[0]=BomberApproach::State(U32(std::int32_t(std::int16_t(*word&65535))),BomberApproach::Suppress(memory,r[4]));return;
+    }
+    if(swi==BomberApproach::FirstSVC+1) {
+        if(BomberApproach::Suppress(memory,r[4]))r[15]=BomberApproach::ResetPC;else r[1]=15;return;
+    }
+    if(swi==OwlIntro::FirstSVC) {OwlIntro::Enter(r);return;}
+    if(swi==OwlIntro::FirstSVC+1) {
+        r[0]=OwlIntro::TatlFlags(memory.Read8(r[0]+0x2d3));return;
+    }
+    if(swi==ActorDrawDistance::SVC) {
+        U32 value=ActorDrawDistance::Apply(memory,r[4],cpu.ExtRegs()[16],ActorDrawDistance::multiplier.load());
+        cpu.ExtRegs()[0]=PropDrawDistance::Apply(memory,r[4],value,PropDrawDistance::multiplier.load());return;
+    }
+    if(swi>=PropDrawDistance::FirstSVC&&swi<PropDrawDistance::FirstSVC+PropDrawDistance::Hooks.size()) {
+        PropDrawDistance::Load(swi-PropDrawDistance::FirstSVC,r,cpu.ExtRegs(),PropDrawDistance::multiplier.load());return;
+    }
+
 
         if(swi==Mm3dDekui::MinimapShortcut::SVC) {
             auto& guest=memory;
@@ -729,13 +770,16 @@ std::vector<U32> Core::CandidatePcs() {
         0x00161b54U, // ref 0x00161c9c; dialogue_scale
         0x00161b5cU, // ref 0x00161ca4; dialogue_scale
         0x0016f8bcU, // ref 0x0016fa18; death_penalties
+        0x001754d8U, // update 6e36dfb4
         0x0018d414U, // ref 0x0018d414, 0x0018d570; camera_live
         0x0018d428U, // ref 0x0018d428, 0x0018d584; camera_live
         0x0019870cU, // ref 0x00198868; pause_capture
         0x001e6c70U, // ref 0x001e6e80; bottle_healing
         0x00206134U, // ref 0x00206344; death_penalties
+        0x0021e33cU, // update 6e36dfb4
         0x0021e34cU, // ref 0x0021e34c, 0x0021e55c; difficulty
         0x0021f140U, // ref 0x0021f350; bottle_healing
+        0x0021f54cU, // update 6e36dfb4
         0x0022053cU, // ref 0x0022053c, 0x0022074c; difficulty
         0x002993f4U, // ref 0x00299558; prices
         0x00299404U, // ref 0x00299568; prices
@@ -766,6 +810,14 @@ std::vector<U32> Core::CandidatePcs() {
         0x00429214U, // ref 0x004290bc; prices
         0x0042c6e4U, // ref 0x0042c58c; prices
         0x0042c710U, // ref 0x0042c5b8; prices
+        0x00436d30U, // update vegetation stock
+        0x00436d40U, // update vegetation stock
+        0x00436d44U, // update vegetation stock
+        0x00436d80U, // update vegetation stock
+        0x00437018U, // update vegetation stock
+        0x00437034U, // update vegetation stock
+        0x00437078U, // update vegetation stock
+        0x0043fb7cU, // update 6e36dfb4
         0x004476ccU, // ref 0x00447574; prices
         0x004476ecU, // ref 0x00447594; prices
         0x00447724U, // ref 0x004475cc; prices
@@ -777,15 +829,32 @@ std::vector<U32> Core::CandidatePcs() {
         0x0046ffc4U, // ref 0x0046fe6c; form_camera
         0x004700a0U, // ref 0x0046ff48; form_camera
         0x00477724U, // ref 0x004775cc; prices
+        0x0047b4a0U, // update 6e36dfb4
         0x00489d00U, // ref 0x00489ba8; song_effect
         0x00489f68U, // ref 0x00489e10; song_effect
         0x0048a1c4U, // ref 0x0048a06c; song_effect
         0x0048a3e8U, // ref 0x0048a290; song_effect
         0x0048a600U, // ref 0x0048a4a8; song_effect
+        0x004cb240U, // update 6e36dfb4
+        0x004cb254U, // update 6e36dfb4
+        0x004cb378U, // update 6e36dfb4
+        0x0050965cU, // update 6e36dfb4
+        0x005097b4U, // update 6e36dfb4
+        0x005097f8U, // update 6e36dfb4
+        0x00517efcU, // update vegetation stock
+        0x00518400U, // update vegetation stock
+        0x00518414U, // update vegetation stock
+        0x00518470U, // update vegetation stock
+        0x00519ad0U, // update vegetation stock
+        0x00535014U, // update vegetation stock
+        0x00535028U, // update vegetation stock
+        0x00535090U, // update vegetation stock
         0x00546cf0U, // ref 0x00546b80; prices
         0x00546d94U, // ref 0x00546c24; prices
         0x00546fc4U, // ref 0x00546e54; prices
         0x00547010U, // ref 0x00546ea0; prices
+        0x0056dea0U, // update 6e36dfb4
+        0x0056e290U, // update 6e36dfb4
         0x005945f0U, // ref 0x00594480; dungeon_map
         0x00596d94U, // ref 0x00596c24; dungeon_map
         0x00596e28U, // ref 0x00596cb8; dungeon_map

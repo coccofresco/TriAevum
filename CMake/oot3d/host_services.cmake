@@ -291,6 +291,42 @@ if(TRIAEVUM_TITLE_MM3D)
         oot3d_mm3d_single_screen)
     oot3d_target_defaults(oot3d_mm3d_dekui_settings_tests FOLDER Tests)
 
+    # Replay fixtures of the dekui 6e36dfb4 gameplay hooks (titles/mm3d/dekui).
+    add_executable(oot3d_mm3d_dekui_update_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/update_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_dekui_update_tests PRIVATE
+        oot3d_mm3d_single_screen)
+    oot3d_target_defaults(oot3d_mm3d_dekui_update_tests FOLDER Tests)
+
+    # Message-archive language contract and prompt consumers (dekui S1). Optional argument:
+    # the user's code.bin, to compare the guard words with original EUR v1.1.
+    add_executable(oot3d_mm3d_dekui_language_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/language_tests.cpp
+    )
+    target_include_directories(oot3d_mm3d_dekui_language_tests PRIVATE titles/mm3d/dekui)
+    oot3d_target_defaults(oot3d_mm3d_dekui_language_tests FOLDER Tests)
+
+    # No integer language code may cross PromptText: `Language(m) == 2` and
+    # `Translate(2, label)` must fail to compile, the normalized form must compile.
+    foreach(_mm3d_language_case POSITIVE_CONTROL NEGATIVE_COMPARE NEGATIVE_TRANSLATE)
+        try_compile(_mm3d_language_${_mm3d_language_case}
+            "${CMAKE_CURRENT_BINARY_DIR}/mm3d_language_compile/${_mm3d_language_case}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/dekui/language_negative_compile.cpp"
+            CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/dekui"
+            COMPILE_DEFINITIONS -DTRIAEVUM_${_mm3d_language_case}
+            CXX_STANDARD 20
+            CXX_STANDARD_REQUIRED ON
+            OUTPUT_VARIABLE _mm3d_language_output_${_mm3d_language_case})
+    endforeach()
+    if(NOT _mm3d_language_POSITIVE_CONTROL)
+        message(FATAL_ERROR "MM3D PromptText positive compile control failed:\n${_mm3d_language_output_POSITIVE_CONTROL}")
+    endif()
+    if(_mm3d_language_NEGATIVE_COMPARE OR _mm3d_language_NEGATIVE_TRANSLATE)
+        message(FATAL_ERROR "MM3D PromptText accepted an integer language code (negative compile test)")
+    endif()
+    message(STATUS "MM3D PromptText negative compile test: integer language codes rejected")
+
     add_executable(oot3d_mm3d_single_screen_tests EXCLUDE_FROM_ALL
         titles/mm3d/adapter/mm3d_single_screen_tests.cpp
     )

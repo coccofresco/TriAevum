@@ -27,15 +27,16 @@ struct Hook {
         if(enabled&&(option||file)) {
             prompt.icon=prompt.text=0;prompt.texture=prompt.Parts(m);
             NativeInventory::Hook helper;
-            source.Templates(m,helper,layout,"SelectBack");
-            if(file&&files.summary)source.Templates(m,helper,files.summary,"SelectBack");
+            const std::string alphabet=std::string(PromptText::Get(m,"Select"))+std::string(PromptText::Get(m,"Back"));
+            source.Templates(m,helper,layout,alphabet);
+            if(file&&files.summary)source.Templates(m,helper,files.summary,alphabet);
             // Options labels may be textured. Its native help window supplies
             // the same font before gameplay has ever been entered.
             if(!prompt.text&&m.Read(0x001c5074)==0xe59f0004u&& // ref 0x1c527c
                 m.Read(0x001c5078)==0xe8bd8070u&&m.Read(0x001c5080)==0x006b3700u) { // ref 0x1c5280, 0x1c5288, 0x6b36f8
                 auto window=m.Read(0x006b3700+0x2c); // ref 0x6b36f8
                 if(window&&LayoutNamed(m,*window,"MessageWindow"))
-                    source.Templates(m,helper,*window,"SelectBack");
+                    source.Templates(m,helper,*window,alphabet);
             }
             if(prompt.icon&&prompt.text&&prompt.texture) {
                 prompt.panel=layout;prompt.pass=3;

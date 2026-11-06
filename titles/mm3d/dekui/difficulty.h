@@ -11,6 +11,8 @@
 namespace Mm3dDekui::Difficulty {
 using U32=std::uint32_t;
 inline std::atomic<int> damage_multiplier{1};
+inline std::atomic<bool> weaker_enhanced_defense{false};
+constexpr U32 DefenseWord=0xb1a040c1,DefenseSVC=0xfffe72;
 inline std::atomic<bool> disable_heart_drops{false};
 inline std::atomic<bool> disable_rupee_drops{false};
 inline std::atomic<bool> disable_fairy_drops{false};
@@ -25,13 +27,23 @@ constexpr std::array<U32,29> HealthCode{
     0xc1c013bc,0xe1d013fc,0xe3510000,0xd3a01000,0xd1c013bc,0xd1a00001,
     0xc3a00001,0xe8bd8010,0x01000777,0x007751d8,0x007752d8};
 inline U32 Instruction(U32 pc,U32 word) {
+    if(pc==OriginalPC-16&&word==DefenseWord)return 0xef000000|DefenseSVC;
     return (pc==OriginalPC||pc==RestorationPC)&&word==Word?0xef000000|SVC:word;
 }
 template<class M> bool CodeMatches(M& m,U32 pc) {
+    if(pc==OriginalPC-16)pc+=16;
     if(pc!=OriginalPC&&pc!=RestorationPC)return false;
     for(unsigned i=0;i<HealthCode.size();++i)
         if(m.Read(pc-0x38+4*i)!=std::optional<U32>(HealthCode[i]))return false;
     return true;
+}
+inline U32 DefenseDelta(U32 current,U32 original,U32 cpsr,bool weaker) {
+    if(((cpsr>>31)&1)==((cpsr>>28)&1))return current;
+    const auto delta=std::bit_cast<std::int32_t>(original);
+    if(!weaker||delta>=0)return std::bit_cast<U32>(delta>>1);
+    const std::int64_t damage=-std::int64_t(delta);
+    const auto loss=std::max<std::int64_t>(1,(damage*2+1)/3);
+    return U32(-loss);
 }
 // Replay ADD r2,r2,r4 after the native defense reduction. Only damage changes;
 // clamp amplified loss to current health before native SXTH to prevent wraparound.

@@ -3,6 +3,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #include "settings.h"
 #include "bloom_sampling.h"
+#include "actor_draw_distance.h"
+#include "tatl_reminders.h"
+#include "bomber_approach.h"
+#include "owl_intro.h"
+#include "prop_draw_distance.h"
+
 #include "bottle_healing.h"
 #include "camera_live.h"
 #include "death_penalties.h"
@@ -264,8 +270,23 @@ bool Settings::LoadFromString(std::string_view text) {
     song_list.enabled=Boolean(object,"song_list_top",true);
     song_list.background_x=value("song_list_background_x",-230.f,-512.f,512.f);
     song_list.spacing=value("song_list_spacing",16.f,0.f,60.f);
+    song_list.panel_color={value("song_panel_color_r",1.f,0.f,1.f),value("song_panel_color_g",1.f,0.f,1.f),value("song_panel_color_b",1.f,0.f,1.f)};
+    song_list.panel_color_opacity=value("song_panel_color_opacity",0.f,0.f,1.f);
+    song_list.panel_darkness=value("song_panel_darkness",0.f,0.f,1.f);
+    song_list.stone_darkness=value("song_stone_darkness",0.f,0.f,1.f);
     song_list.column_spacing=value("song_list_column_spacing",62.f,40.f,180.f);
     song_list.songs={value("song_list_x",24.f,-512.f,512.f),value("song_list_y",12.f,-240.f,240.f),value("song_list_scale",.35f,.1f,2.f)};
+    // Seed independent banner placement from the old grid-derived position once.
+    const float song_banner_height=std::clamp(song_list.songs.y-2.f,10.f,18.f);
+    song_list.banner={value("song_banner_x",song_list.songs.x,-512.f,512.f),
+        value("song_banner_y",song_list.songs.y-song_banner_height-2.f,-240.f,240.f),
+        value("song_banner_scale",1.f,.1f,3.f)};
+    song_list.banner_width=value("song_banner_width",(2*song_list.column_spacing+54)*song_list.songs.scale,2.f,600.f);
+    song_list.banner_height=value("song_banner_height",song_banner_height,1.f,40.f);
+    // Preserve the old fitted bounds on migration, then save independent edges.
+    song_list.panel_left=value("song_panel_left_x",std::clamp(std::min(song_list.songs.x,song_list.banner.x)-4.f,-512.f,496.f),-512.f,496.f);
+    song_list.panel_right=value("song_panel_right_x",std::clamp(std::max(song_list.songs.x+(2*song_list.column_spacing+54)*song_list.songs.scale,
+        song_list.banner.x+song_list.banner_width*song_list.banner.scale)+4.f,song_list.panel_left+16.f,512.f),song_list.panel_left+16.f,512.f);
     song_list.staff={value("song_staff_x",90.f,-512.f,512.f),value("song_staff_y",0.f,-240.f,240.f),value("song_staff_scale",.8f,.1f,2.f)};
     ocarina_prompt.enabled=Boolean(object,"ocarina_prompts",true);
     ocarina_prompt.x=value("ocarina_prompt_x",0.f,-400.f,400.f);
@@ -280,7 +301,20 @@ bool Settings::LoadFromString(std::string_view text) {
     file_select_prompt.spacing=value("file_select_prompt_spacing",22.0f,0.0f,60.0f);
     file_select_prompt.icon_scale=value("file_select_prompt_icon_scale",1.0f,0.5f,2.0f);
     file_select.stone_spacing=value("file_select_stone_spacing",0.f,0.f,80.f);
+    file_select.entrance_ease=value("file_select_entrance_ease",2.f,1.f,3.f);
     file_select.enabled=Boolean(object,"file_select_native",true);
+    file_select.header.x=value("file_select_header_x",0.f,-512.f,512.f);
+    file_select.header.y=value("file_select_header_y",0.f,-512.f,512.f);
+    file_select.header.scale_x=value("file_select_header_scale_x",1.f,.01f,3.f);
+    file_select.header.scale_y=value("file_select_header_scale_y",1.f,.01f,3.f);
+    file_select.title.x=value("file_select_title_x",0.f,-512.f,512.f);
+    file_select.title.y=value("file_select_title_y",0.f,-512.f,512.f);
+    file_select.title.scale=value("file_select_title_scale",1.f,.01f,3.f);
+    disable_tatl_reminders=Boolean(object,"disable_tatl_reminders",false);
+    disable_bomber_approach=Boolean(object,"disable_bomber_approach",false);
+    sword_activate_owls=Boolean(object,"sword_activate_owls",false);
+    classic_saving=Boolean(object,"classic_saving",false);
+    classic_double_time=Boolean(object,"classic_double_time",false);
     startup.logo.x=value("startup_logo_x",0,-400,400);
     startup.logo.y=value("startup_logo_y",0,-240,240);
     startup.logo.scale=value("startup_logo_scale",1,.1f,3);
@@ -298,20 +332,36 @@ bool Settings::LoadFromString(std::string_view text) {
     item_present.help_spacing=value("item_present_help_spacing",6,0,100);
     item_present.horizontal=Boolean(object,"item_present_horizontal",false);
     for(unsigned i=0;i<NativeItemPresent::Count;++i) {
-        const std::string key=std::string("item_present_")+std::to_string(i)+"_";auto& p=item_present.poses[i];
+        const auto key=std::string("item_present_")+std::to_string(i)+"_";auto& p=item_present.poses[i];
         p.x=value((key+"x"),p.x,-512.f,512.f);
         if(i==NativeItemPresent::Background)continue;
         p.y=value((key+"y"),p.y,-512.f,512.f);
         p.scale=value((key+"scale"),p.scale,.1f,2.f);
     }
+    // Seed the independent moon-mask controls from the former shared placement.
+    // Preserve the description's previous global dialogue pose on first load.
+    mask_present=item_present;
+    mask_present.horizontal=false;
+    mask_present.poses[NativeItemPresent::Description]={0,value("dialogue_y",0,-120,120),value("dialogue_scale",1,.5f,1)};
+    mask_present.enabled=Boolean(object,"mask_present_native",mask_present.enabled);
+    mask_present.help_pose={value("mask_present_help_x",mask_present.help_pose.x,-512,512),
+        value("mask_present_help_y",mask_present.help_pose.y,-512,512),value("mask_present_help_scale",mask_present.help_pose.scale,.1f,2)};
+    mask_present.help_spacing=value("mask_present_help_spacing",mask_present.help_spacing,0,100);
+    for(unsigned i=0;i<NativeItemPresent::Count;++i) {
+        if(i==NativeItemPresent::Background||i==NativeItemPresent::Right)continue;
+        const auto key=std::string("mask_present_")+std::to_string(i)+"_";auto& p=mask_present.poses[i];
+        p.x=value((key+"x"),p.x,-512,512);
+        p.y=value((key+"y"),p.y,-512,512);
+        p.scale=value((key+"scale"),p.scale,.1f,2);
+    }
     for(unsigned i=0;i<NativeFileSelect::Count;++i) {
-        const std::string key=std::string("file_select_")+std::to_string(i)+"_";auto& p=file_select.poses[i];
+        const auto key=std::string("file_select_")+std::to_string(i)+"_";auto& p=file_select.poses[i];
         p.x=value((key+"x"),p.x,-512.f,512.f);
         p.y=value((key+"y"),p.y,-512.f,512.f);
         p.scale=value((key+"scale"),p.scale,.1f,2.f);
     }
     for(unsigned i=0;i<NativeNotebook::Count;++i) {
-        const std::string key=std::string("notebook_live_")+std::to_string(i)+"_";auto& p=notebook_live.poses[i];
+        const auto key=std::string("notebook_live_")+std::to_string(i)+"_";auto& p=notebook_live.poses[i];
         p.x=value((key+"x"),p.x,-512.f,512.f);
         p.y=value((key+"y"),p.y,-512.f,512.f);
         p.scale=value((key+"scale"),p.scale,.1f,2.f);
@@ -320,7 +370,7 @@ bool Settings::LoadFromString(std::string_view text) {
     inventory_menu.gear.horizontal=Boolean(object,"gear_horizontal",true);
     for(unsigned i=0;i<GearMenu::Count;++i) {
         if(i==GearMenu::Background||i==GearMenu::Model||i==GearMenu::Description)continue; // Shared inventory settings.
-        const std::string key=std::string("gear_")+std::to_string(i)+"_";
+        const auto key=std::string("gear_")+std::to_string(i)+"_";
         auto& p=inventory_menu.gear.poses[i];
         const auto def=GearMenu::Options{}.poses[i];
         const bool model=i==GearMenu::Model;
@@ -395,6 +445,9 @@ bool Settings::LoadFromString(std::string_view text) {
         b.y=value((prefix+"y"),0.f,-240.f,240.f);
         b.scale=value((prefix+"scale"),1.f,.25f,2.f);
     }
+    player_hud.opacity=value("player_hud_opacity",1.f,0.f,1.f);
+    player_hud.banner_darkness=value("player_hud_banner_darkness",0.f,0.f,1.f);
+    player_hud.banner_y=int(value("player_hud_banner_y",0.f,-240.f,240.f));
     player_hud.hide_minimap=Boolean(object,"player_hud_hide_minimap",false);
     for(unsigned i=0;i<6;++i) {
         const auto key=std::string("player_hud_button_")+HudAdjustments::ButtonKeys[i]+"_";
@@ -415,8 +468,15 @@ bool Settings::LoadFromString(std::string_view text) {
         player_hud.x[i]=int(value((prefix+"x"),0,-400,400));
         player_hud.y[i]=int(value((prefix+"y"),0,-240,240));
     }
-    accurate_hle_audio=Boolean(object,"accurate_hle_audio",true);
+    // One-time migration of every older audio preference to Balanced. Keep the
+    // stored mode IDs stable; the marker preserves later Accurate HLE choices.
+    const auto& audio_mode=Get(object,"hle_audio_accuracy");
+    const int requested_mode=Integer(object,"hle_audio_accuracy",-1);
+    hle_audio_accuracy=Get(object,"hle_audio_mode_version")==Json(1) &&
+        audio_mode.is_number() && Number(object,"hle_audio_accuracy",-1)==requested_mode &&
+        requested_mode>=1 && requested_mode<=2?requested_mode:1;
     mute_music=Boolean(object,"mute_music",false);
+    disable_low_health_beep=Boolean(object,"disable_low_health_beep",false);
     disable_heart_drops=Boolean(object,"disable_heart_drops",false);
     disable_rupee_drops=Boolean(object,"disable_rupee_drops",false);
     disable_fairy_drops=Boolean(object,"disable_fairy_drops",false);
@@ -424,6 +484,11 @@ bool Settings::LoadFromString(std::string_view text) {
     disable_ammo_pickups=Boolean(object,"disable_ammo_pickups",false);
     lose_rupees_on_death=Boolean(object,"lose_rupees_on_death",false);
     world_ends_on_death=Boolean(object,"world_ends_on_death",false);
+    advance_six_hours_on_death=Boolean(object,"advance_six_hours_on_death",false);
+    fast_time=Boolean(object,"fast_time",false);
+    prop_draw_distance=ActorDrawDistance::Clamp(float(Number(object,"prop_draw_distance",1.)));
+    actor_draw_distance=ActorDrawDistance::Clamp(float(Number(object,"actor_draw_distance",1.)));
+    weaker_enhanced_defense=Boolean(object,"weaker_enhanced_defense",false);
     damage_multiplier=int(value("damage_multiplier",1.f,1.f,16.f));
     dialogue_scale=value("dialogue_scale",1.f,.5f,1.f);
     dialogue_y=value("dialogue_y",0.f,-120.f,120.f);
@@ -431,16 +496,33 @@ bool Settings::LoadFromString(std::string_view text) {
     dialogue_indicator_x=value("dialogue_indicator_x",0.f,-200.f,200.f);
     dialogue_indicator_y=value("dialogue_indicator_y",0.f,-64.f,64.f);
     double_prices = Boolean(object,"double_prices",false);
+    price_multiplier = std::clamp(Integer(object,"price_multiplier",2),2,3);
+    stick_click_controls = Boolean(object,"stick_click_controls",false);
     single_screen_text = Boolean(object,"single_screen_text",true);
     fix_bloom = Boolean(object,"fix_bloom",true);
+    disable_fog = Boolean(object,"disable_fog",false);
+    hd_pictograph_photos = Boolean(object,"hd_pictograph_photos",true);
+    ambient_occlusion = AmbientOcclusion::Sanitize({
+        Boolean(object,"ambient_occlusion",false),
+        float(Number(object,"ambient_occlusion_strength",.6)),
+        float(Number(object,"ambient_occlusion_radius",40))});
+    depth_of_field = DepthOfField::Sanitize({
+        Boolean(object,"depth_of_field",false),
+        float(Number(object,"depth_of_field_focus",600)),
+        float(Number(object,"depth_of_field_transition",1200)),
+        float(Number(object,"depth_of_field_strength",1.5))});
+    interpolation_60fps = Boolean(object,"interpolation_60fps",true);
+    interpolation_cpu_vertices = Boolean(object,"interpolation_cpu_vertices",true);
     red_potion_hearts = std::clamp(Integer(object,"red_potion_hearts",20),1,20);
     blue_potion_hearts = std::clamp(Integer(object,"blue_potion_hearts",20),1,20);
     bottled_fairy_hearts = std::clamp(Integer(object,"bottled_fairy_hearts",10),1,20);
     show_performance = Boolean(object,"show_performance",false);
+    show_startup_settings_hint = Boolean(object,"show_startup_settings_hint",true);
     indicator = Boolean(object,"indicator",true);
     widescreen = Boolean(object,"widescreen",false);
     camera_zoom_out = value("camera_zoom_out", 1.f, 1.f, 1.5f);
     game_camera_fov = value("game_camera_fov", 65.f, 45.f, 70.f);
+    cutscene_camera_fov = value("cutscene_camera_fov", 49.f, 45.f, 70.f);
     restoration_hud_scale = value("restoration_hud_scale", 1.f, .5f, 1.5f);
     const OptionsMenu::Options options_defaults;
     options_menu.x=value("options_menu_x",options_defaults.x,-400.f,400.f);
@@ -468,9 +550,11 @@ bool Settings::LoadFromString(std::string_view text) {
     magic_bar_y = value("magic_bar_y", 0.f, -64.f, 64.f);
     magic_bar_height = value("magic_bar_height", 1.f, .5f, 2.f);
     dpad_y = value("dpad_y", 0.f, -120.f, 120.f);
+    dpad_offset_x=value("dpad_offset_x",0.f,-400.f,400.f);
+    dpad_offset_y=value("dpad_offset_y",0.f,-240.f,240.f);
     minimap = Boolean(object,"minimap",true);
     minimap_scale = value("minimap_scale", .36f, .2f, .6f);
-    minimap_opacity = value("minimap_opacity", .85f, .2f, 1.f);
+    minimap_opacity = value("minimap_opacity", .85f, 0.f, 1.f);
     minimap_right_margin = value("minimap_right_margin", 8.f, -64.f, 120.f);
     minimap_bottom_margin = value("minimap_bottom_margin", 8.f, -64.f, 120.f);
     fullscreen_draws.clear();
@@ -506,14 +590,27 @@ bool Settings::LoadFromString(std::string_view text) {
 }
 bool Settings::Save(const std::filesystem::path& path) const {
     if(save_blocked) return false;
-    Json object{{"version", 1}, {"accurate_hle_audio",accurate_hle_audio}, {"damage_multiplier",damage_multiplier}, {"disable_heart_drops",disable_heart_drops}, {"disable_rupee_drops",disable_rupee_drops}, {"disable_fairy_drops",disable_fairy_drops}, {"disable_magic_drops",disable_magic_drops}, {"disable_ammo_pickups",disable_ammo_pickups}, {"lose_rupees_on_death",lose_rupees_on_death}, {"world_ends_on_death",world_ends_on_death}, {"double_prices",double_prices}, {"inventory_panel_x",inventory_menu.x}, {"inventory_panel_y",inventory_menu.y}, {"inventory_panel_scale",inventory_menu.scale}, {"dialogue_scale",dialogue_scale}, {"dialogue_y",dialogue_y}, {"dialogue_background_width",dialogue_background_width}, {"dialogue_indicator_x",dialogue_indicator_x}, {"dialogue_indicator_y",dialogue_indicator_y}, {"indicator", indicator}, {"show_performance", show_performance},
+    Json object{{"version", 1}, {"accurate_hle_audio",hle_audio_accuracy==2}, {"hle_audio_accuracy",hle_audio_accuracy}, {"hle_audio_mode_version",1}, {"damage_multiplier",damage_multiplier}, {"disable_heart_drops",disable_heart_drops}, {"disable_rupee_drops",disable_rupee_drops}, {"disable_fairy_drops",disable_fairy_drops}, {"disable_magic_drops",disable_magic_drops}, {"disable_ammo_pickups",disable_ammo_pickups}, {"lose_rupees_on_death",lose_rupees_on_death}, {"world_ends_on_death",world_ends_on_death}, {"advance_six_hours_on_death",advance_six_hours_on_death}, {"fast_time",fast_time}, {"double_prices",double_prices}, {"price_multiplier",price_multiplier}, {"inventory_panel_x",inventory_menu.x}, {"inventory_panel_y",inventory_menu.y}, {"inventory_panel_scale",inventory_menu.scale}, {"dialogue_scale",dialogue_scale}, {"dialogue_y",dialogue_y}, {"dialogue_background_width",dialogue_background_width}, {"dialogue_indicator_x",dialogue_indicator_x}, {"dialogue_indicator_y",dialogue_indicator_y}, {"indicator", indicator}, {"show_performance", show_performance}, {"show_startup_settings_hint", show_startup_settings_hint},
         {"scale", scale}, {"opacity", opacity}, {"x", x}, {"y", y},
-        {"single_screen_text", single_screen_text}, {"fix_bloom", fix_bloom}, {"red_potion_hearts", red_potion_hearts}, {"blue_potion_hearts", blue_potion_hearts}, {"bottled_fairy_hearts", bottled_fairy_hearts}, {"widescreen", widescreen}, {"camera_zoom_out", camera_zoom_out}, {"game_camera_fov", game_camera_fov}, {"restoration_hud_scale", restoration_hud_scale}, {"minigame_hud_x",minigame_hud.x},{"minigame_hud_y",minigame_hud.y},{"minigame_hud_scale",minigame_hud.scale},{"magic_shadow_enabled",magic_border.shadow_enabled},{"magic_shadow_size",magic_border.shadow_size},{"magic_shadow_opacity",magic_border.shadow_opacity},{"magic_border_enabled",magic_border.enabled},{"magic_border_thickness",magic_border.thickness},{"magic_border_r",magic_border.color[0]},{"magic_border_g",magic_border.color[1]},{"magic_border_b",magic_border.color[2]}, {"magic_bar_y", magic_bar_y}, {"magic_bar_height", magic_bar_height}, {"dpad_y", dpad_y},
+        {"single_screen_text", single_screen_text}, {"stick_click_controls", stick_click_controls}, {"fix_bloom", fix_bloom}, {"disable_fog", disable_fog},
+        {"hd_pictograph_photos", hd_pictograph_photos},
+        {"ambient_occlusion", ambient_occlusion.enabled},
+        {"ambient_occlusion_strength", ambient_occlusion.strength}, {"ambient_occlusion_radius", ambient_occlusion.radius},
+        {"depth_of_field", depth_of_field.enabled}, {"depth_of_field_focus", depth_of_field.focus},
+        {"depth_of_field_transition", depth_of_field.transition}, {"depth_of_field_strength", depth_of_field.strength}, {"interpolation_60fps", interpolation_60fps}, {"red_potion_hearts", red_potion_hearts}, {"blue_potion_hearts", blue_potion_hearts}, {"bottled_fairy_hearts", bottled_fairy_hearts}, {"widescreen", widescreen}, {"camera_zoom_out", camera_zoom_out}, {"game_camera_fov", game_camera_fov}, {"cutscene_camera_fov", cutscene_camera_fov}, {"restoration_hud_scale", restoration_hud_scale}, {"minigame_hud_x",minigame_hud.x},{"minigame_hud_y",minigame_hud.y},{"minigame_hud_scale",minigame_hud.scale},{"magic_shadow_enabled",magic_border.shadow_enabled},{"magic_shadow_size",magic_border.shadow_size},{"magic_shadow_opacity",magic_border.shadow_opacity},{"magic_border_enabled",magic_border.enabled},{"magic_border_thickness",magic_border.thickness},{"magic_border_r",magic_border.color[0]},{"magic_border_g",magic_border.color[1]},{"magic_border_b",magic_border.color[2]}, {"magic_bar_y", magic_bar_y}, {"magic_bar_height", magic_bar_height}, {"dpad_y", dpad_y},
         {"minimap", minimap}, {"minimap_scale", minimap_scale}, {"minimap_opacity", minimap_opacity},
         {"minimap_right_margin", minimap_right_margin}, {"minimap_bottom_margin", minimap_bottom_margin}};
     for(const auto& f:SubmenuHeader::Fields) object[f.key]=submenu_header.*f.member;
+    object["interpolation_cpu_vertices"]= interpolation_cpu_vertices;
+    object["prop_draw_distance"]=ActorDrawDistance::Clamp(prop_draw_distance);
+    object["actor_draw_distance"]=ActorDrawDistance::Clamp(actor_draw_distance);
+    object["weaker_enhanced_defense"]=weaker_enhanced_defense;
+    object["player_hud_opacity"]=player_hud.opacity;
+    object["player_hud_banner_darkness"]=player_hud.banner_darkness;
+    object["player_hud_banner_y"]=player_hud.banner_y;
     object["player_hud_hide_minimap"]=player_hud.hide_minimap;
     object["mute_music"]=mute_music;
+    object["disable_low_health_beep"]=disable_low_health_beep;
     for(unsigned i=0;i<6;++i) {
         const auto key=std::string("player_hud_button_")+HudAdjustments::ButtonKeys[i]+"_";
         object[key+"x"]=player_hud.button_x[i];object[key+"y"]=player_hud.button_y[i];
@@ -541,6 +638,8 @@ bool Settings::Save(const std::filesystem::path& path) const {
     object["options_description_x"]=options_menu.description.x;
     object["options_description_y"]=options_menu.description.y;
     object["options_description_scale"]=options_menu.description.scale;
+    object["dpad_offset_x"]=dpad_offset_x;
+    object["dpad_offset_y"]=dpad_offset_y;
     object["carrots_x"]=carrots.x;
     object["carrots_y"]=carrots.y;
     object["carrots_scale"]=carrots.scale;
@@ -600,9 +699,19 @@ bool Settings::Save(const std::filesystem::path& path) const {
     object["double_time_top"]=double_time.enabled;object["double_time_current_day"]=double_time.current_day_only;
     for(unsigned i=0;i<DoubleTime::Count;++i){const auto key=std::string("double_time_")+std::to_string(i)+"_";const auto p=double_time.poses[i];
         object[key+"x"]=p.x;object[key+"y"]=p.y;object[key+"scale"]=p.scale;}
+    object["song_panel_left_x"]=song_list.panel_left;object["song_panel_right_x"]=song_list.panel_right;
+    object["song_panel_color_r"]=song_list.panel_color[0];
+    object["song_panel_color_g"]=song_list.panel_color[1];
+    object["song_panel_color_b"]=song_list.panel_color[2];
+    object["song_panel_color_opacity"]=song_list.panel_color_opacity;
+    object["song_panel_darkness"]=song_list.panel_darkness;
+    object["song_stone_darkness"]=song_list.stone_darkness;
     object["song_list_column_spacing"]=song_list.column_spacing;
     object["song_list_top"]=song_list.enabled;object["song_list_background_x"]=song_list.background_x;object["song_list_spacing"]=song_list.spacing;
     object["song_list_x"]=song_list.songs.x;object["song_list_y"]=song_list.songs.y;object["song_list_scale"]=song_list.songs.scale;
+    object["song_banner_x"]=song_list.banner.x;object["song_banner_y"]=song_list.banner.y;
+    object["song_banner_scale"]=song_list.banner.scale;
+    object["song_banner_width"]=song_list.banner_width;object["song_banner_height"]=song_list.banner_height;
     object["song_staff_x"]=song_list.staff.x;object["song_staff_y"]=song_list.staff.y;object["song_staff_scale"]=song_list.staff.scale;
     object["ocarina_prompts"]=ocarina_prompt.enabled;
     object["ocarina_prompt_x"]=ocarina_prompt.x;
@@ -617,7 +726,20 @@ bool Settings::Save(const std::filesystem::path& path) const {
     object["file_select_prompt_spacing"]=file_select_prompt.spacing;
     object["file_select_prompt_icon_scale"]=file_select_prompt.icon_scale;
     object["file_select_stone_spacing"]=file_select.stone_spacing;
+    object["file_select_entrance_ease"]=file_select.entrance_ease;
     object["file_select_native"]=file_select.enabled;
+    object["file_select_header_x"]=file_select.header.x;
+    object["file_select_header_y"]=file_select.header.y;
+    object["file_select_header_scale_x"]=file_select.header.scale_x;
+    object["file_select_header_scale_y"]=file_select.header.scale_y;
+    object["file_select_title_x"]=file_select.title.x;
+    object["file_select_title_y"]=file_select.title.y;
+    object["file_select_title_scale"]=file_select.title.scale;
+    object["classic_saving"]=classic_saving;
+    object["classic_double_time"]=classic_double_time;
+    object["sword_activate_owls"]=sword_activate_owls;
+    object["disable_bomber_approach"]=disable_bomber_approach;
+    object["disable_tatl_reminders"]=disable_tatl_reminders;
     object["startup_logo_x"]=startup.logo.x;
     object["startup_logo_y"]=startup.logo.y;
     object["startup_logo_scale"]=startup.logo.scale;
@@ -635,23 +757,31 @@ bool Settings::Save(const std::filesystem::path& path) const {
     object["item_present_help_scale"]=item_present.help_pose.scale;object["item_present_help_spacing"]=item_present.help_spacing;
     object["item_present_horizontal"]=item_present.horizontal;
     for(unsigned i=0;i<NativeItemPresent::Count;++i) {
-        const std::string key=std::string("item_present_")+std::to_string(i)+"_";const auto& p=item_present.poses[i];
+        const auto key=std::string("item_present_")+std::to_string(i)+"_";const auto& p=item_present.poses[i];
         object[key+"x"]=p.x;
         if(i!=NativeItemPresent::Background){object[key+"y"]=p.y;object[key+"scale"]=p.scale;}
     }
+    object["mask_present_native"]=mask_present.enabled;
+    object["mask_present_help_x"]=mask_present.help_pose.x;object["mask_present_help_y"]=mask_present.help_pose.y;
+    object["mask_present_help_scale"]=mask_present.help_pose.scale;object["mask_present_help_spacing"]=mask_present.help_spacing;
+    for(unsigned i=0;i<NativeItemPresent::Count;++i) {
+        if(i==NativeItemPresent::Background||i==NativeItemPresent::Right)continue;
+        const auto key=std::string("mask_present_")+std::to_string(i)+"_";const auto& p=mask_present.poses[i];
+        object[key+"x"]=p.x;object[key+"y"]=p.y;object[key+"scale"]=p.scale;
+    }
     for(unsigned i=0;i<NativeFileSelect::Count;++i) {
-        const std::string key=std::string("file_select_")+std::to_string(i)+"_";const auto& p=file_select.poses[i];
+        const auto key=std::string("file_select_")+std::to_string(i)+"_";const auto& p=file_select.poses[i];
         object[key+"x"]=p.x;object[key+"y"]=p.y;object[key+"scale"]=p.scale;
     }
     for(unsigned i=0;i<NativeNotebook::Count;++i) {
-        const std::string key=std::string("notebook_live_")+std::to_string(i)+"_";const auto& p=notebook_live.poses[i];
+        const auto key=std::string("notebook_live_")+std::to_string(i)+"_";const auto& p=notebook_live.poses[i];
         object[key+"x"]=p.x;object[key+"y"]=p.y;object[key+"scale"]=p.scale;
     }
     object["gear_enabled"]=inventory_menu.gear.enabled;
     object["gear_horizontal"]=inventory_menu.gear.horizontal;
     for(unsigned i=0;i<GearMenu::Count;++i) {
         if(i==GearMenu::Background||i==GearMenu::Model||i==GearMenu::Description)continue; // Shared inventory settings.
-        const std::string key=std::string("gear_")+std::to_string(i)+"_";
+        const auto key=std::string("gear_")+std::to_string(i)+"_";
         const auto& p=inventory_menu.gear.poses[i];
         object[key+"x"]=p.x;
         if(i!=GearMenu::Background){object[key+"y"]=p.y;object[key+"scale"]=p.scale;}
@@ -732,8 +862,19 @@ void ApplySettings(const Settings& settings) {
     PlayerHud::ApplyRupeeKeys(settings.rupee_keys);
     PlayerHud::ApplyCarrots(settings.carrots);
     PlayerHud::ApplyMagicHeight(settings.magic_bar_height);
-    SettingsHost::accurate_hle_audio.store(settings.accurate_hle_audio);
+    SettingsHost::hle_audio_accuracy.store(settings.hle_audio_accuracy);
+    SettingsHost::accurate_hle_audio.store(settings.hle_audio_accuracy==2);
     Music::muted.store(settings.mute_music);
+    Music::disable_low_health_beep.store(settings.disable_low_health_beep);
+    TatlReminders::disabled.store(settings.disable_tatl_reminders);
+    BomberApproach::disabled.store(settings.disable_bomber_approach);
+    // The sword option must activate both owl paths together. Its source-owner
+    // trigger proof is pending; retain normal introductions until that slice.
+    OwlIntro::disabled.store(false);
+    Difficulty::weaker_enhanced_defense.store(settings.weaker_enhanced_defense);
+    ActorDrawDistance::multiplier.store(ActorDrawDistance::Clamp(settings.actor_draw_distance));
+    PropDrawDistance::multiplier.store(ActorDrawDistance::Clamp(settings.prop_draw_distance));
+
     SingleScreenText::enabled.store(settings.single_screen_text);
     BloomSampling::enabled.store(settings.fix_bloom);
     BottleHealing::red_hearts.store(settings.red_potion_hearts);
@@ -773,6 +914,7 @@ void ApplySettings(const Settings& settings) {
     DialogueScale::indicator_x.store(settings.dialogue_indicator_x);
     DialogueScale::indicator_y.store(settings.dialogue_indicator_y);
     CameraLive::SetFov(settings.game_camera_fov);
+    CameraLive::SetCutsceneFov(settings.cutscene_camera_fov);
     Minimap::enabled.store(settings.minimap);
     Minimap::scale.store(settings.minimap_scale);
     Minimap::opacity.store(settings.minimap_opacity);

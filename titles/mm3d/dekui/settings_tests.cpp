@@ -68,10 +68,10 @@ void Shipped(const fs::path& defaults, const fs::path& scratch) {
     const auto canonical=Saved(settings,scratch/"shipped.json");
     Check(canonical==Saved(embedded,scratch/"embedded.json"),"file/string equivalence");
 
-    Near(settings.song_list.background_x,-103);
-    Pose(settings.song_list.songs,GearMenu::Pose{-6.5f,31.7f,.58f});
-    Pose(settings.song_list.staff,GearMenu::Pose{147.4f,150.4f,.75f});
-    Near(settings.song_list.spacing,37.9f);Near(settings.song_list.column_spacing,72.9f);
+    Near(settings.song_list.background_x,-118.3f);
+    Pose(settings.song_list.songs,GearMenu::Pose{-3.9f,38.4f,.58f});
+    Pose(settings.song_list.staff,GearMenu::Pose{111.8f,154.f,.75f});
+    Near(settings.song_list.spacing,34.6f);Near(settings.song_list.column_spacing,65.6f);
     const std::array<GearMenu::Pose,SongReset::Count> reset{{
         {-13.5f,37.6f,.57f},{-9.6f,43,.54f},{-9.7f,50.2f,.54f},{94.3f,0,.67f}}};
     const std::array<GearMenu::Pose,DoubleTime::Count> time{{
@@ -283,6 +283,56 @@ void Application() {
     Check(Prices::initialized && !Prices::enabled,"Prices stays at first startup choice despite reapply");
     std::cout << "PASS gameplay/audio/renderer/camera/dialogue application and one-time price latch\n";
 }
+void UpdateSchema(const fs::path& defaults,const fs::path& scratch) {
+    Settings settings;
+    Check(settings.Load(defaults),"updated defaults load");
+    const auto shipped=Json::parse(Read(defaults));
+    const auto saved=Saved(settings,scratch/"update-defaults.json");
+    Check(shipped.size()==588,"tip has 588 shipped keys");
+    for(const auto& [key,value]:shipped.items()) {
+        Check(saved.contains(key),("shipped key retained: "+key).c_str());
+        if(key=="accurate_hle_audio") {
+            Check(saved[key]==(settings.hle_audio_accuracy==2),"legacy audio output derives from migrated mode");
+        } else if(value.is_number()) {
+            Near(saved[key].get<float>(),value.get<float>());
+        } else Check(saved[key]==value,("shipped default retained: "+key).c_str());
+    }
+    for(const auto& input:std::array<Json,6>{
+        Json{{"version",1},{"accurate_hle_audio",true}},
+        Json{{"version",1},{"accurate_hle_audio",false}},
+        Json{{"version",1},{"hle_audio_accuracy",2}},
+        Json{{"version",1},{"hle_audio_accuracy",2},{"hle_audio_mode_version",0}},
+        Json{{"version",1},{"hle_audio_accuracy",1.5},{"hle_audio_mode_version",1}},
+        Json{{"version",1},{"hle_audio_accuracy",3},{"hle_audio_mode_version",1}}}) {
+        Check(settings.LoadFromString(input.dump()),"old/invalid audio mode loads");
+        Check(settings.hle_audio_accuracy==1,"all pre-migration/invalid preferences become Balanced");
+    }
+    Check(settings.LoadFromString(R"({"version":1,"hle_audio_accuracy":2,"hle_audio_mode_version":1})"),"versioned accurate mode loads");
+    Check(settings.hle_audio_accuracy==2,"preserve post-migration Accurate HLE");
+    ApplySettings(settings);
+    Check(SettingsHost::hle_audio_accuracy==2&&SettingsHost::accurate_hle_audio,"host receives audio mode 2");
+    Check(settings.LoadFromString(R"({"version":1,"song_list_x":40,"song_list_y":30,"song_list_scale":0.5,
+        "song_list_column_spacing":80,"dialogue_y":-22,"dialogue_scale":0.7,
+        "item_present_1_x":71,"player_hud_opacity":0,"minimap_opacity":0,
+        "actor_draw_distance":99,"prop_draw_distance":-1,"price_multiplier":99,
+        "file_select_entrance_ease":9,"ambient_occlusion_strength":99,"depth_of_field_focus":0})"),"new schema migration fixture");
+    Near(settings.song_list.banner.x,40);Near(settings.song_list.banner.y,10);
+    Near(settings.song_list.banner_height,18);Near(settings.song_list.banner_width,107);
+    Near(settings.song_list.panel_left,36);Near(settings.song_list.panel_right,151);
+    Near(settings.mask_present.poses[NativeItemPresent::Panel].x,71);
+    Near(settings.mask_present.poses[NativeItemPresent::Description].y,-22);
+    Near(settings.mask_present.poses[NativeItemPresent::Description].scale,.7f);
+    Check(!settings.mask_present.horizontal,"independent mask migration remains vertical");
+    Near(settings.player_hud.opacity,0);Near(settings.minimap_opacity,0);
+    Near(settings.actor_draw_distance,3);Near(settings.prop_draw_distance,1);
+    Check(settings.price_multiplier==3,"three-times price bound");
+    Near(settings.file_select.entrance_ease,3);
+    Near(settings.ambient_occlusion.strength,1.5f);Near(settings.depth_of_field.focus,50);
+    const auto once=Saved(settings,scratch/"update-migration.json");
+    Check(settings.Load(scratch/"update-migration.json"),"update migration reload");
+    Check(Saved(settings,scratch/"update-migration-again.json")==once,"update migration stable on second load");
+    std::cout<<"PASS update defaults coverage, independent poses, audio migration and new bounds\n";
+}
 } // namespace
 
 int main(int argc,char** argv) {
@@ -291,7 +341,7 @@ int main(int argc,char** argv) {
         const fs::path scratch=argv[2];
         Check(fs::is_directory(scratch) && fs::is_empty(scratch),"scratch must be an existing empty directory");
         Shipped(argv[1],scratch);DefaultsAndMigration(scratch);DrawRules(scratch);
-        InvalidAndPersistence(scratch);Application();
+        InvalidAndPersistence(scratch);Application();UpdateSchema(argv[1],scratch);
         std::cout << "PASS " << checks << " settings checks\n";
         return 0;
     } catch(const std::exception& error) {
