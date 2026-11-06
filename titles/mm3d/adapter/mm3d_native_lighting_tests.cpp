@@ -3,6 +3,8 @@
 #include "mm3d_title_contracts.h"
 #include "mm3d_lighting_hook_sites.h"
 #include "mm3d_local_light_sources.h"
+#include "mm3d_room_emitters.h"
+#include <cstdio>
 #include "oot3d_native_a32_memory.h"
 #include "fast/renderer3ds/pica_resolved_draw_stream.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
@@ -120,8 +122,76 @@ void TestLocalSourceGuards() {
     }
 }
 
+void TestEachProvenSourcePublication() {
+    for (const auto& source : kMm3dLocalLightSources) {
+        Fixture f; Mm3dNativeA32LightingProbe probe;
+        f.W16(f.Actor,source.Actor); f.W8(f.Actor+2,source.Category);
+        f.W16(f.Actor+0x1C,1);
+        f.W32(f.Actor+0x140,source.Update); f.W32(f.Actor+0x13C,source.Destroy);
+        for (const auto& guard : source.Guards) f.W32(guard[0],guard[1]);
+        f.W32(f.Play+0x20C0+source.Category*12,1);
+        f.W32(f.Play+0x20C4+source.Category*12,f.Actor);
+        f.W32(f.Play+0xA88,f.Nodes); f.Link(f.Nodes,f.Actor+source.Info,0);
+        f.W32(f.Actor+source.Node,f.Nodes); f.Point(f.Actor+source.Info+4,250);
+        probe.CaptureSceneLights(f.Play,f.Memory);
+        const auto binding=probe.CaptureRenderer(0,f.Memory);
+        Require(binding.ScenePoints && binding.ScenePoints->Count==1,"proved source not selected exactly once");
+        const auto& light=binding.ScenePoints->Lights[0];
+        Require(light.SourceIdentity==f.Actor+source.Info+4 && light.ReplacesNativeLocal && light.Radius==250,
+                "source publication changed native identity/radius");
+        const float gain=source.Actor==0x10?1.0F:0.15F;
+        Require(std::abs(light.Color[0]-gain)<1e-6F && std::abs(light.Color[1]-gain*128.0F/255.0F)<1e-6F,
+                "selector lost native colour or added-light fade policy");
+        f.W32(f.Play+0x138,2); f.W32(f.Actor+source.Node,0);
+        probe.CaptureSceneLights(f.Play,f.Memory);
+        Require(!probe.CaptureRenderer(0,f.Memory).ScenePoints,"unowned native source remained selected");
+    }
+}
+
+void TestRoomEmitterPublication() {
+    Fixture f; Mm3dNativeA32LightingProbe probe;
+    const uint32_t segment=f.Actor+0x8000;
+    std::array<uint8_t,40> bytes{};
+    bytes[0]='Z';bytes[1]='S';bytes[2]='I';bytes[3]=9;
+    bytes[16]=1;bytes[17]=2;bytes[20]=0x48;
+    bytes[24]=0xA;bytes[28]=0x60;bytes[32]=0x14;
+    for(uint32_t i=0;i<bytes.size();++i)f.W8(segment+i,bytes[i]);
+    f.W8(f.Play+0xC260,0);f.W32(f.Play+0xC270,segment);
+    const auto hash=Mm3dRoomFingerprint(bytes);
+    Require(hash.has_value(),"ROM room fingerprint rejected");
+    // Exactly the native loader's observed pointer/relocation changes.
+    f.W16(segment+18,1);f.W32(segment+20,0x09001234);
+    f.W16(segment+26,1);f.W32(segment+28,0x09005678);
+    const auto room=CaptureMm3dEmitterRoom(f.Play,f.Memory);
+    Require(room && room->Fingerprint==*hash,"runtime relocation changed room identity");
+    char fingerprint[17];std::snprintf(fingerprint,sizeof(fingerprint),"%016llx",static_cast<unsigned long long>(*hash));
+    const std::string json=std::string(R"({"schema":"triaevum.scene-lights","version":1,"title":"mm3d","rooms":[{"scene":111,"room":0,"fingerprint":")")+
+        fingerprint+R"(","emitters":[{"position":[10,20,30],"colour":[1,0.8,0.5],"radius":500,"gain":0.45,"category":"window-lamp","independentEmission":true,"surfaces":["0000000000001234"]}]}]})";
+    const auto catalog=PicaEmitterCatalog::Parse(json);
+    Require(catalog && catalog->MatchesTitle("mm3d"),"MM catalog rejected");
+    probe.SetEmitterCatalog(catalog);probe.CaptureSceneLights(f.Play,f.Memory);
+    auto binding=probe.CaptureRenderer(0,f.Memory);
+    Require(binding.ScenePoints && binding.ScenePoints->Count==1 && binding.ScenePoints->Lights[0].Group==3 &&
+            binding.ScenePoints->Lights[0].CastsShadow && binding.ScenePoints->Lights[0].IndependentEmission &&
+            !binding.ScenePoints->Lights[0].ReplacesNativeLocal,
+            "room emitter did not use shared supplemental policy");
+    auto& emission=PicaSurfaceEmissionRegistry::Instance();emission.BeginFrame();
+    Require(emission.Follows(0x1234),"MM S14 follow set not published");
+    emission.Observe(0x1234,0);emission.BeginFrame();
+    f.W32(f.Play+0x138,2);probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(!probe.CaptureRenderer(0,f.Memory).ScenePoints,"native-off fake-emissive surface still lit");
+    f.W8(f.Play+0xC260,0xFF);
+    Require(!CaptureMm3dEmitterRoom(f.Play,f.Memory),"unloaded room accepted");
+    f.W8(f.Play+0xC260,0);f.W8(segment,'X');
+    Require(!CaptureMm3dEmitterRoom(f.Play,f.Memory),"unknown room ABI accepted");
+    probe.Reset();emission.BeginFrame();
+    Require(!emission.Follows(0x1234),"reset retained MM S14 follow set");
+}
+
 void TestSceneSnapshots() {
     TestLocalSourceGuards();
+    TestEachProvenSourcePublication();
+    TestRoomEmitterPublication();
     Fixture f; Mm3dNativeA32LightingProbe probe;
     probe.SetSupplementalPublication(true, true);
     const uint32_t sun=f.Play+0x86D0U,moon=f.Play+0x86E8U,torch=f.Actor+0x2B0U;
@@ -148,7 +218,7 @@ void TestSceneSnapshots() {
     Require(probe.CaptureRenderer(0,f.Memory).SceneDirectionals==first.SceneDirectionals,"same guest frame advanced continuity");
     f.W32(f.Play+0x138U,2);f.Point(torch+4U,-1);probe.CaptureSceneLights(f.Play,f.Memory);
     const auto second=probe.CaptureRenderer(0,f.Memory);
-    Require(second.ScenePoints->Lights[0].Radius==0 && first.ScenePoints->Lights[0].Radius==250,"dormant identity/immutable snapshot lost");
+    Require(!second.ScenePoints && first.ScenePoints->Lights[0].Radius==250,"dormant source selected or immutable snapshot lost");
     f.W32(f.Play+0x138U,3);f.Direction(sun,-120,-20,220);f.Direction(moon,120,20,20);
     probe.CaptureSceneLights(f.Play,f.Memory);
     Require(!probe.CaptureRenderer(0,f.Memory).SceneDirectionals->Lights[0].SkyLight,"nonclock direction was overwritten");

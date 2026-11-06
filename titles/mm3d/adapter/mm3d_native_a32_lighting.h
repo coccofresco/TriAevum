@@ -2,6 +2,8 @@
 
 #include "oot3d_native_a32_lighting.h"
 #include "mm3d_scene_environment.h"
+#include "fast/renderer3ds/pica_emitter_catalog.h"
+#include "fast/renderer3ds/pica_scene_light_selection.h"
 
 namespace Oot3dNativeGame {
 
@@ -30,6 +32,12 @@ class Mm3dNativeA32LightingProbe {
         oot3d::recomp::a32::MemoryBus& memory);
     void CaptureSceneLights(uint32_t play, oot3d::recomp::a32::MemoryBus& memory);
     void Reset() noexcept;
+    void SetEmitterCatalog(std::shared_ptr<const Fast::Renderer3ds::PicaEmitterCatalog> catalog) {
+        if (mEmitterCatalog) Fast::Renderer3ds::PicaSurfaceEmissionRegistry::Instance().Follow({});
+        mEmitterCatalog = catalog && catalog->MatchesTitle("mm3d") ? std::move(catalog) : nullptr;
+        mEmitterCatalogResolved = true;
+        mSelector.Reset();
+    }
     // Once per mounted image: the environment-group writers are where the
     // layout says (mm3d_scene_environment.h); otherwise the group stays Unknown.
     bool VerifyEnvironmentGroupGuards(oot3d::recomp::a32::MemoryBus& memory);
@@ -63,6 +71,10 @@ class Mm3dNativeA32LightingProbe {
     Mm3dEnvironmentGroupLatch mGroup;
     uint64_t mSceneLightFrames = 0;
     uint32_t mSnapshotPlay = 0, mSnapshotFrame = 0;
+    uint16_t mSnapshotScene = 0;
+    Fast::Renderer3ds::PicaSceneLightSelector mSelector;
+    std::shared_ptr<const Fast::Renderer3ds::PicaEmitterCatalog> mEmitterCatalog;
+    bool mEmitterCatalogResolved = false;
     bool mHaveSnapshot = false;
     bool mPublishPoints = true, mPublishWater = true;
     struct ContinuityLight {

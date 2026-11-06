@@ -47,3 +47,39 @@ room/material emitter catalog and S14 follow set; installed native-fragment
 GGX conversion; complete Off/On qualification and the owner JPEG batch.
 See the append-only local progress log for exact binaries, run receipts,
 checksums, E:-backed build junctions, failure evidence and resume boundary.
+
+## Continuation: shared selection and room material facts (still partial)
+
+The selector and room-emitter catalog/TEV-strength capture now have neutral
+renderer owners (`pica_scene_light_selection.h`, `pica_emitter_catalog.*`).
+OoT3D retains compatibility adapters and its original arithmetic/defaults.
+MM3D uses that selector for its proved native sources and room emitters.
+
+The guarded native table now contains 15 source records across 12 EUR actor
+ids. Added insertion/store and matching destructor/removal evidence covers
+warp/light-ray/Poe/secondary-torch records and two keep-archive families.
+An unidentified keep family is **not** thereby called a proved fire-arrow
+analogue. Live callback, linked node and exact LightInfo identity remain
+mandatory; native RGB, signed radius and flicker remain the inputs.
+
+`tools/scene_emitters.py` generates an explicitly `mm3d`-namespaced catalog
+from the user's EUR code and RomFS. It reads CMB v10 geometry/material names,
+uses encoded texture hashes and reuses placement/clustering policies without
+pixel statistics. Torch stands, unknown/fullbright materials, water and shadows
+are excluded. The room reader normalises the native ZSI relocation fields;
+offline Clock Town/Inn/Woodfall ROM/native/catalog identities agree. The local
+EUR survey currently finds 145 emitters in 310 rooms, no rejected rooms, but
+only four populated categories: windows, lamps, shafts and fire/lava. Magic
+and doorway predicates are not evidence of populated/qualified MM3D examples.
+
+The shared native-fragment ledger now accepts separately proved independent
+emission as well as exact native replacements. Neither default supplemental
+points nor contradictory proof flags are sufficient. A native identity clash
+or untracked native point fails closed. Catalog material roles are not a PBR
+emissive-map installer and do not change the native surface appearance.
+
+**Not complete:** native-gated synthetic stick/arrow/Keese/projectile/wall/spout
+sources, dormant-but-visible fairy variants, complete six-category material
+proof, installed GGX receivers, installer/Forge catalog routing, previous-room
+transition coverage and the final owner Off/On batch. The MM3D base profile,
+including ambient 0.6, is unchanged. Do not land this as full parity.

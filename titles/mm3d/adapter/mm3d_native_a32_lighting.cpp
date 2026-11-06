@@ -1,6 +1,7 @@
 #include "mm3d_native_a32_lighting.h"
 #include "mm3d_scene_environment.h"
 #include "mm3d_local_light_sources.h"
+#include "mm3d_room_emitters.h"
 #include "recomp/a32_runtime.h"
 
 #include <algorithm>
@@ -271,15 +272,19 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
     const auto current = CaptureMm3dSceneEnvironment(memory);
     if (!current.State || current.Play != play) {
         mScenePoints.reset(); mSceneDirectionals.reset(); mWater.reset(); mLightFunctions.clear();
-        mHaveSnapshot = false; mContinuityEnvironment.reset(); mShadowCaster.Reset();
+        mHaveSnapshot = false; mContinuityEnvironment.reset(); mShadowCaster.Reset(); mSelector.Reset();
+        if (mEmitterCatalog) PicaSurfaceEmissionRegistry::Instance().Follow({});
         return;
     }
     const uint32_t frame = current.State->GuestFrame;
     if (mHaveSnapshot && mSnapshotPlay == play && mSnapshotFrame == frame) return;
-    if (mHaveSnapshot && (mSnapshotPlay != play || frame != mSnapshotFrame + 1U)) {
+    const bool discontinuity = !mHaveSnapshot || mSnapshotPlay != play ||
+        frame != mSnapshotFrame + 1U || mSnapshotScene != current.State->SceneId;
+    if (discontinuity) {
         mContinuityEnvironment.reset(); mShadowCaster.Reset();
     }
     mHaveSnapshot = true; mSnapshotPlay = play; mSnapshotFrame = frame;
+    mSnapshotScene = current.State->SceneId;
     ++mSceneLightFrames;
     std::unordered_set<uint32_t> infos, nodes;
     mLightFunctions.clear();
@@ -326,14 +331,16 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         mSceneDirectionals = std::make_shared<const PicaSceneDirectionalLights>(directionals);
 
     PicaScenePointLights points;
-    std::unordered_set<uint32_t> visitedActors;
+    std::vector<PicaScenePointLight> candidates;
+    std::optional<std::array<float, 3>> player;
+    std::unordered_set<uint32_t> visitedActors, capturedInfos;
     const auto capturePoint = [&](uint32_t actor, uint32_t offset, uint32_t nodeOffset, uint32_t group) {
         const uint32_t info = actor + offset;
         uint32_t ownedNode = 0, owner = 0;
         uint16_t rawRadius = 0;
         uint8_t kind = 0;
         PicaScenePointLight light;
-        if (!infos.contains(info) || !memory.Read32(actor + nodeOffset, &ownedNode) || !nodes.contains(ownedNode) ||
+        if (capturedInfos.contains(info) || !infos.contains(info) || !memory.Read32(actor + nodeOffset, &ownedNode) || !nodes.contains(ownedNode) ||
             !memory.Read32(ownedNode, &owner) || owner != info || !memory.Read8(info, &kind) ||
             (kind != 0U && kind != 2U) || !ReadPosition(memory, info + 4U, light.PositionWorld) ||
             !ReadColor(memory, info + 0x10U, light.Color) || !memory.Read16(info + 0x16U, &rawRadius)) return;
@@ -343,8 +350,10 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         light.ReplacesNativeLocal = Mm3dLocalLightSourceProved(memory, actor, offset, nodeOffset);
         // Registered by this actor through its own LightNode: local.
         mLightFunctions[light.SourceIdentity] = {PicaNativeLightOrigin::Actor, PicaNativeLightScope::Local};
-        if (light.ReplacesNativeLocal && points.Count < points.Lights.size())
-            points.Lights[points.Count++] = light;
+        if (light.ReplacesNativeLocal) {
+            capturedInfos.insert(info);
+            candidates.push_back(light);
+        }
     };
     for (uint32_t category = 0; category < 12U; ++category) {
         uint32_t count = 0, actor = 0;
@@ -354,22 +363,37 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
             uint16_t id = 0, params = 0;
             uint8_t actualCategory = 0;
             uint32_t next = 0, update = 0;
-            if (!Object(actor, 0x600U) || !visitedActors.insert(actor).second || !memory.Read16(actor, &id) ||
+            if (!Object(actor, 0x1000U) || !visitedActors.insert(actor).second || !memory.Read16(actor, &id) ||
                 !memory.Read8(actor + 2U, &actualCategory) || actualCategory != category ||
                 !memory.Read16(actor + 0x1CU, &params) || !memory.Read32(actor + 0x134U, &next) ||
                 !memory.Read32(actor + 0x140U, &update)) break;
             if (update) {
-                if (id == 0x10U) {
-                    capturePoint(actor, 0x578U, 0x590U, params == 0 ? 0U : 1U);
-                    capturePoint(actor, 0x594U, 0x5ACU, params == 0 ? 0U : 1U);
-                } else if (id == 4U) capturePoint(actor, 0x200U, 0x1FCU, 2U);
-                else if (id == 0x2EU) capturePoint(actor, 0x2B0U, 0x2ACU, 2U);
+                if (id == 0 && category == 2) {
+                    std::array<float, 3> position;
+                    if (ReadPosition(memory, actor + 0x24U, position)) player = position;
+                }
+                for (const auto& source : kMm3dLocalLightSources) {
+                    if (source.Actor != id || source.Category != category) continue;
+                    const uint32_t group = id == 0x10U ? (params == 0 ? 0U : 1U) : 2U;
+                    capturePoint(actor, source.Info, source.Node, group);
+                }
             }
             actor = next;
         }
     }
-    // MM torches already register native sources. Never add OoT's synthetic flame.
-    // Dormant non-Tatl fairy extensions wait for variant/draw-gate proof.
+    // MM torches already register native sources. Never add a synthetic copy.
+    // Dormant non-Tatl fairy extensions still require variant/draw-gate proof.
+    if (!mEmitterCatalogResolved) {
+        mEmitterCatalog = PicaEmitterCatalog::FromEnvironment("mm3d");
+        mEmitterCatalogResolved = true;
+    }
+    if (mEmitterCatalog) {
+        std::vector<PicaEmitterRoom> rooms;
+        if (const auto room = CaptureMm3dEmitterRoom(play, memory)) rooms.push_back(*room);
+        CapturePicaRoomEmitters(*mEmitterCatalog, current.State->SceneId, rooms, candidates,
+                               &PicaSurfaceEmissionRegistry::Instance());
+    }
+    mSelector.Select(candidates, player, discontinuity, points);
     if (!points.Count) mScenePoints.reset();
     else if (!mScenePoints || *mScenePoints != points) mScenePoints = std::make_shared<const PicaScenePointLights>(points);
     auto water = CaptureMm3dWaterBodies(play, memory);
@@ -461,7 +485,8 @@ Fast::Renderer3ds::PicaNativeLightBinding Mm3dNativeA32LightingProbe::CaptureRen
 void Mm3dNativeA32LightingProbe::Reset() noexcept {
     mBoundLights.clear(); mRenderStates.clear(); mUploadOwners.clear();
     mScenePoints.reset(); mSceneDirectionals.reset(); mWater.reset(); mHaveSnapshot = false;
-    mLightFunctions.clear(); mGroup.Reset();
+    mLightFunctions.clear(); mGroup.Reset(); mSelector.Reset();
+    if (mEmitterCatalog) PicaSurfaceEmissionRegistry::Instance().Follow({});
     mContinuityPlayState = 0; mContinuityEnvironment.reset(); mContinuityCount = 0;
     ++mContinuityEpoch; mShadowCaster.Reset();
 }
