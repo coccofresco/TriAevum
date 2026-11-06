@@ -1,12 +1,12 @@
 #pragma once
 
-// Missing-file fallback only. Shipped environments/mm3d/group-*.environment.json
-// now own the group defaults (including night), loaded by SceneEnvironmentRuntime
-// exactly like OoT3D. Never select this ahead of user/release profile files.
+// MM3D's base scene environment per environment group: the profile a scene
+// takes while neither the user nor the release has a file for it.
 //
 // Owner decision Q-P1 (b), 2026-11-06: an OoT3D-style base profile per group,
-// applied by function. This conservative fallback predates the full profile
-// evaluator and adds no authored lights:
+// applied by function. MM3D's scene is lit by native fragment lights, so the
+// base is the shape those draws support (Fast::Renderer3ds::
+// PicaFragmentBalanceProfileSupported):
 // - Scene lights (the environment's sun/moon records, which the lighting
 //   probe classifies as Scene) are replaced: the main one becomes a white 1x
 //   key that follows it and casts the shadows; the other one, native scene
@@ -27,9 +27,8 @@
 // (owner amendment: static-light interiors use the equation OoT3D uses for
 // them). It acts by function there as well: MM3D's interior room geometry has
 // no scene directional among its fragment lights (only the ambient and local
-// lamps), so no scene-following key is invented there; the native ambient gain
-// and local policy still apply. Actors carrying the environment's records take
-// the key and its shadow. No interior shells
+// lamps), so those draws keep their native lighting, while actors that carry
+// the environment's records take the key and its shadow. No interior shells
 // are requested until MM3D supplies them (P2.6). Unknown keeps the native
 // lighting: an unproved environment is never replaced.
 
