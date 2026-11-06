@@ -1,4 +1,5 @@
 #include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/title_grass_rules_file.h"
 
 #include <gtest/gtest.h>
 #include <nlohmann/json.hpp>
@@ -1657,4 +1658,120 @@ TEST(Oot3dGraphicsSettingsPersistence, RoundTripsTheAspectRatioAsHostOwnedOutput
     settings.Aspect = static_cast<AspectRatioMode>(9);
     EXPECT_EQ(GraphicsSettingsService::Validate(settings, GraphicsCapabilities{}).Value.Aspect,
               AspectRatioMode::Wide16x9);
+}
+
+TEST(TitleGrassRulesFile, LegacyStorageIsExactlyUnchanged) {
+    using namespace Fast::Extension;
+    TitleGrassRulesFile file;
+    nlohmann::json root{{"Graphics", SerializeGraphicsSettings(CompleteSettings())}}, stored;
+    const auto before = root;
+    file.Load(root);
+    EXPECT_EQ(root, before);
+    EXPECT_TRUE(file.Store(root["Graphics"], root, stored));
+    EXPECT_EQ(stored, root["Graphics"]);
+}
+
+TEST(TitleGrassRulesFile, MissingNamespaceDoesNotImportLegacyAuthoring) {
+    using namespace Fast::Extension;
+    const auto dir = std::filesystem::temp_directory_path() / "triaevum-new-title-grass-test";
+    std::filesystem::remove_all(dir);
+    TitleGrassRulesFile file; file.SetPath(dir / "rules.json");
+    const auto original = CompleteSettings();
+    auto loaded = DeserializeGraphicsSettings(SerializeGraphicsSettings(original));
+    file.LoadSettings(loaded);
+    EXPECT_TRUE(loaded.Value.Grass.Rules.empty()); EXPECT_TRUE(loaded.Value.Grass.Masks.empty());
+    EXPECT_TRUE(loaded.Value.GrassSavedPreset.Rules.empty()); EXPECT_TRUE(loaded.Value.GrassSavedPreset.Masks.empty());
+    EXPECT_EQ(loaded.Value.Grass.Quality, original.Grass.Quality);
+    file.SetPath({});
+    loaded = DeserializeGraphicsSettings(SerializeGraphicsSettings(original));
+    file.LoadSettings(loaded);
+    EXPECT_FALSE(loaded.Value.Grass.Rules.empty());
+}
+
+TEST(TitleGrassRulesFile, SeparateFilesKeepBothTitlesAndTheSavedPreset) {
+    using namespace Fast::Extension;
+    const auto dir = std::filesystem::temp_directory_path() / "triaevum-title-grass-test";
+    std::filesystem::remove_all(dir);
+    TitleGrassRulesFile file;
+    file.SetPath(dir / "grass" / "another-title" / "rules.json");
+    auto original = SerializeGraphicsSettings(CompleteSettings());
+    nlohmann::json root{{"Graphics", original}}, host;
+    auto edited = original;
+    edited["Grass"]["Sources"][0]["Target"]["Rgba8Hash"] = "123456789abcdef0";
+    edited["GrassSavedPreset"]["Sources"] = nlohmann::json::array();
+    edited["Grass"]["Masks"] = nlohmann::json::array({{{"Mode", "Off"}}});
+    edited["Grass"]["Quality"] = "Low";
+    ASSERT_TRUE(file.Store(edited, root, host));
+    EXPECT_EQ(host["Grass"]["Sources"], original["Grass"]["Sources"]);
+    EXPECT_EQ(host["GrassSavedPreset"]["Sources"], original["GrassSavedPreset"]["Sources"]);
+    EXPECT_EQ(host["Grass"]["Quality"], "Low");
+    root["Graphics"] = host;
+    file.Load(root);
+    EXPECT_EQ(root["Graphics"]["Grass"]["Sources"], edited["Grass"]["Sources"]);
+    EXPECT_EQ(root["Graphics"]["Grass"]["Masks"], edited["Grass"]["Masks"]);
+    EXPECT_TRUE(root["Graphics"]["GrassSavedPreset"]["Sources"].empty());
+    // Unknown owner/example metadata survives ordinary automatic saves.
+    nlohmann::json authored;
+    { std::ifstream stream(file.Path()); stream >> authored; }
+    authored["exampleOnly"] = true;
+    { std::ofstream stream(file.Path()); stream << authored; }
+    // Restore point has its own rules; a user-empty source list stays empty.
+    edited["Grass"]["Sources"] = nlohmann::json::array();
+    ASSERT_TRUE(file.Store(edited, {{"Graphics", host}}, host));
+    file.Load(root);
+    EXPECT_TRUE(root["Graphics"]["Grass"]["Sources"].empty());
+    { std::ifstream stream(file.Path()); stream >> authored; }
+    EXPECT_EQ(authored["exampleOnly"], true);
+    // The legacy title never reads or writes the other title's file.
+    file.SetPath({});
+    nlohmann::json legacy{{"Graphics", original}};
+    file.Load(legacy);
+    EXPECT_EQ(legacy["Graphics"], original);
+    std::filesystem::remove_all(dir);
+}
+
+TEST(TitleGrassRulesFile, CurrentRulesAreNotReinterpretedAsLegacyRules) {
+    using namespace Fast::Extension;
+    const auto dir = std::filesystem::temp_directory_path() / "triaevum-grass-legacy-test";
+    std::filesystem::remove_all(dir);
+    TitleGrassRulesFile file; file.SetPath(dir / "rules.json");
+    auto current = SerializeGraphicsSettings(CompleteSettings());
+    current["GrassSavedPreset"]["Sources"] = nlohmann::json::array();
+    nlohmann::json host;
+    ASSERT_TRUE(file.Store(current, {{"Graphics", current}}, host));
+    auto legacy = current;
+    legacy["SchemaVersion"] = 6;
+    legacy["Grass"].erase("Sources");
+    legacy.erase("GrassSavedPreset");
+    auto loaded = DeserializeGraphicsSettings(legacy);
+    const auto before = loaded.Value.Grass.Generation;
+    file.LoadSettings(loaded);
+    EXPECT_EQ(SerializeGraphicsSettings(loaded.Value)["Grass"]["Sources"], current["Grass"]["Sources"]);
+    EXPECT_TRUE(loaded.Value.GrassSavedPreset.Rules.empty());
+    EXPECT_EQ(loaded.Value.Grass.Generation.BladeHeightMin, before.BladeHeightMin);
+    std::filesystem::remove_all(dir);
+}
+
+TEST(TitleGrassRulesFile, RefusesUnknownOrCorruptFilesAndSurfacesWriteFailure) {
+    using namespace Fast::Extension;
+    const auto dir = std::filesystem::temp_directory_path() / "triaevum-grass-errors-test";
+    std::filesystem::remove_all(dir);
+    std::filesystem::create_directories(dir);
+    TitleGrassRulesFile file;
+    file.SetPath(dir / "rules.json");
+    const auto graphics = SerializeGraphicsSettings(CompleteSettings());
+    nlohmann::json root{{"Graphics", graphics}}, host;
+    for (const auto text : {"broken json", "{\"schema\":\"triaevum.grass-rules\",\"version\":2}"}) {
+        { std::ofstream stream(file.Path()); stream << text; }
+        EXPECT_ANY_THROW(file.Load(root));
+        auto loaded = DeserializeGraphicsSettings(graphics);
+        EXPECT_ANY_THROW(file.LoadSettings(loaded));
+        EXPECT_TRUE(loaded.Value.Grass.Rules.empty()); EXPECT_TRUE(loaded.Value.GrassSavedPreset.Rules.empty());
+        EXPECT_FALSE(file.Store(graphics, root, host));
+        std::ifstream stream(file.Path());
+        EXPECT_EQ(std::string(std::istreambuf_iterator<char>(stream), {}), text);
+    }
+    file.SetPath(dir / "rules.json" / "child.json"); // parent is a file
+    EXPECT_FALSE(file.Store(graphics, root, host));
+    std::filesystem::remove_all(dir);
 }

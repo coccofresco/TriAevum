@@ -1,6 +1,7 @@
 #include "fast/extension/graphics_settings_window.h"
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/title_grass_rules_file.h"
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_settings_panel.h"
 #include "oot3d_photo_mode_panel.h"
@@ -58,7 +59,11 @@ struct MemoryStore final : GraphicsSettingsPersistencePort {
     bool StoreGraphics(const nlohmann::json& value) override {
         ++Stores;
         if (Fail) return false;
-        Root["Graphics"] = value;
+        nlohmann::json host;
+        auto& file = ActiveTitleGrassRulesFile();
+        if (!file.Store(value, Root, host)) return false;
+        Root["Graphics"] = std::move(host);
+        file.Load(Root); // the settings view, as read at the next launch
         return true;
     }
     int PresetStores = 0;
@@ -1888,6 +1893,9 @@ int main(int argc, char** argv) try {
     Frame(); Frame();
 
     if (argc == 2 && std::string_view(argv[1]) == "--grass-masks") {
+        const auto ruleDirectory = std::filesystem::temp_directory_path() / "triaevum-f1-title-grass";
+        std::filesystem::remove_all(ruleDirectory);
+        ActiveTitleGrassRulesFile().SetPath(ruleDirectory / "grass" / "title-fixture" / "rules.json");
         auto& bridge = GrassSceneBridge::Instance();
         bridge.Clear();
         GrassSceneMesh source;
@@ -1925,6 +1933,7 @@ int main(int argc, char** argv) try {
         Click("Grass");
         Click("Masks");
         Frame(true);
+        Check(loggedPanelText.find("Title grass rules:") != std::string::npos, "title grass authoring file hidden");
         Check(loggedPanelText.find("Covered source area") != std::string::npos, "mask overlap absent from panel");
         Check(loggedPanelText.find("MASK auto") != std::string::npos, "automatic catalog badge missing");
         Click("Overlay mask");
@@ -1996,6 +2005,14 @@ int main(int argc, char** argv) try {
               "manual catalog mask used wrong identity");
         Click("Remove mask rule");
         Check(runtime.Snapshot().Grass.Masks.empty(), "remove mask failed");
+        Click("Save current preset");
+        Check(std::filesystem::is_regular_file(ActiveTitleGrassRulesFile().Path()), "F1 did not write title grass file");
+        nlohmann::json reloaded = store->Root;
+        ActiveTitleGrassRulesFile().Load(reloaded);
+        Check(reloaded["Graphics"]["Grass"]["Masks"].empty() &&
+              reloaded["Graphics"]["GrassSavedPreset"]["Masks"].empty(), "title grass restart lost empty mask state");
+        ActiveTitleGrassRulesFile().SetPath({});
+        std::filesystem::remove_all(ruleDirectory);
         size.y = 680;
         Frame();
         Frame();

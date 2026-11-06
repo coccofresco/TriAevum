@@ -9,6 +9,7 @@
 #include "fast/extension/grass_texture_twins.h"
 #include "fast/extension/texture_assignment_model.h"
 #include "fast/extension/texture_catalog_viewer.h"
+#include "fast/extension/title_grass_rules_file.h"
 
 #include <imgui.h>
 
@@ -761,6 +762,10 @@ bool DrawGrassSettingsPanel(
     InteractiveGrassSettings& savedPreset,
     GrassSettingsPanelState& state) {
     bool changed = false;
+    if (const auto path = ActiveTitleGrassRulesFile().Path(); !path.empty()) {
+        ImGui::TextWrapped("Title grass rules: %s", path.generic_string().c_str());
+        ImGui::TextDisabled("Source and mask edits save automatically; Save current preset keeps a restore point.");
+    }
     if (ImGui::Button("Save current preset")) {
         savedPreset = grass;
         state.Status = "Grass preset saved";

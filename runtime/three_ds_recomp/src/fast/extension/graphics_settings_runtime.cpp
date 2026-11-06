@@ -1,6 +1,7 @@
 #include "fast/extension/graphics_settings_runtime.h"
 
 #include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/title_grass_rules_file.h"
 
 #include <algorithm>
 #include <array>
@@ -128,8 +129,8 @@ GraphicsSettingsRuntime::GraphicsSettingsRuntime() {
         try {
             nlohmann::json root;
             if (mPersistence->LoadRoot(root)) {
-                const auto loaded = LoadGraphicsSettingsConfig(
-                    root, mService.Current());
+                auto loaded = LoadGraphicsSettingsConfig(root, mService.Current());
+                ActiveTitleGrassRulesFile().LoadSettings(loaded);
                 for (const auto& issue : loaded.Issues) {
                     if (issue.Corrected) {
                         SPDLOG_WARN("OOT3D graphics config {}: {}",

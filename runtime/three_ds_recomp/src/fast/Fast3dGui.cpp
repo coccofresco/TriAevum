@@ -14,6 +14,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/title_grass_rules_file.h"
 #endif
 #include "ship/window/gui/resource/GuiTextureFactory.h"
 #include "ship/resource/File.h"
@@ -76,8 +77,11 @@ class Oot3dGraphicsSettingsPersistence final
 
     bool StoreGraphics(const nlohmann::json& graphics) override {
         auto* context = Ship::Context::GetRawInstance();
-        return context != nullptr && context->GetConfig() != nullptr &&
-            context->GetConfig()->SetBlock("Graphics", graphics);
+        if (context == nullptr || context->GetConfig() == nullptr) return false;
+        nlohmann::json hostGraphics;
+        return Extension::ActiveTitleGrassRulesFile().Store(
+                   graphics, context->GetConfig()->GetNestedJson(), hostGraphics) &&
+               context->GetConfig()->SetBlock("Graphics", std::move(hostGraphics));
     }
 
     bool StoreGraphicsPresets(const nlohmann::json& presets) override {
