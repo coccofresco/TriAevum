@@ -67,6 +67,14 @@ void InstallTitleGrassRuleDefaults(const nlohmann::json& rules);
 // configurations; a block whose Grass (or GrassSavedPreset) holds exactly one
 // of them, sources and masks unedited, has them removed on load and is
 // rewritten. Edited rules are the user's and are kept.
+//
+// One configuration file can serve both titles (a developer launch without
+// --config uses the working directory's file for every title). A removal is
+// therefore recorded in the "Graphics" block (GraphicsSettings::RemovedTitleGrassRules,
+// "RemovedTitleGrassRules", "<block>/<set hash>"), and the title whose Rules
+// are that set restores them on its next load where the block's sources and
+// masks are still empty; rules the user wrote there in the meantime are kept.
+// With a shared file each title's load leaves the grass rules in its own form.
 struct TitleGrassRuleDefaults {
     std::optional<nlohmann::json> Rules;
     std::vector<nlohmann::json> ForeignRuleSets;

@@ -150,7 +150,9 @@ void NativeA32WindowSession::Setup() {
   // Before any settings load: configurations older than schema 15 take the
   // title's shipped grass source and mask rules. OoT3D's rules are keyed by
   // its own textures; another title's configuration drops an unedited copy
-  // that builds installing them for every title wrote there.
+  // that builds installing them for every title wrote there. The removal is
+  // recorded, and OoT3D restores its rules from it when it loads the same
+  // file (a developer launch without --config shares one for every title).
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur) {
     Fast::Extension::InstallTitleGrassRuleDefaults(Oot3dNativeGame::Oot3dTitleGrassRuleDefaults());
   } else {

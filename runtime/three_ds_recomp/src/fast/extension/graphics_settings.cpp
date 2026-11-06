@@ -330,6 +330,7 @@ GraphicsSettings GraphicsSettingsService::KeepHostOwnedSettings(
     value.Grass.Rules = current.Grass.Rules;
     value.Grass.Masks = current.Grass.Masks;
     value.GrassSavedPreset = current.GrassSavedPreset;
+    value.RemovedTitleGrassRules = current.RemovedTitleGrassRules;
     value.Effects.ReflectionMaterials =
         current.Effects.ReflectionMaterials;
     return value;
