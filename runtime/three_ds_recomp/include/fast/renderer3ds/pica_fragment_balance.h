@@ -42,10 +42,19 @@ inline bool PicaFragmentBalanceProfileSupported(const PicaEnvironmentLighting& e
 // follow the native environment too, exactly as with the profile Off (the
 // settings that are independent of it stay: scope, scene point-light groups,
 // caster faces), instead of a key that no fragment-lit receiver can match.
+// In the supported shape, the rim light and the fog contribution, which the
+// fragment-lit contract does not apply, apply to no draw of the frame (the
+// title's other draws included), so a profile acts the same on every draw.
 // Other titles are unchanged.
 [[nodiscard]] inline PicaEnvironmentLighting PicaFragmentLitFrameEnvironment(
     const PicaEnvironmentLighting& e, bool nativeFragmentLighting) noexcept {
-    if (!nativeFragmentLighting || !e.Enabled || PicaFragmentBalanceProfileSupported(e)) return e;
+    if (!nativeFragmentLighting || !e.Enabled) return e;
+    if (PicaFragmentBalanceProfileSupported(e)) {
+        auto applied = e;
+        applied.Rim.Enabled = false;
+        applied.FogStrength = 1.0F;
+        return applied;
+    }
     PicaEnvironmentLighting off;
     off.ScopeIdentity = e.ScopeIdentity;
     off.PointLights = e.PointLights;
@@ -57,8 +66,10 @@ inline bool PicaFragmentBalanceProfileSupported(const PicaEnvironmentLighting& e
 // adapter classified as Scene must be one of the environment's own
 // directionals (records whose owner it proved: PicaSceneDirectionalLights
 // Scope Scene). The main one becomes the key; the others follow the native
-// direct policy. Every other slot (Local or Unknown: lamps, actor and room
-// lights) keeps its native light at the profile's local gain, and an
+// direct policy; their ambient and the draw's global ambient (the scene
+// ambient) take the profile's ambient gain. Every other slot (Local or
+// Unknown: lamps, actor and room lights) keeps its whole native light,
+// diffuse, specular and its own ambient, at the profile's local gain, and an
 // environment record the adapter did not prove is never replaced. A Scene
 // slot without such a record keeps the whole draw native instead of guessing
 // which term it was.
@@ -107,7 +118,7 @@ inline std::optional<PicaFragmentBalanceUniforms> BuildPicaFragmentBalanceUnifor
         }
         if (nativeScene && !directional) return std::nullopt;
         auto& gain=out.Gains[i];
-        gain={e.NativeLocalStrength,e.NativeLocalStrength,ambient,0};
+        gain={e.NativeLocalStrength,e.NativeLocalStrength,e.NativeLocalStrength,0};
         if (nativeScene) {
             if (nativeScene==main) {
                 if (out.Control[1]!=8) return std::nullopt;
@@ -125,6 +136,20 @@ inline std::optional<PicaFragmentBalanceUniforms> BuildPicaFragmentBalanceUnifor
     }
     if (out.Control[1]==8) return std::nullopt;
     return out;
+}
+
+// The environment a surface draw of a title lit by native fragment lights
+// takes while a profile applies (`balanceTitleDraw`: such a title, an enabled
+// frame profile, not an isolated draw). True keeps the no-profile native
+// reference: a fragment-lit draw the balance did not qualify must never fall
+// back to adding the old demo key on top of its native lights, and outside
+// the full scene-lighting model no draw of the title takes the profile. A
+// draw without native fragment lighting (vertex lit or baked room colour)
+// takes the profile through the ordinary vertex-lighting equations,
+// baked-reference path included, in the full model only.
+[[nodiscard]] constexpr bool PicaFragmentLitTitleDrawKeepsNative(
+    bool balanceTitleDraw, bool balanced, bool fragmentLit, bool fullSceneLighting) noexcept {
+    return balanceTitleDraw && !balanced && (fragmentLit || !fullSceneLighting);
 }
 
 inline constexpr std::string_view kPicaFragmentBalanceCaptureBegin=R"glsl(

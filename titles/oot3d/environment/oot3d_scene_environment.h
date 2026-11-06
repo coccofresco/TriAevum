@@ -144,6 +144,9 @@ struct SceneEnvironmentSnapshot {
   std::array<bool, 2> DirtyTabs{};
   // The player in this scene, when known.
   std::optional<ScenePlayerPlacement> Player;
+  // What the runtime last published to the renderer: the slots blended at
+  // the applied night weight and resolved (the renderer's frame input).
+  Fast::Renderer3ds::PicaEnvironmentLighting Published;
   // Advances whenever the profile is replaced from outside the editor (scene
   // change, reload, a file applied from disk): an edit made on an older
   // revision is refused rather than overwriting what replaced it.

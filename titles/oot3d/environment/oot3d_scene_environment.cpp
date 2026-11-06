@@ -472,6 +472,7 @@ void SceneEnvironmentRuntime::PublishLocked(bool edited) {
         mState.Group ? EnvironmentGroupId(*mState.Group) : "unknown",
         unsigned(mState.Sources[0]), unsigned(mState.Sources[1]));
 #endif
+  mState.Published = resolved;
   if (!mPublished || *mPublished != resolved) { mPublished = resolved; mPublish(resolved); }
 }
 

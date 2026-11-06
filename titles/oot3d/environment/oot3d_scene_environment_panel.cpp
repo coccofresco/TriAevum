@@ -96,14 +96,21 @@ private:
           "and a supported renderer.");
     ImGui::BeginDisabled(!value.Enabled || !supported);
     if (mOptions.NativeFragmentLighting && value.Enabled) {
+      // This tab's shape decides the marks and the button; the status is
+      // what the renderer has now (both tabs blended at the applied weight).
       const bool applies = Fast::Renderer3ds::PicaFragmentBalanceProfileSupported(
           ResolveSceneEnvironment(value, *state.SceneId, state.EditingNight));
-      ImGui::TextWrapped(applies
+      const bool appliedNow = Fast::Renderer3ds::PicaFragmentBalanceProfileSupported(state.Published);
+      ImGui::TextWrapped(!applies
+          ? "Not applied: this game is lit by native fragment lights, which take only a white 1x key "
+            "following the main scene light, no native scene direct, no added ambient, fill or placed "
+            "lights. Lighting and shadows stay native until the marked controls are set back."
+          : appliedNow
           ? "Applied to the native fragment lights: the sun or moon becomes the key light and casts the "
             "shadows, the native ambient is scaled, and lamps and other local lights stay native."
-          : "Not applied: this game is lit by native fragment lights, which take only a white 1x key "
-            "following the main scene light, no native scene direct, no added ambient, fill or placed "
-            "lights. Lighting and shadows stay native until the marked controls are set back.");
+          : "Not applied now: this tab has the supported shape, but the profile in use (the other tab, or "
+            "both blended at the current time) does not. Lighting and shadows stay native until the other "
+            "tab is set back too.");
       if (!applies) {
         if (ImGui::Button("Use the supported shape")) {
           UseSupportedFragmentShape(value);

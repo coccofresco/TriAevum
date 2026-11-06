@@ -2419,8 +2419,9 @@ TEST(PicaFragmentBalance, LightFunctionDecidesWhatTheProfileReplaces) {
     EXPECT_EQ(out->Control[0],7U);
     EXPECT_EQ(out->Control[1],1U); // The moon carries the key (and its shadow).
     EXPECT_EQ(out->Control[2],0U);
-    // The lamp (Local) keeps its native light and stays additive.
-    EXPECT_EQ(out->Gains[0],(Gain{1,1,.6F,0}));
+    // The lamp (Local) keeps its whole native light, its own ambient
+    // included, and stays additive: the scene ambient gain is not applied.
+    EXPECT_EQ(out->Gains[0],(Gain{1,1,1,0}));
     EXPECT_EQ(out->Gains[1],(Gain{0,0,.6F,2}));
     EXPECT_EQ(out->Gains[2],(Gain{0,0,.6F,1})); // Native scene direct 0.
     EXPECT_FLOAT_EQ(out->Parameters[0],.6F); // Relative gain on the native scene ambient.
@@ -2434,7 +2435,7 @@ TEST(PicaFragmentBalance, LightFunctionDecidesWhatTheProfileReplaces) {
     const auto kept=BuildPicaFragmentBalanceUniforms(true,f.Layout,partly,f.Profile);
     ASSERT_TRUE(kept);
     EXPECT_EQ(kept->Control[1],1U);
-    EXPECT_EQ(kept->Gains[2],(Gain{1,1,.6F,0}));
+    EXPECT_EQ(kept->Gains[2],(Gain{1,1,1,0}));
     // Records whose owner the adapter did not prove are never Scene.
     auto records=std::make_shared<PicaSceneDirectionalLights>(*f.Binding.SceneDirectionals);
     records->Scope=PicaNativeLightScope::Local;
@@ -2447,7 +2448,8 @@ TEST(PicaFragmentBalance, LightFunctionDecidesWhatTheProfileReplaces) {
     auto dimmed=f.Profile;dimmed.NativeLocalStrength=.5F;
     const auto half=BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,dimmed);
     ASSERT_TRUE(half);
-    EXPECT_EQ(half->Gains[0],(Gain{.5F,.5F,.6F,0}));
+    EXPECT_EQ(half->Gains[0],(Gain{.5F,.5F,.5F,0}));
+    EXPECT_EQ(half->Gains[1],(Gain{0,0,.6F,2})); // Scene slots keep the scene ambient gain.
 }
 
 TEST(PicaFragmentBalance, UnsupportedShapeLeavesTheFragmentLitFrameNative) {
@@ -2456,6 +2458,19 @@ TEST(PicaFragmentBalance, UnsupportedShapeLeavesTheFragmentLitFrameNative) {
     // Supported shape: unchanged, for both kinds of title.
     EXPECT_EQ(PicaFragmentLitFrameEnvironment(f.Profile,true),f.Profile);
     EXPECT_EQ(PicaFragmentLitFrameEnvironment(f.Profile,false),f.Profile);
+    // The rim light and the fog contribution are not part of the contract:
+    // with native fragment lights they reach no draw of the frame (F1 marks
+    // them unavailable), whatever else the shape is. Other titles keep them.
+    {
+        auto rim=f.Profile;rim.Rim.Enabled=true;rim.FogStrength=.5F;
+        ASSERT_TRUE(PicaFragmentBalanceProfileSupported(rim));
+        const auto frame=PicaFragmentLitFrameEnvironment(rim,true);
+        EXPECT_FALSE(frame.Rim.Enabled);
+        EXPECT_EQ(frame.FogStrength,1.0F);
+        auto expected=rim;expected.Rim.Enabled=false;expected.FogStrength=1.0F;
+        EXPECT_EQ(frame,expected);
+        EXPECT_EQ(PicaFragmentLitFrameEnvironment(rim,false),rim);
+    }
     // Authored shapes (added ambient, a turned key, native direct, a fill) on
     // a title lit by native fragment lights: the whole frame is native, so the
     // shadow light is the native one (no profile key, native direct 1, no
@@ -2481,6 +2496,24 @@ TEST(PicaFragmentBalance, UnsupportedShapeLeavesTheFragmentLitFrameNative) {
     }
     auto off=f.Profile;off.Enabled=false;
     EXPECT_EQ(PicaFragmentLitFrameEnvironment(off,true),off);
+}
+
+TEST(PicaFragmentBalance, UnqualifiedFragmentLitDrawKeepsTheNativeReference) {
+    using Fast::Renderer3ds::PicaFragmentLitTitleDrawKeepsNative;
+    // Arguments: title draw under a profile, balanced, fragment lit, full model.
+    // A balanced draw takes the balance; titles/draws outside the case, never native here.
+    for(bool fragmentLit:{false,true}) for(bool full:{false,true}) {
+        EXPECT_FALSE(PicaFragmentLitTitleDrawKeepsNative(true,true,fragmentLit,full));
+        EXPECT_FALSE(PicaFragmentLitTitleDrawKeepsNative(false,false,fragmentLit,full));
+    }
+    // A fragment-lit draw the balance refused (unproved slot, water) keeps its
+    // native lights in every model: no demo key added on top of them.
+    EXPECT_TRUE(PicaFragmentLitTitleDrawKeepsNative(true,false,true,true));
+    EXPECT_TRUE(PicaFragmentLitTitleDrawKeepsNative(true,false,true,false));
+    // A draw without native fragment lighting takes the profile (vertex
+    // equations, baked-reference path) only in the full scene-lighting model.
+    EXPECT_FALSE(PicaFragmentLitTitleDrawKeepsNative(true,false,false,true));
+    EXPECT_TRUE(PicaFragmentLitTitleDrawKeepsNative(true,false,false,false));
 }
 
 TEST(PicaFragmentBalance, ExplicitProfileAndFractionalAmbientEndpoints) {

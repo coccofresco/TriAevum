@@ -20,6 +20,14 @@ namespace Fast::Renderer3ds {
 // which a scene-wide lighting profile may replace. Local: every other light
 // (actor and room lights, lamps, companions, fixed object lights), which
 // stays native and additive. A light whose owner is not proved is Local.
+// Consumer: the native fragment-light balance (pica_fragment_balance.h), the
+// only path that replaces lights inside a title's native fragment lighting.
+// The vertex-lighting path keeps its own older contract: it replaces the
+// draw lights whose identity is one of the published environment records
+// (PicaSceneDirectionalLights), whatever their scope, so an adapter publishes
+// there only records it proved to be the environment's own. A title that
+// does not classify its lights leaves both scopes at the default, and traces
+// then show "local"/"unknown" for lights the vertex path replaces that way.
 enum class PicaNativeLightScope : uint8_t { Local, Scene };
 enum class PicaNativeLightOrigin : uint8_t {
     Unknown,                // owner not proved (treated as Local)
@@ -120,7 +128,9 @@ struct PicaSceneDirectionalLights {
     // authored room/scene headers; interiors and unknown rooms leave it off.
     bool BakedOutdoorRoom = false;
     // The records are the environment's own (Scene) when the adapter proved
-    // their owner; otherwise they are treated as Local and kept native.
+    // their owner. The fragment-light balance treats records without that
+    // proof as Local and keeps them native; the vertex-lighting path replaces
+    // any published record by identity (see PicaNativeLightScope).
     PicaNativeLightScope Scope = PicaNativeLightScope::Local;
     bool operator==(const PicaSceneDirectionalLights&) const = default;
 };

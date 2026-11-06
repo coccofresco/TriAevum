@@ -389,11 +389,21 @@ placed lights, native ambient and local gains in [0, 1].
   (`PicaSceneDirectionalLights::Scope` Scene): the main one becomes the key and
   casts the shadow, the others follow the native direct policy (removed, or
   retained as reference fill when brightness is preserved). Local and Unknown
-  slots (lamps, actor and room lights, unproved owners) keep their native light
-  at the profile's local gain. A Scene slot without such a record, or a draw
-  without a Scene key, keeps its native lighting. The scene ambient is the
-  draw's native global ambient, scaled by the native ambient gain: a relative
+  slots (lamps, actor and room lights, unproved owners) keep their whole
+  native light (diffuse, specular and the light's own ambient) at the
+  profile's local gain; at local gain 1 they are bit-identical to native. A
+  Scene slot without such a record, or a draw without a Scene key, keeps its
+  native lighting. The scene ambient is the draw's native global ambient (and
+  the Scene slots' own ambient), scaled by the native ambient gain: a relative
   gain that keeps the title's own room/actor balance.
+- **Scope consumers.** Only the balance reads the scope. The vertex-lighting
+  path keeps its older contract: it replaces the draw lights whose identity is
+  a published environment record, whatever their scope, so an adapter
+  publishes there only records it proved (MM3D: the environment's still-linked
+  sun/moon records, published with Scope Scene). OoT3D does not classify its
+  lights, so its traces show "local"/"unknown" for the environment records the
+  vertex path does replace; enforcing the scope there needs the OoT3D adapter
+  (and the visual-replay format) to carry it first.
 - **Per-vertex information.** The balance recomposes only the fragment primary
   colour before the native clamp and TEV, so a vertex colour the TEV combiner
   multiplies later (baked shading, fake AO, tint) is unchanged. Draws of such a
@@ -401,6 +411,14 @@ placed lights, native ambient and local gains in [0, 1].
   vertex-lighting equations, including the baked-reference path
   (`BAKED_SURFACE_LIGHTING.md`), in the full scene-lighting model; with the
   Native model they stay native as before.
+- **Draw routing.** `PicaFragmentLitTitleDrawKeepsNative` decides which draws
+  of such a title keep the no-profile native reference: a fragment-lit draw the
+  balance refused (unproved slot, water) in every model, and every draw outside
+  the full scene-lighting model.
+- **Rim and fog.** The contract has no rim light or fog contribution. In the
+  supported shape `PicaFragmentLitFrameEnvironment` turns both off for the
+  whole frame (rim disabled, fog contribution 1), so they reach no draw of the
+  title, including the draws without native fragment lighting, as F1 says.
 - **Unsupported shapes.** `PicaFragmentLitFrameEnvironment` turns any other
   shape into the profile-Off inputs for the whole frame (scope, scene
   point-light groups and caster faces stay). The shadow light, caster
@@ -410,7 +428,9 @@ placed lights, native ambient and local gains in [0, 1].
   native moon shadow subtracted under a profile that changes nothing else
   (darker moonlit surfaces).
 - **F1.** For such a title the Scene lights panel says whether the profile is
-  applied and marks the controls the contract does not apply (added ambient,
+  applied, from the environment the runtime published (both day/night slots
+  blended at the applied weight, `SceneEnvironmentSnapshot::Published`), and
+  separately whether the edited slot has the supported shape. It marks the controls the contract does not apply (added ambient,
   native scene direct, fog contribution, rim, key tint/intensity/offsets,
   fill, fallback directions, placed lights) as unavailable with the reason.
   A control holding an unsupported value stays editable so it can be set back
@@ -419,6 +439,6 @@ placed lights, native ambient and local gains in [0, 1].
   environment, the builder's inputs and every shader source are the same.
 
 Tests: `oot3d_pica_shader_pipeline_cache_tests` (light function, unproved
-owners, Local gain, unsupported shapes leave the frame native, supported shape
-unchanged), `triaevum_environment_tests` (a title's base per environment
+owners, Local gain including the light's own ambient, draw routing, rim and
+fog off, unsupported shapes leave the frame native), `triaevum_environment_tests` (a title's base per environment
 group), `triaevum_f1_settings_smoke` (the marks on the actual widgets).
