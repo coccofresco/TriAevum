@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 #include "song_list.h"
+#include "hud_adjustments.h"
 namespace Mm3dDekui::Banners {
 using namespace NativeInventory;
 struct Banner {float height=1,y=0,text_scale=1,text_x=40,text_y=0,brightness=1;};
@@ -12,25 +13,32 @@ inline void Apply(const Options& o){for(unsigned i=0;i<2;++i){const auto& p=o.pa
     a.height=p.height;a.y=p.y;a.text_scale=p.text_scale;a.text_x=p.text_x;a.text_y=p.text_y;a.brightness=p.brightness;}}
 struct Hook {
     SongList::Hook helper;
+    U32 owner=0;
     using Write=NativeInventory::Hook::Write;
     std::vector<std::vector<Write>> frames;
     template<class M> void Pass(M& m,U32 manager,U32 screen) {
         // Queue 0 runs before notebook/Items foreground (queues 2/3).
         // Wait until here so the inventory background has already been routed.
-        if(screen!=0||!Pointer(manager,0x24))return;
+        if(screen!=0)return;
+        owner=0;
+        if(!Pointer(manager,0x24))return;
         using Buckets=NativeInventory::Hook::Buckets;
         std::array<U32,4> addresses{};std::array<Buckets,4> queues;
-        bool menu=false;
+        bool menu=false,duplicate=false;U32 telop=0;
         for(unsigned i=0;i<4;++i) {
             auto address=m.Read(manager+8+4*i);
             if(!address||!Pointer(*address,0x848)||!helper.helper.ReadQueue(m,*address,queues[i]))return;
             addresses[i]=*address;
             for(unsigned j=0;j<i;++j)if(addresses[j]==*address)return;
-            for(const auto& bucket:queues[i])for(auto entry:bucket)
-                for(const char* name:{"MenuItem","MenuMask","MenuQuestlist","MenuSchedule","UpQuestlist","UpSchedule","MenuMapDungeon","UpWorldMapBG","UpWorldMapHud"})
+            for(const auto& bucket:queues[i])for(auto entry:bucket) {
+                if(LayoutNamed(m,entry,"Telop")) {
+                    duplicate|=telop&&telop!=entry;telop=entry;
+                }
+                for(const char* name:{"MenuItem","MenuMask","MenuCollect","MenuQuestlist","MenuSchedule","UpQuestlist","UpSchedule","MenuMapDungeon","UpWorldMapBG","UpWorldMapHud"})
                     if(LayoutNamed(m,entry,name))menu=true;
+            }
         }
-        if(!menu)return;
+        if(!menu){owner=duplicate?0:telop;return;}
         bool removed=false;
         for(unsigned i=0;i<4;++i)for(auto& bucket:queues[i]) {
             std::vector<U32> kept;
@@ -73,17 +81,18 @@ struct Hook {
             const auto anim=helper.Child(m,plate,anim_names[i]),pane=helper.Child(m,anim,pane_names[i]);
             const auto letters=helper.Child(m,text,text_names[i]);if(!pane||!letters)return;
             const float sx=wide?16.f/15.f:1.f,anchor_y=i?72.f:66.f;
+            const float y=p.y+(i==0?HudAdjustments::BannerY():0);
             std::vector<U32> seen;
-            if(!helper.helper.Transform(m,pane,writes,seen,{sx,0,0,p.height,200*(1-sx),anchor_y*(1-p.height)+p.y}))return;
+            if(!helper.helper.Transform(m,pane,writes,seen,{sx,0,0,p.height,200*(1-sx),anchor_y*(1-p.height)+y}))return;
             // Multiply RGB only. Keep the native gradient and animated opacity.
             for(U32 offset:{0x128u,0x12cu,0x130u}){
                 auto bits=m.Read(pane+offset);if(!bits)return;
                 const float c=std::bit_cast<float>(*bits);if(!std::isfinite(c))return;
-                if(!helper.helper.Stage(m,writes,pane+offset,std::bit_cast<U32>(c*p.brightness)))return;
+                if(!helper.helper.Stage(m,writes,pane+offset,std::bit_cast<U32>(c*p.brightness*(i==0?HudAdjustments::BannerBrightness():1.f))))return;
             }
             seen.clear();const float text_anchor_x=i?200.f:40.f,text_anchor_y=i?120.f:66.f;
             if(!helper.helper.Transform(m,letters,writes,seen,{p.text_scale,0,0,p.text_scale,
-                p.text_x-text_anchor_x*p.text_scale,text_anchor_y*(1-p.text_scale)+p.y+p.text_y}))return;
+                p.text_x-text_anchor_x*p.text_scale,text_anchor_y*(1-p.text_scale)+y+p.text_y}))return;
         }
         for(auto w:writes)m.Write(w.address,w.after);frames.back()=std::move(writes);
     }

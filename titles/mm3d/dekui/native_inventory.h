@@ -13,6 +13,13 @@
 #include "dialogue_scale.h"
 #include "gear_menu.h"
 
+// S2: the HD pause photo (PhotoCapture) arrives with MenuBackdrop in S4. Until then the
+// Gear photo layout stays inert: no photo layout is ever bound.
+namespace Mm3dDekui::PhotoCapture {
+inline std::atomic<bool> enabled{false};
+inline std::atomic<std::uint32_t> layout{0};
+}
+
 namespace Mm3dDekui::NativeInventory {
 using U32 = std::uint32_t;
 inline std::atomic<bool> enabled{true};
@@ -29,6 +36,16 @@ inline std::atomic<bool> background_enabled{true};
 inline AtomicButtonPose background_pose;
 inline std::atomic<float> shadow_width{1.f},shadow_opacity{1.f};
 inline std::atomic<unsigned> status{0}, routed_icons{0};
+inline std::optional<float> HorizontalSlideDistance(bool masks) {
+    const std::array<float,6> p{x.load(),scale.load(),masks?masks_x.load():0.f,
+        masks?masks_scale.load():1.f,background_pose.x.load(),background_pose.scale.load()};
+    for(float v:p)if(!std::isfinite(v))return {};
+    const float grid_right=std::clamp(p[0],-320.f,320.f)+std::clamp(p[2],-320.f,320.f)+
+        320*std::clamp(p[1],.5f,1.5f)*std::clamp(p[3],.5f,1.5f);
+    const float bg_right=background_enabled.load()?std::clamp(p[4],-400.f,400.f)+
+        400*std::clamp(p[5],.25f,2.f):0.f;
+    return 64+std::max({0.f,grid_right,bg_right});
+}
 // Restoration + HD HUD v110; instruction substitutions leave guest code unchanged.
 constexpr std::array<U32,4> PCs{0x0059e558,0x001267ec,0x001262c8,0x001262d4}; // ref 0x59e3e8, 0x126814, 0x1262f0, 0x1262fc
 constexpr std::array<U32,4> Words{0xe1a04000,0xe1a04000,0xe2842008,0xe5860000};
@@ -129,15 +146,9 @@ struct Hook {
             const std::array<float,8> poses{x.load(),scale.load(),bar_x.load(),bar_scale.load(),
                 bar_spacing.load(),background_pose.x.load(),background_pose.scale.load(),bar_y.load()};
             for(float v:poses)if(!std::isfinite(v))return;
-            const float mx=masks?masks_x.load():0.f,ms=masks?masks_scale.load():1.f;
-            if(!std::isfinite(mx)||!std::isfinite(ms))return;
-            const float grid_right=std::clamp(poses[0],-320.f,320.f)+std::clamp(mx,-320.f,320.f)+
-                320*std::clamp(poses[1],.5f,1.5f)*std::clamp(ms,.5f,1.5f);
             const float strip_bottom=std::clamp(poses[7],-240.f,240.f)+64*std::clamp(poses[3],.35f,1.5f);
-            const float bg_right=background_enabled.load()?std::clamp(poses[5],-400.f,400.f)+
-                400*std::clamp(poses[6],.25f,2.f):0.f;
             // Conservative bounds plus margin clear the top viewport at all GUI poses.
-            const float distance=64+std::max({0.f,grid_right,bg_right});
+            const auto distance=HorizontalSlideDistance(masks);if(!distance)return;
             auto widgets=m.Read(panel+0x154),n=m.Read(panel+0x158);
             if(!widgets||!n||*n>256||!Pointer(*widgets,*n*4))return;
             for(unsigned j=0;j<*n;++j) {
@@ -147,7 +158,7 @@ struct Hook {
                 if(!wx||!lx)return;
                 const float dx=std::bit_cast<float>(*wx)-std::bit_cast<float>(*lx);
                 if(!std::isfinite(dx)||dx<-.01f||dx>80.01f)return;
-                slide_remaining=remaining;bar_native_x=dx;slide_x=-distance*remaining;
+                slide_remaining=remaining;bar_native_x=dx;slide_x=-*distance*remaining;
                 bar_slide_y=-(64+std::max(0.f,strip_bottom))*remaining;
                 slide_active=true;return;
             }
@@ -219,14 +230,18 @@ struct Hook {
         if(!gear||!GearMenu::enabled.load()||!LayoutNamed(m,panel,"MenuCollect"))return;
         auto players=m.Read(panel+0x14c),count=m.Read(panel+0x150);
         if(!players||!count||*count>64||!Pointer(*players,*count*4))return;
-        bool valid=false;
+        std::optional<bool> opening;
         for(unsigned i=0;i<*count;++i) {
             auto player=m.Read(*players+i*4);if(!player||!Pointer(*player,0x18))continue;
             auto anim=m.Read(*player+0xc);if(!anim||!Pointer(*anim,0x18))continue;
             auto name=m.Read(*anim+8);
-            if(name&&(DialogueScale::Name(m,*name,"in_menu_collect_anim")||DialogueScale::Name(m,*name,"out_menu_collect_anim")))valid=true;
+            if(!name)continue;
+            const bool in=DialogueScale::Name(m,*name,"in_menu_collect_anim");
+            if(!in&&!DialogueScale::Name(m,*name,"out_menu_collect_anim"))continue;
+            if(opening&&*opening!=in)return;
+            opening=in;
         }
-        if(!valid)return;
+        if(!opening)return;
         auto list=m.Read(panel+0x154),n=m.Read(panel+0x158);
         if(!list||!n||*n>256||!Pointer(*list,*n*4))return;
         unsigned found=0;
@@ -250,7 +265,16 @@ struct Hook {
             if(!std::isfinite(l)||!std::isfinite(r)||!std::isfinite(top)||!std::isfinite(bottom))return;
             if(l<427&&r>0&&top<240&&bottom>0)edge=std::max(edge,r);
         }
-        gear_slide_x=-(32+edge)*std::clamp(-gear_left_x/264.f,0.f,1.f);gear_slide_active=true;
+        const auto reference=HorizontalSlideDistance(true);if(!reference)return;
+        // Gear first submits its opening at progress 1/4. Keep that real pose
+        // fully hidden so the next frame can interpolate from it. The remaining
+        // three 30 Hz intervals then cover the same pixels per second as Masks'
+        // four animation units (eight 60 Hz submissions). Closing already uses
+        // three 30 Hz intervals. Preserve clearance for larger custom Gear poses.
+        const float distance=std::max(32+edge,*reference*.75f);
+        const float remaining=std::clamp(-gear_left_x/264.f,0.f,1.f);
+        const float travel=*opening?std::min(1.f,remaining/.75f):remaining;
+        gear_slide_x=-distance*travel;gear_slide_active=true;
     }
     Affine GearSlide(Affine pose,unsigned part) const {
         if(gear_slide_active&&(part==GearMenu::Panel||part==GearMenu::Right)) {
@@ -612,10 +636,11 @@ struct Hook {
         const unsigned layers=(inventory_page||gear)?2u:1u;
         if(!active||occurrences!=1||to[15].size()+layers>32||!LayoutNamed(m,background,"CommonBottomBg")) return;
         frame_background={background_pose.x.load(),background_pose.y.load(),background_pose.scale.load()};
-        if(gear)frame_background.x+=gear_slide_x;
         auto& b=frame_background;
         if(!std::isfinite(b.x)||!std::isfinite(b.y)||!std::isfinite(b.scale)) return;
         b.x=std::clamp(b.x,-400.f,400.f);b.y=std::clamp(b.y,-240.f,240.f);b.scale=std::clamp(b.scale,.25f,2.f);
+        // Clamp the user's placement, not the animation's offscreen travel.
+        if(gear)frame_background.x+=gear_slide_x;
         std::vector<Write> preview;
         if(!Prepare(m,background,background_pass,preview)) return;
         frame_shadow_width=shadow_width.load();frame_shadow_opacity=shadow_opacity.load();
@@ -839,8 +864,61 @@ struct Hook {
         constexpr float factor=16.f/15.f;
         return Transform(m,layout+8,writes,seen,{factor,0,0,1,200.f*(1.f-factor),0});
     }
+    template<class M> bool GearPhoto(M& m,U32 layout) const {
+        // The photo layout is shared with other screens. Only transform the
+        // instance owned by the currently open Gear page, never the pause BG.
+        if(!GearMenu::enabled.load()||!Pointer(layout,0x148))return false;
+        const auto page=m.Read(0x656b0c);
+        return page&&Pointer(*page,0x198)&&m.Read(*page)==0x63a270&&
+            m.Read(0x72f5bc+8)==page&&m.Read(*page+0x10)==layout;
+    }
+    template<class M> bool PhotoBorder(M& m,const std::vector<U32>& nodes,std::vector<Write>& writes) {
+        for(const auto node:nodes)if(Named(m,node,"frame_base_pane")) {
+            const auto geo=m.Read(node+0x28);
+            if(!geo || !Pointer(*geo,0x28))continue;
+            const auto kind=m.Read(*geo+4);if(!kind || (*kind&0xffff)!=5)continue;
+            // Verified UpCollect gradient rectangle: [-104,-64,208,128].
+            // The picture is 200x120. Widen only the picture's 200 pixels;
+            // retain four screen-space pixels of border on every edge.
+            if(m.Read(*geo+0x14)!=std::bit_cast<U32>(-104.f) ||
+               m.Read(*geo+0x18)!=std::bit_cast<U32>(-64.f) ||
+               m.Read(*geo+0x20)!=std::bit_cast<U32>(208.f) ||
+               m.Read(*geo+0x24)!=std::bit_cast<U32>(128.f))continue;
+            if(!Stage(m,writes,*geo+0x14,std::bit_cast<U32>(-103.75f)) ||
+               !Stage(m,writes,*geo+0x20,std::bit_cast<U32>(207.5f)))return false;
+        }
+        return true;
+    }
+    template<class M> bool PrepareGearPhoto(M& m,U32 layout,std::vector<Write>& writes,bool widescreen) {
+        auto p=GearMenu::Get(GearMenu::Photo);
+        if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.scale))return false;
+        p.x=std::clamp(p.x,-320.f,320.f);p.y=std::clamp(p.y,-240.f,240.f);
+        p.scale=std::clamp(p.scale,.25f,2.f);
+        std::vector<U32> seen;
+        // Transform the complete photo layout, including both eyes and frame
+        // artwork, around the native top-screen center. Restore after drawing.
+        const bool hd_photo=widescreen && PhotoCapture::enabled.load() && PhotoCapture::layout.load()==layout;
+        const float sx=p.scale*(hd_photo?16.f/15.f:1.f);
+        return Transform(m,layout+8,writes,seen,{sx,0,0,p.scale,
+            p.x+200.f*(1-sx),p.y+120.f*(1-p.scale)}) &&
+            (!hd_photo || PhotoBorder(m,seen,writes));
+    }
     template<class Memory> void Begin(Memory& m,U32 layout,bool widescreen=false) {
         frames.emplace_back();
+        if(widescreen && PhotoCapture::enabled.load() && PhotoCapture::layout.load()==layout && !GearPhoto(m,layout)) {
+            std::vector<Write> writes;std::vector<U32> seen;
+            if(Transform(m,layout+8,writes,seen,{16.f/15.f,0,0,1,-200.f/15.f,0}) && PhotoBorder(m,seen,writes)) {
+                for(const auto& w:writes)m.Write(w.address,w.after);
+                frames.back()=std::move(writes);
+            }
+            return;
+        }
+        if(GearPhoto(m,layout)) {
+            std::vector<Write> writes;
+            if(!PrepareGearPhoto(m,layout,writes,widescreen))return;
+            for(const auto& w:writes)m.Write(w.address,w.after);
+            frames.back()=std::move(writes);return;
+        }
         if(widescreen&&pass==0&&LayoutNamed(m,layout,"UpCommonBG")) {
             std::vector<Write> writes;
             if(!PrepareMenuBackdrop(m,layout,writes)) return;
@@ -873,6 +951,26 @@ struct Hook {
         if(!prepared) { status.store(4);return; }
         for(const auto& w:writes) m.Write(w.address,w.after);
         frames.back()=std::move(writes);
+    }
+    template<class M> U32 SubmittedInterpolationOwner(M& m,U32 manager,bool world_map_only=false) {
+        if(!Pointer(manager,0x20))return 0;
+        U32 owner=0;
+        // World-map HUD uses native top queue 2; relocated inventory pages
+        // and Double Time use 3/5. Common backgrounds/titles alone cannot establish ownership.
+        for(unsigned screen:{2u,3u,5u}) {
+            if(world_map_only && screen!=2)continue;
+            Buckets submitted;
+            const auto queue=m.Read(manager+8+4*screen);
+            if(!queue||!ReadQueue(m,*queue,submitted))continue;
+            for(const auto& bucket:submitted)for(const auto layout:bucket) {
+                const bool menu=screen==2?LayoutNamed(m,layout,"UpWorldMapHud"):
+                    LayoutNamed(m,layout,"MenuItem")||LayoutNamed(m,layout,"MenuMask")||
+                    LayoutNamed(m,layout,"MenuCollect")||LayoutNamed(m,layout,"MenuMapDungeon")||
+                    LayoutNamed(m,layout,"MenuMusicList")||LayoutNamed(m,layout,"LapTimeSong");
+                if(menu&&(!owner||layout<owner))owner=layout;
+            }
+        }
+        return owner;
     }
     template<class Memory> void End(Memory& m) {
         if(frames.empty()) return;

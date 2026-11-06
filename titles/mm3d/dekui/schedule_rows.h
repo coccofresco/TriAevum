@@ -143,20 +143,6 @@ struct Hook {
                 }
             }
         }
-        // TextNew is submitted as a separate layout.  Its native Y position
-        // can remain on the old schedule row after the character slot has
-        // been repositioned, leaving a badge detached from its icon.  Match
-        // each badge to the rendered icon's current world Y while preserving
-        // the badge's intentional left-side X offset.
-        for(unsigned i=0;i<8;++i) {
-            auto icon=m.Read(owner+0x4d8u+4*i),badge=m.Read(owner+0x550u+4*i);
-            if(!icon||!badge||!Pointer(*icon,0x140)||!Pointer(*badge+8,0x140))return false;
-            auto icon_y=m.Read(*icon+0xfc),badge_y=m.Read(*badge+8+0xfc);
-            if(!icon_y||!badge_y)return false;
-            const float dy=std::bit_cast<float>(*icon_y)-std::bit_cast<float>(*badge_y);
-            if(!std::isfinite(dy)||std::abs(dy)>256.f*scale)return false;
-            if(!helper.Transform(m,*badge+8,writes,seen,{1,0,0,1,row_dx[i],dy}))return false;
-        }
         // Native footer starts below four rows (Y=220); extend by three pitches.
         std::vector<U32> pending{layout+8},visited;
         while(!pending.empty()) {
@@ -189,8 +175,30 @@ struct Hook {
         // seven-character range. Stage all modifications for exact draw restoration.
         auto bar=m.Read(owner+0x5c0);if(!bar||!LayoutNamed(m,*bar,"ScrollBar"))return false;
         const float fraction=total>Visible?float(first)/float(total-Visible):0.f;
-        const float coverage=float(std::min(Visible,total))/float(std::max(1,total));
-        return NotebookScrollbar::Resize(m,*bar,helper,writes,base+356.f*scale,fraction,coverage);
+        const float coverage=total>Visible?float(Visible)/float(total):1.f;
+        if(!NotebookScrollbar::Resize(m,*bar,helper,writes,base+356.f*scale,fraction,coverage))return false;
+
+        // TextNew layouts are recycled independently from their row anchors.
+        // A newly revealed badge can still have its previous world origin;
+        // allow the full eight-slot span, including the offscreen buffer row.
+        // Optional badges must not invalidate the footer, time line or scroll
+        // track: that would put the footer back at the native four-row height.
+        for(unsigned i=0;i<8;++i) {
+            auto icon=m.Read(owner+0x4d8u+4*i),badge=m.Read(owner+0x550u+4*i);
+            if(!icon||!badge||!Pointer(*icon,0x140)||!LayoutNamed(m,*badge,"TextNew"))continue;
+            auto icon_y=m.Read(*icon+0xfc),badge_y=m.Read(*badge+8+0xfc);
+            if(!icon_y||!badge_y)continue;
+            const float dy=std::bit_cast<float>(*icon_y)-std::bit_cast<float>(*badge_y);
+            if(!std::isfinite(dy)||std::abs(dy)>float(Visible+1)*40.f*scale)continue;
+            // Transform can fail after staging writes. Commit a badge only
+            // after its complete subtree validates, preserving all core work.
+            std::vector<Write> badge_writes;
+            auto badge_seen=seen;
+            if(!helper.Transform(m,*badge+8,badge_writes,badge_seen,{1,0,0,1,row_dx[i],dy}))continue;
+            writes.insert(writes.end(),badge_writes.begin(),badge_writes.end());
+            seen=std::move(badge_seen);
+        }
+        return true;
     }
 };
 }

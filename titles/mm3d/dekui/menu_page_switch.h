@@ -79,7 +79,7 @@ struct Hook {
             if(owner&&state&&Pointer(*owner,0x188)&&*owner==*state)r[15]=0x005a6170; // ref 0x5a6000
         }
     }
-    template<class M> void Tick(M& m,U32 ctx) {
+    template<class M> void Tick(M& m,U32 ctx,bool retained_gear_scene=false) {
         if(context) {
             if(ctx!=context||++waiting_ticks>120) {*this={};return;}
             if(PairPending(m,ctx))return;
@@ -119,7 +119,10 @@ struct Hook {
                 target=*map;target_vtable=MapVtable;
             } else {target=*gear;target_vtable=GearVtable;}
         } else if(*current==*gear&&shoulder==0x100) {
-            if(Byte(m,*gear+0x194)!=2)return;
+            const auto state=Byte(m,*gear+0x194);
+            // A retained scene makes the photo's load/open wait irrelevant to
+            // tab navigation. The native destructor cancels an unfinished photo.
+            if(state!=2&&!(retained_gear_scene&&(state==0||state==1)))return;
             auto layout=m.Read(*gear+0x14);
             if(!layout||!LayoutNamed(m,*layout,"MenuCollect"))return;
             target=*masks;target_vtable=MasksVtable;
@@ -132,7 +135,7 @@ struct Hook {
         // A map opened independently may not own an inventory capture. In that
         // case allow native Items PrepareOpen to create one normally.
         auto capture=m.Read(*game+0x11018);
-        preserve_capture=capture&&Pointer(*capture,0xb0);
+        preserve_capture=(capture&&Pointer(*capture,0xb0))||(*current==*gear&&retained_gear_scene);
         context=ctx;source=*current;opening_ticks=1;waiting_ticks=0;
         m.Write(ctx+12,target);
         m.Write(*game+0x34,*pressed&~shoulder); // consume only this pressed edge

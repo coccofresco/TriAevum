@@ -4,15 +4,23 @@
 #include <chrono>
 #include "native_inventory.h"
 #include "notebook_prompt.h"
+#include "song_header.h"
+#include "song_panel.h"
 namespace Mm3dDekui::SongList {
 using namespace NativeInventory;
 struct Options {bool enabled=true;float background_x=-230,spacing=16,column_spacing=62,stone_darkness=0;GearMenu::Pose songs{24,12,.35f},staff{90,0,.8f},banner{24,0,1};float banner_width=62.3f,banner_height=10.f,panel_left=20.f,panel_right=90.3f,panel_darkness=0.f;std::array<float,3> panel_color{1.f,1.f,1.f};float panel_color_opacity=0.f;};
 inline std::atomic<bool> enabled{true};
-inline std::atomic<float> background_x{-230},spacing{16},column_spacing{62};
+inline std::atomic<float> background_x{-230},spacing{16},column_spacing{62},stone_darkness{0};
 inline GearMenu::AtomicPose songs,staff;
-inline void Apply(const Options& o){enabled=o.enabled;background_x=o.background_x;spacing=o.spacing;column_spacing=o.column_spacing;
+inline std::atomic<float> panel_red{1.f},panel_green{1.f},panel_blue{1.f},panel_color_opacity{0.f};
+inline std::atomic<float> panel_left{20.f},panel_right{90.3f},panel_darkness{0.f};
+inline std::atomic<float> banner_x{24},banner_y{0},banner_scale{1},banner_width{62.3f},banner_height{10};
+inline void Apply(const Options& o){enabled=o.enabled;background_x=o.background_x;spacing=o.spacing;column_spacing=o.column_spacing;stone_darkness=o.stone_darkness;
     songs.x=o.songs.x;songs.y=o.songs.y;songs.scale=o.songs.scale;
-    staff.x=o.staff.x;staff.y=o.staff.y;staff.scale=o.staff.scale;}
+    staff.x=o.staff.x;staff.y=o.staff.y;staff.scale=o.staff.scale;
+    banner_x=o.banner.x;banner_y=o.banner.y;banner_scale=o.banner.scale;
+    banner_width=o.banner_width;banner_height=o.banner_height;panel_left=o.panel_left;panel_right=o.panel_right;panel_darkness=o.panel_darkness;
+    panel_red=o.panel_color[0];panel_green=o.panel_color[1];panel_blue=o.panel_color[2];panel_color_opacity=o.panel_color_opacity;}
 constexpr std::array<const char*,14> Names{"btn_song_of_time","btn_song_of_heal","btn_song_of_epona","btn_song_of_wing","btn_song_of_strom","btn_sonata","btn_lullaby","btn_lullaby_half","btn_bossanova","btn_elegy","btn_cry","btn_sakasa_uta","btn_kasane_uta","btn_kakashi"};
 inline unsigned Slot(unsigned i){return i>6?i-1:i;}
 inline unsigned Column(unsigned slot){return slot==12?1:slot%3;}
@@ -35,6 +43,8 @@ inline U32 Selection(U32 current,U32 buttons,bool full){
 struct Hook {
     NativeInventory::Hook helper;
     NotebookPrompt::Hook shadow_scratch;
+    SongHeader::Hook header;
+    SongPanel::Hook backdrop;
     using Write=NativeInventory::Hook::Write;
     U32 panel=0,background=0,pass=~0u;unsigned bg_draw=0;
     std::vector<U32> cursors;
@@ -73,8 +83,18 @@ struct Hook {
         // positions. Cancel the source's current world translation in both cases.
         float ox=std::bit_cast<float>(*wx)+(geometry?a[0]-13:0),oy=std::bit_cast<float>(*wy)+(geometry?a[1]-13:0);
         if(!std::isfinite(ox)||!std::isfinite(oy))return false;
-        return helper.Transform(m,node,w,seen,{column.scale,0,0,column.scale,
-            column.x+slide+Column(slot)*column_gap*column.scale+(geometry?0:13*column.scale)-column.scale*ox,column.y+gap*Row(slot)+(geometry?0:13*column.scale)-column.scale*oy});
+        if(!helper.Transform(m,node,w,seen,{column.scale,0,0,column.scale,
+            column.x+slide+Column(slot)*column_gap*column.scale+(geometry?0:13*column.scale)-column.scale*ox,column.y+gap*Row(slot)+(geometry?0:13*column.scale)-column.scale*oy}))return false;
+        const float tint=1.f-std::clamp(stone_darkness.load(),0.f,1.f);
+        if(geometry&&tint<1)for(U32 n:seen) {
+            const auto geo=m.Read(n+0x28);if(!geo||!*geo)continue;
+            for(unsigned c=0;c<3;++c) {
+                const auto value=m.Read(n+0x128+c*4);if(!value)return false;
+                const float color=std::bit_cast<float>(*value);if(!std::isfinite(color))return false;
+                if(!helper.Stage(m,w,n+0x128+c*4,std::bit_cast<U32>(color*tint)))return false;
+            }
+        }
+        return true;
     }
     template<class M> bool Prepare(M& m,U32 layout,bool top,std::vector<Write>& w){
         if(layout!=panel)return false;
@@ -136,13 +156,17 @@ struct Hook {
     }
     template<class M> void Pass(M& m,U32 manager,U32 screen){
         pass=screen;if(screen!=4)return;
-        panel=background=0;bg_draw=0;cursors.clear();
+        panel=background=0;bg_draw=0;cursors.clear();/* S5: OcarinaInput::Observe(false) */
         if(!enabled)return;
         auto bottom=m.Read(manager+28),top=m.Read(manager+20),bgfrom=m.Read(manager+24),bgto=m.Read(manager+12);
         NativeInventory::Hook::Buckets from,to,bf,bt;
         if(!bottom||!top||!bgfrom||!bgto||!helper.ReadQueue(m,*bottom,from)||!helper.ReadQueue(m,*top,to)||!helper.ReadQueue(m,*bgfrom,bf)||!helper.ReadQueue(m,*bgto,bt))return;
+        // The native ocarina panel is retained by the music-list controller.
+        // Capture its banner while it is queued, then validate its identity on draw.
+        for(auto& bucket:from)for(U32 p:bucket)if(LayoutNamed(m,p,"MenuOcarina"))header.source_layout=p;
         for(auto& bucket:from)for(U32 p:bucket)if(LayoutNamed(m,p,"MenuMusicList")){if(panel){panel=0;return;}panel=p;}
         if(!panel)return;
+        /* S5: OcarinaInput::Observe(true) */
         ReadBars(m);
         for(auto& bucket:bf)for(U32 p:bucket)if(LayoutNamed(m,p,"CommonBottomBg")){if(background){panel=0;return;}background=p;}
         for(auto& bucket:from)for(U32 p:bucket)if(LayoutNamed(m,p,"CursorItemCollect"))cursors.push_back(p);
@@ -171,6 +195,7 @@ struct Hook {
         if(layout==panel&&(pass==3||pass==5)){if(!Prepare(m,layout,pass==3,writes))return;}
         else if(layout==background&&pass==1){
             if(bg_draw>=helper.brown_shadow_steps+2){if(!Bar(m,(bg_draw++-helper.brown_shadow_steps-2)%2,writes))return;}
+            else if(backdrop.Source(m,panel)){++bg_draw;if(!Hide(m,layout+8,writes))return;}
             else if(bg_draw<helper.brown_shadow_steps){if(!helper.PrepareBrownShadow(m,layout,bg_draw++,writes))return;}
             else{auto b=helper.frame_background;bool upper=(bg_draw++-helper.brown_shadow_steps)%2;std::vector<U32> seen;
                 if(!helper.Transform(m,layout+8,writes,seen,{b.scale,0,0,b.scale,b.x,b.y-(upper?240*b.scale:0)}))return;}
@@ -201,6 +226,18 @@ struct Hook {
         const float opacity=std::bit_cast<float>(*alpha);
         const float gx=std::bit_cast<float>(*px),gy=std::bit_cast<float>(*py);
         if(!std::isfinite(opacity)||opacity<=0||opacity>1||!std::isfinite(gx)||!std::isfinite(gy))return root;
+        // Learned songs have visible button/stone subtrees; locked notes are
+        // separate siblings. Follow native visibility instead of shadowing every slot.
+        std::array<float,13> stone_alpha{};
+        for(unsigned i=0;i<Names.size();++i) {
+            const U32 button=Child(m,music,Names[i]);
+            auto visible=m.Read(button+0xd4),a=m.Read(button+0x134);
+            if(!button||!visible||!(*visible&1)||!a)continue;
+            const float value=std::bit_cast<float>(*a);
+            if(!std::isfinite(value)||value<=0||value>1)continue;
+            stone_alpha[Slot(i)]=std::max(stone_alpha[Slot(i)],std::min(opacity,value));
+        }
+        if(std::none_of(stone_alpha.begin(),stone_alpha.end(),[](float a){return a>0;}))return root;
         constexpr U32 Size=0x5200;
         if(sp<0x10b000||(sp&7))return root;const U32 base=sp-Size;
         for(U32 at=base-Size;at<sp;at+=4)if(!m.Read(at))return root;
@@ -209,20 +246,42 @@ struct Hook {
         const auto f=[&](U32 at,float v){put(at,std::bit_cast<U32>(v));};
         const auto copy=[&](U32 at,U32 from,U32 size){for(U32 j=0;j<size;j+=4){auto v=m.Read(from+j);if(!v)return false;put(at+j,*v);}return true;};
         if(!copy(0,root,0x140))return root;
-        put(0x14,base+0x140);put(0x18,40);put(0x20,0);put(0x24,0xffff);put(0x28,0);put(0x140,root);
+        put(0x14,base+0x140);put(0x18,1);put(0x20,0);put(0x24,0xffff);put(0x28,0);put(0x140,root);
+        unsigned children=1;
         for(unsigned layer=0;layer<3;++layer)for(unsigned slot=0;slot<13;++slot) {
+            if(stone_alpha[slot]<=0)continue;
             const unsigned index=layer*13+slot;
             const U32 node=0x200+index*0x200,geo=node+0x140;
             if(!copy(node,source,0x140)||!copy(geo,*geometry,0x7c))return root;
-            put(0x144+index*4,base+node);put(node+0x28,base+geo);
+            put(0x140+children++*4,base+node);put(node+0x28,base+geo);
             put(node+0x14,0);put(node+0x18,0);put(node+0x20,0);put(node+0x24,0xffff);put(node+0xd4,15);
-            for(unsigned c=0;c<3;++c)f(node+0x128+c*4,0);f(node+0x134,opacity*(.32f-.09f*layer));
+            for(unsigned c=0;c<3;++c)f(node+0x128+c*4,0);f(node+0x134,stone_alpha[slot]*(.32f-.09f*layer));
             f(node+0xe0,column.scale);f(node+0xe4,0);f(node+0xf0,0);f(node+0xf4,column.scale);
             f(node+0xec,column.x+slide+(Column(slot)*column_gap+2-gx)*column.scale);
             f(node+0xfc,column.y+gap*Row(slot)+(4+2*layer-gy)*column.scale);
         }
+        put(0x18,children);
         for(U32 i=0;i<words.size();++i)frame.writes.push_back({base+4*i,*m.Read(base+4*i),words[i]});
         for(auto w:frame.writes)m.Write(w.address,w.after);frame.sp=sp;return base;
+    }
+    template<class M> U32 PanelRoot(M& m,U32 layout,U32 content,U32 sp) {
+        if(!enabled||pass!=3||!panel||layout!=panel){backdrop.scratch.frames.emplace_back();return content;}
+        const auto all=Child(m,panel+8,"all"),music=Child(m,all,"btn_music_g");
+        const auto alpha=m.Read(music+0x134),flags=m.Read(music+0xd4);
+        const float left=panel_left.load(),right=panel_right.load();
+        return backdrop.Root(m,layout,content,sp,left+slide,bar_height,right-left,240.f-2*bar_height,
+            alpha&&flags&&(*flags&1)?std::bit_cast<float>(*alpha):0.f,panel_darkness.load(),{panel_red.load(),panel_green.load(),panel_blue.load()},panel_color_opacity.load());
+    }
+    template<class M> U32 HeaderRoot(M& m,U32 layout,U32 content,U32 sp) {
+        if(!enabled||pass!=3||!panel||layout!=panel) {
+            header.scratch.frames.emplace_back();return content;
+        }
+        const U32 all=Child(m,panel+8,"all"),music=Child(m,all,"btn_music_g");
+        const auto alpha=m.Read(music+0x134),flags=m.Read(music+0xd4);
+        const float scale=banner_scale.load();
+        return header.Root(m,layout,content,sp,banner_x.load()+slide,banner_y.load(),
+            banner_width.load()*scale,banner_height.load()*scale,
+            alpha&&flags&&(*flags&1)?std::bit_cast<float>(*alpha):0.f);
     }
     template<class M> void End(M& m){if(frames.empty())return;for(auto i=frames.back().rbegin();i!=frames.back().rend();++i)m.Write(i->address,i->before);frames.pop_back();}
 };

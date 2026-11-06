@@ -119,6 +119,36 @@ strings are not used.
   notebook pages) that check the drawn glyphs, the English/translated branches and that guest
   memory is restored.
 
+## S2: shared UI at tip 4f2692ed (2026-11-06)
+
+Method: each module is a three-way merge (`git merge-file`) of our port onto the upstream tip,
+with the upstream version our port was made from as the base (beta.1 source or 6e36dfb4) and
+both upstream files normalised the way our port names things (namespace `Mm3dDekui`, local
+includes). Our translated v1.1 PCs and guard words therefore stay in place; every hex literal
+the merge introduced was listed and checked (W/tools/dekui/s2_merge.py, s2_resolve.py).
+
+Shared UI modules now at tip (6e36dfb4 slice 3 plus the tip delta): banners, dialogue_scale,
+hud_buttons, inventory_shadow, item_preview, menu_page_switch, menu_tabs, native_file_select,
+native_inventory, native_item_present, native_notebook, notebook_rows, notebook_scrollbar,
+ocarina_prompt (group transform, button_v, width_label, icon_scale, dungeon_alignment, 32-glyph
+flat rows), schedule_rows (TextNew badge repair), song_list, and the new song_header and
+song_panel. notebook_prompt, file_select_prompt and items_map_prompt were already at tip.
+No new native PC: these modules reuse the existing sites.
+
+Deliberate differences from tip, until their owning slice:
+- native_inventory: the HD Gear photo (PhotoCapture) arrives with MenuBackdrop in S4; a local
+  inert `PhotoCapture` (enabled false, no layout) keeps the Gear photo layout and border off.
+  Its data reads 0x656B0C / 0x63A270 are only reached through that path and are unproved.
+- native_item_present: `ItemSlideInterpolation::Offset` is the renderer's (class b); the same
+  six-frame linear offset is computed inline.
+- hud_buttons / player_hud: `StickControls::ItemLayoutIndex` (S5) is the identity while stick
+  controls are off, so the slot index is used directly.
+- song_list: `OcarinaInput::Observe` (S5 host input filter) is not called yet.
+- ocarina_prompt: English arrow labels keep the native 12-pixel size; only translated labels
+  shrink to the 36-pixel slot (S1 decision, kept over the tip's unconditional fit).
+- Not ported in S2: menu_help (tip conflicts and a new PC 0x5A58F4), world_map_prompt (its tip
+  version needs DungeonMap's tip backgrounds, S3), file_select_input (host input, class c).
+
 ## Renderer and frontend handoff
 
 Class (b) implementations remain with the title renderer: 60 Hz interpolation

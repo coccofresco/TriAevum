@@ -279,9 +279,10 @@ struct Hook {
             const int first=int(static_cast<std::int8_t>(*state&255))+positions[ordered.front()];
             const int range=std::max(1,total-int(ordered.size()));
             std::vector<Write> scrollbar_writes;
-            // Match the native top inset: track starts 15 units above the
-            // first row center, so end 15 below the eighth row center.
-            if(Scrollbar(m,helper,scrollbar_writes,origin+7.f*spacing+15.f*std::bit_cast<float>(*root_basis),
+            // Use the Schedule track's 356-unit bottom before the shared
+            // screen mapping. A shorter Events track was stretched afterwards,
+            // enlarging its caps and empty end insets relative to Schedule.
+            if(Scrollbar(m,helper,scrollbar_writes,std::bit_cast<float>(*root_y)+356.f*std::bit_cast<float>(*root_basis),
                          std::clamp(float(first)/float(range),0.f,1.f),
                          float(ordered.size())/float(std::max(1,total))))
                 writes.insert(writes.end(),scrollbar_writes.begin(),scrollbar_writes.end());

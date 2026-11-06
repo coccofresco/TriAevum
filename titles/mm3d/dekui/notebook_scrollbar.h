@@ -35,7 +35,10 @@ template<class M> bool Resize(M& m,U32 layout,NativeInventory::Hook& helper,
         const float stretch=(new_bottom-top)/(184.f*scale);
         if(!helper.Transform(m,middle,writes,seen,{1,0,0,stretch,0,top*(1-stretch)}))return false;
         if(!helper.Transform(m,lower,writes,seen,{1,0,0,1,0,new_bottom-old_bottom}))return false;
-        const float thumb_start=base+41.f*scale,available=new_bottom-thumb_start;
+        // Track caps span 36..44 and 228..236. The thumb begins five
+        // units inside the upper cap, so end five inside the lower one too.
+        // Stopping at the lower cap's origin left a three-unit empty tail.
+        const float thumb_start=base+41.f*scale,available=new_bottom+3.f*scale-thumb_start;
         const float old_top=std::bit_cast<float>(*ty),old_middle=std::bit_cast<float>(*my);
         const float old_bottom_y=std::bit_cast<float>(*by),cap=old_middle-old_top;
         const float middle_scale=std::bit_cast<float>(*middle_basis),bottom_scale=std::bit_cast<float>(*bottom_basis);
@@ -49,9 +52,14 @@ template<class M> bool Resize(M& m,U32 layout,NativeInventory::Hook& helper,
         // ScrollBar.mfl: bar01_pane is one unit high. bar02_pane is
         // two units high at local Y=-3, so its bottom is anchor Y-1.
         // Native animation scales the strip independently of the cap anchor.
-        const float thumb_stretch=(height-caps)/middle_scale;
+        // The layout shader floors each piece's transformed endpoints. A
+        // shared edge computed as 227.99998 on the strip but 228 on its cap
+        // becomes a whole-pixel hole. Extend only the strip into the
+        // inner portion of each cap, preserving the rounded outside edges.
+        const float overlap=.5f*std::min(cap,bottom_scale);
+        const float thumb_stretch=(height-caps+2.f*overlap)/middle_scale;
         return helper.Transform(m,thumb_top,writes,seen,{1,0,0,1,0,target-old_top})&&
-            helper.Transform(m,thumb_middle,writes,seen,{1,0,0,thumb_stretch,0,target+cap-thumb_stretch*old_middle})&&
+            helper.Transform(m,thumb_middle,writes,seen,{1,0,0,thumb_stretch,0,target+cap-overlap-thumb_stretch*old_middle})&&
             helper.Transform(m,thumb_bottom,writes,seen,{1,0,0,1,0,target+height+bottom_scale-old_bottom_y});
     }
 }

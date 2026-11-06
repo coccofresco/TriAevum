@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 #include "gear_menu.h"
+#include "hud_adjustments.h"
 #include <array>
 #include <atomic>
 #include <bit>
@@ -87,7 +88,7 @@ struct Hook {
         // The shared `all` group has front, text, and plate children. Stretch only
         // the plate branch so glyphs and wrapping retain their native geometry.
         const float configured_width=background_width.load();
-        const float width=std::isfinite(configured_width)?std::clamp(configured_width,1.f,2.f):1.f;
+        const float width=(std::isfinite(configured_width)?std::clamp(configured_width,1.f,2.f):1.f);
         auto children=m.Read(*group+0x14);
         if(children && *children>=0x100000 && *children<=0x3ffffff0) {
             for(U32 i=0;i<3;++i) {

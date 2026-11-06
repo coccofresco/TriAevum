@@ -5,6 +5,25 @@
 namespace Mm3dDekui::MenuTabs {
 using namespace NativeInventory;
 inline AtomicButtonPose gear_pose;
+inline float SlideClearance(float y,float scale,bool selected) {
+    // Start just beyond the bottom edge. A fixed 40px minimum leaves small,
+    // low-positioned tabs invisible through most of the four opening steps.
+    // The selected face/rim is lifted seven local pixels before scaling.
+    return std::max(0.f,242.f-(204.f+y-(selected?7.f*scale:0.f)));
+}
+struct SlideTiming {
+    U32 layout{};
+    float previous=1;
+    bool opening=true;
+    float Apply(U32 next,float remaining) {
+        if(layout!=next){layout=next;previous=1;opening=true;}
+        remaining=std::clamp(remaining,0.f,1.f);
+        if(remaining!=previous)opening=remaining<previous;
+        previous=remaining;
+        constexpr float speed=1.15f;
+        return opening?std::max(0.f,1.f-(1.f-remaining)*speed):std::min(1.f,remaining*speed);
+    }
+};
 // Gear uses native TouchPanel panes; Items/Masks use MenuItem/MenuMask panes.
 // Pause tabs include their native selected face and both mirrored rim halves.
 // Textures remain in the user's live resource registry; no images are bundled.
@@ -24,6 +43,7 @@ inline constexpr std::array<std::array<U32,11>,12> Panes{{
 }};
 struct Hook {
     NotebookPrompt::Hook scratch;
+    SlideTiming slide;
     template<class M> U32 Texture(M& m,U32 id) {
         const auto registry=NotebookPrompt::Registry;
         if(m.Read(NotebookPrompt::RegistryLiteral)!=registry)return 0;
@@ -63,13 +83,10 @@ struct Hook {
             const auto& pose=tab?buttons[tab]:gear_pose;
             const float y=pose.y.load(),s=pose.scale.load();
             if(!std::isfinite(y)||!std::isfinite(s))return content;
-            // The synthetic faces start at Y204; their scales do not move
-            // that anchor. The old conservative widget bound gave 208px of
-            // travel, leaving the strip offscreen for most of the animation.
-            clearance=std::max(clearance,std::max(40.f,242.f-(204.f+y)));
+            clearance=std::max(clearance,SlideClearance(y,s,int(tab)==selected));
         }
         if(!std::isfinite(remaining))return content;
-        motion_y=clearance*std::clamp(remaining,0.f,1.f);
+        motion_y=clearance*slide.Apply(layout,remaining);
         if(old_tabs){
             auto a=m.Read(old_tabs+0x134);if(!a)return content;
             float native_alpha=std::bit_cast<float>(*a);

@@ -108,17 +108,26 @@ struct Hook {
             if(actions!=(i==0||i==3))continue;
             auto icon=helper.helper.Child(m,all,icons[i]);
             auto base=actions?0:helper.helper.Child(m,all,bases[i]);if(!icon||(!actions&&!base))return;
-            const auto& a=buttons[i];const GearMenu::Pose p{a.x.load(),a.y.load(),scale.load()};
+            const unsigned slot=i; // StickControls::ItemLayoutIndex(i,4) arrives in S5 (identity while it is off)
+            const auto& a=buttons[slot];const GearMenu::Pose p{a.x.load(),a.y.load(),scale.load()};
             if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.scale)||p.scale<.1f||p.scale>3)return;
             auto x=m.Read(icon+0xec),y=m.Read(icon+0xfc);if(!x||!y)return;
             const float cx=std::bit_cast<float>(*x),cy=std::bit_cast<float>(*y);
             if(!std::isfinite(cx)||!std::isfinite(cy))return;
+            float target_x=cx,target_y=cy;
+            if(slot!=i) {
+                const auto other=helper.helper.Child(m,all,icons[slot]);if(!other)return;
+                const auto ox=m.Read(other+0xec),oy=m.Read(other+0xfc);if(!ox||!oy)return;
+                target_x=std::bit_cast<float>(*ox);target_y=std::bit_cast<float>(*oy);
+                if(!std::isfinite(target_x)||!std::isfinite(target_y))return;
+            }
             float tx=p.x+cx*(1-p.scale),ty=p.y+cy*(1-p.scale);
+            if(slot!=i){tx=p.x+target_x-cx*p.scale;ty=p.y+target_y-cy*p.scale;}
             if(!actions&&diamond_enabled){
                 const Diamond d{true,center_x.load(),center_y.load(),spacing.load(),rotation.load()};
                 for(float v:{d.x,d.y,d.spacing,d.rotation})if(!std::isfinite(v))return;
                 if(d.spacing<0||d.spacing>160)return;
-                const auto target=DiamondPoint(i,d);
+                const auto target=DiamondPoint(slot,d);
                 // Common root translation retains native HUD entrance/exit motion.
                 auto ax=m.Read(all+0xec),ay=m.Read(all+0xfc);if(!ax||!ay)return;
                 const float ox=std::bit_cast<float>(*ax),oy=std::bit_cast<float>(*ay);
