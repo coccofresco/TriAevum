@@ -1113,8 +1113,7 @@ void NativeA32WindowSession::Setup() {
       [](const Fast::Renderer3ds::PicaEnvironmentLighting& environment) {
         Fast::Extension::GraphicsSettingsRuntime::Instance().PublishSceneEnvironment(environment);
       },
-      launch.Host.ResourceRoot.empty() ? std::filesystem::path{}
-                                       : std::filesystem::path(launch.Host.ResourceRoot) / "environments",
+      Oot3dNativeGame::TitleReleaseSceneEnvironmentDirectory(launch.Host.ResourceRoot, titleAdapter),
       // A title without authored tuning keeps its native lighting (D1 of the
       // alignment: OoT3D's base profile is OoT3D's).
       titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur
