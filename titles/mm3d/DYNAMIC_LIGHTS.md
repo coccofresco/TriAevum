@@ -100,7 +100,7 @@ still-pending capture index are in the local DL evidence directory.
   fire-arrow child, two wall forms, spout controller/child and wizard trail
   readers. Native phase, scale/opacity, colour and draw gates own publication.
   The invisible Keese additionally requires the current EUR lens field and
-  native draw history; lens-off cannot reuse yesterday's visibility. Fire-arrow
+  native draw history; lens-off cannot reuse the previous frame's visibility. Fire-arrow
   Charge/Fly/Hit callbacks are proved independently; their lighting policy is
   the OoT3D policy. Active registered points suppress synthetic duplicates.
 - The player/carried-fire LightInfo is now an exact native replacement, not a
@@ -132,3 +132,36 @@ retries**; its exact results, labelled JPEGs and remaining qualification limits
 belong to `DL/captures/INDEX.md`, not to an assumed full-parity verdict. Product
 smoke failure, automatic installer routing and previous-room ABI qualification
 are not silently declared resolved. Base-profile values remain frozen.
+
+## Owner batch delivered at implementation `117687b8`
+
+The final implementation consists of shared renderer commit `67622f32` and
+MM3D source commit `117687b8`. Developer binary SHA-256:
+`fa8db2ec25d035410706d35b72273a5b6bc5f1f917a2ead8a0013039e6a306ff`.
+All ten serial launches succeeded, **zero retries**: Off/On night Clock Town
+lamps, Stock Pot Inn, Woodfall torches, the semantic window policy and visible
+Tatl. A labelled native warp-glow crop derives from the Tatl pair with no extra
+launch. JPEGs, checksums, profile overlays and exact receipts are indexed at:
+`I:/_triaevum_work/mm3d-port/analysis/parity/DL/captures/INDEX.md`.
+No implementation/binary change followed the batch; this status update is docs only.
+
+The Inn actually installed the neutral-map PBR fixture:152 GGX trace records
+per mode;86 balanced Off /152 On,3 rendered point lights and77 bound receiver
+draws. Off renders zero point lights in all five views. Its flat/rough/black-map,
+zero-specular-weight fixture qualifies routing, not a glossy or positive
+emissive-map appearance. Nine GGX and nine native-unlit PBR numeric GPU cases
+pass; native-unlit PBR was not encountered live in that Inn fixture. Six source
+families/18 native records have EUR/CPU proof, not exhaustive actor look review.
+
+One new OoT3D runtime gate is3/3 p13 SHA-identical. Final audit discovered its
+nominal OoT-only build directory still enabled both titles; the gate used that
+dual-title binary. The cache was then explicitly corrected to OoT3D-only and
+built successfully, without another game launch. Do not mislabel either receipt.
+Fresh product game/iMMERSE/DLSS builds also pass; the product-info tool reports
+`developer_tools=false`. No product runtime smoke was repeated.
+
+This delivers the requested runtime/capture slice, **not full parity or release
+approval**. The four-populated-category room catalog, unknown material roles,
+uncaptured variants, installer/previous-room integration and the prior failed
+product smoke remain honestly bounded in the evidence index. Base-profile
+values, including ambient0.6, remain unchanged; the look verdict is the owner's.
