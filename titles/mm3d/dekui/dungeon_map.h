@@ -45,10 +45,12 @@ inline OcarinaPrompt::Group PromptGroup() {
 inline std::array<AtomicButtonPose,2> panels{{{0,120,.35f},{288,120,.35f}}};
 inline std::array<GearMenu::AtomicPose,Count> poses;
 inline std::atomic<unsigned> status{0};
+// Upstream writes these facts to /tmp/mm3d-map-input.txt on every Map-page input frame.
+// The port routes the donor diagnostic to HostLog (no file, no global state).
 template<class M> void LogInput(M& m,U32 owner,U32 buttons){
-    static FILE* f=[](){auto p=std::fopen("/tmp/mm3d-map-input.txt","w");if(p)std::fprintf(p,"owner buttons off74c off78c off34 off8c\n");return p;}();
-    if(!f)return; auto read=[&](U32 at)->U32{auto v=m.Read(at);return v?*v:0;};
-    std::fprintf(f,"%08x %08x %08x %08x %08x %08x\n",owner,buttons,read(owner+0x74c),read(owner+0x78c),read(owner+0x34),read(owner+0x8c));std::fflush(f);
+    auto read=[&](U32 at)->U32{auto v=m.Read(at);return v?*v:0;};
+    HostLog("mm3d-map-input owner={:08x} buttons={:08x} off74c={:08x} off78c={:08x} off34={:08x} off8c={:08x}",
+            owner,buttons,read(owner+0x74c),read(owner+0x78c),read(owner+0x34),read(owner+0x8c));
 }
 // waiting, outside, dungeon, guarded
 inline void Apply(const Options& o) {
@@ -118,11 +120,15 @@ template<class M> bool CodeMatches(M& m) {
 // shared strb 0x1AEC08; mode 2: 0x1AEC04 mov r1,#1; other modes: 0x1AECB0/0x1AECB4). The marker
 // builders read the byte (0x59C624 ldrb r5,[r0,#0x837]).
 constexpr U32 Radar=0x00727970,MarkerStyle=Radar+0x834; // style = top byte (+0x837)
-constexpr std::array<std::pair<U32,U32>,17> MarkerStyleGuards{{
+constexpr std::array<std::pair<U32,U32>,22> MarkerStyleGuards{{
     {0x00188338,0xe59f0008},{0x00188348,0x00727970}, // getter and its literal
     {0x001aeb18,0xe59f60bc},{0x001aeb1c,0xe5d60523},{0x001aeb20,0xe3500003},{0x001aeb24,0x0a000007},
     {0x001aeb28,0xe3500002},{0x001aeb2c,0x0a00002b},{0x001aebac,0xe3a01000},{0x001aebb4,0xea000013},
     {0x001aec04,0xe3a01001},{0x001aec08,0xe5c01837},{0x001aecb0,0xe3a01001},{0x001aecb4,0xe5c01837},
+    // Each store's r0 is the getter's return: the three BL 0x1882F8 (0x1AEBA8, 0x1AEC00,
+    // 0x1AECAC), and the other-mode branches into the 0x1AECAC path (0x1AEB40, 0x1AEB44).
+    {0x001aeba8,0xebff65d2},{0x001aec00,0xebff65bc},{0x001aecac,0xebff6591},
+    {0x001aeb40,0x0a000032},{0x001aeb44,0xea00004b},
     {0x001aebdc,0x007781d8}, // writer pool
     {0x0059c624,0xe5d05837}, // marker builder reader
     {MapStateLiteral,MapState}
@@ -140,7 +146,11 @@ inline std::optional<U32> MarkerStyleWord(U32 style,U32 mode) {
 // +0x837 == 0 where the mode byte is 3 and 1 where it is 1 or 2 (W/tools/dekui/s3_marker_probe.py).
 // Confirmed 2026-11-06 on six Woodfall Temple states (native build, no write): mode 1 -> 1 in
 // wft_entrance, wft_pause_map and two Map-page states; mode 3 -> 0 after the A toggle and after
-// re-entry (runs/s3-t5/states wft_live1_f130, wft_live1_f790).
+// re-entry (runs/s3-t5/states wft_live1_f130, wft_live1_f790). Mode 2 (the gameplay minimap
+// transform; site 6's entry turns it into mode 1) was never observed: no decoded state holds it
+// (the 23 states in W/saves/states also agree: mode 1 -> 1 in 20, mode 3 -> 0 in the three file
+// select states). Its value 1 rests on the static proof (0x1AEC00 bl getter; 0x1AEC04 mov r1,#1;
+// 0x1AEC08 strb), which the guards above hold. The write keeps upstream's 1..3 bound.
 inline constexpr bool MarkerStyleConfirmed=true;
 inline std::atomic<bool> marker_style_write{MarkerStyleConfirmed};
 template<class M> std::optional<bool> Dungeon(M& m,U32 owner) {

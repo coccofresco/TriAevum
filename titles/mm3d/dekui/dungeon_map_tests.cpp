@@ -11,7 +11,10 @@
 #include "v110_address.h"
 #include "world_map_prompt.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -157,6 +160,18 @@ void ImageChecks(const char* path){
     Check(BranchTarget(0x001aebb4,m.words.at(0x001aebb4))==0x001aec08,"mode 3 joins the shared store");
     Check(BranchTarget(0x001aeba8,m.words.at(0x001aeba8))==0x001882f8&&BranchTarget(0x001aec00,m.words.at(0x001aec00))==0x001882f8&&
           BranchTarget(0x001aecac,m.words.at(0x001aecac))==0x001882f8,"each store follows the Radar getter");
+    Check(BranchTarget(0x001aeb40,m.words.at(0x001aeb40))==0x001aec10&&BranchTarget(0x001aeb44,m.words.at(0x001aeb44))==0x001aec78,
+          "other modes reach the 0x1AECAC store path");
+    // The getter calls and other-mode branches are contract words: a call moved to another
+    // function (offset +1) must reject the write, not only a flipped low bit.
+    for(U32 at:{0x001aeba8u,0x001aec00u,0x001aecacu,0x001aeb40u,0x001aeb44u}){
+        const U32 old=m.words.at(at);
+        Check(std::find(D::MarkerStyleGuards.begin(),D::MarkerStyleGuards.end(),std::pair<U32,U32>{at,old})!=D::MarkerStyleGuards.end(),
+              "getter call / branch is a marker guard "+std::to_string(at));
+        m.words[at]=old+1;Check(!D::MarkerStyleContract(m),"retargeted marker call "+std::to_string(at));
+        m.words[at]=old;
+    }
+    Check(D::MarkerStyleContract(m),"marker contract restored");
     std::cout<<"PASS code.bin: 8 sites, "<<guards.size()<<" site guards and "<<D::MarkerStyleGuards.size()
              <<" marker guards against original EUR v1.1\n";
 }
@@ -234,14 +249,21 @@ void SiteChecks(){
         Check(cpu.r==expected&&cpu.s==vfp,"site 7 r0 and continuation");
     }
     f.m.words[f.owner+0x78c]=0;
-    // Site 3: A is no longer filtered in dungeon mode; the world map still filters it.
+    // Site 3: A is no longer filtered in dungeon mode; the world map still filters it. The donor's
+    // input diagnostic (upstream: /tmp/mm3d-map-input.txt) writes no file and no guest memory.
     const U32 pad=f.m.Alloc(0x10);
+    const std::filesystem::path donor_log="/tmp/mm3d-map-input.txt";
+    std::error_code ignored;const bool log_existed=std::filesystem::exists(donor_log,ignored);
     for(bool dungeon:{true,false}){
         f.m.words[f.owner+0x78c]=dungeon?0:0x100;
         f.m.words[pad+0xc]=0x0f;cpu.r[4]=f.owner;cpu.r[6]=pad;
+        const auto writes=f.m.words;
+        D::LogInput(f.m,f.owner,0x0f);
         core.CallSvc(D::FirstSVC+3,cpu,f.m);
         Check(cpu.r[0]==(dungeon?0x0fu:0x0eu),"A passes in the dungeon map, filtered on the world map");
+        Check(f.m.words==writes,"site 3 writes no guest memory");
     }
+    Check(log_existed||!std::filesystem::exists(donor_log,ignored),"no donor input log file");
     std::cout<<"PASS sites 5/6/7 and the A filter\n";
 }
 
@@ -494,12 +516,121 @@ void ZoomFadeChecks(){
     Check(fade.Update(2,true,900000)==0,"a long gap restarts");
     std::cout<<"PASS zoom prompt fade\n";
 }
+
+// ---- WorldMapPrompt dungeon branch: Zoom in/out label, Move map chained, End order ----------
+// Font and parts-atlas harness as language_tests.cpp (4f2692ed prompt_localization_check.cpp).
+struct PromptFixture {
+    Mem m;D::Hook map;
+    U32 font=0,pages=0,icon=0,text=0,ig=0,tg=0,map_pane=0,sp=0;
+    PromptFixture(){
+        font=m.Alloc(0x14);const U32 header=m.Alloc(0x2c);pages=m.Alloc(8);
+        std::u32string chars;
+        for(const char* label:{"Zoom in","Zoom out","Move map","Move cursor","Return"})chars+=PromptText::Codes(label);
+        std::sort(chars.begin(),chars.end());chars.erase(std::unique(chars.begin(),chars.end()),chars.end());
+        const U32 records=m.Alloc(U32(chars.size())*12);
+        m.words[font+4]=header;m.words[font+0xc]=pages;m.words[font+0x10]=records;
+        m.words[header+8]=8u<<16;m.words[header+12]=12;m.words[header+0x10]=1;m.words[header+0x14]=U32(chars.size());
+        m.words[header+0x1c]=4;m.words[header+0x24]=16u<<16;m.words[header+0x28]=16;
+        m.words[pages]=0x1000;m.words[pages+4]=256u|(256u<<16);
+        for(unsigned i=0;i<chars.size();++i){
+            m.words[records+i*12]=chars[i];m.words[records+i*12+4]=chars[i]==' '?4:10;
+            m.words[records+i*12+8]=1u|(((i%16)|((i/16)<<8))<<16);
+        }
+        icon=m.Widget("icon");text=m.Widget("text");ig=m.Alloc(0x7c);tg=m.Alloc(0x30c);
+        m.words[icon+0x28]=ig;m.words[text+0x28]=tg;m.words[tg+0x28]=font;
+        m.words[ig+4]=6;m.words[ig+0x10]=pages;m.words[tg+4]=3;
+        const U32 groups=m.Alloc(8),entries=m.Alloc(48),parts=m.Alloc(0x60);
+        m.words[NotebookPrompt::RegistryLiteral]=NotebookPrompt::Registry;
+        for(U32 at=NotebookPrompt::Registry;at<NotebookPrompt::Registry+0x40;at+=4)m.words[at]=0;
+        m.words[NotebookPrompt::Registry+0x28]=groups;m.words[NotebookPrompt::Registry+0x2c]=entries;
+        m.words[groups]=12;m.words[entries+44]=parts;m.words[parts+4]=11u<<16;
+        // The dungeon page: MenuMapDungeon (holding the template panes), its BackGround map
+        // backdrop (map_base alpha = the menu fade), the screen controller and the routed pass.
+        map.panel=m.Layout("MenuMapDungeon");const U32 all=m.Widget("all");
+        m.Children(map.panel+8,{all});m.Children(all,{icon,text});
+        map.owner=m.Alloc(0x800);m.words[map.owner+0x18]=map.panel;
+        map.backgrounds[1]=m.Layout("BackGround");const U32 group=m.Widget("backGround");map_pane=m.Widget("map_base");
+        m.Children(map.backgrounds[1]+8,{group});m.Children(group,{map_pane});
+        m.words[map_pane+0x134]=std::bit_cast<U32>(.8f);
+        map.controller=m.Alloc(0x14);m.words[map.controller+8]=map.owner;
+        map.valid=map.dungeon=true;map.pass=3;map.routed={map.panel};
+        m.words[D::OverviewCursorGuards.back().first]=D::MapState;m.words[D::MapMode]=0x01010101u;
+        sp=(m.Alloc(0x10000)+0x10000)&~7u;
+    }
+    // The flat prompt's children: [0] icon, [1] label, [2] icon shadow, [3] label shadow, [4] content.
+    U32 Child(U32 root,unsigned i){return m.words.at(m.words.at(root+0x14)+i*4);}
+};
+
+void WorldMapPromptDungeonChecks(){
+    D::Apply(D::Options{});
+    PromptFixture f;auto& m=f.m;WorldMapPrompt::Hook hook;
+    const U32 content=f.map.panel+8;
+    const auto f32=[&](U32 at){return std::bit_cast<float>(m.words.at(at));};
+    struct Frame {U32 mode;std::int64_t now;bool label_out;float move_alpha;};
+    // Mode 1 (zoomed) -> "Zoom out"; 3 (overview) -> "Zoom in". Move map fades in over 150 ms of
+    // guest time while zoomed, then out, never popping: hidden on the first sample.
+    for(const Frame step:{Frame{1,0,true,0},Frame{1,150000,true,.8f},Frame{3,225000,false,.8f},Frame{3,300000,false,.4f}}){
+        m.words[D::MapMode]=(step.mode<<24)|0x010101u;
+        const auto before=m.words;
+        const U32 root=hook.Root(m,f.map,f.map.panel,f.sp,content,false,step.now);
+        const U32 first=step.move_alpha>0?f.Child(root,4):root;
+        Check(first==f.sp-0x2400,"zoom prompt scratch directly under the SP");
+        Check(f.Child(first,4)==content,"zoom prompt wraps the native content");
+        // Glyph records equal the font's glyphs for the label (mode>>24 picks it).
+        const auto expected=PromptText::Codes(step.label_out?"Zoom out":"Zoom in");
+        const U32 geo=m.words.at(f.Child(first,1)+0x28);
+        Check(m.words.at(geo+0x300)==expected.size(),"zoom label glyph count");
+        {float pen=0;const U32 start=m.words.at(geo+0x2fc);
+         for(unsigned i=0;i<expected.size();++i){auto g=NotebookFont::Lookup(m,f.font,expected[i],pen);Check(bool(g),"label glyph");
+             for(unsigned j=0;j<15;++j)Check(m.words.at(start+i*60+j*4)==g->words[j],"zoom label glyph record");pen+=float(g->advance);}}
+        Check(f32(f.Child(first,0)+0x134)==.8f,"zoom prompt follows the menu fade");
+        Check(f32(f.Child(first,0)+0xfc)==200.f,"zoom prompt one row above the shared prompt origin");
+        if(step.move_alpha>0){
+            // Move map: chained below the zoom prompt's scratch, two rows higher.
+            Check(root==first-0x2400,"Move map scratch chained under the zoom prompt");
+            const U32 mgeo=m.words.at(f.Child(root,1)+0x28);
+            const auto move=PromptText::Codes("Move map");
+            Check(m.words.at(mgeo+0x300)==move.size(),"Move map glyph count");
+            Check(std::abs(f32(f.Child(root,0)+0x134)-step.move_alpha)<1e-6f,"Move map fade alpha");
+            Check(f32(f.Child(root,0)+0xfc)==160.f,"Move map two rows above the zoom prompt");
+        }
+        // End: the Move map frame first, then the zoom prompt; the guest returns to its own SP.
+        Check(hook.End(m)==f.sp,"End returns the entry SP");
+        Check(m.words==before,"End restores every scratch word");
+        Check(hook.move_prompt.scratch.frames.empty()&&hook.source.prompt.scratch.frames.empty()&&hook.native_frames.empty(),
+              "every Root frame is closed");
+    }
+    // Declined frames: the mode byte is trusted only behind the IsMapZoomed literal, modes 1..3 only,
+    // dungeon pass 3 of the routed page only. Nothing is drawn or written. On the dungeon page
+    // itself (or once the page is gone) the Move map fade restarts; any other layout or pass of
+    // the page, which reaches Root on every draw, must keep it.
+    const auto declined=[&](const char* what,bool restarts){
+        hook.move_fade={f.map.owner,300000,.5f,false}; // a half-faded Move map
+        const auto before=m.words;
+        Check(hook.Root(m,f.map,f.map.panel,f.sp,content,false,310000)==content,what);
+        Check(m.words==before,std::string(what)+": no writes");
+        hook.End(m);Check(m.words==before,std::string(what)+": End inert");
+        Check(restarts?hook.move_fade.value==0:hook.move_fade.value==.5f,
+              std::string(what)+(restarts?": Move map fade restarts":": Move map fade kept"));
+    };
+    m.words[D::MapMode]=0x01010101u;
+    m.words[D::OverviewCursorGuards.back().first]=0;declined("unguarded mode byte",true);
+    m.words[D::OverviewCursorGuards.back().first]=D::MapState;
+    for(U32 mode:{0u,4u}){m.words[D::MapMode]=mode<<24;declined("mode outside 1..3",true);}
+    m.words[D::MapMode]=0x01010101u;
+    f.map.pass=2;declined("not the dungeon pass",false);f.map.pass=3;
+    f.map.routed.clear();declined("page not routed",false);f.map.routed={f.map.panel};
+    m.words[f.map.controller+8]=0;declined("another screen owns the controller",true);
+    m.words[f.map.controller+8]=f.map.owner;
+    std::cout<<"PASS world-map prompt dungeon branch (labels, Move map chain and fade, End order)\n";
+}
 } // namespace
 
 int main(int argc,char** argv){
     try{
         TranslationChecks();ImageChecks(argc>1?argv[1]:std::getenv("MM3D_CODE_BIN"));MarkerStyleWordChecks();
         SiteChecks();SidePanelAndRoutingChecks();MarkerStyleChecks();DescriptionChecks();ArrowChecks();ZoomFadeChecks();
+        WorldMapPromptDungeonChecks();
         std::cout<<"PASS "<<checks<<" dungeon map checks\n";return 0;
     }catch(const std::exception& e){std::cerr<<"FAIL after "<<checks<<" checks: "<<e.what()<<"\n";return 1;}
 }

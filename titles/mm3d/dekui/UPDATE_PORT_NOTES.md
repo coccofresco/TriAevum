@@ -221,15 +221,23 @@ through `v110_address.h`; `world_map_prompt.h` by three-way merge (`W/tools/deku
   dungeon page (still filtered on the world map), with the native touch Zoom buttons hidden and
   the dungeon zoom prompt plus "Move map" drawn by `world_map_prompt.h`.
 - Marker style (+0x834, byte +0x837): contract guards `MarkerStyleGuards` (getter 0x188338/
-  0x188348, MapTransformUpdate 0x1AEB18..0x1AECB4 with pool 0x1AEBDC, reader 0x59C624, the
-  0x36E268 literal). The write is gated by `MarkerStyleConfirmed`, set after the required T5
-  confirmation of `+0x837 = (mode == 3) ? 0 : 1` (W/tools/dekui/s3_marker_probe.py): mode 1 -> 1
-  in four Woodfall Temple states (entrance and Map page), mode 3 -> 0 in two (after the A toggle
-  and after re-entry), all decoded offline from states taken with the write disabled.
-- ZoomFade clock: `world_map_prompt` gets `Core::GlobalTimeUs()`, the window setup's
-  presentation clock (presentation frame count x 1/60 s), the same clock ItemsMapPrompt already
-  uses; it is deterministic under `--fixed-delta-seconds`. Not proved to equal emulated guest
-  time: the fade only sets the "Move map" prompt's 150 ms opacity ramp.
+  0x188348, MapTransformUpdate 0x1AEB18..0x1AECB4 with pool 0x1AEBDC, the three `bl 0x1882F8`
+  calls that give each store its r0 (0x1AEBA8, 0x1AEC00, 0x1AECAC) and the other-mode branches
+  0x1AEB40/0x1AEB44, reader 0x59C624, the 0x36E268 literal: 22 words). The write is gated by
+  `MarkerStyleConfirmed`, set after the required T5 confirmation of `+0x837 = (mode == 3) ? 0 :
+  1` (W/tools/dekui/s3_marker_probe.py): mode 1 -> 1 in four Woodfall Temple states (entrance
+  and Map page), mode 3 -> 0 in two (after the A toggle and after re-entry), all decoded offline
+  from states taken with the write disabled; the 23 kept states in W/saves/states agree too
+  (mode 1 -> 1 in 20, mode 3 -> 0 in the three file-select states). Mode 2 was never observed
+  (site 6 turns it into mode 1 on Map entry): its value 1 rests on the guarded static proof
+  (0x1AEC00 bl getter, 0x1AEC04 mov r1,#1, 0x1AEC08 strb). The write keeps upstream's 1..3 bound.
+- Guest clock: `Core::GlobalTimeUs()` (upstream CoreTiming `GetGlobalTimeUs`, emulated time)
+  is the session's `GuestClock`, the CTR system ticks in microseconds
+  (`NativeA32CtrHostServices::SystemTimeMicroseconds`). It advances with guest time only; the
+  earlier presentation clock (presentation frames x 1/60 s) is gone. Consumers: the dungeon
+  "Move map" ZoomFade (150 ms ramp, 500 ms reset), the ItemsMapPrompt bob and fades.
+- The donor's `LogInput` diagnostic (upstream: fopen("/tmp/mm3d-map-input.txt") written and
+  flushed on every Map-page input frame) goes to `HostLog`: no file, no static FILE.
 - Not ported (class b): `InterpolationIdentity` / `dungeon_map_interpolation.h` (map pan
   identity for 60 Hz interpolation), the `EffectCapture::MapShadow` diagnostic.
 - Tests: `dungeon_map_tests.cpp` (`oot3d_mm3d_dekui_dungeon_map_tests [code.bin]`, standalone
@@ -238,8 +246,10 @@ through `v110_address.h`; `world_map_prompt.h` by three-way merge (`W/tools/deku
   preservation, same game+scene recall vs a new scene or game, mode 2 never remembered, overview
   skip only for mode 3 on the dungeon page, A filter), and the tip dungeon_side_panels_check
   scenarios (side panels, screen-2 routing, early arrows, hidden zoom buttons and inner shadows,
-  marker restore on early exits, description exclusion, arrows). core_tests' code.bin manifest
-  has 153 sites.
+  marker restore on early exits, description exclusion, arrows), plus the `world_map_prompt`
+  dungeon branch (label from the mode byte behind the 0x1B2570 literal, Move map chained under
+  the zoom prompt's scratch, its guest-time fade, End order, declined frames). core_tests'
+  code.bin manifest has 153 sites. The ctr host tests cover the tick-to-microsecond clock.
 
 ## Renderer and frontend handoff
 
