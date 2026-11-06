@@ -62,6 +62,9 @@ constexpr uint32_t kEntranceTable = 0x00543BB8U;
 constexpr uint32_t kEntranceCount = 1586U;
 constexpr uint64_t kArrivalTimeoutFrames = 900U;
 constexpr uint32_t kReportFrames = 90U;
+// Guest frames an arrived title warp waits for gameplay to resume after its
+// entrance cutscene before it reports "arrived in a cutscene".
+constexpr uint64_t kCutsceneTimeoutFrames = 3600U;
 
 template <class T> bool ReadValue(DevWarpGuest &guest, uint32_t address, T &value) {
   std::array<uint8_t, sizeof(T)> bytes{};
@@ -178,13 +181,17 @@ std::string DevWarpRuntime::ArrivalError(const DevWarpSelection &arrival) const 
     if (!axes[axis].Proven)
       return std::string(axes[axis].Label) + ": " + (*axes[axis].Pending ? axes[axis].Pending : "awaiting proof");
   }
-  return {};
+  return mTitle ? mTitle->ArrivalError(arrival) : std::string{};
 }
 
 void DevWarpRuntime::QueueLocked(Request request, const std::string &message) {
+  const auto warning = ArrivalWarning(request.Entrance, request.Arrival);
+  if (!warning.empty())
+    std::fprintf(stderr, "TRIAEVUM_DEV_WARP warning target=\"%s\" reason=\"%s\"\n", request.Label.c_str(),
+                 warning.c_str());
   mPending = std::move(request);
   mStatus.Phase = DevWarpPhase::Waiting;
-  mStatus.Message = message;
+  mStatus.Message = warning.empty() ? message : message + " Warning: " + warning;
 }
 
 void DevWarpRuntime::WarpTo(const DevWarpEntrance &entrance, const DevWarpSelection &arrival) {
@@ -575,12 +582,33 @@ void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t g
       if (mSawTransition && pendingEntrance < 0 && observation.Scene == mActive->Scene &&
           observation.Player && (!mTitle || mTitle->Arrived(observation, mActive->Entrance,
               mActive->Type == Kind::WarpPoint && !mActive->Point.UseSceneEntrance))) {
-        mStatus.Phase = DevWarpPhase::Arrived;
+        // Arriving stops the arrival timeout, also during an entrance
+        // cutscene (a boss lair's intro runs past the arrival window).
         mArrived = true;
+        mArrivedFrame = guestFrame;
+        mResumed = false;
+        Report(guest, "arrived", guestFrame);
+      } else if (guestFrame - mRequestFrame > kArrivalTimeoutFrames) {
+        mStatus.Phase = DevWarpPhase::Failed;
+        mStatus.Message = "The warp to " + mActive->Label + " did not arrive.";
+        Report(guest, "failed", guestFrame);
+        mActive.reset();
+        return;
+      }
+    }
+    if (mArrived && !mResumed) {
+      // A title's arrival is complete when its gameplay resumes: the arrival
+      // options are checked and the settle countdown starts only then, as a
+      // scene's entrance cutscene may still change them. OoT3D's own ABI keeps
+      // its earlier behaviour (its arrival observation is gameplay).
+      if (!mTitle || observation.Gameplay) {
+        mResumed = true;
+        mStatus.InCutscene = false;
+        mStatus.Phase = DevWarpPhase::Arrived;
         mReportFrames = kReportFrames;
         mStatus.Message = "Arrived at " + mActive->Label + ".";
-        Report(guest, "arrived", guestFrame);
-        // The title's arrival options must have taken effect.
+        if (const auto warning = ArrivalWarning(mActive->Entrance, mActive->Arrival); !warning.empty())
+          mStatus.Message += " Warning: " + warning;
         const auto mismatch = mTitle ? mTitle->ArrivalMismatch(guest, observation, mActive->Arrival) : std::string{};
         if (!mismatch.empty()) {
           mStatus.Phase = DevWarpPhase::Failed;
@@ -589,13 +617,22 @@ void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t g
                        static_cast<unsigned long long>(guestFrame), mismatch.c_str());
           mActive.reset();
         }
-      } else if (guestFrame - mRequestFrame > kArrivalTimeoutFrames) {
-        mStatus.Phase = DevWarpPhase::Failed;
-        mStatus.Message = "The warp to " + mActive->Label + " did not arrive.";
-        Report(guest, "failed", guestFrame);
+      } else if (guestFrame - mArrivedFrame > kCutsceneTimeoutFrames) {
+        // Arrived, but the scene stayed in its cutscene: reported distinctly,
+        // with the arrival options unchecked.
+        mStatus.Phase = DevWarpPhase::Arrived;
+        mStatus.InCutscene = true;
+        mStatus.Message = "Arrived at " + mActive->Label +
+                          " in a cutscene; gameplay did not resume, so the arrival options were not checked.";
+        Report(guest, "arrived_in_cutscene", guestFrame);
         mActive.reset();
+      } else {
+        mStatus.InCutscene = true;
+        mStatus.Message = "Arrived at " + mActive->Label + "; waiting for the entrance cutscene to end...";
       }
-    } else {
+      return;
+    }
+    if (mArrived) {
       if (mReportFrames != 0U && --mReportFrames == 0U) Report(guest, "settled", guestFrame);
       if (mReportFrames == 0U) mActive.reset();
     }
@@ -626,6 +663,8 @@ void DevWarpRuntime::Advance(DevWarpGuest &guest, uint32_t playState, uint64_t g
   mRequestFrame = guestFrame;
   mSawTransition = false;
   mArrived = false;
+  mResumed = false;
+  mStatus.InCutscene = false;
   mCancelVoidDamage = !mTitle && request.Type == Kind::WarpPoint && !request.Point.UseSceneEntrance;
   mStatus.Phase = DevWarpPhase::Requested;
   mStatus.Message = "Warping to " + request.Label + " (entrance " + Hex4(request.Entrance) + ")...";

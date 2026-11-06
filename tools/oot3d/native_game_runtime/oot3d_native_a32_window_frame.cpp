@@ -3005,6 +3005,12 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
       auto detail = titlePlace();
       detail["reason"] = status.Message;
       finish("failed", detail);
+    } else if (status.Phase == Oot3dNativeGame::DevWarpPhase::Arrived && status.InCutscene) {
+      // Arrived, but the entrance cutscene outlasted the runtime's wait:
+      // distinct from settled, as the arrival options were not checked.
+      auto detail = titlePlace();
+      detail["reason"] = status.Message;
+      finish("arrived-in-cutscene", detail);
     } else if (status.Phase == Oot3dNativeGame::DevWarpPhase::Arrived) {
       if (!devLabSawArrival) {
         devLabSawArrival = true;
@@ -3012,7 +3018,9 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
       } else if (devLabFrames >= command.value("settleFrames", 60U)) {
         finish("ok", titlePlace());
       }
-    } else if (devLabFrames >= command.value("timeoutFrames", 3600U)) {
+    } else if (!status.InCutscene && devLabFrames >= command.value("timeoutFrames", 3600U)) {
+      // While an arrived warp waits out its entrance cutscene the runtime
+      // bounds the wait itself (and then reports arrived in a cutscene).
       auto detail = titlePlace();
       detail["reason"] = status.Message;
       finish("timeout", detail);

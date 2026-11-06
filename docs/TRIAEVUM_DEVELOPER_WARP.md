@@ -156,9 +156,12 @@ committed file and, with `TRIAEVUM_2S2H_ROOT`, regenerates it byte-identically.
 
 The tab adds, for a title that declares them:
 
-- **Zones**: 69 curated destinations by category (Clock Town, Termina Field,
+- **Zones**: 69 curated destinations by category (each proven by id in the
+  generator's explicit `PROVEN_ZONES` list after a reviewed live receipt; a new
+  zone is shown "(unverified)" until its id is added) (Clock Town, Termina Field,
   the four regions and their temples, Ikana, the Moon, boss lairs, interiors,
-  mini-dungeons), each with a suggested day, time and form; Warp, and
+  mini-dungeons, each with a suggested day, time and form); Warp (an error
+  that keeps it from queuing is shown below it), and
   **Start here on launch** (the boot zone, taken once when gameplay first
   starts, after a file or a savestate loads; it replaces a boot warp point
   and the reverse).
@@ -177,8 +180,23 @@ being left keeps its time: written straight into the time, its day/night actor
 moon crash on day 3). Play_Init advances the day when nextDayTime is exactly
 noon, so noon is staged as 0x8001. eventDayCount stays, as 2S2H's map select. A
 day or time write is refused while nextDayTime is staged; Fierce Deity only in
-the boss lairs. After arrival the runtime checks day, time (within 0x800 units),
-isNight, form and mask, and fails the warp naming the field that differs. Each
+the boss lairs. A day is accepted only together with a time: MM3D has no native
+field that stages an arbitrary day (Play_Init only advances it by one, at noon,
+for NEXT_TIME_DAY), so the day is written at once and is always paired with a
+staged time, giving the new scene's Play_Init and En_Test4_Init one complete
+day and time to start from (isNight, sky, the day 3 bells), as the map select
+and Song of Double Time do. A day alone is refused by Apply, disables the Warp
+buttons (the title's `ArrivalError`) and is a hook error for an entrance; every
+zone preset with a day has a time. After arrival the runtime checks day, time (within 0x800 units),
+isNight, form and mask, and fails the warp naming the field that differs. That
+check, and the settle countdown, wait until gameplay resumes: an arrival during
+an entrance cutscene stops the arrival timeout at once, but the scene is not
+settled until its cutscene ends (status "waiting for the entrance cutscene to
+end"); a cutscene that lasts 3600 more guest frames is reported distinctly as
+`arrived_in_cutscene` (the lab answers `arrived-in-cutscene`), with the options
+unchecked. Destinations whose scene sets its own clock (Cutscene Scene 0-2 and
+4, the Moon 0-1, `MM3D_OWN_CLOCK`) show a warning, not a failure, when a time is
+requested, and their arrival does not compare the time. Each
 axis has its own gate in `Mm3dDevProof`; while a gate is off a zone's preset
 for it keeps the current value and an explicit value is refused.
 
@@ -232,7 +250,9 @@ only): `{"op":"script","script":"mm3d:zone=deku-palace"}` runs the title's
 TRIAEVUM_DEV_WARP script, the same WarpTo/WarpToZone requests as the tab's Warp
 buttons, and acknowledges once settled with the scene, entrance and arrival
 state; `{"op":"panel","tab":"Dev Tools"}` shows F1 on that tab so a lab
-`capture` records it (the capture includes ImGui). The MM3D work tree's
+`capture` records it (the capture includes ImGui). The lab's tab request,
+F1 show/hide and `TRIAEVUM_CRASH_DIALOG=0` exist only in developer builds
+(`TRIAEVUM_RENDERER_DEVELOPER_TOOLS` in the shared runtime). The MM3D work tree's
 `tools/devwarp_verify.py` runs a plan through `run_safe.sh` (its watchdog and
 GPU lock): one warp after another from `sct_day1_idle`, a fresh process after a
 fault or a warp that never left a cutscene, one rgb8 JPEG per warp with the
@@ -249,17 +269,21 @@ Results (`analysis/devwarp/verify_2026-11`, `summary.tsv` per entry):
   Moon sets its own clock (07:45), so its zone keeps the day and time.
 - All 490 destinations, each with day 1, 12:00 and Human: 468 settled; 6
   arrived in scenes that set their own clock (Cutscene Scene 0-2 and 4, the
-  Moon 0-1); Deku Palace 4 ("from Deku Shrine") ends in Deku Shrine (spawn 0)
-  instead, twice, not yet explained; 15 end MM3D's title process (svcBreak at 0x14C210 or
-  a guest dispatch exit), each reproduced alone in a fresh process. Those 15
-  are `MM3D_REFUSED` in the generator: shown disabled with the fault, refused
-  by Apply before any write and so by the hook.
+  Moon 0-1; a requested time is now a warning there); Deku Palace 4 ("from
+  Deku Shrine") ends in Deku Shrine (spawn 0) instead, twice, not yet
+  explained, so it is refused with that reason until explained; 15 end MM3D's
+  title process (svcBreak at 0x14C210 or a guest dispatch exit), each
+  reproduced alone in a fresh process. Those 16 are `MM3D_REFUSED` in the
+  generator: shown disabled with the reason, refused by Apply before any write
+  (its error is the reason) and so by the hook.
 - Spawn names checked by meaning on the Termina Field and South Clock Town
-  sets (each "from X" faces the exit to X).
+  sets (each "from X" faces the exit to X). A spawn is never named after its
+  own scene (an exit within the scene); such a spawn reads "n: spawn".
 
 Two fixes came from the sweep: the time staging above (night-to-day warps
 arrived on the next day at 06:01 or after a "Dawn of" reload), and an arrival
 during an entrance cutscene (Twinmold's intro outlasts the 900-frame window)
-now counts, as the title requires only the entrance and the player. The
+now counts for the timeout, as the title requires only the entrance and the
+player (the options check and settling wait for gameplay, above). The
 Inverted Stone Tower zone uses spawn 1 (spawn 0 is the flip from the upright
 tower and lands back on it).

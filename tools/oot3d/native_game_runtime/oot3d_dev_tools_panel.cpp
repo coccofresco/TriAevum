@@ -99,8 +99,10 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
         ImGui::BeginDisabled(availability.Known && !availability.Available);
         if (arrival.BootZone == zone.Id) name += "  [Boot]";
         if (!zone.Proven) name += "  (unverified)";
-        // "##zone": the Debug Warp Screen lists scenes of the same name.
-        name += "##zone";
+        // "###zone": the ID ignores the visible text, so a zone keeps its
+        // identity when its [Boot] or (unverified) mark changes; PushID(Id)
+        // scopes it per zone (the Debug Warp Screen lists scenes of the same name).
+        name += "###zone";
         ImGui::PushID(zone.Id);
         if (ImGui::Selectable(name.c_str(), selected == &zone)) {
           arrival.SelectedZone = zone.Id;
@@ -131,13 +133,15 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     const bool gameplay = status.Observation.Gameplay;
     ImGui::BeginDisabled(!gameplay || (availability.Known && !availability.Available) || !arrivalError.empty());
     if (ImGui::Button("Warp##Zone")) {
-      std::string error;
-      mWarp->WarpToZone(selected->Id, arrival.Arrival, &error);
+      mZoneError.clear();
+      if (!mWarp->WarpToZone(selected->Id, arrival.Arrival, &mZoneError) && mZoneError.empty())
+        mZoneError = "The zone warp was not queued.";
     }
     ImGui::EndDisabled();
     if (!gameplay) Tooltip("Warps start from normal gameplay: load a file first.");
     else if (!availability.Reason.empty()) Tooltip(availability.Reason.c_str());
     else if (!arrivalError.empty()) Tooltip(arrivalError.c_str());
+    const auto zoneWarning = mWarp->ArrivalWarning(selected->Entrance, resolved);
     ImGui::SameLine();
     const bool boot = arrival.BootZone == selected->Id;
     if (ImGui::Button(boot ? "Clear launch zone" : "Start here on launch")) arrival.BootZone = boot ? "" : selected->Id;
@@ -145,6 +149,18 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
             "(after loading a file or a savestate). Replaces a boot warp point.");
     ImGui::SameLine();
     ImGui::TextDisabled("%s", PresetText(*selected).c_str());
+    if (!zoneWarning.empty()) WarningText(zoneWarning);
+    if (!mZoneError.empty()) {
+      ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.45F, 0.35F, 1.0F));
+      ImGui::TextWrapped("%s", mZoneError.c_str());
+      ImGui::PopStyleColor();
+    }
+  }
+
+  static void WarningText(const std::string &warning) {
+    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0F, 0.8F, 0.3F, 1.0F));
+    ImGui::TextWrapped("Warning: %s", warning.c_str());
+    ImGui::PopStyleColor();
   }
 
   void DrawArrival(DevWarpArrivalOptions &arrival) {
@@ -271,6 +287,10 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     if (!gameplay) Tooltip("Warps start from normal gameplay: load a file first.");
     else if (!availability.Reason.empty()) Tooltip(availability.Reason.c_str());
     else if (titleArrival && !arrivalError.empty()) Tooltip(arrivalError.c_str());
+    if (titleArrival) {
+      const auto warning = mWarp->ArrivalWarning(target->Entrance, mWarp->Resolve(arrival, nullptr));
+      if (!warning.empty()) WarningText(warning);
+    }
     if (!status.Message.empty()) {
       const bool failed = status.Phase == DevWarpPhase::Failed;
       ImGui::PushStyleColor(ImGuiCol_Text, failed ? ImVec4(1.0F, 0.45F, 0.35F, 1.0F)
@@ -330,6 +350,8 @@ class DevToolsPanel final : public Fast::Extension::GraphicsSettingsPanelTab {
   std::string mLanguage;
   std::array<char, 64> mName{};
   std::array<char, 64> mFilter{};
+  // Why the last zone Warp was not queued (shown below the button).
+  std::string mZoneError;
 };
 
 } // namespace

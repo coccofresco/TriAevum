@@ -187,6 +187,22 @@ inline const Mm3dDevRefusal *FindMm3dDevRefusal(uint16_t entrance) {
       return &refusal;
   return nullptr;
 }
+// A destination whose scene sets its own clock on arrival (a requested time
+// does not apply there): the reason, or null.
+inline const char *FindMm3dDevOwnClock(uint16_t entrance) {
+  for (const auto &own : kMm3dDevOwnClock)
+    if (own.Entrance == entrance)
+      return own.Reason;
+  return nullptr;
+}
+// MM3D has no native field that stages an arbitrary day: Play_Init only
+// advances it by one when nextDayTime is NEXT_TIME_DAY (Sun's Song), and then
+// at noon. A day is therefore written into the save at once, and is always
+// staged with a time (nextDayTime), so that the arrival is one complete day and
+// time pair the new scene's Play_Init and En_Test4_Init start from (isNight,
+// sky, the day 3 bells), as the map select and Song of Double Time give it.
+// A day alone would keep the running clock across the change.
+inline constexpr const char *kMm3dDayNeedsTime = "MM3D day needs a time (a day is staged together with a time)";
 
 // The arrival axes, in selection order.
 enum Mm3dDevAxis : size_t { kMm3dAxisDay = 0, kMm3dAxisTime = 1, kMm3dAxisForm = 2 };
@@ -253,7 +269,8 @@ inline Mm3dDevWarpScript ParseMm3dDevWarpScript(std::string_view spec, std::span
       script.Arrival[kMm3dAxisDay] = value[0] - '0';
     } else if (key == "time" && value == "keep") {
       script.Arrival[kMm3dAxisTime] = kDevWarpKeep;
-    } else if (key == "time" && value.size() == 4 && std::all_of(value.begin(), value.end(), ::isdigit)) {
+    } else if (key == "time" && value.size() == 4 &&
+               std::all_of(value.begin(), value.end(), [](unsigned char c) { return std::isdigit(c) != 0; })) {
       const int hours = std::stoi(value.substr(0, 2)), minutes = std::stoi(value.substr(2));
       if (hours > 23 || minutes > 59)
         throw bad("invalid time '" + value + "'");
@@ -261,7 +278,8 @@ inline Mm3dDevWarpScript ParseMm3dDevWarpScript(std::string_view spec, std::span
     } else if (key == "form") {
       const auto found = std::find_if(std::begin(kMm3dFormChoices), std::end(kMm3dFormChoices), [&](const auto &c) {
         std::string label(c.Label);
-        std::transform(label.begin(), label.end(), label.begin(), ::tolower);
+        std::transform(label.begin(), label.end(), label.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
         return label == value || (value == "deity" && c.Value == Mm3dDevAbi::FormDeity);
       });
       if (value == "keep")
@@ -276,6 +294,9 @@ inline Mm3dDevWarpScript ParseMm3dDevWarpScript(std::string_view spec, std::span
       throw bad("invalid option '" + field + "'");
     }
   }
+  // An entrance keeps what it does not name; a zone may still take its preset.
+  if (script.Entrance && script.Arrival[kMm3dAxisDay] >= 0 && script.Arrival[kMm3dAxisTime] == kDevWarpKeep)
+    throw bad(kMm3dDayNeedsTime);
   return script;
 }
 
@@ -363,7 +384,7 @@ public:
   bool Apply(DevWarpGuest &g, uint32_t p, uint16_t entrance, const DevWarpPoint *point,
              const DevWarpSelection &arrival, std::string *error) const override {
     using namespace Mm3dDevAbi;
-    auto fail = [&](const char *reason) {
+    auto fail = [&](const std::string &reason) {
       if (error)
         *error = reason;
       return false;
@@ -379,10 +400,12 @@ public:
       return fail(mAxes[kMm3dAxisTime].Proven ? "MM3D time must be 0x0000-0xFFFF" : "MM3D time writes are awaiting proof");
     if (form != kDevWarpKeep && (!mAxes[kMm3dAxisForm].Proven || form < FormDeity || form > FormHuman))
       return fail(mAxes[kMm3dAxisForm].Proven ? "MM3D form must be 0-4" : "MM3D form writes are awaiting proof");
+    if (day != kDevWarpKeep && time == kDevWarpKeep)
+      return fail(kMm3dDayNeedsTime);
     if (point && !point->UseSceneEntrance && !mProof.WarpPointRespawn)
       return fail("MM3D point-respawn proof pending");
-    if (FindMm3dDevRefusal(entrance) != nullptr)
-      return fail("this destination faults MM3D when warped to directly");
+    if (const auto *refusal = FindMm3dDevRefusal(entrance))
+      return fail(refusal->Reason);
     DevWarpObservation o;
     int16_t busy = -1;
     uint32_t player = 0, row = 0;
@@ -442,7 +465,8 @@ public:
   // The runtime has already seen the transition end in the requested scene
   // with the player present. An entrance cutscene (a boss lair's intro:
   // Twinmold's runs past the 900-frame arrival window) is part of arriving,
-  // so the arrival does not wait for gameplay to resume.
+  // so this does not wait for gameplay; the runtime checks the arrival options
+  // and settles only once gameplay resumes.
   bool Arrived(const DevWarpObservation &o, uint16_t entrance, bool point) const override {
     return o.Player && o.Entrance == (point ? uint16_t(entrance & 0xFE0F) : entrance);
   }
@@ -463,7 +487,8 @@ public:
       std::snprintf(text, sizeof(text), "field=day expected=%d actual=%d", arrival[kMm3dAxisDay], day);
       return text;
     }
-    if (arrival[kMm3dAxisTime] != kDevWarpKeep) {
+    // A scene that sets its own clock: the requested time was a warning.
+    if (arrival[kMm3dAxisTime] != kDevWarpKeep && !FindMm3dDevOwnClock(o.Entrance)) {
       if (uint16_t(time - uint16_t(arrival[kMm3dAxisTime])) > kTimeTolerance) {
         std::snprintf(text, sizeof(text), "field=time expected=0x%04X actual=0x%04X", arrival[kMm3dAxisTime], time);
         return text;
@@ -478,8 +503,14 @@ public:
       std::snprintf(text, sizeof(text), "field=form expected=%d actual=%u mask=%u", arrival[kMm3dAxisForm], form, mask);
       return text;
     }
-    (void)o;
     return {};
+  }
+  std::string ArrivalError(const DevWarpSelection &arrival) const override {
+    return arrival[kMm3dAxisDay] >= 0 && arrival[kMm3dAxisTime] == kDevWarpKeep ? kMm3dDayNeedsTime : std::string{};
+  }
+  std::string ArrivalWarning(uint16_t entrance, const DevWarpSelection &arrival) const override {
+    const char *own = arrival[kMm3dAxisTime] != kDevWarpKeep ? FindMm3dDevOwnClock(entrance) : nullptr;
+    return own ? own : std::string{};
   }
   std::string Describe(const DevWarpObservation &o) const override {
     if (!o.PlayState)

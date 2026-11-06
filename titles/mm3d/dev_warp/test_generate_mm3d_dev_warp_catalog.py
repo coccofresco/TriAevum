@@ -98,6 +98,38 @@ class CommittedCatalog(unittest.TestCase):
             self.assertEqual(unused, -1, name)
             # Fierce Deity is never a preset: the game allows it only in boss rooms.
             self.assertNotEqual(form, 0, name)
+            # A day is always staged with a time (the runtime refuses a day alone).
+            self.assertTrue(day == -1 or time != -1, name)
+
+    def test_proven_zones_are_an_explicit_list(self):
+        # Proof is per zone id with a live receipt, never derived from ZONES:
+        # a zone added to ZONES stays unverified until its id is listed.
+        self.assertIsInstance(generator.PROVEN_ZONES, frozenset)
+        self.assertEqual(len(generator.PROVEN_ZONES), 69)
+        ids = {generator.slug(zone[1]) for zone in generator.ZONES}
+        self.assertLessEqual(generator.PROVEN_ZONES, ids)
+        proven = {zone_id: flag == "true" for zone_id, *_, flag in self.zones}
+        for zone_id, flag in proven.items():
+            self.assertEqual(flag, zone_id in generator.PROVEN_ZONES, zone_id)
+
+    def test_spawns_are_never_named_after_their_own_scene(self):
+        scene_of_row = {}
+        for name, first, count in self.scenes:
+            for label, entrance, scene, _ in self.rows[first:first + count]:
+                scene_of_row.setdefault(entrance, set()).add(name)
+        for label, entrance, _, _ in self.rows:
+            neighbour = re.search(r"from (.+?)(?: \(| / |, |$)", label)
+            if neighbour:
+                self.assertNotIn(neighbour.group(1), scene_of_row.get(entrance, ()), label)
+
+    def test_refusals_and_own_clock(self):
+        refused = {int(e, 16) for e in re.findall(r"\{0x([0-9A-F]{4}), \"", self.text.split("kMm3dDevRefused")[1]
+                                                  .split("};")[0])}
+        own = {int(e, 16) for e in re.findall(r"\{0x([0-9A-F]{4}), \"", self.text.split("kMm3dDevOwnClock")[1]
+                                              .split("};")[0])}
+        self.assertIn(0x5040, refused)  # Deku Palace spawn 4 arrives in Deku Shrine
+        self.assertEqual(own, {0x1C00, 0x1C10, 0x1C20, 0x1C40, 0xC800, 0xC810})
+        self.assertFalse(own & refused)
 
 
 @unittest.skipUnless(os.environ.get("TRIAEVUM_2S2H_ROOT"), "TRIAEVUM_2S2H_ROOT is not set")

@@ -64,8 +64,9 @@ class CrashHandler {
 
     /**
      * @brief Whether error dialogs are disabled for this process
-     * (TRIAEVUM_CRASH_DIALOG=0): an automated run then logs the crash and
-     * exits instead of waiting for someone to dismiss a message box.
+     * (TRIAEVUM_CRASH_DIALOG=0, developer builds only; always false in a
+     * product build): an automated run then logs the crash and exits instead
+     * of waiting for someone to dismiss a message box.
      */
     static bool DialogsSuppressed() noexcept;
 

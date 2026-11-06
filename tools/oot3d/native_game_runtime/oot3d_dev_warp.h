@@ -90,6 +90,10 @@ struct DevWarpStatus {
   DevWarpPhase Phase = DevWarpPhase::Idle;
   std::string Message;
   bool EntranceTableRead = false;
+  // A title warp arrived in its scene while an entrance cutscene runs: the
+  // phase becomes Arrived when gameplay resumes, or, with this still set, when
+  // the cutscene outlasts the wait ("arrived in a cutscene", options unchecked).
+  bool InCutscene = false;
 };
 
 // The Debug Warp Screen choices SoH keeps in CVars.
@@ -142,6 +146,12 @@ class DevWarpTitleAbi {
   // The observed arrival state for the status line and the log, e.g.
   // "Day 1 12:04, Human".
   virtual std::string Describe(const DevWarpObservation&) const { return {}; }
+  // Why the title refuses this combination of arrival options (empty: none);
+  // `arrival` may hold kDevWarpPreset for a value still to be resolved.
+  virtual std::string ArrivalError(const DevWarpSelection&) const { return {}; }
+  // A note, not a refusal, about a request (`arrival` resolved): e.g. a scene
+  // that sets its own clock on arrival when a time is requested. Empty: none.
+  virtual std::string ArrivalWarning(uint16_t, const DevWarpSelection&) const { return {}; }
   virtual bool CameraOwnsInput(DevWarpGuest&) const = 0;
   virtual bool ApplyCamera(DevWarpGuest&, DevFreeCamera&, uint32_t, uint32_t) const = 0;
 };
@@ -168,6 +178,10 @@ class DevWarpRuntime {
   [[nodiscard]] const DevWarpEntrance *FindEntrance(uint16_t entrance) const;
   [[nodiscard]] std::string Describe(const DevWarpObservation &observation) const {
     return mTitle ? mTitle->Describe(observation) : std::string{};
+  }
+  // The title's warning for a destination and a resolved arrival (empty: none).
+  [[nodiscard]] std::string ArrivalWarning(uint16_t entrance, const DevWarpSelection &arrival) const {
+    return mTitle ? mTitle->ArrivalWarning(entrance, arrival) : std::string{};
   }
 
   // UI side.
@@ -251,6 +265,9 @@ class DevWarpRuntime {
   bool mSawTransition = false;
   // The active warp arrived; the status phase may already show a newer request.
   bool mArrived = false;
+  // The arrived warp's gameplay resumed (a title's arrival check has run).
+  bool mResumed = false;
+  uint64_t mArrivedFrame = 0;
   // Guest frames until the settled report after arrival.
   uint32_t mReportFrames = 0;
   // A warp point respawn: the void-out damage Player_Init arms is cancelled

@@ -479,9 +479,115 @@ int main() {
           "a refused destination is shown disabled with its fault");
     std::string error;
     Check(!proven.Apply(g, Fake::P, 0x3A10, nullptr, kDevWarpKeepAll, &error) && g.writes.empty() &&
-              error.find("faults MM3D") != std::string::npos,
-          "a refused destination is refused without writes");
-    Check(std::size(kMm3dDevRefused) == 15, "the sweep's fifteen faulting destinations");
+              error.find("Faults MM3D") != std::string::npos,
+          "a refused destination is refused without writes, with its reason");
+    Check(std::size(kMm3dDevRefused) == 16, "the sweep's fifteen faulting destinations and Deku Palace 4");
+    // Deku Palace spawn 4 arrived in Deku Shrine: refused with that reason.
+    Check(!proven.Apply(g, Fake::P, 0x5040, nullptr, kDevWarpKeepAll, &error) && g.writes.empty() &&
+              error.find("Deku Shrine") != std::string::npos,
+          "Deku Palace spawn 4 is refused until explained");
+  }
+  {
+    // A day is staged together with a time; a day alone is refused.
+    Fake g;
+    Mm3dDevTools proven({true, true, false, true, true, true});
+    std::string error;
+    Check(!proven.Apply(g, Fake::P, 0xD600, nullptr, DevWarpSelection{2, -1, -1, -1}, &error) && g.writes.empty() &&
+              error == kMm3dDayNeedsTime,
+          "a day without a time is refused without writes");
+    Check(proven.ArrivalError(DevWarpSelection{2, -1, -1, -1}) == kMm3dDayNeedsTime &&
+              proven.ArrivalError(DevWarpSelection{2, 0x8000, -1, -1}).empty() &&
+              proven.ArrivalError(DevWarpSelection{2, kDevWarpPreset, -1, -1}).empty() &&
+              proven.ArrivalError(kDevWarpKeepAll).empty(),
+          "the title's arrival error names a day without a time");
+    DevWarpRuntime runtime({}, std::make_shared<Mm3dDevTools>(Mm3dDevProof{true, true, false, true, true, true}));
+    Check(runtime.ArrivalError(DevWarpSelection{2, -1, -1, -1}) == kMm3dDayNeedsTime,
+          "the runtime reports the title's arrival error (the F1 Warp button is disabled)");
+    bool threw = false;
+    try {
+      ParseMm3dDevWarpScript("mm3d:0xD600:day=2", kMm3dDevEntrances, kMm3dDevZones);
+    } catch (const std::runtime_error &) {
+      threw = true;
+    }
+    Check(threw, "a script entrance with a day and no time is refused");
+    // Every zone preset with a day also has a time.
+    for (const auto &zone : kMm3dDevZones)
+      Check(zone.Preset[0] == -1 || zone.Preset[1] != -1, zone.Id);
+  }
+  {
+    // A scene that sets its own clock: a requested time is a warning, not a
+    // failure, and the arrival check does not compare the time there.
+    Fake g;
+    Mm3dDevTools proven({true, true, false, true, true, true});
+    Check(proven.ArrivalWarning(0xC800, DevWarpSelection{-1, 0x8000, -1, -1}).find("Moon") != std::string::npos &&
+              proven.ArrivalWarning(0x1C40, DevWarpSelection{1, 0x8000, -1, -1}).find("Cutscene Scene") !=
+                  std::string::npos,
+          "own-clock destinations warn about a requested time");
+    Check(proven.ArrivalWarning(0xC800, kDevWarpKeepAll).empty() &&
+              proven.ArrivalWarning(0x1C30, DevWarpSelection{-1, 0x8000, -1, -1}).empty() &&
+              proven.ArrivalWarning(0xD600, DevWarpSelection{-1, 0x8000, -1, -1}).empty(),
+          "no warning without a time or elsewhere");
+    std::vector<uint32_t> table(65536, UINT32_MAX);
+    const auto &moon = Entrance(0xC800);
+    table[0xC800] = uint32_t(moon.Scene) | (uint32_t(moon.Spawn) << 8);
+    Check(proven.Check(moon, table).Available, "an own-clock destination stays available");
+    g.Put(Common + 0x20, uint16_t{0x52D8}); // 07:45, the Moon's clock
+    g.Put(Common + 0x0C, uint8_t{0});
+    DevWarpObservation o;
+    o.Entrance = 0xC800;
+    Check(proven.ArrivalMismatch(g, o, DevWarpSelection{-1, 0x0000, -1, -1}).empty(),
+          "the Moon's own clock is no arrival mismatch");
+    o.Entrance = 0xD600;
+    Check(proven.ArrivalMismatch(g, o, DevWarpSelection{-1, 0x0000, -1, -1}).starts_with("field=time"),
+          "elsewhere the time is still checked");
+  }
+  {
+    // The arrival counts during an entrance cutscene (no arrival timeout), but
+    // the arrival options are checked and the warp settles only once gameplay
+    // resumes; a cutscene that outlasts the wait is reported distinctly.
+    const auto arriveInCutscene = [](Fake &g, DevWarpRuntime &runtime) {
+      runtime.WarpTo(Entrance(0xD800), DevWarpSelection{-1, 0xEAAB, -1, -1});
+      runtime.Advance(g, 0, 10);
+      Check(runtime.Status().Phase == DevWarpPhase::Requested, runtime.Status().Message.c_str());
+      g.Put(Fake::P + 0xC529, uint8_t{0});
+      g.Put(Fake::P + 0xC85A, uint8_t{3});
+      runtime.Advance(g, 0, 11);
+      g.Put(Fake::P + 0xC85A, uint8_t{0});
+      g.Put(Common + 0x3518, uint32_t{0xD800});
+      g.Put(Fake::P + 0x148, int16_t{0x6F});
+      g.Put(Fake::P + 0xAAC, uint16_t{1});    // not gameplay: the entrance cutscene
+      g.Put(Common + 0x20, uint16_t{0x8000}); // the cutscene's own clock, for now
+      runtime.Advance(g, 0, 12);
+    };
+    auto title = std::make_shared<Mm3dDevTools>(Mm3dDevProof{true, true, false, true, true, true});
+    {
+      Fake g;
+      DevWarpRuntime runtime({}, title);
+      arriveInCutscene(g, runtime);
+      Check(runtime.Status().Phase == DevWarpPhase::Requested && runtime.Status().InCutscene,
+            "arrived in the cutscene: not yet settled, options not yet checked");
+      for (uint64_t frame = 13; frame < 1200; ++frame)
+        runtime.Advance(g, 0, frame);
+      Check(runtime.Status().Phase == DevWarpPhase::Requested && runtime.Status().InCutscene,
+            "the arrival timeout does not fire during the entrance cutscene");
+      // Gameplay resumes with the staged time applied: arrived, no mismatch.
+      g.Put(Common + 0x20, uint16_t{0xEAAB});
+      g.Put(Common + 0x0C, uint8_t{1});
+      g.Put(Fake::P + 0xAAC, uint16_t{0});
+      runtime.Advance(g, 0, 1200);
+      Check(runtime.Status().Phase == DevWarpPhase::Arrived && !runtime.Status().InCutscene,
+            runtime.Status().Message.c_str());
+    }
+    {
+      Fake g;
+      DevWarpRuntime runtime({}, title);
+      arriveInCutscene(g, runtime);
+      for (uint64_t frame = 13; frame < 5000; ++frame)
+        runtime.Advance(g, 0, frame);
+      Check(runtime.Status().Phase == DevWarpPhase::Arrived && runtime.Status().InCutscene &&
+                runtime.Status().Message.find("in a cutscene") != std::string::npos,
+            "a cutscene that never ends is arrived in a cutscene, not settled or failed");
+    }
   }
   {
     // A boss lair's intro cutscene (no gameplay yet) still counts as arrived

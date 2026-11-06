@@ -25,6 +25,10 @@ and `preflight.rs`; runtime: `tools/oot3d/native_game_runtime/triaevum_fatal_rep
   - with `TRIAEVUM_NO_FATAL_DIALOG=1` (any value except empty or `0`).
   Automation that starts the game interactively must set
   `TRIAEVUM_NO_FATAL_DIALOG=1` or it waits for someone to close the dialog.
+  Developer builds (`TRIAEVUM_DEVELOPER_TOOLS`) also honour
+  `TRIAEVUM_CRASH_DIALOG=0`, which suppresses the crash handlers' own dialog
+  (and this one) so an agent's run logs the crash and exits; a product build
+  ignores it and always shows the crash dialog.
 - The exit code is 1 (2 for invalid arguments); a crash ends with the
   system's code (`0xC0000005`, `0xC0000409`, a signal).
 

@@ -141,11 +141,28 @@ ZONES = [
     ("Mini-dungeons", "Fairy Fountain (Clock Town)", "FAIRY_FOUNTAIN", 0, None, None, None, ""),
 ]
 # Zones whose arrival has a reviewed live receipt (TRIAEVUM_DEV_WARP arrived
-# and settled from a base savestate). The others are listed as unverified.
+# and settled from a base savestate). An explicit list: a zone added to ZONES
+# is unverified until its own receipt is reviewed and its id is added here.
 # 2026-11-06 (runs/mm3dwarp, from sct_day1_idle): r0, r1, r2, r3, r4, r6; then
-# the lab sweep analysis/devwarp/verify_2026-11 (zones, zones_retry, fixcheck):
-# every zone arrived at its entrance with its preset, one JPEG each. All
-# zones are therefore proven (PROVEN_ZONES, after slug() below).
+# the lab sweep analysis/devwarp/verify_2026-11 (zones, zones_retry, fixcheck;
+# the-moon in final/ after its preset became keep): each arrived at its
+# entrance with its preset, one JPEG each.
+PROVEN_ZONES: frozenset[str] = frozenset({
+    "south-clock-town-clock-tower-door", "south-clock-town-from-termina-field", "north-clock-town",
+    "east-clock-town", "west-clock-town", "laundry-pool", "clock-tower-interior", "clock-tower-rooftop",
+    "termina-field-south-gate", "termina-field-astral-observatory", "milk-road", "romani-ranch",
+    "road-to-southern-swamp", "southern-swamp-poisoned", "southern-swamp-cleared", "deku-palace",
+    "woods-of-mystery", "woodfall", "woodfall-temple", "path-to-mountain-village", "mountain-village-winter",
+    "mountain-village-spring", "goron-village-winter", "snowhead", "snowhead-temple", "great-bay-coast",
+    "zora-cape", "zora-hall", "pirates-fortress-exterior", "pinnacle-rock", "great-bay-temple", "road-to-ikana",
+    "ikana-graveyard", "ikana-canyon", "stone-tower", "inverted-stone-tower", "stone-tower-temple",
+    "stone-tower-temple-inverted", "ancient-castle-of-ikana", "the-moon", "moon-deku-trial", "moon-goron-trial",
+    "moon-zora-trial", "moon-link-trial", "odolwas-lair", "gohts-lair", "gyorgs-lair", "twinmolds-lair",
+    "igos-du-ikanas-lair", "majoras-lair", "stock-pot-inn", "milk-bar", "astral-observatory", "mayors-residence",
+    "curiosity-shop", "bomb-shop", "swordsmans-school", "post-office", "goron-shrine", "magic-hags-potion-shop",
+    "swamp-spider-house", "oceanside-spider-house", "pirates-fortress-interior", "beneath-the-well",
+    "beneath-the-graveyard", "secret-shrine", "deku-shrine", "ghost-hut", "fairy-fountain-clock-town",
+})
 
 # Destinations that end MM3D's title process when warped to directly from
 # gameplay in this build (live sweep 2026-11, analysis/devwarp/verify_2026-11:
@@ -167,9 +184,22 @@ MM3D_REFUSED: dict[int, str] = {
     0x3A10: _BREAK,                    # Town Shooting Gallery spawn 1
     0x40D0: _EXIT.format("0x1F4A14"),  # Pirates' Fortress Interior spawns 13-14
     0x40E0: _BREAK,
+    # Deku Palace spawn 4: requested, MM3D arrived in Deku Shrine (scene 0x52,
+    # entrance 0x9E00) instead; unexplained, so refused until it is explained.
+    0x5040: "Arrives in Deku Shrine (entrance 0x9E00) instead of Deku Palace; refused until explained (live sweep 2026-11).",
     0x9E20: _EXIT.format("0x1F4A14"),  # Deku Shrine spawn 2
     0xD2C0: _BREAK,                    # East Clock Town spawn 12
     0xDA20: _EXIT.format("0x2FF543"),  # Laundry Pool spawn 2
+}
+
+# Destinations whose scene sets its own clock on arrival, so a requested time
+# does not apply: warned about, not refused (live sweep 2026-11: each arrived
+# with its scene's own time, Cutscene Scene 05:58, the Moon 07:45).
+_CUTSCENE_CLOCK = "Cutscene Scene sets its own clock on arrival (05:58 observed); a requested time does not apply."
+_MOON_CLOCK = "The Moon sets its own clock on arrival (07:45 observed); a requested time does not apply."
+MM3D_OWN_CLOCK: dict[int, str] = {
+    0x1C00: _CUTSCENE_CLOCK, 0x1C10: _CUTSCENE_CLOCK, 0x1C20: _CUTSCENE_CLOCK, 0x1C40: _CUTSCENE_CLOCK,
+    0xC800: _MOON_CLOCK, 0xC810: _MOON_CLOCK,
 }
 
 FORMS = {"deity": 0, "goron": 1, "zora": 2, "deku": 3, "human": 4}
@@ -185,9 +215,6 @@ def clock(hhmm: str) -> int:
 
 def slug(text: str) -> str:
     return re.sub(r"-+", "-", re.sub(r"[^a-z0-9]+", "-", text.lower().replace("'", ""))).strip("-")
-
-
-PROVEN_ZONES: set[str] = {slug(zone[1]) for zone in ZONES}
 
 
 def c_string(text: str) -> str:
@@ -266,8 +293,11 @@ class Donor:
                             (region_scene, "one way" if not exit_.group(3) else ""))
         return names
 
-    def spawn_label(self, group: int, spawn: int) -> str | None:
-        candidates = self.spawn_names.get((group, spawn), [])
+    def spawn_label(self, group: int, spawn: int, own: str = "") -> str | None:
+        # A spawn is named by the neighbour it comes from, never by its own
+        # scene (an exit within the scene would read "X, n: from X").
+        candidates = [(scene, comment) for scene, comment in self.spawn_names.get((group, spawn), [])
+                      if scene != own]
         scenes: list[str] = []
         comments: dict[str, set[str]] = {}
         for scene, comment in candidates:
@@ -319,7 +349,7 @@ def build(root: Path) -> tuple[str, dict]:
             if row is None:
                 continue
             # "<spawn>: <meaning>", e.g. "1: from South Clock Town (to lower)".
-            label = donor.spawn_label(group, spawn)
+            label = donor.spawn_label(group, spawn, donor.scenes[row[0]][3] if row[0] in donor.scenes else "")
             parts = [part for part in (label, note) if part]
             label = f"{spawn}: " + (", ".join(parts) if parts else "spawn")
             rows.append((label, (group << 9) | (spawn << 4), row[0], row[1]))
@@ -394,7 +424,16 @@ def build(root: Path) -> tuple[str, dict]:
     for entrance, reason in sorted(MM3D_REFUSED.items()):
         out.append(f"  {{0x{entrance:04X}, {c_string(reason)}}},")
     out.append("};")
-    summary = {"entrances": len(rows), "refused": len(MM3D_REFUSED), "scenes": len(scene_rows), "zones": len(zones),
+    unknown_clock = set(MM3D_OWN_CLOCK) - set(by_entrance)
+    if unknown_clock or set(MM3D_OWN_CLOCK) & set(MM3D_REFUSED):
+        raise ValueError(f"own-clock entrances absent or refused: {sorted(unknown_clock)}")
+    out.append("// Destinations whose scene sets its own clock: a requested time is warned about.")
+    out.append("inline constexpr Mm3dDevRefusal kMm3dDevOwnClock[]{")
+    for entrance, reason in sorted(MM3D_OWN_CLOCK.items()):
+        out.append(f"  {{0x{entrance:04X}, {c_string(reason)}}},")
+    out.append("};")
+    summary = {"entrances": len(rows), "refused": len(MM3D_REFUSED), "own_clock": len(MM3D_OWN_CLOCK),
+               "scenes": len(scene_rows), "zones": len(zones),
                "named": sum(1 for label, *_ in rows if not label.endswith(": spawn"))}
     return "\n".join(out) + "\n", summary
 
