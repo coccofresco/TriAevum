@@ -165,3 +165,40 @@ approval**. The four-populated-category room catalog, unknown material roles,
 uncaptured variants, installer/previous-room integration and the prior failed
 product smoke remain honestly bounded in the evidence index. Base-profile
 values, including ambient0.6, remain unchanged; the look verdict is the owner's.
+
+## Native contribution conservation correction (`f04d2376`)
+
+Owner review rejected the old On torch pools as too dark. The shared conversion
+had discarded exact native fragment-slot diffuse/specular response and rebuilt
+it from a separately faded supplemental colour, generic material/normal and
+different falloff. Exact identity proved ownership, not energy conservation.
+
+Matched slots now retain their native per-pixel response and attenuation LUT;
+user intensity/tint/radius controls and the existing cube visibility apply once.
+The exact matching point row is excluded from supplemental evaluation. Installed
+GGX uses the same native radiance/attenuation and cube routing. Ambient and alpha
+are retained. Unmatched independent emitters and OoT3D's legacy path are unchanged;
+there is no per-scene tuning, base-profile edit, new uniform ABI or old pack change.
+
+A real Clock Town floor-triangle sample traced to source `99069c4` gives native
+unshadowed RGB `(0.228650,0.158109,0)` versus the old approximation
+`(0.189191,0.131659,0)`. The corrected unit-control, unoccluded response is native.
+Another sample had almost no deficit: do not claim that selector fade explains
+all the image darkening. Reconstruction is not a live pixel/visibility readback.
+New36 production GPU cases preserve contribution at the70-unit reference distance
+and across/beyond native reach, with shadow/control/ambient/specular/alpha checks.
+Pipeline72, foundation463+1skip,54 existing point cases and12 GGX+12 native-unlit
+PBR cases pass. Regenerated uber/pass packs remain byte-identical.
+
+Exactly four new serialized launches, zero retries: diagnostic Clock Town Off,
+diagnostic Woodfall Off, then corrected On for each at this implementation.
+Off used `cde29681` plus trace-only instrumentation and is BMP-identical to the
+previous Off reference; both On runs used one clean `f04d2376` binary. Details:
+`DL/captures/conversion/INDEX.md`. No other scene/game was rerun.
+
+The new comparisons show retained warm response, but darker regions remain
+around torch bases and parts of the altar. Whether every remaining region is an
+intended cube shadow or a residual artifact is not isolated by these captures.
+**Contribution conservation is tested; complete visual resolution and appearance
+approval remain unclaimed.** The four-launch budget is exhausted. Further live
+isolation needs new authorization; all earlier product/full-parity gaps remain.
