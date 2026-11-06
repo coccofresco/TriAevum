@@ -1490,6 +1490,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand))
             Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting,
                 pbrOptions.NativeBalance || pbrOptions.PreserveNativeUnlit);
+        if (surfaceLighting && pointReplacement && fragmentBalance)
+            Renderer3ds::ApplyPicaNativePointReplacementControls(*surfaceLighting, *pointReplacement, mFrameEnvironment);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
         if (surfaceCandidate && surfaceDebug.Tracing()) {
             // One candidate: its native colour computation and what Modern did.
@@ -1578,17 +1580,50 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         : kind == Renderer3ds::PicaNativeLightSource::Type::Point      ? "point"
                                                                                         : "none";
                 };
+                const auto nativeTrace = Extension::DecodePicaNativeDrawEnvironment(
+                    draw.VertexUniformBytes, draw.FragmentUniformBytes, draw.FragmentFeatures).FragmentLighting;
                 std::string lights = ",\"classifiedLights\":[";
                 for (size_t slot = 0; slot < draw.LightBinding.Sources.size(); ++slot) {
                     const auto& source = draw.LightBinding.Sources[slot];
-                    char text[192];
+                    char text[1024];
+                    const auto& n = nativeTrace.Lights[slot];
                     std::snprintf(text, sizeof(text),
-                                  "%s{\"slot\":%zu,\"kind\":\"%s\",\"scope\":\"%s\",\"origin\":\"%s\",\"id\":\"%llx\"}",
+                                  "%s{\"slot\":%zu,\"kind\":\"%s\",\"scope\":\"%s\",\"origin\":\"%s\",\"id\":\"%llx\","
+                                  "\"position\":[%.9g,%.9g,%.9g],\"radius\":%.9g,\"unattenuated\":[%.9g,%.9g,%.9g],"
+                                  "\"reference\":[%.9g,%.9g,%.9g],\"nativeDiffuse\":[%.9g,%.9g,%.9g],"
+                                  "\"nativePosition\":[%.9g,%.9g,%.9g],\"nativeAttenuation\":[%.9g,%.9g]}",
                                   slot ? "," : "", slot, kindName(source.Kind),
                                   Renderer3ds::PicaNativeLightScopeName(source.Scope),
                                   Renderer3ds::PicaNativeLightOriginName(source.Origin),
-                                  static_cast<unsigned long long>(source.SourceIdentity));
+                                  static_cast<unsigned long long>(source.SourceIdentity),
+                                  source.PositionWorld[0], source.PositionWorld[1], source.PositionWorld[2], source.Radius,
+                                  source.UnattenuatedColor[0], source.UnattenuatedColor[1], source.UnattenuatedColor[2],
+                                  source.ReferenceColor[0], source.ReferenceColor[1], source.ReferenceColor[2],
+                                  n.Diffuse[0], n.Diffuse[1], n.Diffuse[2],
+                                  n.PositionOrDirectionView[0], n.PositionOrDirectionView[1], n.PositionOrDirectionView[2],
+                                  n.DistanceAttenuationBias, n.DistanceAttenuationScale);
                     lights += text;
+                }
+                lights += "],\"selectedPoints\":[";
+                if (const auto& points = draw.LightBinding.ScenePoints) {
+                    for (uint32_t p = 0; p < points->Count; ++p) {
+                        const auto& point = points->Lights[p];
+                        std::array<float, 3> positionView{};
+                        if (mSurfaceLightingView) for (size_t r = 0; r < 3; ++r) {
+                            positionView[r] = mSurfaceLightingView->Rows[r][3];
+                            for (size_t c = 0; c < 3; ++c)
+                                positionView[r] += mSurfaceLightingView->Rows[r][c] * point.PositionWorld[c];
+                        }
+                        char text[512];
+                        std::snprintf(text, sizeof(text),
+                            "%s{\"id\":\"%llx\",\"position\":[%.9g,%.9g,%.9g],\"radius\":%.9g,\"color\":[%.9g,%.9g,%.9g],"
+                            "\"replacementPositionView\":[%.9g,%.9g,%.9g]}",
+                            p ? "," : "", static_cast<unsigned long long>(point.SourceIdentity),
+                            point.PositionWorld[0], point.PositionWorld[1], point.PositionWorld[2], point.Radius,
+                            point.Color[0], point.Color[1], point.Color[2],
+                            positionView[0], positionView[1], positionView[2]);
+                        lights += text;
+                    }
                 }
                 lights += "],\"environmentLights\":";
                 if (const auto& scene = draw.LightBinding.SceneDirectionals) {
@@ -1671,7 +1706,21 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         static_cast<unsigned long long>(pointReplacement->Points.Lights[i].SourceIdentity));
                     record += identity;
                 }
-                record += "]}}";
+                record += "]},\"nativePointControls\":[";
+                bool firstControl = true;
+                if (surfaceLighting) for (uint32_t i = 0; i < 8; ++i) {
+                    const auto& gain = pointReplacement->Balance.Gains[i];
+                    if (gain[3] < 4) continue;
+                    const auto p = static_cast<uint32_t>(gain[3]) - 4U;
+                    const auto& color = surfaceLighting->ScenePoints[p].Color;
+                    char control[256];
+                    std::snprintf(control, sizeof(control),
+                        "%s{\"slot\":%u,\"pointRow\":%u,\"intensity\":%.9g,\"radiusScale\":%.9g,"
+                        "\"tint\":[%.9g,%.9g,%.9g],\"shadowRow\":%.9g}", firstControl ? "" : ",", i, p,
+                        gain[0], gain[1], color[0], color[1], color[2], color[3]);
+                    record += control; firstControl = false;
+                }
+                record += "]}";
             }
             if (fragmentBalance) {
                 char balance[256];

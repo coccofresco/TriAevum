@@ -2541,7 +2541,7 @@ TEST(PicaNativePointReplacement, ExactHardwareSlotAndTitleProofOwnReplacement) {
     ASSERT_TRUE(result);
     EXPECT_EQ(result->ReplacedSlots, 1U);
     EXPECT_EQ(result->Points.Count, 1U);
-    EXPECT_EQ(result->Balance.Gains[0], (std::array<float,4>{0,0,1,4}));
+    EXPECT_EQ(result->Balance.Gains[0], (std::array<float,4>{1,1,1,4}));
     EXPECT_EQ(result->Balance.Control[1], 1U); // scene key unchanged
     EXPECT_FLOAT_EQ(result->Balance.Parameters[0], .6F);
     f.Layout.LightPermutation = {2,0,1};
@@ -2588,6 +2588,29 @@ TEST(PicaNativePointReplacement, ExactHardwareSlotAndTitleProofOwnReplacement) {
     EXPECT_FALSE(BuildPicaNativePointReplacement(false, f.Layout, f.Binding, f.Profile, {}));
     points->Count = 33;
     EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
+}
+
+TEST(PicaNativePointReplacement, MatchedRowsUseNativeResponseNotFadedSupplementalRadiance) {
+    using namespace Fast::Renderer3ds;
+    FragmentLitNightFixture f;
+    auto points=std::make_shared<PicaScenePointLights>();points->Count=2;
+    points->Lights[0]={987654,{0,10,0},{.1F,.2F,.3F},250,3};
+    points->Lights[0].IndependentEmission=true;
+    points->Lights[1]={f.Binding.Sources[0].SourceIdentity,{0,70,0},{.01F,.007F,0},250,2};
+    points->Lights[1].ReplacesNativeLocal=true;
+    f.Binding.ScenePoints=points;
+    f.Profile.PointLights[2].Intensity=.4F;f.Profile.PointLights[2].RadiusScale=2;
+    f.Profile.PointLights[2].ColorTint={.5F,.75F,1};
+    const auto result=BuildPicaNativePointReplacement(true,f.Layout,f.Binding,f.Profile,{});
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->Balance.Gains[0],(std::array<float,4>{.4F,2,1,5}));
+    PicaSurfaceLightingUniforms surface;surface.Control[1]=2;
+    surface.ScenePoints[0].Color={.1F,.2F,.3F,-1};
+    surface.ScenePoints[1].Color={0,0,0,3}; // even after black material folding
+    ApplyPicaNativePointReplacementControls(surface,*result,f.Profile);
+    EXPECT_EQ(surface.ScenePoints[0].Color,(std::array<float,4>{.1F,.2F,.3F,-1}));
+    EXPECT_EQ(surface.ScenePoints[1].Color,(std::array<float,4>{.5F,.75F,1,3}));
+    EXPECT_EQ(result->Balance.Parameters[0],1);
 }
 
 TEST(PicaFragmentBalance, UnsupportedShapeLeavesTheFragmentLitFrameNative) {

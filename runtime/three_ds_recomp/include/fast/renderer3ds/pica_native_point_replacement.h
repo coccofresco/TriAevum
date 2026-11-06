@@ -76,13 +76,31 @@ struct PicaNativePointReplacement {
         result.ReplacedSlots |= match;
         for (uint32_t i = 0; i < binding.Sources.size(); ++i)
             if (match & (1U << i))
-                // Replace direct/specular only. The native light's ambient
-                // remains native; global scene ambient keeps its prior policy.
-                result.Balance.Gains[i] = {0, 0, 1, 4};
+                // A fragment-native point already has per-pixel radiance and
+                // attenuation. Convert its visibility, not its energy into a
+                // separately selected/faded supplemental-light approximation.
+                // w >= 4 encodes the exact scene-point index; x/y are the user
+                // intensity/radius controls on this path, z retains ambient.
+                result.Balance.Gains[i] = {setting.Intensity, setting.RadiusScale, 1,
+                    float(4U + result.Points.Count - 1U)};
     }
     if (!result.Points.Count) return std::nullopt;
     result.Balance.Control[3] |= 2U; // proved replacement/independent point term before native clamp
     return result;
+}
+
+// Call after material folding: matched point rows carry only a user tint.
+// Their authored material/light response stays in the native slot; unmatched
+// rows remain ordinary supplemental radiance. No uniform-layout/legacy change.
+inline void ApplyPicaNativePointReplacementControls(PicaSurfaceLightingUniforms& surface,
+    const PicaNativePointReplacement& replacement, const PicaEnvironmentLighting& environment) noexcept {
+    for (const auto& gains : replacement.Balance.Gains) {
+        if (gains[3] < 4.0F) continue;
+        const auto p = static_cast<uint32_t>(gains[3]) - 4U;
+        if (p >= replacement.Points.Count || p >= surface.Control[1]) continue;
+        const auto& tint = environment.PointLights[replacement.Points.Lights[p].Group].ColorTint;
+        std::copy(tint.begin(), tint.end(), surface.ScenePoints[p].Color.begin());
+    }
 }
 
 } // namespace Fast::Renderer3ds

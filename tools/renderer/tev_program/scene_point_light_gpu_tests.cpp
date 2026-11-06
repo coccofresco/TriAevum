@@ -393,6 +393,7 @@ void main() {
                 binding, settings, &*view, nullptr, true);
             if (!lighting) throw std::runtime_error("native-point builder rejected fixture");
             entry.Lighting.Surface = *lighting;
+            if (replacement) ApplyPicaNativePointReplacementControls(entry.Lighting.Surface, *replacement, settings);
             if (i == 1) entry.Visibility[0] = 0;
             if (i == 2) entry.Visibility[0] = .5F;
         }
@@ -400,8 +401,12 @@ void main() {
             std::regex(R"(layout\([^)]*\)\s*)"), "");
         nativeDeclarations = std::regex_replace(nativeDeclarations, std::regex(R"(\bin\s+)"), "");
         nativeDeclarations = std::regex_replace(nativeDeclarations, std::regex(R"(\buniform\b)"), "struct");
-        const auto nativeShader = "#version 450\nlayout(local_size_x=1) in;\nvec3 pica_view;\nvec4 pica_primary_color;\n" +
-            nativeDeclarations + R"glsl(
+        const auto nativeShader = std::string("#version 450\nlayout(local_size_x=1) in;\nvec3 pica_view;\nvec4 pica_primary_color;\n") +
+            R"glsl(
+struct FU { vec4 lighting_global_ambient; vec4 lighting_attenuation[8]; };
+FU fragment_uniforms;
+float pica_lighting_lut_unsigned(int table,float x){return 1.0-x;}
+)glsl" + nativeDeclarations + R"glsl(
 struct NativePointCase { PicaSurfaceLighting lighting; vec4 visibility; };
 layout(set=0,binding=0,std430) readonly buffer Cases { NativePointCase cases[]; } inputs;
 layout(set=0,binding=1,std430) writeonly buffer Results { vec4 values[]; } outputs;
@@ -418,10 +423,9 @@ void main() {
     vec4 secondary_fragment_color=vec4(.4,0,0,.63);
     struct LP { uvec4 control; uvec4 lights[8]; };
     LP lp; lp.control=uvec4(1,0,0,0); lp.lights[0]=uvec4(0);
-    struct FU { vec4 lighting_global_ambient; };
-    FU fragment_uniforms; fragment_uniforms.lighting_global_ambient=vec4(.1,.1,.1,0);
+    fragment_uniforms.lighting_global_ambient=vec4(.1,.1,.1,0);
 )glsl" + std::string(kPicaFragmentBalanceCaptureBegin) + R"glsl(
-    balance_diffuse[0]=vec3(.8,0,0);
+    balance_diffuse[0]=vec3(index==3u?0.0:.8,0,0);
     balance_ambient[0]=vec3(.2);
     balance_combined[0]=balance_diffuse[0]+balance_ambient[0];
     balance_specular[0]=vec3(.4,0,0);
@@ -432,7 +436,7 @@ void main() {
         std::array<Vec4, nativePoints.size()> nativeOutput{};
         RunComputeTest(nativeShader, std::as_bytes(std::span(nativePoints)),
             std::as_writable_bytes(std::span(nativeOutput)), nativePoints.size());
-        const std::array<float, nativePoints.size()> nativeExpected{.675F,.3F,.4875F,.3F,1};
+        const std::array<float, nativePoints.size()> nativeExpected{1.F,.3F,.7F,.3F,1};
         for (size_t i=0;i<nativePoints.size();++i) {
             const Vec4 expectedNative{nativeExpected[i],.3F,.3F,.37F};
             for (size_t c=0;c<4;++c)

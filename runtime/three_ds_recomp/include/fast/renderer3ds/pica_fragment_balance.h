@@ -11,6 +11,7 @@ struct alignas(16) PicaFragmentBalanceUniforms {
     std::array<uint32_t,4> Control{};
     // Per native index: diffuse gain, specular gain, ambient gain, source class.
     // class0 local, class1 scene direct, class2 key carrier, class3 retained fill.
+    // class >=4: exact point row (class-4), x=intensity, y=radius scale.
     std::array<std::array<float,4>,8> Gains{};
     std::array<float,4> Parameters{}; // global ambient gain, reserved
 };
@@ -152,6 +153,37 @@ inline std::optional<PicaFragmentBalanceUniforms> BuildPicaFragmentBalanceUnifor
     return balanceTitleDraw && !balanced && (fragmentLit || !fullSceneLighting);
 }
 
+// Specialized variants only: native radiance/LUTs are already per pixel.
+// The exact point row supplies user tint and cube visibility, not a second
+// material coefficient or the supplemental selector's exposure/fade.
+inline constexpr std::string_view kPicaNativePointBalanceFunctions=R"glsl(
+float pica_point_shadow(float slot, vec3 light_to_fragment, float radius);
+bool pica_native_point_row(int point) {
+    for (uint i = 0u; i < 8u; ++i)
+        if ((pica_surface.balance_control.x & (1u << i)) != 0u &&
+            pica_surface.balance_gains[i].w == float(point + 4)) return true;
+    return false;
+}
+vec3 pica_native_point_factor(uint i) {
+    PicaScenePointLight point = pica_surface.scene_points[int(pica_surface.balance_gains[i].w) - 4];
+    vec3 delta = point.position_radius.xyz + pica_view;
+    vec3 world_delta = vec3(dot(pica_surface.view_to_world_linear[0].xyz, delta),
+        dot(pica_surface.view_to_world_linear[1].xyz, delta),
+        dot(pica_surface.view_to_world_linear[2].xyz, delta));
+    return point.color.rgb * pica_surface.balance_gains[i].x *
+        pica_point_shadow(point.color.w, -world_delta, point.position_radius.w);
+}
+float pica_native_point_attenuation(uint i, uint flags, float distance_to_light,
+    float spot, float native_attenuation) {
+    float scale = pica_surface.balance_gains[i].y;
+    if (pica_surface.balance_gains[i].w < 4.0 || scale == 1.0 || (flags & 64u) == 0u)
+        return native_attenuation;
+    return spot * pica_lighting_lut_unsigned(int(16u + i), clamp(
+        fragment_uniforms.lighting_attenuation[i].y * distance_to_light / scale +
+        fragment_uniforms.lighting_attenuation[i].x, 0.0, 1.0));
+}
+)glsl";
+
 inline constexpr std::string_view kPicaFragmentBalanceCaptureBegin=R"glsl(
     precise vec3 balance_diffuse[8];
     precise vec3 balance_ambient[8];
@@ -159,12 +191,19 @@ inline constexpr std::string_view kPicaFragmentBalanceCaptureBegin=R"glsl(
     precise vec3 balance_combined[8];
 )glsl";
 inline constexpr std::string_view kPicaFragmentBalanceCaptureDiffuse=R"glsl(
-        balance_diffuse[slot] = diffuse * attenuation;
+        float replacement_attenuation = pica_native_point_attenuation(i, flags,
+            distance_to_light, spot_attenuation, attenuation);
+        balance_diffuse[slot] = diffuse * replacement_attenuation;
         balance_ambient[slot] = fragment_uniforms.lighting_ambient[i].rgb * attenuation;
         balance_combined[slot] = diffuse * attenuation + fragment_uniforms.lighting_ambient[i].rgb * attenuation;
 )glsl";
 inline constexpr std::string_view kPicaFragmentBalanceCaptureSpecular=R"glsl(
         balance_specular[slot] = specular;
+        if (pica_surface.balance_gains[i].w >= 4.0) {
+            balance_specular[slot] = (s0 + s1) * highlight * replacement_attenuation;
+            if ((lp.control.w & 4u) != 0u && (flags & 16u) != 0u)
+                balance_specular[slot] *= pica_shadow_factor.rgb;
+        }
 )glsl";
 inline constexpr std::string_view kPicaFragmentBalanceBody=R"glsl(
     // Preserve native material/vertex colour. Recompose BEFORE native clamp
@@ -179,6 +218,14 @@ inline constexpr std::string_view kPicaFragmentBalanceBody=R"glsl(
         for (uint slot=0u;slot<lp.control.x;++slot) {
             uint i=lp.lights[slot].x;
             vec4 gains=pica_surface.balance_gains[i];
+            if (gains.w >= 4.0) {
+                vec3 factor = pica_native_point_factor(i);
+                balance_primary += balance_diffuse[slot] * factor + balance_ambient[slot];
+                balance_secondary += balance_specular[slot] * factor;
+                balance_ambient_sum += balance_ambient[slot];
+                identity = false;
+                continue;
+            }
             vec3 dg=vec3(gains.x), sg=vec3(gains.y);
             if (i==pica_surface.balance_control.y) { dg=key_visibility; sg=key_visibility; }
             bool unchanged=all(equal(dg,vec3(1.0))) && gains.z==1.0;
@@ -189,10 +236,9 @@ inline constexpr std::string_view kPicaFragmentBalanceBody=R"glsl(
             identity = identity && unchanged && all(equal(sg,vec3(1.0)));
         }
         if ((pica_surface.balance_control.w & 2u) != 0u && pica_surface.control.y != 0u) {
-            // Only identity-proved Local sources enter this variant. Their
-            // native direct/specular terms were removed above, before clamp.
-            // Reuse the scene-point evaluator (including its cube shadow),
-            // with material reflectance once, as on vertex-lit receivers.
+            // Exact native matches were converted above. The scene evaluator
+            // skips their rows: only unmatched/independent sources add energy.
+            // Supplemental material reflectance is applied exactly once.
             balance_primary += pica_surface_scene_point_primary(
                 pica_surface_unit(pica_surface_normal), false) * pica_surface.material_diffuse.rgb;
             identity = false;

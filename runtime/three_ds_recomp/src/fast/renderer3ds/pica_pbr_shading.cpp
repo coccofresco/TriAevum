@@ -314,10 +314,16 @@ constexpr std::string_view kPbrBalancedNativeLoopEnd = R"glsl(
             if ((pbr_material.native_control.w & 6u) != 0u) rim *= pica_shadow_factor.rgb;
         }
         vec3 radiance = fragment_uniforms.lighting_diffuse[i].rgb;
-        pbr_direct += (diffuse * gains.x + specular * gains.y + rim * gains.x) *
-            radiance * attenuation * pica_surface_shadow(int(i));
-        pbr_gi_native += diffuse * gains.x * radiance * attenuation * pica_surface_shadow(int(i)) *
-            ((flags & 1u) != 0u ? pica_surface.gi_sources.x : pica_surface.gi_sources.z);
+        if (gains.w >= 4.0) {
+            vec3 converted = radiance * direct_attenuation * pica_native_point_factor(i);
+            pbr_direct += (diffuse + specular + rim) * converted;
+            pbr_gi_native += diffuse * converted * pica_surface.gi_sources.z;
+        } else {
+            pbr_direct += (diffuse * gains.x + specular * gains.y + rim * gains.x) *
+                radiance * attenuation * pica_surface_shadow(int(i));
+            pbr_gi_native += diffuse * gains.x * radiance * attenuation * pica_surface_shadow(int(i)) *
+                ((flags & 1u) != 0u ? pica_surface.gi_sources.x : pica_surface.gi_sources.z);
+        }
         pbr_ambient += fragment_uniforms.lighting_ambient[i].rgb * attenuation * gains.z;
     }
     pbr_ambient += fragment_uniforms.lighting_global_ambient.rgb * pica_surface.balance_parameters.x;
@@ -643,6 +649,17 @@ std::optional<PicaPbrShader> BuildPicaPbrShader(
         result.ShadingBody += kPbrNativeLoopBegin;
         if (options.NativeAttenuationLuts) {
             result.ShadingBody += kPbrNativeAttenuation;
+        }
+        if (options.NativeBalance) {
+            result.ShadingBody += "        float direct_attenuation = attenuation;\n";
+            if (options.NativeAttenuationLuts)
+                result.ShadingBody += R"glsl(
+        float point_spot = 1.0;
+        if ((flags & 32u) != 0u)
+            point_spot = pbr_native_spot(int(8u + i), two_sided, pbr_normal, pbr_tangent,
+                pbr_view, l, pbr_view + l, fragment_uniforms.lighting_spot_direction[i].xyz);
+        direct_attenuation = pica_native_point_attenuation(i, flags, light_distance, point_spot, attenuation);
+)glsl";
         }
         result.ShadingBody += options.NativeBalance ? kPbrBalancedNativeLoopEnd : kPbrNativeLoopEnd;
     } else {

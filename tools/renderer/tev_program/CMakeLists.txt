@@ -127,6 +127,18 @@ if(WIN32)
 endif()
 add_test(NAME scene_point_light_gpu COMMAND scene_point_light_gpu_tests)
 set_tests_properties(scene_point_light_gpu PROPERTIES TIMEOUT 60)
+add_executable(native_point_reference_gpu_tests native_point_reference_gpu_tests.cpp
+    "${runtime}/src/fast/renderer3ds/pica_surface_lighting.cpp"
+    "${runtime}/src/fast/renderer3ds/point_shadow_map.cpp")
+target_compile_features(native_point_reference_gpu_tests PRIVATE cxx_std_20)
+target_include_directories(native_point_reference_gpu_tests PRIVATE "${runtime}/include" "${SHADERC_INCLUDE_DIR}")
+target_link_libraries(native_point_reference_gpu_tests PRIVATE Vulkan::Vulkan "${SHADERC_LIBRARY}")
+if(WIN32)
+    add_custom_command(TARGET native_point_reference_gpu_tests POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:native_point_reference_gpu_tests>")
+endif()
+add_test(NAME native_point_reference_gpu COMMAND native_point_reference_gpu_tests)
+set_tests_properties(native_point_reference_gpu PROPERTIES TIMEOUT 60)
 add_executable(native_pbr_point_gpu_tests native_pbr_point_gpu_tests.cpp
     "${runtime}/src/fast/renderer3ds/pica_pbr_shading.cpp"
     "${runtime}/src/fast/renderer3ds/pica_pbr_seam_shader.cpp"
