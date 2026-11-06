@@ -4,6 +4,7 @@
 #include "mm3d_lighting_hook_sites.h"
 #include "mm3d_local_light_sources.h"
 #include "mm3d_room_emitters.h"
+#include "mm3d_synthetic_emitters.h"
 #include <cstdio>
 #include "oot3d_native_a32_memory.h"
 #include "fast/renderer3ds/pica_resolved_draw_stream.h"
@@ -188,7 +189,71 @@ void TestRoomEmitterPublication() {
     Require(!emission.Follows(0x1234),"reset retained MM S14 follow set");
 }
 
+void TestSyntheticFireAndFairies() {
+    for(const auto& row:kMm3dSyntheticSources) {
+        Fixture f;std::vector<PicaScenePointLight> lights;
+        f.W16(f.Actor,row.Actor);f.W32(f.Actor+0x140,row.Update);f.W32(f.Actor+0x13C,row.Destroy);
+        for(const auto& g:row.Guards)if(g[0])f.W32(g[0],g[1]);
+        f.F32(f.Actor+0x24,10);f.F32(f.Actor+0x28,20);f.F32(f.Actor+0x2C,30);
+        for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.03F);
+        uint32_t draw=0x100100;
+        if(row.Actor==0xC){draw=0x457638;f.W8(f.Actor+0x768,1);}
+        if(row.Actor==0x57){draw=0x44C8D0;f.W32(f.Actor+0x30C,0x25DFC4);f.W8(f.Actor+0x314,255);}
+        if(row.Actor==0xB7){draw=0x47C5E4;f.F32(f.Actor+0x224,255);f.F32(f.Actor+0x228,1);f.W32(f.Actor+0x28C,f.Model);}
+        if(row.Actor==0xFA){draw=0x483518;for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x2FC+n*4,255);
+            for(uint32_t i=0;i<10;++i)for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x22C+i*12+n*4,float(10+n*10));}
+        f.W32(f.Actor+0x144,draw);
+        CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+        Require(lights.size()==1 && lights[0].IndependentEmission && !lights[0].ReplacesNativeLocal &&
+                lights[0].Group==2 && lights[0].Radius>0,"proved native fire phase not published");
+        lights.clear();CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,true,false,lights);
+        Require(lights.empty(),"registered source gained a synthetic duplicate");
+        for(const auto& g:row.Guards)if(g[0]){f.W32(g[0],g[1]^1U);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"corrupt fire phase guard accepted");f.W32(g[0],g[1]);}
+        f.W32(f.Actor+0x144,0);CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+        Require(lights.empty(),"hidden fire phase emitted");
+        if(row.Actor==0x57) {
+            f.W32(f.Actor+0x144,draw);f.W32(f.Actor+0x30C,0x58BCEC);
+            f.W32(f.Actor+0x128,f.Owner);f.W16(f.Owner,0xF);f.W32(f.Owner+0x140,1);
+            f.W16(f.Actor+0x310,0);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"uncharged arrow emitted");
+            f.W16(f.Actor+0x310,5);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Radius==125,"half charge lost OoT policy");
+            lights.clear();f.W32(f.Actor+0x30C,0xBAD);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"unknown fire-arrow action emitted");
+        }
+        if(row.Actor==0xC){f.W32(f.Actor+0x144,draw);f.W8(f.Actor+0x768,2);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"ice/extinguished Keese treated as fire");
+            f.W8(f.Actor+0x768,1);f.W8(f.Actor+0x76A,1);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"invisible Keese bypassed native draw/lens gate");
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,true,lights);
+            Require(lights.empty(),"previous draw survived current lens-off");
+            f.W8(f.Play+0x20B4,100);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,true,lights);
+            Require(lights.size()==1,"native-visible invisible Keese rejected");}
+    }
+    Fixture f;std::vector<PicaScenePointLight> lights;
+    for(auto g:std::array{std::pair{0x397F54U,0xE5D405EEU},std::pair{0x397FD4U,0xED940A16U},
+                         std::pair{0x39805CU,0xEDD50A51U},std::pair{0x3980D8U,0xE2833F56U}})f.W32(g.first,g.second);
+    f.W32(f.Play+0x20DC,f.Owner);
+    f.W32(f.Actor+0x144,0x397F2C);f.F32(f.Actor+0x58,.008F);f.F32(f.Actor+0x544,1);f.F32(f.Actor+0x564,255);
+    for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x558+n*4,float(255-n*20));
+    CaptureMm3dVisibleFairy(f.Play,f.Actor,1,f.Memory,lights);
+    Require(lights.size()==1 && lights[0].Group==1 && lights[0].SourceIdentity==f.Actor+0x57C &&
+            lights[0].IndependentEmission && !lights[0].ReplacesNativeLocal,"visible dormant fairy lost native identity/proof");
+    lights.clear();f.W8(f.Actor+0x5EE,8);CaptureMm3dVisibleFairy(f.Play,f.Actor,1,f.Memory,lights);
+    Require(lights.empty(),"hidden fairy emitted");f.W8(f.Actor+0x5EE,0);f.F32(f.Actor+0x544,0);
+    CaptureMm3dVisibleFairy(f.Play,f.Actor,1,f.Memory,lights);Require(lights.empty(),"zero glow fairy emitted");
+}
+
 void TestSceneSnapshots() {
+    TestSyntheticFireAndFairies();
     TestLocalSourceGuards();
     TestEachProvenSourcePublication();
     TestRoomEmitterPublication();

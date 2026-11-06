@@ -2,6 +2,7 @@
 #include "mm3d_scene_environment.h"
 #include "mm3d_local_light_sources.h"
 #include "mm3d_room_emitters.h"
+#include "mm3d_synthetic_emitters.h"
 #include "recomp/a32_runtime.h"
 
 #include <algorithm>
@@ -93,7 +94,14 @@ void Mm3dNativeA32LightingProbe::ObserveBlockEntry(uint32_t pc,
     case 0x0015E9ECU:
         // Unknown copies/recycled owners cannot inherit a previous frame's sources.
         mBoundLights.clear(); mRenderStates.clear(); mUploadOwners.clear();
+        mPreviousDrawnActors = std::move(mDrawnActors); mDrawnActors.clear();
         break;
+    case 0x00182C44U: {
+        uint32_t callback=0;
+        if (Object(state.r[0],0x148U) && memory.Read32(state.r[0]+0x144U,&callback) &&
+            callback && callback==state.r[2]) mDrawnActors.insert(state.r[0]);
+        break;
+    }
     case 0x0040650CU: ObserveAcceptedLight(state.r[0], state.r[1], state.r[3], true, memory); break;
     case 0x004648F4U: ObserveAcceptedLight(state.r[0], state.r[1], state.r[2], false, memory); break;
     case 0x001BFB40U: mBoundLights.erase(state.r[1]); break;
@@ -283,6 +291,7 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         frame != mSnapshotFrame + 1U || mSnapshotScene != current.State->SceneId;
     if (discontinuity) {
         mContinuityEnvironment.reset(); mShadowCaster.Reset();
+        mPreviousDrawnActors.clear(); mDrawnActors.clear();
     }
     mHaveSnapshot = true; mSnapshotPlay = play; mSnapshotFrame = frame;
     mSnapshotScene = current.State->SceneId;
@@ -353,7 +362,7 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         mLightFunctions[light.SourceIdentity] = {PicaNativeLightOrigin::Actor, PicaNativeLightScope::Local};
         if (light.ReplacesNativeLocal) {
             capturedInfos.insert(info);
-            candidates.push_back(light);
+            if (light.Radius>0) candidates.push_back(light);
         }
     };
     for (uint32_t category = 0; category < 12U; ++category) {
@@ -373,17 +382,24 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
                     std::array<float, 3> position;
                     if (ReadPosition(memory, actor + 0x24U, position)) player = position;
                 }
+                const auto firstCandidate=candidates.size();
                 for (const auto& source : kMm3dLocalLightSources) {
                     if (source.Actor != id || source.Category != category) continue;
                     const uint32_t group = id == 0x10U ? (params == 0 ? 0U : 1U) : 2U;
                     capturePoint(actor, source.Info, source.Node, group);
                 }
+                const bool nativePoint=candidates.size()!=firstCandidate;
+                if (id==0x10 && !nativePoint && capturedInfos.contains(actor+0x578U))
+                    CaptureMm3dVisibleFairy(play,actor,params,memory,candidates);
+                CaptureMm3dSyntheticEmitters(play,actor,id,memory,nativePoint,
+                    mPreviousDrawnActors.contains(actor),candidates);
             }
             actor = next;
         }
     }
     // MM torches already register native sources. Never add a synthetic copy.
-    // Dormant non-Tatl fairy extensions still require variant/draw-gate proof.
+    // Visible dormant fairies and unregistered fire phases use native gates
+    // above; native player/carried-fire records remain exact replacements.
     if (!mEmitterCatalogResolved) {
         mEmitterCatalog = PicaEmitterCatalog::FromEnvironment("mm3d");
         mEmitterCatalogResolved = true;
@@ -487,6 +503,7 @@ void Mm3dNativeA32LightingProbe::Reset() noexcept {
     mBoundLights.clear(); mRenderStates.clear(); mUploadOwners.clear();
     mScenePoints.reset(); mSceneDirectionals.reset(); mWater.reset(); mHaveSnapshot = false;
     mLightFunctions.clear(); mGroup.Reset(); mSelector.Reset();
+    mPreviousDrawnActors.clear(); mDrawnActors.clear();
     if (mEmitterCatalog) PicaSurfaceEmissionRegistry::Instance().Follow({});
     mContinuityPlayState = 0; mContinuityEnvironment.reset(); mContinuityCount = 0;
     ++mContinuityEpoch; mShadowCaster.Reset();

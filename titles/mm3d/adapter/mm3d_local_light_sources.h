@@ -19,6 +19,18 @@ struct Mm3dLocalLightSource {
     std::array<std::array<uint32_t,2>,4> Guards;
 };
 inline constexpr std::array kMm3dLocalLightSources{
+    // Player/carried fire: wrapper callbacks dispatch through 6919AC. Native
+    // init 1F5C78 inserts +9A4 and stores +9A0; destroy 1F6FDC removes it.
+    // Keep the title's active radius/RGB/limb-tip position, not a second stick.
+    Mm3dLocalLightSource{0,2,0x9A4,0x9A0,0x1F4E1C,0x43A8D4,{{
+        {0x1F6818,0xEBFFC3E9},{0x1F681C,0xE58409A0},
+        {0x1F7038,0xE59429A0},{0x1F7044,0xEBFFE811}}}},
+    Mm3dLocalLightSource{0x10,7,0x578,0x590,0x398120,0x31F844,{{
+        {0x31F854,0xE5902590},{0x31F864,0xEBFB4609},
+        {0x31F868,0xE59525AC},{0x31F874,0xEBFB4605}}}},
+    Mm3dLocalLightSource{0x10,7,0x594,0x5AC,0x398120,0x31F844,{{
+        {0x31F854,0xE5902590},{0x31F864,0xEBFB4609},
+        {0x31F868,0xE59525AC},{0x31F874,0xEBFB4605}}}},
     Mm3dLocalLightSource{4,7,0x200,0x1FC,0x3FE1BC,0x39E1DC,{{
         {0x39E1FC,0xE59421FC},{0x3FE270,0xE2840C02},
         {0x3FE274,0xEBF855E2},{0x213A18,0xE1C041B6}}}},

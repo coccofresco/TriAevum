@@ -4,6 +4,7 @@
 #include "mm3d_scene_environment.h"
 #include "fast/renderer3ds/pica_emitter_catalog.h"
 #include "fast/renderer3ds/pica_scene_light_selection.h"
+#include <unordered_set>
 
 namespace Oot3dNativeGame {
 
@@ -68,6 +69,7 @@ class Mm3dNativeA32LightingProbe {
         Fast::Renderer3ds::PicaNativeLightScope Scope = Fast::Renderer3ds::PicaNativeLightScope::Local;
     };
     std::unordered_map<uint64_t, LightFunction> mLightFunctions;
+    std::unordered_set<uint32_t> mDrawnActors, mPreviousDrawnActors;
     Mm3dEnvironmentGroupLatch mGroup;
     uint64_t mSceneLightFrames = 0;
     uint32_t mSnapshotPlay = 0, mSnapshotFrame = 0;
