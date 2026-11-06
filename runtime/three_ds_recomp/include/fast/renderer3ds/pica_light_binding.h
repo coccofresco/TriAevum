@@ -82,6 +82,11 @@ struct PicaScenePointLight {
     // Competes for a point-shadow cube map. Broad, soft sources (lava, windows,
     // shafts) light without one.
     bool CastsShadow = true;
+    // Title proof: this source replaces a native Local point with the same
+    // identity. Unmatched receivers may receive it; unproved matching slots
+    // must retain native lighting and omit this source instead of doubling it.
+    // False preserves the existing vertex-lit/supplemental source contract.
+    bool ReplacesNativeLocal = false;
     bool operator==(const PicaScenePointLight&) const = default;
 };
 

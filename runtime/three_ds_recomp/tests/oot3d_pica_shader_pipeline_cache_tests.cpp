@@ -1,4 +1,5 @@
 #include "fast/renderer3ds/pica_fragment_balance.h"
+#include "fast/renderer3ds/pica_native_point_replacement.h"
 #include "fast/extension/pica_attachment_contract.h"
 #include "fast/extension/pica_directional_shadow_caster.h"
 #include "fast/extension/pica_directional_shadow_lighting.h"
@@ -2450,6 +2451,74 @@ TEST(PicaFragmentBalance, LightFunctionDecidesWhatTheProfileReplaces) {
     ASSERT_TRUE(half);
     EXPECT_EQ(half->Gains[0],(Gain{.5F,.5F,.5F,0}));
     EXPECT_EQ(half->Gains[1],(Gain{0,0,.6F,2})); // Scene slots keep the scene ambient gain.
+}
+
+TEST(PicaNativePointReplacement, ExactHardwareSlotAndTitleProofOwnReplacement) {
+    using namespace Fast::Renderer3ds;
+    FragmentLitNightFixture f;
+    auto points = std::make_shared<PicaScenePointLights>();
+    points->Count = 1;
+    auto& point = points->Lights[0];
+    point.SourceIdentity = f.Binding.Sources[0].SourceIdentity;
+    point.Radius = 250; point.Color = {1, .7F, 0}; point.Group = 2;
+    point.ReplacesNativeLocal = true;
+    f.Binding.ScenePoints = points;
+    const auto resolve = [&](const auto& binding, const auto& profile, const auto& layout) {
+        auto sceneOnly = binding; sceneOnly.ScenePoints.reset();
+        return BuildPicaNativePointReplacement(true, layout, binding, profile,
+            BuildPicaFragmentBalanceUniforms(true, layout, sceneOnly, profile));
+    };
+    auto result = resolve(f.Binding, f.Profile, f.Layout);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->ReplacedSlots, 1U);
+    EXPECT_EQ(result->Points.Count, 1U);
+    EXPECT_EQ(result->Balance.Gains[0], (std::array<float,4>{0,0,1,4}));
+    EXPECT_EQ(result->Balance.Control[1], 1U); // scene key unchanged
+    EXPECT_FLOAT_EQ(result->Balance.Parameters[0], .6F);
+    f.Layout.LightPermutation = {2,0,1};
+    auto permuted = resolve(f.Binding, f.Profile, f.Layout);
+    ASSERT_TRUE(permuted);
+    EXPECT_EQ(result->Balance.Gains, permuted->Balance.Gains);
+    EXPECT_EQ(result->ReplacedSlots, permuted->ReplacedSlots);
+    // A no-key wall still receives dynamic Local light, without acquiring
+    // the scene profile's ambient or changing any unmatched native slot.
+    f.Binding.SceneDirectionals.reset();
+    result = resolve(f.Binding, f.Profile, f.Layout);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->Balance.Control[1], 8U);
+    EXPECT_FLOAT_EQ(result->Balance.Parameters[0], 1);
+    EXPECT_EQ(result->Balance.Gains[1], (std::array<float,4>{1,1,1,0}));
+    f.Binding.Sources[0].SourceIdentity++;
+    result = resolve(f.Binding, f.Profile, f.Layout);
+    ASSERT_TRUE(result); EXPECT_EQ(result->ReplacedSlots, 0U); // proved different source
+    f.Binding.Sources[0].SourceIdentity = point.SourceIdentity;
+    f.Binding.Sources[0].Origin = PicaNativeLightOrigin::Unknown;
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
+    f.Binding.Sources[0].Origin = PicaNativeLightOrigin::Actor;
+    f.Binding.Sources[0].Scope = PicaNativeLightScope::Scene;
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
+    f.Binding.Sources[0].Scope = PicaNativeLightScope::Local;
+    f.Binding.Sources[0].SourceIdentity = 0;
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout)); // not an unmatched source
+    f.Binding.Sources[0].SourceIdentity = point.SourceIdentity;
+    f.Profile.PointLights[2].Enabled = false;
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
+    f.Profile.PointLights[2].Enabled = true;
+    point.ReplacesNativeLocal = false;
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout)); // legacy title is inert
+    point.ReplacesNativeLocal = true;
+    points->Lights[1] = point; points->Count = 2;
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout)); // ambiguous scene identity
+    points->Count = 1;
+    f.Layout.LightPermutation = {0,0,1};
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
+    f.Layout.LightPermutation = {0,1,2};
+    f.Layout.Lights[1].Directional = false;
+    f.Binding.Sources[1] = f.Binding.Sources[0];
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout)); // ambiguous native identity
+    EXPECT_FALSE(BuildPicaNativePointReplacement(false, f.Layout, f.Binding, f.Profile, {}));
+    points->Count = 33;
+    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
 }
 
 TEST(PicaFragmentBalance, UnsupportedShapeLeavesTheFragmentLitFrameNative) {
