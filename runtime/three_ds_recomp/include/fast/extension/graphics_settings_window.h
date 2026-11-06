@@ -73,6 +73,9 @@ void ToggleGraphicsNativePresentation();
 // installs it before the GUI is created; the default is "OOT3D Graphics".
 void InstallGraphicsSettingsWindowTitle(std::string title);
 [[nodiscard]] std::string GraphicsSettingsWindowTitle();
+// Selects the top-level tab of that name (an application tab or group) the
+// next time the window draws; the developer lab uses it to capture a tab.
+void RequestGraphicsSettingsTab(std::string name);
 
 class GraphicsSettingsPanel final {
   public:

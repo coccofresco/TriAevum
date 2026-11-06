@@ -2757,8 +2757,28 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
     devLabSawArrival = false;
     const auto &command = *devLabCommand;
     const std::string op = command["op"].get<std::string>();
+    // Another title's guest (MM3D): the ops below read OoT3D's actors,
+    // cameras and tables, so only the title-neutral ones are offered.
+    static constexpr std::array<std::string_view, 6> kTitleOps{"script", "capture", "panel",
+                                                              "status", "wait",    "quit"};
+    if (devToolsTitle && std::find(kTitleOps.begin(), kTitleOps.end(), op) == kTitleOps.end()) {
+      finish("rejected", {{"reason", "op unavailable for this title"}});
+      return;
+    }
     try {
-      if (op == "warp" && command.contains("better")) {
+      if (op == "script") {
+        // The title's TRIAEVUM_DEV_WARP script (MM3D: mm3d:<entrance>|zone=<id>
+        // with arrival options): the same requests as F1 > Dev Tools' Warp
+        // buttons; settled like "warp".
+        if (!devToolsTitle || !titleSession) throw std::invalid_argument("no title warp script");
+        titleSession->RunDevWarpScript(command.at("script").get<std::string>(), *devWarp);
+      } else if (op == "panel") {
+        // F1 shown or hidden, on a top-level tab ("Dev Tools"), for captures.
+        if (fast3dGui == nullptr) throw std::invalid_argument("no settings window");
+        if (command.contains("tab")) Fast::Extension::RequestGraphicsSettingsTab(command["tab"].get<std::string>());
+        fast3dGui->SetOot3dGraphicsWindowVisible(command.value("open", true));
+        finish("ok", {{"frame", guestFrame}});
+      } else if (op == "warp" && command.contains("better")) {
         // An entrance of the Debug Warp Screen's Better list ([scene, entrance]
         // indices), with age ("child"/"adult") and time ("day"/"night").
         const auto scenes = Oot3dNativeGame::DevWarpBetterScenes();
@@ -2970,19 +2990,32 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
   ++devLabFrames;
   const auto &command = *devLabCommand;
   const std::string op = command["op"].get<std::string>();
-  if (op == "warp") {
-    // Settled: the given frames after arriving (title cards and fades).
+  if (op == "warp" || op == "script") {
+    // Settled: the given frames after arriving (title cards and fades). A
+    // title's warp also reports its arrival state (day, time, form, health).
+    const auto titlePlace = [&] {
+      auto detail = place();
+      if (devToolsTitle) {
+        detail["entrance"] = seen.Entrance;
+        detail["state"] = devWarp->Describe(seen);
+      }
+      return detail;
+    };
     if (status.Phase == Oot3dNativeGame::DevWarpPhase::Failed) {
-      finish("failed", {{"reason", status.Message}});
+      auto detail = titlePlace();
+      detail["reason"] = status.Message;
+      finish("failed", detail);
     } else if (status.Phase == Oot3dNativeGame::DevWarpPhase::Arrived) {
       if (!devLabSawArrival) {
         devLabSawArrival = true;
         devLabFrames = 0;
       } else if (devLabFrames >= command.value("settleFrames", 60U)) {
-        finish("ok", place());
+        finish("ok", titlePlace());
       }
-    } else if (devLabFrames >= 3600U) {
-      finish("timeout", {{"reason", status.Message}});
+    } else if (devLabFrames >= command.value("timeoutFrames", 3600U)) {
+      auto detail = titlePlace();
+      detail["reason"] = status.Message;
+      finish("timeout", detail);
     }
   } else if (op == "camera") {
     // Held until the game took the free view for the given frames from the
