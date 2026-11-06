@@ -43,7 +43,10 @@ struct PicaNativePointReplacement {
     const auto& points = *binding.ScenePoints;
     for (uint32_t p = 0; p < points.Count; ++p) {
         const auto& point = points.Lights[p];
-        if (!point.ReplacesNativeLocal || !point.SourceIdentity ||
+        // An independent emitter is admitted only with its separate title
+        // proof. Neither a default supplemental point nor contradictory proof
+        // flags can bypass native replacement ownership.
+        if (point.ReplacesNativeLocal == point.IndependentEmission || !point.SourceIdentity ||
             point.Group >= environment.PointLights.size()) continue;
         const auto& setting = environment.PointLights[point.Group];
         // Off keeps native; it is not the native-local-gain slider.
@@ -68,7 +71,7 @@ struct PicaNativePointReplacement {
         }
         // A matching Unknown/Scene/ambiguous slot is not an unmatched new
         // source: omit the renderer light on this draw and keep native.
-        if (!valid) continue;
+        if (!valid || (point.IndependentEmission && match)) continue;
         result.Points.Lights[result.Points.Count++] = point;
         result.ReplacedSlots |= match;
         for (uint32_t i = 0; i < binding.Sources.size(); ++i)
@@ -78,7 +81,7 @@ struct PicaNativePointReplacement {
                 result.Balance.Gains[i] = {0, 0, 1, 4};
     }
     if (!result.Points.Count) return std::nullopt;
-    result.Balance.Control[3] |= 2U; // new Local scene-point term, before native clamp
+    result.Balance.Control[3] |= 2U; // proved replacement/independent point term before native clamp
     return result;
 }
 

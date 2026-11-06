@@ -87,6 +87,10 @@ struct PicaScenePointLight {
     // must retain native lighting and omit this source instead of doubling it.
     // False preserves the existing vertex-lit/supplemental source contract.
     bool ReplacesNativeLocal = false;
+    // Separate positive title proof: an authored emitter has no native light
+    // counterpart (e.g. a room's fake-emissive window). Never infer this from
+    // ReplacesNativeLocal=false, a texture's brightness, or an unmatched slot.
+    bool IndependentEmission = false;
     bool operator==(const PicaScenePointLight&) const = default;
 };
 

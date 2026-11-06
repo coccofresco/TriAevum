@@ -86,6 +86,7 @@ set(Source_Files__Renderer3dsPica
     renderer3ds/pica_vertex_surface.cpp
     renderer3ds/pica_surface_lighting.cpp
     renderer3ds/pica_surface_emission.cpp
+    renderer3ds/pica_emitter_catalog.cpp
     renderer3ds/pica_pbr_shading.cpp
     renderer3ds/pica_pbr_seams.cpp
     renderer3ds/pica_pbr_seam_shader.cpp
@@ -101,9 +102,11 @@ add_library(ThreeDsRecomp::Renderer3dsPicaCore ALIAS
     renderer_3ds_pica_core)
 set_property(TARGET renderer_3ds_pica_core PROPERTY CXX_STANDARD 20)
 target_include_directories(renderer_3ds_pica_core PUBLIC ${INCLUDE_DIR})
+find_package(nlohmann_json CONFIG REQUIRED)
 target_link_libraries(renderer_3ds_pica_core PUBLIC
     ThreeDsRecomp::TevProgram
-    ThreeDsRecomp::RendererExtensionCore)
+    ThreeDsRecomp::RendererExtensionCore
+    nlohmann_json::nlohmann_json)
 get_target_property(renderer_3ds_pica_core_direct_links
     renderer_3ds_pica_core LINK_LIBRARIES)
 foreach(renderer_3ds_pica_core_direct_link

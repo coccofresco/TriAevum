@@ -2453,6 +2453,35 @@ TEST(PicaFragmentBalance, LightFunctionDecidesWhatTheProfileReplaces) {
     EXPECT_EQ(half->Gains[1],(Gain{0,0,.6F,2})); // Scene slots keep the scene ambient gain.
 }
 
+TEST(PicaNativePointReplacement, IndependentEmissionNeedsSeparatePositiveProof) {
+    using namespace Fast::Renderer3ds;
+    FragmentLitNightFixture f;
+    auto points=std::make_shared<PicaScenePointLights>();points->Count=1;
+    auto& point=points->Lights[0];
+    point.SourceIdentity=0xA500000000001234ULL;point.Group=3;
+    point.Color={1,.8F,.5F};point.Radius=500;
+    f.Binding.ScenePoints=points;
+    const auto resolve=[&] {
+        return BuildPicaNativePointReplacement(true,f.Layout,f.Binding,f.Profile,{});
+    };
+    EXPECT_FALSE(resolve()); // default supplemental source is not proof
+    point.IndependentEmission=true;
+    const auto result=resolve();ASSERT_TRUE(result);
+    EXPECT_EQ(result->ReplacedSlots,0U);
+    EXPECT_EQ(result->Points.Count,1U);
+    EXPECT_EQ(result->Balance.Parameters[0],1.F); // local-only: no profile invention
+    EXPECT_EQ(result->Balance.Gains[0],(std::array<float,4>{1,1,1,0}));
+    EXPECT_NE(result->Balance.Control[3]&2U,0U);
+    point.ReplacesNativeLocal=true;EXPECT_FALSE(resolve()); // contradictory proof
+    point.ReplacesNativeLocal=false;
+    point.SourceIdentity=f.Binding.Sources[0].SourceIdentity;
+    EXPECT_FALSE(resolve()); // independent source cannot mask a native counterpart
+    point.SourceIdentity=0xA500000000001234ULL;
+    f.Binding.Sources[0].SourceIdentity=0;EXPECT_FALSE(resolve()); // unknown native point
+    f.Binding.Sources[0].SourceIdentity=1;
+    f.Profile.PointLights[3].Enabled=false;EXPECT_FALSE(resolve()); // Off is native
+}
+
 TEST(PicaNativePointReplacement, ExactHardwareSlotAndTitleProofOwnReplacement) {
     using namespace Fast::Renderer3ds;
     FragmentLitNightFixture f;

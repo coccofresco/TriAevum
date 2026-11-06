@@ -184,11 +184,11 @@ class Model:
     def _u32(self, offset: int) -> int:
         return self._unpack("<I", offset)[0]
 
-    def _bone_transforms(self, skl: int) -> list:
+    def _bone_transforms(self, skl: int, stride: int = 0x28) -> list:
         """Each bone's bind transform to model space (3x4 rows): scale, then
         rotations about X, Y and Z, then translation, under its parent's."""
         count = self._u32(skl + 8)
-        bones = [self._unpack("<hh9f", skl + 0x10 + i * 0x28) for i in range(count)]
+        bones = [self._unpack("<hh9f", skl + 0x10 + i * stride) for i in range(count)]
         local = []
         for _, _, sx, sy, sz, rx, ry, rz, tx, ty, tz in bones:
             cx, snx, cy, sny, cz, snz = math.cos(rx), math.sin(rx), math.cos(ry), math.sin(ry), math.cos(rz), math.sin(rz)
@@ -216,6 +216,12 @@ class Model:
                                 for j in range(4)] for i in range(3)]
         return world
 
+    # Binary-layout facts supplied by the title's model reader. Geometry,
+    # connectivity and placement arithmetic are otherwise shared.
+    uv_attribute = 3
+    shape_auto_flags = 0x106
+    shape_primitives = 0x108
+
     def triangles(self, shape: int) -> list:
         """The shape's visible rigid triangles, corners as ((shape, vertex)
         key, model-space position)."""
@@ -229,7 +235,7 @@ class Model:
         if d[sepd:sepd + 4] != b"sepd":
             raise ValueError("CMB shape chunk is missing")
         primitive_count, flags = self._unpack("<HH", sepd + 8)
-        auto_flags = self._unpack("<H", sepd + 0x106)[0]
+        auto_flags = self._unpack("<H", sepd + self.shape_auto_flags)[0]
         offset, scale, kind, mode = self._unpack("<IfHH", sepd + 0x24)
         constant = self._unpack("<3f", sepd + 0x30)
         length, start = self._unpack("<II", self._vatr + 0x0C)
@@ -239,12 +245,14 @@ class Model:
         if code is None or not math.isfinite(scale) or not all(math.isfinite(c) for c in constant):
             raise ValueError("CMB positions are not readable")
         fmt, width = "<" + code * 3, struct.calcsize("<" + code) * 3
-        # The first texture coordinates (flag 8), for lamps inside atlases.
-        uv_offset, uv_scale, uv_kind, uv_mode = self._unpack("<IfHH", sepd + 0x78)
-        uv_constant = self._unpack("<2f", sepd + 0x84)
-        uv_length, uv_start = self._unpack("<II", self._vatr + 0x24)
+        # The first texture coordinates, for lamps inside atlases.
+        uv_desc = sepd + 0x24 + self.uv_attribute * 0x1C
+        uv_offset, uv_scale, uv_kind, uv_mode = self._unpack("<IfHH", uv_desc)
+        uv_constant = self._unpack("<2f", uv_desc + 0xC)
+        uv_length, uv_start = self._unpack("<II", self._vatr + 0xC + self.uv_attribute * 8)
         uv_code = SCALAR.get(uv_kind)
-        uv_fixed = not (flags & 8) or (auto_flags & 8) or uv_mode != 0 or uv_code is None
+        uv_flag = 1 << self.uv_attribute
+        uv_fixed = not (flags & uv_flag) or (auto_flags & uv_flag) or uv_mode != 0 or uv_code is None
         uv_width = struct.calcsize("<" + uv_code) * 2 if uv_code else 0
 
         def uv(index: int) -> tuple:
@@ -266,7 +274,7 @@ class Model:
             return (x * scale, y * scale, z * scale)
 
         for p in range(primitive_count):
-            prms = sepd + self._unpack("<H", sepd + 0x108 + p * 2)[0]
+            prms = sepd + self._unpack("<H", sepd + self.shape_primitives + p * 2)[0]
             if d[prms:prms + 4] != b"prms":
                 raise ValueError("CMB primitive chunk is missing")
             skinning, bone_count, bone_table, relative = self._unpack("<HHII", prms + 0x0C)
