@@ -223,12 +223,14 @@ public:
     time.Owner = state.ContextIdentity;
     time.AuthoredScene = snapshot.WorldIdentity;
     // The visit's environment group, latched by the lighting probe at the
-    // same opaque boundary (mm3d_scene_environment.h). The day/night blend
-    // follows the clock only where the lights do: TimeFlows. Indoor, fixed
-    // light settings, a stopped clock and Unknown keep their entry profile.
+    // same opaque boundary (mm3d_scene_environment.h). Profile day/night
+    // selection also covers TimeAtEntry: its native clock is stopped, but
+    // entering at night must select the group's night file. This is not the
+    // lighting probe's continuous-sun flag (which remains TimeFlows only).
     time.Group = mComposition.EnvironmentGroup(state.ContextIdentity, state.SceneId);
     if (state.Night) {
-      time.TimeDriven = time.Group == SceneEnvironmentGroup::TimeFlows;
+      time.TimeDriven = time.Group == SceneEnvironmentGroup::TimeFlows ||
+                        time.Group == SceneEnvironmentGroup::TimeAtEntry;
       time.Night = *state.Night;
       time.Clock = state.Clock.value_or(*state.Night ? 0x0000U : 0x8000U);
     }
