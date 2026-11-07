@@ -7,6 +7,9 @@
 #include "../dekui/button_emission.h"
 #include <set>
 #include <tuple>
+#include <memory>
+#include <deque>
+#include <span>
 
 namespace Oot3dNativeGame {
 // EUR v1.1 widget emission ABI: 134DE4 supplies each actually rendered pane,
@@ -16,24 +19,59 @@ class Mm3dButtonOverlay {
 public:
   struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0, StandaloneLabels=0, EmptyRecords=0, PassRejected=0, GuardRejected=0, Candidates=0, TintRejected=0, PoseRejected=0, UnboundCandidates=0, RingGeometryRejected=0, CapacityRejected=0, DuplicateCandidates=0; };
   const Counters& Stats() const { return mStats; }
-  size_t PendingLabels() const { return mPending.size(); }
+  size_t PendingLabels() const { size_t n=0;for(const auto& pane:mPending)n+=pane.Slots.size();return n; }
   size_t PendingPanes() const { return mSeen.size(); }
   void Configure(const NativeControlConfig& controls, NativePromptSet prompts) {
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
     mControls = controls; mPrompts = prompts; mActive = active;
+    mStyle=std::make_shared<Style>(Style{controls,prompts});
   }
-  void Reset() { mPending.clear(); mSeen.clear(); mFrames.Reset(); }
-  void Record(uint64_t draw) {
-    ++mStats.Frames;
-    if(mPending.empty())++mStats.EmptyRecords;
-    mFrames.Record(draw, std::move(mPending),mPrompts,mControls); mPending.clear(); mSeen.clear();
+  void Reset() { mPending.clear(); mSeen.clear(); mDraws.clear(); mSubmitted.reset(); mPresented.clear(); }
+  // Called at actual GSP submission, BEFORE that list is decoded. A host
+  // refresh may produce zero, one or several lists, or yield halfway through
+  // building the next one. Never drain captures at a host-refresh boundary.
+  void SubmitCommandList(uint32_t begin,uint32_t bytes) {
+    auto snapshot=std::make_shared<Snapshot>();
+    const uint64_t end=uint64_t(begin)+bytes;
+    if(bytes && end<=uint64_t(UINT32_MAX)+1) {
+      for(auto it=mPending.begin();it!=mPending.end();) {
+        if(it->Cursor>=begin && it->Cursor<end) {
+          mSeen.erase(it->Identity);it->Cursor=0;it->Identity={};
+          snapshot->push_back(std::move(*it));it=mPending.erase(it);
+        } else ++it;
+      }
+    }
+    ++mStats.Frames;if(snapshot->empty())++mStats.EmptyRecords;
+    mSubmitted=std::move(snapshot);
   }
-  void Select(uint64_t draw) { mFrames.Select(draw, true); mStats.Presented += mFrames.Presented().size(); }
+  // Runs synchronously on successful packet enqueue, before the guest can
+  // submit/reuse another command buffer. No guest addresses survive in draws.
+  void ObserveDraw(uint64_t draw) {
+    if(!mDraws.empty() && draw<=mDraws.back().Last)mDraws.clear();
+    if(!mDraws.empty() && mDraws.back().Data==mSubmitted && mDraws.back().Last+1==draw)
+      mDraws.back().Last=draw;
+    else {
+      if(mDraws.size()==512)mDraws.pop_front();
+      mDraws.push_back({draw,draw,mSubmitted});
+    }
+  }
+  void Select(std::span<const uint64_t> draws) {
+    mPresented.clear();std::set<const Snapshot*> seen;
+    for(auto id:draws) {
+      auto it=std::lower_bound(mDraws.begin(),mDraws.end(),id,[](const auto& group,uint64_t value){return group.Last<value;});
+      if(it!=mDraws.end() && it->First<=id && it->Data && seen.insert(it->Data.get()).second) {
+        mPresented.push_back(it->Data);
+        for(const auto& pane:*it->Data)mStats.Presented+=pane.Slots.size();
+      }
+    }
+  }
   std::vector<oot3d::ui::UiPrimitive> Compose(float pixelsPerUnit) const {
     std::vector<oot3d::ui::UiPrimitive> result;
-    AppendNativeButtonOverlay(result, mFrames.Presented(), mFrames.Prompts(), mFrames.Controls(), pixelsPerUnit);
+    for(const auto& snapshot:mPresented)for(const auto& pane:*snapshot)
+      AppendNativeButtonOverlay(result,pane.Slots,pane.Settings->Prompts,pane.Settings->Controls,pixelsPerUnit);
     return result;
   }
+  static constexpr uint32_t CommandCursorAddress=0x006A3A88U;
   // True suppresses only this native geometry, never the widget's children.
   template<class M> bool Capture(M& memory, uint32_t layout, uint32_t root, uint32_t pass) {
     if(!mActive)return false;
@@ -149,10 +187,15 @@ private:
     if(*a>1)++mStats.SaturatedAlpha;
     slot.Color={*r,*g,*b,std::min(*a,1.f)};
     if (slot.Height<=0 || slot.Height>128 || std::abs(slot.X)>1024 || std::abs(slot.Y)>1024) {++mStats.PoseRejected;return false;}
-    if(mPending.size()>=252){++mStats.CapacityRejected;return false;}
+    const auto cursor=m.Read(CommandCursorAddress);
+    if(!cursor || !Pointer(*cursor,8) || (*cursor&7)){++mStats.GuardRejected;return false;}
+    if(PendingLabels()>=1020 || mPending.size()>=1020){++mStats.CapacityRejected;return false;}
     bool suppress=!ring;
-    // A shared embedded tree may be visited by its parent and by its own draw.
-    if (mSeen.insert({node,slot.X,slot.Y}).second) {
+    const Key key{*cursor,node,slot.X,slot.Y};
+    // Dedup only the same emission destination, not a later native frame
+    // which happens to reuse the same pane and position before host draining.
+    if (mSeen.insert(key).second) {
+      PendingPane pane{*cursor,key,{},mStyle};
       if(dpad) {
         // Four independently bound directions, positioned within the native
         // D-pad pane. Never replace the mask/instrument content around it.
@@ -163,15 +206,16 @@ private:
           auto key=slot;key.Action=actions[i];key.Height=slot.Height*.36f;key.Width=key.Height;
           key.X+=(*xx*dx[i]* *w+*xy*dy[i]* *h)*.32f;
           key.Y+=(*yx*dx[i]* *w+*yy*dy[i]* *h)*.32f;
-          if(NativeButtonOverlayGlyph(key.Action,mPrompts,mControls)) {mPending.push_back(key);++mStats.Labels;++mStats.Dpad;}
+          if(NativeButtonOverlayGlyph(key.Action,mPrompts,mControls)) {pane.Slots.push_back(key);++mStats.Labels;++mStats.Dpad;}
           else suppress=false;
         }
       } else {
-        mPending.push_back(slot); ++mStats.Labels;
+        pane.Slots.push_back(slot); ++mStats.Labels;
         if (ring) ++mStats.Rings; else if (hud) ++mStats.Hud; else ++mStats.Parts;
         if(owner && LayoutNamed(m,*owner,"Pictogram")) ++mStats.Pictograms;
         if(text) ++mStats.Text;
       }
+      mPending.push_back(std::move(pane));
     }
     else ++mStats.DuplicateCandidates;
     // Mixed A/B ring art remains native. A partially unbound D-pad retains
@@ -186,8 +230,16 @@ private:
   NativeControlConfig mControls;
   NativePromptSet mPrompts=NativePromptSet::Touch;
   bool mActive=false;
-  std::vector<NativeButtonOverlaySlot> mPending;
-  std::set<std::tuple<uint32_t,float,float>> mSeen;
-  NativeButtonOverlayFrames mFrames;
+  struct Style { NativeControlConfig Controls;NativePromptSet Prompts; };
+  using Key=std::tuple<uint32_t,uint32_t,float,float>;
+  struct PendingPane { uint32_t Cursor;Key Identity;std::vector<NativeButtonOverlaySlot> Slots;std::shared_ptr<const Style> Settings; };
+  using Snapshot=std::vector<PendingPane>;
+  struct DrawGroup { uint64_t First,Last;std::shared_ptr<const Snapshot> Data; };
+  std::shared_ptr<const Style> mStyle;
+  Snapshot mPending;
+  std::set<Key> mSeen;
+  std::shared_ptr<const Snapshot> mSubmitted;
+  std::deque<DrawGroup> mDraws;
+  std::vector<std::shared_ptr<const Snapshot>> mPresented;
 };
 } // namespace Oot3dNativeGame

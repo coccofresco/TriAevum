@@ -53,12 +53,19 @@ void TestColorTargetCaptureKeepsNewerProducers() {
         packet.Registers[0x085] = address / 8;
         packet.Registers[0x08E] = 0U;
     };
+    std::vector<uint64_t> observedDraws;
+    queue.SetDrawSubmissionObserver([&](uint64_t id){observedDraws.push_back(id);});
     // A 64x64 target A, then a 64x64 target B downscaled 2x2 into A's first
     // 32x32 texels: the transfer is newer than A's write.
     target(0x20100000U, 64, 64);
     Require(queue.SubmitDrawPacket(packet, &error), error);
     target(0x20120000U, 64, 64);
     Require(queue.SubmitDrawPacket(packet, &error), error);
+    Require(observedDraws==std::vector<uint64_t>({1,2}),"submission observer must run synchronously with exact successful draw IDs");
+    auto invalid=packet;invalid.Registers[0x200]=0;
+    Require(!queue.SubmitDrawPacket(invalid,&error),"unmapped vertex source must fail capture");
+    Require(observedDraws.size()==2,"failed capture must not publish overlay ownership");
+    error.clear();
     bool deferred = false;
     Require(queue.SubmitDisplayTransfer(
         {0x14120000U, 0x14100000U, (64U << 16) | 64, (64U << 16) | 64, 0x02000020U},

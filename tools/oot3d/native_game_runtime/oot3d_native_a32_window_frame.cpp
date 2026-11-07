@@ -2126,7 +2126,6 @@ void NativeA32WindowSession::RunGuestRefresh() {
   // kept for the frame that presents them.
   if (refreshHadNativeDraws) {
     RecordNativeButtonLabels();
-    if (titleSession) titleSession->RecordButtonOverlay(lastSubmittedDrawId);
   }
   phaseTiming.PicaSubmitSeconds += SecondsSince(picaSubmitStart);
 }
@@ -2285,8 +2284,12 @@ void NativeA32WindowSession::PresentVisualFrame(
                   presentedNativeLabels->ItemsLabels.clear();
               }
             }
-            if (titleSession) titleSession->SelectButtonOverlay(
-                finished->Draws.empty() ? 0 : finished->Draws.back().SubmissionId);
+            if (titleSession && titleSession->HasButtonOverlay()) {
+              std::vector<uint64_t> overlayDraws;
+              overlayDraws.reserve(finished->Draws.size());
+              for(const auto& draw:finished->Draws)overlayDraws.push_back(draw.SubmissionId);
+              titleSession->SelectButtonOverlay(overlayDraws);
+            }
             frameActors = titleSession
                 ? titleSession->ActorInteractions(process.Memory(), finished->Sequence)
                 : Oot3dNativeGame::CollectNativeActorInteractions(

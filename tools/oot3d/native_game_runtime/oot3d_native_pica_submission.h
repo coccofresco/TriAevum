@@ -214,6 +214,11 @@ struct Oot3dPicaSubmissionRuntimeProfile {
 
 class Oot3dNativePicaSubmissionQueue final : public Oot3dPicaPacketSink {
   public:
+    // Install before guest execution. Called under the queue lock, after a
+    // successful capture; observers must not reenter the queue.
+    void SetDrawSubmissionObserver(std::function<void(uint64_t)> observer) {
+        mDrawSubmissionObserver=std::move(observer);
+    }
     using TexturePayloadTransform =
         std::function<void(const Oot3dPicaTextureState&,
                            std::span<std::uint8_t>)>;
@@ -292,6 +297,7 @@ class Oot3dNativePicaSubmissionQueue final : public Oot3dPicaPacketSink {
                       std::string* error = nullptr);
 
   private:
+    std::function<void(uint64_t)> mDrawSubmissionObserver;
     struct GeometrySnapshotKey {
       Oot3dPicaResourceKind Kind = Oot3dPicaResourceKind::VertexLoader;
       uint8_t Slot = 0;

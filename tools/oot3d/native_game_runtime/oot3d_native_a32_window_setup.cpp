@@ -1081,6 +1081,10 @@ void NativeA32WindowSession::Setup() {
   }
   auto &submissionQueue = submissionQueueStorage.emplace(
       picaMemoryView, true);
+  if(titleSession && titleSession->HasButtonOverlay())
+    submissionQueue.SetDrawSubmissionObserver([this](uint64_t draw) {
+      titleSession->ObserveButtonOverlayDraw(draw);
+    });
   // Generated title code links its own checked memory helpers. Only a module
   // advertising the observer contract can preserve GPU/CPU byte ownership.
 #if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)

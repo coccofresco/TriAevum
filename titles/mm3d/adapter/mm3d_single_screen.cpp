@@ -83,8 +83,9 @@ Mm3dSingleScreen::Mm3dSingleScreen(std::function<std::int64_t()> globalTimeUs)
 void Mm3dSingleScreen::ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) {
     mButtonOverlay->Configure(config, prompts);
 }
-void Mm3dSingleScreen::RecordButtonOverlay(uint64_t draw) { mButtonOverlay->Record(draw); }
-void Mm3dSingleScreen::SelectButtonOverlay(uint64_t draw) { mButtonOverlay->Select(draw); }
+void Mm3dSingleScreen::SubmitButtonOverlayCommandList(uint32_t address,uint32_t bytes) { mButtonOverlay->SubmitCommandList(address,bytes); }
+void Mm3dSingleScreen::ObserveButtonOverlayDraw(uint64_t draw) { mButtonOverlay->ObserveDraw(draw); }
+void Mm3dSingleScreen::SelectButtonOverlay(std::span<const uint64_t> draws) { mButtonOverlay->Select(draws); }
 void Mm3dSingleScreen::ResetButtonOverlay() { mButtonOverlay->Reset(); mCore->ResetButtonEmission(); }
 std::vector<oot3d::ui::UiPrimitive> Mm3dSingleScreen::ButtonOverlay(float scale) const { return mButtonOverlay->Compose(scale); }
 std::map<std::string, uint64_t> Mm3dSingleScreen::ButtonOverlaySummary() const {

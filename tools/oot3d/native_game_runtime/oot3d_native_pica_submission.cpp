@@ -1092,6 +1092,7 @@ bool Oot3dNativePicaSubmissionQueue::SubmitDrawPacket(
         }
         phaseStart = RuntimeProfileClock::now();
     }
+    if(mDrawSubmissionObserver)mDrawSubmissionObserver(submission.Id);
     ++mNextSubmissionId;
     phaseStart =
         mRuntimeProfilingEnabled ? RuntimeProfileClock::now()

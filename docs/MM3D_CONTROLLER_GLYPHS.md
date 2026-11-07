@@ -69,16 +69,18 @@ are not independent host labels. Coordinates come from final native affine matri
 including the configured dekui poses; the only canvas conversion is MM's
 centered 400×240 origin into its 16:9 presentation canvas.
 
-The host stores complete snapshots, including empty ones, keyed by submitted
-PICA draw IDs. Presentation currently selects the previous host-refresh record.
-That timing assumption is **not qualified for MM3D**: the closure campaign still
-observes alternating empty/nonempty records and visible replacement loss.
-Do not retain the last nonempty record as a workaround: genuinely hidden labels
-must disappear. Native emission, command-list submission and completed-frame
-ownership need to be distinguished before changing this policy.
-Reset and backwards IDs clear history.
-Snapshots also retain binding/family settings, so a switch cannot remove a
-replacement before its corresponding native frame changes. Slots contain
+Captures now carry the native command-writer destination (`0x006a3a88`).
+GSP command-list submission consumes only captures in that list's byte range;
+other native buffers remain pending. Successful draw enqueue binds an immutable
+snapshot to exact draw IDs. Presentation combines only snapshots referenced by
+the completed frame's draw IDs, once per submitted list. There is no previous
+host-refresh guess and no last-nonempty fallback. Empty submissions, address
+reuse, split lists, delayed presentation and binding changes have offline tests.
+Pending capture and draw history are bounded; reset clears both. Source addresses
+are removed from submitted snapshots. Each pane retains its captured binding and
+family settings, so a switch cannot remove already-suppressed replacement art.
+This ownership correction still requires a new live acceptance test; prior
+closure runs do not qualify it. Slots contain
 values, not guest pointers to temporary scratch data. Wide labels fit their
 native cells, and recognized `ZR +` legends retain their plus.
 The title-neutral default methods are no-ops for OoT; its existing overlay is

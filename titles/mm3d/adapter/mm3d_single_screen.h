@@ -9,6 +9,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <span>
 
 namespace Mm3dDekui {
 class Core;
@@ -53,8 +54,9 @@ class Mm3dSingleScreen {
     // dekui's difficulty option (1..16), until the F1 menu owns its settings.
     static void SetDamageMultiplier(int multiplier);
     void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet);
-    void RecordButtonOverlay(uint64_t);
-    void SelectButtonOverlay(uint64_t);
+    void SubmitButtonOverlayCommandList(uint32_t,uint32_t);
+    void ObserveButtonOverlayDraw(uint64_t);
+    void SelectButtonOverlay(std::span<const uint64_t>);
     void ResetButtonOverlay();
     std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float) const;
     std::map<std::string, uint64_t> ButtonOverlaySummary() const;

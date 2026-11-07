@@ -19,6 +19,7 @@ struct MemoryFixture {
 constexpr U32 layout=0x10000000,node=layout+8,geo=0x10010000;
 MemoryFixture Fixture(){
  MemoryFixture m;
+ m.words[Mm3dButtonOverlay::CommandCursorAddress]=0x14001000;
  for(auto [pc,word]:ButtonEmission::Guards)m.words[pc]=word;
  m.words[0x1262d0]=0xeb003ab0;m.words[0x59e564]=0xe59410c0;
  m.words[layout+4]=0x10020000;m.words[0x10020018]=0x10020100;m.Name(0x10020100,"HudItemIconSet");
@@ -34,7 +35,8 @@ MemoryFixture Fixture(){
 }
 std::vector<oot3d::ui::UiPrimitive> Capture(MemoryFixture& m,NativeControlConfig config=NativeControlDefaults(),NativePromptSet set=NativePromptSet::Xbox,U32 pass=3){
  Mm3dButtonOverlay overlay;overlay.Configure(config,set);overlay.Capture(m,layout,node,pass);
- overlay.Record(10);overlay.Record(20);overlay.Select(20);return overlay.Compose(3);
+ overlay.SubmitCommandList(0x14001000,0x100);overlay.ObserveDraw(10);
+ const uint64_t draw=10;overlay.Select(std::span(&draw,1));return overlay.Compose(3);
 }
 void TestCapture(){
  auto m=Fixture();const auto original=m.words;auto glyphs=Capture(m);
@@ -119,10 +121,10 @@ void TestCaptureAccounting(){
  Check(overlay.Stats().Candidates==2 && overlay.Stats().Labels==1 &&
        overlay.Stats().DuplicateCandidates==1 && overlay.PendingLabels()==1 && overlay.PendingPanes()==1,
        "duplicate candidate distinguished from missing binding and empty pending data");
- overlay.Record(10);
+ overlay.SubmitCommandList(0x14001000,0x100);
  Check(overlay.PendingLabels()==0 && overlay.PendingPanes()==0,"record drains labels and dedup keys together");
  Check(overlay.Capture(m,layout,node,3) && overlay.Stats().Labels==2,"next recording admits the same pane");
- overlay.Record(20);overlay.Record(30);
+ overlay.SubmitCommandList(0x14001000,0x100);overlay.SubmitCommandList(0x14001000,0x100);
  Check(overlay.Stats().EmptyRecords==1,"empty record distinguished from duplicate emission");
  auto unbound=NativeControlDefaults();unbound.Bindings[size_t(NativeControlAction::X)]={};
  overlay.Configure(unbound,NativePromptSet::Keyboard);
@@ -130,11 +132,48 @@ void TestCaptureAccounting(){
  overlay.Configure(NativeControlDefaults(),NativePromptSet::Keyboard);
  auto ring=Fixture();ring.Name(0x10020100,"AActionIconBase");ring.Name(0x10020200,"bb00_ybtn");
  Check(!overlay.Capture(ring,layout,node,3) && overlay.Stats().RingGeometryRejected==1,"wrong ring geometry accounted");
- for(unsigned i=0;i<252;++i){m.F(node+0xec,float(i));overlay.Capture(m,layout,node,3);}
- Check(overlay.PendingLabels()==252,"pending cap fixture filled");
+ for(unsigned i=0;i<1020;++i){m.F(node+0xec,float(i%500));m.words[Mm3dButtonOverlay::CommandCursorAddress]=0x14001000+i*8;overlay.Capture(m,layout,node,3);}
+ Check(overlay.PendingLabels()==1020,"pending cap fixture filled");
  m.F(node+0xec,300);
  Check(!overlay.Capture(m,layout,node,3) && overlay.Stats().CapacityRejected==1,"capacity rejection accounted without suppression");
  overlay.Reset();Check(overlay.PendingLabels()==0 && overlay.PendingPanes()==0,"reset drains accounting state");
+}
+void TestSubmissionOwnership(){
+ auto m=Fixture();Mm3dButtonOverlay overlay;auto controls=NativeControlDefaults();
+ overlay.Configure(controls,NativePromptSet::Keyboard);
+ overlay.Capture(m,layout,node,3);
+ // Same pane/position, different native destination, before any host drain.
+ m.words[Mm3dButtonOverlay::CommandCursorAddress]=0x14002000;
+ overlay.Capture(m,layout,node,3);
+ Check(overlay.PendingLabels()==2,"different native buffers cannot deduplicate one another");
+ overlay.SubmitCommandList(0x14003000,0x100);overlay.ObserveDraw(10);
+ Check(overlay.PendingLabels()==2,"unrelated command submission cannot drain captures");
+ overlay.SubmitCommandList(0x14001000,0x100);overlay.ObserveDraw(20);overlay.ObserveDraw(21);
+ Check(overlay.PendingLabels()==1,"only submitted command range consumes captures");
+ const uint64_t a[]{20,21};overlay.Select(a);auto first=overlay.Compose(3);
+ Check(!first.empty(),"exact rendered draw selects its materialization without host-refresh lag");
+ const uint64_t unrelated[]{10};overlay.Select(unrelated);
+ Check(overlay.Compose(3).empty(),"world-only unrelated frame does not borrow HUD");
+ controls.NativeButtonLabels=false;overlay.Configure(controls,NativePromptSet::Touch);
+ overlay.SubmitCommandList(0x14002000,0x100);overlay.ObserveDraw(30);
+ const uint64_t b[]{30};overlay.Select(b);
+ Check(overlay.Compose(3).size()==first.size(),"pending suppressed frame retains captured binding/family despite later Original switch");
+ overlay.Select(a);Check(overlay.Compose(3).size()==first.size(),"delayed presentation retains immutable earlier source snapshot");
+ const uint64_t both[]{20,21,30};overlay.Select(both);
+ Check(overlay.Compose(3).size()==2*first.size(),"split lists compose once each, not once per draw");
+ overlay.SubmitCommandList(0x14001000,0x100);overlay.ObserveDraw(40);
+ const uint64_t empty[]{40};overlay.Select(empty);
+ Check(overlay.Compose(3).empty(),"reused command address with no labels clears instead of retaining stale HUD");
+ overlay.Select(a);Check(!overlay.Compose(3).empty(),"address reuse does not mutate older draw snapshot");
+ overlay.Reset();overlay.Select(a);Check(overlay.Compose(3).empty(),"reset removes draw and capture ownership");
+ overlay.Configure(NativeControlDefaults(),NativePromptSet::Keyboard);
+ m.words[Mm3dButtonOverlay::CommandCursorAddress]=0x14001008;overlay.Capture(m,layout,node,3);
+ overlay.SubmitCommandList(0x14001000,8);
+ Check(overlay.PendingLabels()==1,"command range end is exclusive");
+ overlay.SubmitCommandList(0xfffffff8,32);
+ Check(overlay.PendingLabels()==1,"overflowing range cannot consume captures");
+ m.words.erase(Mm3dButtonOverlay::CommandCursorAddress);
+ Check(!overlay.Capture(m,layout,node,3),"missing command destination leaves native art intact");
 }
 void TestSettings(){
  auto config=NativeControlDefaults();std::string text,error;NativeControlConfig parsed;
@@ -155,7 +194,7 @@ void TestSettings(){
 }
 }
 int main(int argc,char** argv){try{
- TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSettings();
+ TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSubmissionOwnership();TestSettings();
  if(argc==2){std::ifstream in(argv[1],std::ios::binary);Check(bool(in),"code image opens");
   for(auto [pc,word]:ButtonEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR emission guard agrees");}}
  std::cout<<checks<<" overlay checks passed\n";return 0;

@@ -38,17 +38,23 @@
 namespace Oot3dNativeGame {
 namespace {
 
-class Mm3dTitleSession final : public TitleSession {
+class Mm3dTitleSession final : public TitleSession, public Oot3dPicaCommandListCompositionProvider {
 public:
   const char *GameName() const override { return "Majora's Mask 3D"; }
-  Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
+  Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return this; }
+  bool TakeCommandListCompositionSpans(uint32_t address,uint32_t bytes,
+      std::vector<Oot3dPicaCommandListCompositionSpan>& spans,std::string* error) override {
+    if(!mComposition.TakeCommandListCompositionSpans(address,bytes,spans,error))return false;
+    if(mSingleScreen)mSingleScreen->SubmitButtonOverlayCommandList(address,bytes);
+    return true;
+  }
   bool NativeFragmentLighting() const override { return true; }
   bool HasButtonOverlay() const override { return true; }
   void ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) override {
     if (mSingleScreen) mSingleScreen->ConfigureButtonOverlay(config, prompts);
   }
-  void RecordButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->RecordButtonOverlay(draw); }
-  void SelectButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->SelectButtonOverlay(draw); }
+  void ObserveButtonOverlayDraw(uint64_t draw) override { if (mSingleScreen) mSingleScreen->ObserveButtonOverlayDraw(draw); }
+  void SelectButtonOverlay(std::span<const uint64_t> draws) override { if (mSingleScreen) mSingleScreen->SelectButtonOverlay(draws); }
   std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float scale) const override {
     return mSingleScreen ? mSingleScreen->ButtonOverlay(scale) : std::vector<oot3d::ui::UiPrimitive>{};
   }
