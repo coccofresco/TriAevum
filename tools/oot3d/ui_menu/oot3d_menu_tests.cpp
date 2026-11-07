@@ -348,6 +348,26 @@ void TestPointer() {
     draw();
     click(HitKind::ModalConfirm, 0);
     Expect(confirmed == 1 && cancelled == 0 && !model.CurrentModal().has_value(), "clicking Keep confirms");
+    // Desktop input reports a pointer even when nobody is using it. It must
+    // not swallow keyboard/pad navigation or Retry on an open modal.
+    model.SetModal(modal); draw();
+    const auto idleInside = at(HitKind::ModalConfirm, 0);
+    model.Update(Input{}, idleInside, 0.016);
+    model.Update(Press(&Input::Right), idleInside, 0.016);
+    Expect(!model.ModalConfirmHighlighted(), "idle pointer must not swallow modal keyboard navigation");
+    model.Update(Input{}, idleInside, 0.016);
+    model.Update(Press(&Input::Confirm), idleInside, 0.016);
+    Expect(cancelled == 1 && !model.CurrentModal(), "keyboard confirm works with an idle modal pointer");
+    int retries = 0;
+    model.SetModal(SaveFailure("locked controls file", [&] { ++retries; })); draw();
+    Pointer idleOutside; idleOutside.Present = true;
+    model.Update(Input{}, idleOutside, 0.016);
+    auto pressedOutside = idleOutside; pressedOutside.Pressed = true;
+    model.Update(Press(&Input::Confirm), pressedOutside, 0.016);
+    Expect(retries == 0 && model.CurrentModal(), "active outside pointer does not click through a modal");
+    model.Update(Input{}, idleOutside, 0.016);
+    model.Update(Press(&Input::Confirm), idleOutside, 0.016);
+    Expect(retries == 1 && !model.CurrentModal(), "keyboard Retry works with an idle pointer outside the modal");
     // The close hint closes the menu (and the layout goes with it).
     draw();
     auto closePointer = at(HitKind::Close, 0, true);
