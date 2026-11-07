@@ -15,6 +15,16 @@ namespace Fast::Extension {
 // upscaler input, so it neither ghosts with the scene's motion nor shifts with
 // its jitter; it keeps the display's resolution.
 
+// A full-resolution native companion is a view of one immutable reduced
+// scene version. A clear/world write, companion write outside overlay ownership,
+// or reset invalidates it; frame/address coincidence is never enough.
+[[nodiscard]] constexpr bool NativeUiCompanionCurrent(
+    uint64_t sceneSerial, uint64_t sourceSerial, uint64_t contentSerial,
+    uint64_t presentationSerial) noexcept {
+    return sceneSerial != 0 && sourceSerial == sceneSerial &&
+        presentationSerial != 0 && presentationSerial == contentSerial;
+}
+
 // The display texel at the top-left of output texel `pixel`'s bilinear
 // footprint along one axis, and the weight of the next texel.
 struct NativeUiOverlayTap {

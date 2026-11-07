@@ -115,6 +115,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
                 }
                 return true;
             }
+            source = &ResolveNativePicaUiTarget(*source);
             if (transfer.InputWidth > source->Key.Width ||
                 transfer.InputHeight > source->Key.Height) {
                 throw std::runtime_error(
@@ -220,10 +221,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
             // attachment bumps the target's content serial and must not
             // invalidate the version that was actually imported, so this is
             // never re-queried when the snapshot is presented.
-            display.SceneEffectsResolved =
-                NativePicaSceneFullyResolvedForTarget(
-                    source->Key.RenderTargetNamespace,
-                    source->Key.ColorPhysicalAddress);
+            display.SceneEffectsResolved = source->SceneEffectsResolvedSerial != 0U &&
+                source->SceneEffectsResolvedSerial == source->ContentWriteSerial;
+            display.PresentationEffectsResolved = source->PresentationEffectsResolvedSerial != 0U &&
+                source->PresentationEffectsResolvedSerial == source->ContentWriteSerial;
             mDiagnostics.RecordPicaDisplayComposition(
                 display.CompositionDomain, display.SceneResolved);
             if (source->DepthView != VK_NULL_HANDLE &&
@@ -417,7 +418,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
     const NativePicaDisplayImage& display,
     NativePicaRenderTarget* copySource,
     GpuTextureCopySourceImport* copyOutput, std::string* error,
-    bool beforeNativeUi, bool fxaaBeforeUi) {
+    bool beforeNativeUi, bool fxaaBeforeUi, bool outputResolutionUi) {
     Renderer3ds::SlowStepTrace slowSteps("display_graph");
     if (mFrameActive) mGpuProfiler.Mark(mCurrentFrame, "display_graph", mCommandBuffers[mCurrentFrame]);
 
@@ -579,6 +580,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             .BeforeNativeUi = copyBoundary && beforeNativeUi && antiAliasingAvailableHere,
             .SceneEffectsResolved = display.SceneEffectsResolved,
             .SceneBeforeUi = sceneBeforeUi != nullptr,
+            .OutputResolutionBeforeUi = outputResolutionUi,
+            .PresentationEffectsResolved = display.PresentationEffectsResolved,
             .Purpose = mNativePicaCompositionSchedule.Purpose(),
         });
         const auto motionBarrierPlan =
@@ -824,10 +827,12 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             Extension::ResolveUpscalerContractFromRender(
                 effectPlan.Upscaler, presentationSettings.UpscalerMode,
                 plannedUpscalerInputWidth, plannedUpscalerInputHeight);
-        const uint32_t plannedUpscalerWidth =
-            plannedUpscalerContract.Output.Width;
-        const uint32_t plannedUpscalerHeight =
-            plannedUpscalerContract.Output.Height;
+        const auto promotedExtent = outputResolutionUi && copySource != nullptr
+            ? Extension::ResolveNativePicaRenderExtent(
+                {copySource->Key.Width, copySource->Key.Height}, NativeTopScreenOutputExtent(), 1.0F)
+            : Extension::RenderExtent{plannedUpscalerContract.Output.Width, plannedUpscalerContract.Output.Height};
+        const uint32_t plannedUpscalerWidth = promotedExtent.Width;
+        const uint32_t plannedUpscalerHeight = promotedExtent.Height;
         std::array<Extension::EffectTransientImageRequirement, 11U>
             requirements{};
         size_t requirementCount = 0U;
@@ -3235,6 +3240,23 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
         }
         if (copyBoundary) {
+            if (outputResolutionUi && (fsrForDisplay || dlssForDisplay || nisForDisplay)) {
+                VkImage image = mNriUpscalerPass.OutputImage();
+                VkImageView view = mNriUpscalerPass.OutputView();
+#if defined(_WIN32) && defined(ENABLE_OOT3D_D3D12_NGX_PROVIDER)
+                if (dlssForDisplay && mUpscalerUsedD3d12ThisFrame) {
+                    image = mD3d12NgxProvider.FrameOutputImage(mCurrentFrame);
+                    view = mD3d12NgxProvider.FrameOutputView(mCurrentFrame);
+                }
+#endif
+                bindEffectImage(Extension::EffectResource::UpscaledColor, image, view,
+                    VK_FORMAT_R16G16B16A16_SFLOAT, plannedUpscalerWidth, plannedUpscalerHeight,
+                    mUpscalerOutputEncodingThisFrame);
+            }
+            recordDeclared(Extension::DisplayEffectPass::Nis,
+                producedOutcome(nisAttempted, nisForDisplay, canReuseUpscaler));
+            recordDeclared(Extension::DisplayEffectPass::TemporalUpscaler,
+                producedOutcome(fsrAttempted || dlssAttempted, fsrForDisplay || dlssForDisplay, canReuseUpscaler));
             // A native boundary stops here: the scene stages are resolved, with
             // the same-extent anti-aliasing of a boundary before native UI, and
             // the boundary's declared output is what the native consumer
@@ -3309,7 +3331,9 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 (effectPlan.Enabled(Extension::DisplayEffectPass::Composite) &&
                  !compositeForTaa) ||
                 (wantsTaa && !taaForDisplay) ||
-                (wantsSmaa && !smaaForDisplay);
+                (wantsSmaa && !smaaForDisplay) ||
+                (wantsNis && !nisForDisplay) ||
+                (wantsTemporalUpscaler && !fsrForDisplay && !dlssForDisplay);
             if (declaredSceneStageFailed) {
                 mDiagnostics.RecordDisplayEffectGraphExecution(
                     effectExecution.Summary());
@@ -3357,8 +3381,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 throw std::runtime_error(
                     "native scene boundary composition source is incomplete");
             }
-            const uint32_t compositionWidth = copySource->Width;
-            const uint32_t compositionHeight = copySource->Height;
+            const uint32_t compositionWidth = outputResolutionUi ? plannedUpscalerWidth : copySource->Width;
+            const uint32_t compositionHeight = outputResolutionUi ? plannedUpscalerHeight : copySource->Height;
             if (compositionWidth == 0U || compositionHeight == 0U) {
                 throw std::runtime_error(
                     "native scene boundary source has no internal extent");
@@ -3393,18 +3417,22 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             // ponytail: one reusable canvas per extent; a device wait on extent
             // change is the ceiling. Key it per extent if copy resolutions ever
             // thrash within a frame.
-            if (mNativePicaSceneCopyCanvas.Image == VK_NULL_HANDLE ||
-                mNativePicaSceneCopyCanvasWidth != compositionWidth ||
-                mNativePicaSceneCopyCanvasHeight != compositionHeight) {
-                if (mNativePicaSceneCopyCanvas.Image != VK_NULL_HANDLE) {
+            // Promotion must not resize/destroy a raw-copy canvas referenced
+            // earlier in this still-recording command buffer.
+            auto& compositionCanvas = outputResolutionUi ? mNativePicaUiCopyCanvas : mNativePicaSceneCopyCanvas;
+            auto& canvasWidth = outputResolutionUi ? mNativePicaUiCopyCanvasWidth : mNativePicaSceneCopyCanvasWidth;
+            auto& canvasHeight = outputResolutionUi ? mNativePicaUiCopyCanvasHeight : mNativePicaSceneCopyCanvasHeight;
+            if (compositionCanvas.Image == VK_NULL_HANDLE ||
+                canvasWidth != compositionWidth || canvasHeight != compositionHeight) {
+                if (compositionCanvas.Image != VK_NULL_HANDLE) {
                     CheckNativeVk(
                         vkDeviceWaitIdle(mDevice),
                         "vkDeviceWaitIdle(native scene composition canvas)");
                     // The canvas is an NRI-owned texture, so the owned path
                     // releases its views and image together.
                     mNriInterop.DestroyOwnedTexture(
-                        mNativePicaSceneCopyCanvas.Image);
-                    mNativePicaSceneCopyCanvas = {};
+                        compositionCanvas.Image);
+                    compositionCanvas = {};
                 }
                 Extension::NriOwnedTexture2DDesc canvas{};
                 canvas.Width = compositionWidth;
@@ -3414,17 +3442,17 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                     VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
                 if (!mNriInterop.CreateOwnedTexture2D(
-                        canvas, mNativePicaSceneCopyCanvas)) {
+                        canvas, compositionCanvas)) {
                     throw std::runtime_error(
                         "native scene composition canvas is unavailable");
                 }
-                mNativePicaSceneCopyCanvasWidth = compositionWidth;
-                mNativePicaSceneCopyCanvasHeight = compositionHeight;
+                canvasWidth = compositionWidth;
+                canvasHeight = compositionHeight;
             }
             bindEffectImage(
                 Extension::EffectResource::SceneComposition,
-                mNativePicaSceneCopyCanvas.Image,
-                mNativePicaSceneCopyCanvas.ColorAttachmentView,
+                compositionCanvas.Image,
+                compositionCanvas.ColorAttachmentView,
                 VK_FORMAT_R8G8B8A8_UNORM, compositionWidth,
                 compositionHeight);
             const VkImage composedImage = reinterpret_cast<VkImage>(
@@ -3468,9 +3496,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                         .FrameSlot = mCurrentFrame,
                         .FrameId = mFrameCounter,
                         .CommandBuffer = command,
-                        .TargetImage = mNativePicaSceneCopyCanvas.Image,
-                        .TargetView =
-                            mNativePicaSceneCopyCanvas.ColorAttachmentView,
+                        .TargetImage = compositionCanvas.Image,
+                        .TargetView = compositionCanvas.ColorAttachmentView,
                         .TargetFormat = VK_FORMAT_R8G8B8A8_UNORM,
                         .TargetWidth = compositionWidth,
                         .TargetHeight = compositionHeight,
@@ -3509,7 +3536,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                            EffectOutcome::Executed);
             recordEffectPassTransitions(
                 mNriPicaScanoutPass.LastBarrierExecution());
-            copyOutput->Image = mNativePicaSceneCopyCanvas.Image;
+            copyOutput->Image = compositionCanvas.Image;
             copyOutput->Format = VK_FORMAT_R8G8B8A8_UNORM;
             copyOutput->Width = compositionWidth;
             copyOutput->Height = compositionHeight;
@@ -3526,14 +3553,14 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             restoreBoundarySourceColor();
             return true;
         }
-        const bool effectsCompositedForScanout =
+        const bool effectsCompositedForScanout = display.PresentationEffectsResolved || (
             smaaForDisplay
                 ? mSmaaEffectsCompositedThisFrame
                 : (fsrForDisplay || dlssForDisplay || nisForDisplay)
                     ? mUpscalerEffectsCompositedThisFrame
                 : taaForDisplay
                     ? mTaaEffectsCompositedThisFrame
-                    : compositeForTaa;
+                    : compositeForTaa);
 
         if (linearWorkingColorForDisplay) {
             bindEffectImage(
@@ -4087,7 +4114,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
 bool GfxRenderingAPIVulkan::ComposeNativePicaSceneForCopy(
     NativePicaRenderTarget& source, uint64_t afterDrawSubmissionId,
     GpuTextureCopySourceImport& output, std::string* error,
-    const Renderer3ds::PicaCompositionStageAnchor* beforeUi, bool fxaaBeforeUi) {
+    const Renderer3ds::PicaCompositionStageAnchor* beforeUi, bool fxaaBeforeUi,
+    bool outputResolutionUi) {
     output = {};
     if (mFrameActive) mGpuProfiler.Mark(mCurrentFrame, "compose_for_copy", mCommandBuffers[mCurrentFrame]);
     if (!mFrameActive || source.ColorImage == VK_NULL_HANDLE ||
@@ -4180,17 +4208,17 @@ bool GfxRenderingAPIVulkan::ComposeNativePicaSceneForCopy(
     // carries the scene stages and this boundary must not apply them again. The
     // provenance is resolved here, for this version, exactly as presentation
     // resolves it, so chaining raw copies and native effects stays generic.
-    boundaryImage.SceneEffectsResolved =
-        NativePicaSceneFullyResolvedForTarget(
-            source.Key.RenderTargetNamespace,
-            source.Key.ColorPhysicalAddress);
+    boundaryImage.SceneEffectsResolved = source.SceneEffectsResolvedSerial != 0U &&
+        source.SceneEffectsResolvedSerial == source.ContentWriteSerial;
+    boundaryImage.PresentationEffectsResolved = source.PresentationEffectsResolvedSerial != 0U &&
+        source.PresentationEffectsResolvedSerial == source.ContentWriteSerial;
     boundaryImage.PreserveNativeUiSampling = source.NativeUiSamplingSerial != 0U &&
         source.NativeUiSamplingSerial == source.ContentWriteSerial;
     boundaryImage.PresentationFxaaExcluded = source.PresentationFxaaExcludedSerial != 0U &&
         source.PresentationFxaaExcludedSerial == source.ContentWriteSerial;
     if (!ExecuteNativePicaDisplayGraph(
             boundary, boundaryImage, &source, &output, error,
-            beforeUi != nullptr, fxaaBeforeUi)) {
+            beforeUi != nullptr, fxaaBeforeUi, outputResolutionUi)) {
         output = {};
         return false;
     }

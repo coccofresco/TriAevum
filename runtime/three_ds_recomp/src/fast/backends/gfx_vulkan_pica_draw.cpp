@@ -157,6 +157,42 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
         const auto* beforeUi = mNativePicaCompositionSchedule.FindAnchorBeforeDraw(
             Extension::EffectStage::BeforeUi, reference.Target, draw.SubmissionId);
         if (beforeUi != nullptr) {
+            // The opted-in native overlay owns an output-density attachment.
+            // Reconstruct the reduced scene FIRST; native blend/alpha/depth then
+            // compose the UI directly over it, without changed-pixel inference.
+            if (mPresentationUpscaler && draw.Composition.PreserveNativeUiSampling &&
+                mNativePicaSampleCount == VK_SAMPLE_COUNT_1_BIT &&
+                Extension::IsNativeTopScreenTarget({target.Key.Width, target.Key.Height})) {
+                GpuTextureCopySourceImport reconstructed;
+                std::string error;
+                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, reconstructed,
+                        &error, beforeUi, false, true))
+                    throw std::runtime_error(error);
+                auto& ui = GetOrCreateNativePicaRenderTarget(draw, 0, 0, true);
+                EndNativePicaRenderPass();
+                if (reconstructed.Width != ui.Width || reconstructed.Height != ui.Height ||
+                    !mNriPicaDisplayCopyPass.Execute({mCurrentFrame, mFrameCounter,
+                        reconstructed.Image, ui.ColorImage, reconstructed.Format,
+                        {ui.Width, ui.Height, ui.Width, ui.Height}, reconstructed.ShaderRead, true, true}))
+                    throw std::runtime_error("output-resolution native UI scene commit failed");
+                CopyNativePicaUiDepth(target, ui);
+                ui.ContentWriteSerial = ++mGpuTextureCopyWriteSerial;
+                ui.SceneEffectsResolvedSerial = ui.ContentWriteSerial;
+                ui.PresentationEffectsResolvedSerial = ui.ContentWriteSerial;
+                ui.NativeUiSamplingSerial = ui.ContentWriteSerial;
+                ui.PresentationFxaaExcludedSerial = ui.ContentWriteSerial;
+                ui.UiSourceSerial = target.ContentWriteSerial;
+                ui.SampleView = target.SampleView;
+                if (const char* audit = std::getenv("TRIAEVUM_NATIVE_UI_GRID_AUDIT"); audit && *audit == '1') {
+                    static uint32_t count = 0;
+                    if (count++ < 8U)
+                        std::fprintf(stderr, "TRIAEVUM_NATIVE_UI_RASTER scene=%ux%u ui=%ux%u serial=%llu\n",
+                            target.Width, target.Height, ui.Width, ui.Height,
+                            static_cast<unsigned long long>(target.ContentWriteSerial));
+                }
+                TryRenderWorldDebugLines(ui);
+                return;
+            }
             GpuTextureCopySourceImport composed;
             if (sceneEffects || fxaaBeforeUi) {
                 std::string error;
@@ -2110,10 +2146,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         finishCpuStage(cpuTimings.GrassSurfaceMilliseconds);
 
-        auto& renderTarget = GetOrCreateNativePicaRenderTarget(draw);
+        auto& sceneTarget = GetOrCreateNativePicaRenderTarget(draw);
         finishCpuStage(cpuTimings.RenderTargetStateMilliseconds);
-        ExecuteNativePicaBeforeDrawAnchors(renderTarget, draw,
+        ExecuteNativePicaBeforeDrawAnchors(sceneTarget, draw,
             cpuTimings.DirectionalShadowMilliseconds, cpuTimings.GrassRenderMilliseconds);
+        auto& renderTarget = !nativeMemoryOnly && NativeSceneOverlayDraw(draw)
+            ? ResolveNativePicaUiTarget(sceneTarget) : sceneTarget;
         if (collectCpuTimings) cpuStageStart = CpuClock::now();
         renderTarget.WBuffering = draw.WBuffering;
         // The isolated title logo once the boundary before it has resolved the
@@ -3001,6 +3039,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const bool retainResolvedScene = overlayDraw &&
                 renderTarget.SceneEffectsResolvedSerial != 0U &&
                 renderTarget.SceneEffectsResolvedSerial == renderTarget.ContentWriteSerial;
+            const bool retainPresentation = overlayDraw &&
+                renderTarget.PresentationEffectsResolvedSerial != 0U &&
+                renderTarget.PresentationEffectsResolvedSerial == renderTarget.ContentWriteSerial;
             const bool retainSceneBeforeUi = overlayDraw &&
                 renderTarget.SceneBeforeUiSerial != 0U &&
                 renderTarget.SceneBeforeUiSerial == renderTarget.ContentWriteSerial;
@@ -3019,6 +3060,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 renderTarget.PresentationFxaaExcludedSerial = renderTarget.ContentWriteSerial;
             if (retainResolvedScene)
                 renderTarget.SceneEffectsResolvedSerial = renderTarget.ContentWriteSerial;
+            if (retainPresentation)
+                renderTarget.PresentationEffectsResolvedSerial = renderTarget.ContentWriteSerial;
             if (retainSceneBeforeUi)
                 renderTarget.SceneBeforeUiSerial = renderTarget.ContentWriteSerial;
             const bool fullTargetRaster =

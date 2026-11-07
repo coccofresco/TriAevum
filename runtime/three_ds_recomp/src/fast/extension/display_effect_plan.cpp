@@ -302,8 +302,10 @@ DisplayEffectPlan BuildDisplayEffectPlan(const DisplayEffectPlanInput& input) {
     // Scene stages are declared whenever the feature applies. Whether they run
     // at this boundary is decided by the declared domain projection below, not
     // by a list of names.
-    const bool extensionWorld = input.WorldSurface &&
+    const bool extensionWorld = input.WorldSurface && !input.PresentationEffectsResolved &&
         input.Purpose == Renderer3ds::PicaCompositionPurpose::Presentation;
+    const bool outputBeforeUi = extensionWorld && input.NativeSceneBoundary &&
+        input.BeforeNativeUi && input.OutputResolutionBeforeUi;
     const bool ao = extensionWorld &&
                        input.AmbientOcclusion != AmbientOcclusionMode::Off &&
                        input.PerspectiveAvailable;
@@ -348,7 +350,7 @@ DisplayEffectPlan BuildDisplayEffectPlan(const DisplayEffectPlanInput& input) {
     // them: the domain projection below is what enforces that structurally, and
     // these keep the boundary's derived requirements free of presentation
     // resources.
-    const bool upscaler = !input.NativeSceneBoundary && extensionWorld &&
+    const bool upscaler = (!input.NativeSceneBoundary || outputBeforeUi) && extensionWorld &&
                           input.AntiAliasing == AntiAliasingMode::Upscaler &&
                           input.UpscalerAvailable;
     const bool nis = upscaler && input.Upscaler == UpscalerProvider::Nis;
@@ -632,9 +634,9 @@ DisplayEffectPlan BuildDisplayEffectPlan(const DisplayEffectPlanInput& input) {
     compositionResources.push_back(Write(EffectResource::SceneComposition));
     graph.Add({ .Name = "SceneComposition",
                 .DependsOn = { "AmbientOcclusion", "Reflections", "Outline",
-                               "Composite", "TAA", "SMAA", "WorkingColor" },
+                               "Composite", "TAA", "SMAA", "WorkingColor", "TemporalUpscaler", "NIS" },
                 .Enabled = input.NativeSceneBoundary,
-                .Stage = EffectStage::AfterTransparent,
+                .Stage = outputBeforeUi ? EffectStage::BeforeUi : EffectStage::AfterTransparent,
                 .Contract = EffectContractKind::ComposerPass,
                 .Resources = std::move(compositionResources) });
     terminalResources.push_back(Write(EffectResource::PresentationOutput));
@@ -718,8 +720,8 @@ DisplayEffectPlan BuildDisplayEffectPlan(const DisplayEffectPlanInput& input) {
         }
         const auto projectedPasses = ProjectDisplayEffectPasses(
             plan.Graph,
-            input.NativeSceneBoundary ? DisplayEffectDomain::Scene
-                                      : DisplayEffectDomain::Presentation,
+            input.NativeSceneBoundary && !outputBeforeUi ? DisplayEffectDomain::Scene
+                                                        : DisplayEffectDomain::Presentation,
             sceneEffectsResolved
                 ? std::span<const EffectResource>(resolvedColour.data(),
                                                   resolvedCount)
@@ -733,7 +735,7 @@ DisplayEffectPlan BuildDisplayEffectPlan(const DisplayEffectPlanInput& input) {
             // which is what retires it readable for that consumer.
             projected.Export(EffectResource::SceneComposition);
         }
-        if (!input.NativeSceneBoundary || sceneEffectsResolved) {
+        if (!input.NativeSceneBoundary || (sceneEffectsResolved && !outputBeforeUi)) {
             // No scene stage applies to this colour: either none is declared, or
             // the version this plan consumes already carries them, so the native
             // target itself is the composed scene.

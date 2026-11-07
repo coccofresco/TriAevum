@@ -3345,6 +3345,28 @@ TEST(Oot3dUpscalerGuides, ResampleShaderCompiles) {
 }
 #endif
 
+TEST(Oot3dNativeUiOverlay, OutputRasterCompanionRequiresExactContentLifetime) {
+    using Fast::Extension::NativeUiCompanionCurrent;
+    EXPECT_TRUE(NativeUiCompanionCurrent(10, 10, 11, 11));
+    EXPECT_TRUE(NativeUiCompanionCurrent(10, 10, 12, 12)); // next native overlay
+    EXPECT_FALSE(NativeUiCompanionCurrent(13, 10, 12, 12)); // world/clear/fill
+    EXPECT_FALSE(NativeUiCompanionCurrent(10, 10, 13, 12)); // unowned companion write
+    EXPECT_FALSE(NativeUiCompanionCurrent(0, 0, 0, 0)); // reset/restore
+    EXPECT_FALSE(NativeUiCompanionCurrent(10, 0, 12, 12)); // no association
+    EXPECT_FALSE(NativeUiCompanionCurrent(10, 10, 0, 0)); // no completed presentation
+    using namespace Fast::Extension;
+    GraphicsSettings settings{};
+    settings.AntiAliasing = AntiAliasingMode::Upscaler;
+    settings.UpscalerMode = UpscalerQuality::Quality;
+    const auto reduced = ResolveNativePicaRenderExtent({512, 400}, {1280, 720},
+        ResolveInternalResolutionScale(settings, true));
+    const auto ui = ResolveNativePicaRenderExtent({512, 400}, {1280, 720}, 1.0F);
+    EXPECT_LT(reduced.Width, ui.Width);
+    EXPECT_LT(reduced.Height, ui.Height);
+    EXPECT_EQ(ui.Width, 768U);
+    EXPECT_EQ(ui.Height, 1280U);
+}
+
 TEST(Oot3dNativeUiOverlay, PresentationGridIsExplicitAndAvoidsASecondUiFilter) {
     using namespace Fast::Extension;
     const std::array<uint32_t, 2> intermediate{360U, 600U}, presentation{720U, 1200U};

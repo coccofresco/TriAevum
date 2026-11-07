@@ -1405,6 +1405,7 @@ bool GfxRenderingAPIVulkan::SubmitNativePicaRenderTargetCapture(
             }
             return true;
         }
+        source = &ResolveNativePicaUiTarget(*source);
         const uint32_t bytesPerPixel = source->Key.ColorFormat == 0U   ? 4U
                                        : source->Key.ColorFormat == 1U ? 3U
                                                                        : 2U;
@@ -1575,6 +1576,7 @@ bool GfxRenderingAPIVulkan::SubmitNativePicaTextureCopy(
             }
         }
         if (!source) throw std::runtime_error("raw PICA copy has no coherent GPU source");
+        source = &ResolveNativePicaUiTarget(*source);
         // Writing an existing attachment needs an upload as well as guest-memory
         // writeback. Never claim completion for that not-yet-supported case.
         for (const auto& [key, target] : mNativePicaRenderTargets) {
