@@ -730,6 +730,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint64_t PresentationEffectsResolvedSerial = 0;
         // Companion is valid only for this exact reduced scene content version.
         uint64_t UiSourceSerial = 0;
+        bool OutputResolutionUi = false;
         VkImage MsaaColorImage = VK_NULL_HANDLE;
         VkDeviceMemory MsaaColorMemory = VK_NULL_HANDLE;
         VkImageView MsaaColorView = VK_NULL_HANDLE;
@@ -911,6 +912,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         bool outputResolutionUi = false);
     NativePicaRenderTarget& ResolveNativePicaUiTarget(NativePicaRenderTarget& scene);
     void DestroyNativePicaUiTargets();
+    Extension::SceneSurfaceRegistry& NativePicaSurfaceRegistry(const NativePicaRenderTarget& target) {
+        return target.OutputResolutionUi ? mNativePicaUiSurfaces : mSceneSurfaces;
+    }
     void CopyNativePicaUiDepth(const NativePicaRenderTarget& source, NativePicaRenderTarget& destination);
     void DestroyNativePicaRenderTarget(NativePicaRenderTarget& target);
     void PrepareNativePicaTargetAttachments(NativePicaRenderTarget& target);
@@ -2016,6 +2020,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Renderer3ds::PicaTemporalHistory mPicaTemporalHistory;
     uint32_t mNativePicaDepthWritingDrawsThisFrame = 0;
     Extension::SceneSurfaceRegistry mSceneSurfaces;
+    // Companions share guest addresses but must not retire live scene bindings.
+    Extension::SceneSurfaceRegistry mNativePicaUiSurfaces;
     Extension::ResourceStateTracker mResourceStates;
 };
 

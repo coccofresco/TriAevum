@@ -30,6 +30,10 @@ leave ordinary boundaries and existing OoT producers unchanged.
 
 The promoted composition uses a separate canvas: resizing the existing raw-copy
 canvas while the same command buffer still references it would be unsafe.
+Scene and companion attachments have **separate surface registries**, including
+lazy guide allocation and retirement. Their identical guest keys must not cause
+promotion to retire scene/NRI bindings referenced by the still-recording command
+buffer. A regression tests simultaneous publication and independent retirement.
 Companions are retained between frames and are not serialized into guest state.
 `TRIAEVUM_NATIVE_UI_GRID_AUDIT=1` emits bounded `TRIAEVUM_NATIVE_UI_RASTER` receipts
 with reduced and output-density extents.

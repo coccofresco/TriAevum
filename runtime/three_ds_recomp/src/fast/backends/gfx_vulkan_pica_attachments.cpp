@@ -98,7 +98,7 @@ void GfxRenderingAPIVulkan::PrepareNativePicaDiffuseAlbedoGuide(NativePicaRender
                                              target.MsaaDiffuseAlbedoGuideImage,
                                              target.MsaaDiffuseAlbedoGuideMemory,
                                              target.MsaaDiffuseAlbedoGuideView);
-        mSceneSurfaces.Publish({ { target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
+        NativePicaSurfaceRegistry(target).Publish({ { target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
                                    Extension::SceneSurfaceKind::DiffuseAlbedoGuide },
                                  reinterpret_cast<uintptr_t>(target.DiffuseAlbedoGuideImage),
                                  target.Width,
@@ -204,7 +204,7 @@ void GfxRenderingAPIVulkan::PrepareNativePicaBaseGuides(NativePicaRenderTarget& 
         if (slot.Image == VK_NULL_HANDLE) {
             AllocateNativePicaAuxiliaryImage(target, slot.Format, samples, slot.Image, slot.Memory, slot.View);
             if (!msaa) {
-                mSceneSurfaces.Publish(
+                NativePicaSurfaceRegistry(target).Publish(
                     { { target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress, slot.Kind },
                       reinterpret_cast<uintptr_t>(slot.Image),
                       target.Width,

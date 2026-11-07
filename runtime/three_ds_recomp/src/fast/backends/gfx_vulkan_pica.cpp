@@ -613,6 +613,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
 
     NativePicaRenderTarget target;
     target.Key = key;
+    target.OutputResolutionUi = outputResolutionUi;
     target.Width = targetExtent.Width;
     target.Height = targetExtent.Height;
     // A target allocates every base guide together; a frame binds the ones
@@ -1234,7 +1235,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         if (image == VK_NULL_HANDLE)
             return 0U;
         const uintptr_t nativeImage = reinterpret_cast<uintptr_t>(image);
-        const auto& surface = mSceneSurfaces.Publish(
+        const auto& surface = NativePicaSurfaceRegistry(inserted).Publish(
             { { key.RenderTargetNamespace, physicalAddress, kind },
               nativeImage, inserted.Width, inserted.Height,
               static_cast<uint32_t>(format), 0, true });
@@ -1312,30 +1313,15 @@ void GfxRenderingAPIVulkan::DestroyNativePicaRenderTarget(
         mResourceStates.Forget(reinterpret_cast<uintptr_t>(image));
         if (!target.NriOwned) mNriInterop.ForgetTexture(image);
     }
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::Color });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.DepthPhysicalAddress,
-                            Extension::SceneSurfaceKind::Depth });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::NormalGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::MaterialGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::RigidMotionGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::AmbientGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress, Extension::SceneSurfaceKind::FogGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::OutlineGeometryGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::DiffuseAlbedoGuide });
+    auto& surfaces = NativePicaSurfaceRegistry(target);
+    surfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.DepthPhysicalAddress,
+                      Extension::SceneSurfaceKind::Depth });
+    for (const auto kind : {Extension::SceneSurfaceKind::Color,
+            Extension::SceneSurfaceKind::NormalGuide, Extension::SceneSurfaceKind::MaterialGuide,
+            Extension::SceneSurfaceKind::RigidMotionGuide, Extension::SceneSurfaceKind::AmbientGuide,
+            Extension::SceneSurfaceKind::FogGuide, Extension::SceneSurfaceKind::OutlineGeometryGuide,
+            Extension::SceneSurfaceKind::DiffuseAlbedoGuide})
+        surfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress, kind });
     if (target.Framebuffer != VK_NULL_HANDLE) {
         vkDestroyFramebuffer(mDevice, target.Framebuffer, nullptr);
     }

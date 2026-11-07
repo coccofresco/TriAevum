@@ -6567,6 +6567,29 @@ TEST(Oot3dDisplayEffectPlan,
                   "TemporalUpscaler", "Scanout"}));
 }
 
+TEST(Oot3dSceneSurfaces, NativeUiCompanionDoesNotRetireSceneAtTheSameGuestAddress) {
+    using namespace Fast::Extension;
+    std::vector<uintptr_t> retired;
+    const auto retire = [&](const SceneSurface& surface) { retired.push_back(surface.NativeImage); };
+    SceneSurfaceRegistry scene(retire), ui(retire);
+    SceneSurface reduced{{4, 8, SceneSurfaceKind::Color}, 100, 512, 853, 1, 0, true};
+    SceneSurface companion{reduced};
+    companion.NativeImage = 200;
+    companion.Width = 768;
+    companion.Height = 1280;
+    const auto sceneGeneration = scene.Publish(reduced).Generation;
+    ui.Publish(companion);
+    EXPECT_TRUE(retired.empty()); // both may be referenced by the recording command
+    ASSERT_TRUE(scene.Find(reduced.Key).has_value());
+    EXPECT_EQ(scene.Find(reduced.Key)->Generation, sceneGeneration);
+    EXPECT_EQ(scene.Find(reduced.Key)->NativeImage, 100U);
+    ui.Retire(companion.Key);
+    EXPECT_EQ(retired, (std::vector<uintptr_t>{200}));
+    ASSERT_TRUE(scene.Find(reduced.Key).has_value());
+    scene.Retire(reduced.Key);
+    EXPECT_EQ(retired, (std::vector<uintptr_t>{200, 100}));
+}
+
 TEST(Oot3dSceneSurfaces, ReplacementRetiresOldGeneration) {
     uint32_t retired = 0;
     Fast::Extension::SceneSurfaceRegistry registry(

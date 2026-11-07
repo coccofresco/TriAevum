@@ -12,6 +12,11 @@ GfxRenderingAPIVulkan::GfxRenderingAPIVulkan(GfxWindowBackendSDL2* windowBackend
           if (surface.NativeImage != 0)
               mNriInterop.ForgetTexture(reinterpret_cast<VkImage>(surface.NativeImage));
           mResourceStates.Forget(surface.NativeImage);
+      }),
+      mNativePicaUiSurfaces([this](const Extension::SceneSurface& surface) {
+          if (surface.NativeImage != 0)
+              mNriInterop.ForgetTexture(reinterpret_cast<VkImage>(surface.NativeImage));
+          mResourceStates.Forget(surface.NativeImage);
       }) {
 }
 
@@ -703,6 +708,7 @@ void GfxRenderingAPIVulkan::Shutdown() {
         mBrixelizerScene.Shutdown();
         ShutdownImGuiBackend();
         mSceneSurfaces.Clear();
+        mNativePicaUiSurfaces.Clear();
         mResourceStates.Clear();
         mAmbientOcclusionPass.Shutdown();
         mCacaoPass.Shutdown();
