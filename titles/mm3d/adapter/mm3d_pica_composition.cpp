@@ -457,8 +457,33 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
 bool Mm3dNativePicaCompositionTracker::ObserveQuads(
     uint32_t pc, const oot3d::recomp::a32::GuestState& state,
     oot3d::recomp::a32::MemoryBus& memory) {
+    if (pc == 0x0016160CU) {
+        mQuadSortMoves.clear();
+        const uint32_t count = state.r[0], insertion = state.r[1], base = state.r[2];
+        uint32_t actualCount = 0;
+        const uint64_t delta = uint64_t{base} - state.r[6];
+        if (!count || count > 0x180U || insertion >= count ||
+            delta < 0x578U || (delta - 0x578U) % 0x5FCU || (delta - 0x578U) / 0x5FCU > 7U ||
+            uint64_t{base} + 4U * count > UINT32_MAX ||
+            !memory.Read32(state.r[6] + 0x14U, &actualCount) || actualCount != count) {
+            ++mStats.InvalidQuadOwners; mQuadOwners.clear(); return true;
+        }
+        if (insertion == count - 1U) return true;
+        for (uint32_t i = insertion; i < count; ++i) {
+            uint32_t model = 0;
+            if (!memory.Read32(base + i * 4U, &model)) {
+                ++mStats.InvalidQuadOwners; mQuadOwners.clear(); mQuadSortMoves.clear(); return true;
+            }
+            const uint32_t destination = i == count - 1U ? insertion : i + 1U;
+            mQuadSortMoves.push_back({base + i * 4U, base + destination * 4U, model, false});
+        }
+        return true;
+    }
+    if (pc == 0x00161664U) {
+        CommitQuadQueueMoves(mQuadSortMoves, memory); mQuadSortMoves.clear(); return true;
+    }
     if (pc == 0x00112CA4U) {
-        ++mQuadGeneration; mQuadOwners.clear();
+        ++mQuadGeneration; mQuadOwners.clear(); mQuadSortMoves.clear();
         if (mQuadScope) {
             ++mStats.InvalidQuadOwners; mQuadScope.reset(); mActive.reset();
             mPendingPrimitives.clear(); mPrimitiveScope.reset();
@@ -630,6 +655,40 @@ bool Mm3dNativePicaCompositionTracker::ObservePrimitive(
     return true;
 }
 
+void Mm3dNativePicaCompositionTracker::CommitQuadQueueMoves(
+    std::span<const Mm3dDekui::NativeQuadQueueMove> moves, oot3d::recomp::a32::MemoryBus& memory) {
+    if (!mHooksVerified || moves.empty()) return;
+    std::unordered_map<uint32_t, QuadOwner> replacements;
+    bool valid = moves.size() <= 0x300U;
+    std::unordered_map<uint32_t, bool> sources, destinations;
+    for (const auto& move : moves) {
+        uint32_t actual = 0;
+        valid &= move.SourceSlot && !(move.SourceSlot & 3U) && sources.emplace(move.SourceSlot, true).second;
+        if (!move.DestinationSlot) continue; // producer deliberately removed it
+        valid &= !(move.DestinationSlot & 3U) && destinations.emplace(move.DestinationSlot, true).second &&
+            memory.Read32(move.DestinationSlot, &actual) && actual == move.Model && move.Model != 0;
+        const auto owner = mQuadOwners.find(move.SourceSlot);
+        if (move.NativeUi) {
+            QuadOwner ui; ui.Model = move.Model; ui.Generation = mQuadGeneration;
+            ui.Attribution = {Oot3dPicaCompositionLayer::Ui,
+                Oot3dPicaCompositionProvenance::NativeUiLifecycle, 0x0059B4BCU, 4U};
+            ui.Attribution.ExcludeFromPresentationFxaa = true;
+            ui.Attribution.PreserveNativeUiSampling = true;
+            replacements.emplace(move.DestinationSlot, ui);
+        } else if (owner != mQuadOwners.end() && owner->second.Model == move.Model &&
+                   owner->second.Generation == mQuadGeneration) {
+            replacements.emplace(move.DestinationSlot, owner->second);
+        }
+    }
+    for (const auto& move : moves) {
+        mQuadOwners.erase(move.SourceSlot); mQuadOwners.erase(move.DestinationSlot);
+    }
+    if (!valid) { ++mStats.InvalidQuadOwners; return; }
+    for (const auto& [slot, owner] : replacements) mQuadOwners[slot] = owner;
+    mStats.QuadQueueMoves += moves.size();
+    for (const auto& move : moves) if (move.NativeUi) ++mStats.NativeUiQuadMoves;
+}
+
 void Mm3dNativePicaCompositionTracker::FlushPrimitives() {
     // A coarse closing scope must not overwrite its already-observed children.
     for (const auto& span : mPendingPrimitives)
@@ -709,7 +768,7 @@ void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     mActorDrawStack.clear(); mQueueOwners.clear(); mModelSubmit.reset(); mModelScope.reset();
     mOverlaySubmit.reset();
     mPrimitiveScope.reset(); mPendingPrimitives.clear();
-    mEnvironmentProducers.clear(); mQuadOwners.clear(); mQuadScope.reset(); ++mQuadGeneration;
+    mEnvironmentProducers.clear(); mQuadOwners.clear(); mQuadScope.reset(); mQuadSortMoves.clear(); ++mQuadGeneration;
     mFineSuppressed = false;
     ++mQueueGeneration;
     mStats = {};

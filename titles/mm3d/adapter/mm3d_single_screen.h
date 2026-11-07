@@ -7,10 +7,12 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <span>
 #include <vector>
 
 namespace Mm3dDekui {
 class Core;
+struct NativeQuadQueueMove;
 }
 
 namespace Oot3dNativeGame {
@@ -43,6 +45,9 @@ class Mm3dSingleScreen {
     // calls into dekui reach this object's Core. Bind before Verify; the port
     // must outlive this object's sites.
     void BindRestoration(Mm3dRestorationPort& restoration);
+    using QuadQueueObserver = std::function<void(std::span<const Mm3dDekui::NativeQuadQueueMove>,
+        oot3d::recomp::a32::MemoryBus&)>;
+    void SetQuadQueueObserver(QuadQueueObserver observer) { mQuadQueueObserver = std::move(observer); }
     // dekui's settings (its presentation.json): the file at path, or
     // dekui's shipped defaults when path is empty or missing. Applied as
     // dekui applies them at startup; call before the guest runs. Returns
@@ -56,6 +61,7 @@ class Mm3dSingleScreen {
     std::unique_ptr<Mm3dDekui::Core> mCore;
     std::map<std::uint32_t, std::uint32_t> mReplacements;
     Mm3dRestorationPort* mRestoration = nullptr;
+    QuadQueueObserver mQuadQueueObserver;
 };
 
 } // namespace Oot3dNativeGame

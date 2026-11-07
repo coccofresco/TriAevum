@@ -1,4 +1,5 @@
 #pragma once
+#include "../dekui/host_interfaces.h"
 
 #include "oot3d_native_pica_frontend.h"
 #include "mm3d_native_a32_lighting.h"
@@ -75,6 +76,7 @@ struct Mm3dNativePicaCompositionStats {
     uint64_t PrimitiveEntries = 0, PrimitiveSpans = 0, TemporalPrimitiveSpans = 0;
     uint64_t UnownedPrimitives = 0, InvalidPrimitives = 0;
     uint64_t AtmosphereQuadSpans = 0, UiQuadSpans = 0, InvalidQuadOwners = 0;
+    uint64_t QuadQueueMoves = 0, NativeUiQuadMoves = 0;
     std::array<uint64_t, 8> UnknownQuadSpans{};
     std::array<uint64_t, 8> PrimitiveCallerEntries{};
 };
@@ -106,6 +108,8 @@ class Mm3dNativePicaCompositionTracker final
         std::vector<Oot3dPicaCommandListCompositionSpan>& spans,
         std::string* error = nullptr) override;
 
+    void CommitQuadQueueMoves(std::span<const Mm3dDekui::NativeQuadQueueMove> moves,
+        oot3d::recomp::a32::MemoryBus& memory);
     void Reset() noexcept;
     [[nodiscard]] const Mm3dNativePicaCompositionStats& Stats() const noexcept;
     // The environment group latched for this play visit (Unknown = nullopt).
@@ -184,6 +188,7 @@ class Mm3dNativePicaCompositionTracker final
     std::optional<ModelScope> mQuadScope;
     uint32_t mQuadQueue = 0;
     uint64_t mQuadGeneration = 0;
+    std::vector<Mm3dDekui::NativeQuadQueueMove> mQuadSortMoves;
     std::optional<PrimitiveScope> mPrimitiveScope;
     std::vector<Oot3dPicaCommandListCompositionSpan> mPendingPrimitives;
     Mm3dNativeA32LightingProbe mLighting;

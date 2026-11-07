@@ -16,8 +16,12 @@ namespace {
 class BusMemory final : public Mm3dDekui::Memory {
   public:
     explicit BusMemory(a32::MemoryBus& bus,
-                       const Mm3dRestorationPort* restoration = nullptr) noexcept
-        : mBus(bus), mRestoration(restoration) {}
+                       const Mm3dRestorationPort* restoration = nullptr,
+                       const Mm3dSingleScreen::QuadQueueObserver* observer = nullptr) noexcept
+        : mBus(bus), mRestoration(restoration), mQuadQueueObserver(observer) {}
+    void NativeQuadQueueCommitted(std::span<const Mm3dDekui::NativeQuadQueueMove> moves) override {
+        if (mQuadQueueObserver && *mQuadQueueObserver) (*mQuadQueueObserver)(moves, mBus);
+    }
     // Project Restoration's appended code, ported as source: dekui's checks
     // of that code accept the port's verified sites instead.
     bool RestorationMessagePort() const override {
@@ -47,6 +51,7 @@ class BusMemory final : public Mm3dDekui::Memory {
   private:
     a32::MemoryBus& mBus;
     const Mm3dRestorationPort* mRestoration;
+    const Mm3dSingleScreen::QuadQueueObserver* mQuadQueueObserver;
 };
 
 // The guest thread's state in dynarmic's register view: S0..S31 are copied
@@ -163,7 +168,7 @@ void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
             state.r[15] = pc + 4U;
             {
                 StateCpu cpu(state);
-                BusMemory memory(bus, mRestoration);
+                BusMemory memory(bus, mRestoration, &mQuadQueueObserver);
                 mCore->CallSvc(replacement & 0x00FFFFFFU, cpu, memory);
             }
             // dekui leaves Thumb as the CPSR T bit; the A32 runtime keeps it

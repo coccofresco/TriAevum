@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 #pragma once
 #include "hud_adjustments.h"
+#include "host_interfaces.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -71,7 +72,7 @@ template<class Memory> float HeartsOpacity(Memory& m) {
     }
     return 1.f;
 }
-struct Entry { U32 object, priority; };
+struct Entry { U32 object, priority, source_slot = 0; };
 struct Hook {
     bool armed = false;
     U32 owner = 0;
@@ -105,7 +106,7 @@ struct Hook {
         for (U32 i=0; i<*count; ++i) {
             auto p=m.Read(Pointer(q,i)), rank=m.Read(Priority(q,i));
             if (!p || !rank || !*p) return false;
-            out.push_back({*p,*rank});
+            out.push_back({*p,*rank,Pointer(q,i)});
         }
         return true;
     }
@@ -155,13 +156,28 @@ struct Hook {
                 if (occurrences != (q==6 ? 1u : 0u)) return;
             }
         }
+        const auto publish_moves=[&](const std::vector<Entry>* new_top) {
+            if constexpr(requires { m.NativeQuadQueueCommitted(std::span<const NativeQuadQueueMove>{}); }) {
+                std::vector<NativeQuadQueueMove> moves;
+                for(unsigned i=0;i<retained.size();++i)
+                    moves.push_back({retained[i].source_slot,Pointer(6,i),retained[i].object,false});
+                if(new_top) for(unsigned i=0;i<new_top->size();++i) {
+                    const auto& entry=(*new_top)[i];
+                    const bool moved=std::any_of(selected.begin(),selected.end(),[&](const Entry& e){return e.source_slot==entry.source_slot;});
+                    moves.push_back({entry.source_slot,Pointer(4,i),entry.object,moved});
+                }
+                else for(const auto& e:selected) moves.push_back({e.source_slot,0,e.object,false});
+                m.NativeQuadQueueCommitted(moves);
+            }
+        };
         if(HudAdjustments::hide_minimap) {
             // Remove only this gameplay call's map/radar entries. Full map menus
             // use their own routing; unrelated lower-screen objects remain.
             for(unsigned i=0;i<retained.size();++i) {
                 m.Write(Pointer(6,i),retained[i].object);m.Write(Priority(6,i),retained[i].priority);
             }
-            m.Write(Count(6),static_cast<U32>(retained.size()));status.store(2);return;
+            m.Write(Count(6),static_cast<U32>(retained.size()));
+            publish_moves(nullptr);status.store(2);return;
         }
         // Stage all writes. A bad pointer/count leaves the original map untouched.
         std::vector<std::pair<U32,U32>> writes;
@@ -249,6 +265,7 @@ struct Hook {
             m.Write(Count(q),static_cast<U32>(entries.size()));
         };
         save(6,retained); save(4,top);
+        publish_moves(&top);
         moved_quads.store(total); status.store(2);
     }
 };

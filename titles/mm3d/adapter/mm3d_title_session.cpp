@@ -93,6 +93,9 @@ public:
       // dekui animates with the emulated clock: here the deterministic
       // presentation clock (a 60 Hz frame each).
       mSingleScreen.emplace(setup.PresentationClock);
+      mSingleScreen->SetQuadQueueObserver([this](auto moves, auto& memory) {
+        mComposition.CommitQuadQueueMoves(moves, memory);
+      });
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
@@ -305,6 +308,8 @@ public:
         {"light_bindings", stats.LightBindings},
         {"atmosphere_quad_spans", stats.AtmosphereQuadSpans},
         {"ui_quad_spans", stats.UiQuadSpans},
+        {"quad_queue_moves", stats.QuadQueueMoves},
+        {"native_ui_quad_moves", stats.NativeUiQuadMoves},
         {"unknown_quad_spans", stats.UnknownQuadSpans},
         {"invalid_quad_owners", stats.InvalidQuadOwners},
         {"primitive_caller_entries", stats.PrimitiveCallerEntries},

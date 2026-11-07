@@ -232,7 +232,7 @@ void TestQuadEntryOwnership() {
     const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
     constexpr uint32_t manager = f.Actor + 0x8000U;
     constexpr std::array returns{0x110B7CU, 0x110BACU, 0x110C8CU, 0x110CB0U, 0x110D88U, 0x110DB8U};
-    for (uint32_t q = 0; q < returns.size(); ++q) {
+    for (bool reordered : {false, true}) for (uint32_t q = 0; q < returns.size(); ++q) {
         tracker.Reset(); s.r[0] = f.Play; observe(0x15E9ECU);
         f.W32(manager + 0x14U + q * 4U, 0);
         s.r[14] = 0x15EF58U; observe(0x171B40U);
@@ -248,6 +248,12 @@ void TestQuadEntryOwnership() {
         // has its own guarded producer, separate from the flat-color pool.
         s.r[5] = manager; s.r[10] = q; s.r[4] = f.Model; observe(0x191CC8U);
         f.W32(slot + 4U, f.Model); f.W32(manager + 0x14U + q * 4U, 2);
+        if (reordered) {
+            // Native insertion moves the final entry ahead of the first.
+            // Identical model handles must retain their different semantics.
+            s.r[0] = 2; s.r[1] = 0; s.r[2] = slot; s.r[6] = manager + q * 4U;
+            observe(0x16160CU); observe(0x161664U);
+        }
         f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
         s.r[0] = manager; s.r[1] = q; s.r[14] = returns[q]; observe(kMm3dQuadQueueDrawEntry);
         s.r[6] = manager + q * 0x600U;
@@ -259,14 +265,42 @@ void TestQuadEntryOwnership() {
         observe(returns[q]);
         std::vector<Oot3dPicaCommandListCompositionSpan> spans;
         tracker.TakeCommandListCompositionSpans(0, 0, spans);
-        Require(spans.size() == 2 && spans[0].Attribution.Layer == Oot3dPicaCompositionLayer::Atmosphere &&
-                !spans[0].Attribution.ExcludeFromPresentationFxaa && !spans[0].Attribution.TemporalIdentity.Available(),
+        const size_t atmosphere = reordered ? 1 : 0, other = reordered ? 0 : 1;
+        Require(spans.size() == 2 && spans[atmosphere].Attribution.Layer == Oot3dPicaCompositionLayer::Atmosphere &&
+                !spans[atmosphere].Attribution.ExcludeFromPresentationFxaa && !spans[atmosphere].Attribution.TemporalIdentity.Available(),
                 "environment quad lost exact producer ownership");
-        Require(spans[1].Attribution.Layer == (q >= 4 ? Oot3dPicaCompositionLayer::Ui : Oot3dPicaCompositionLayer::Unknown),
+        Require(spans[other].Attribution.Layer == (q >= 4 ? Oot3dPicaCompositionLayer::Ui : Oot3dPicaCompositionLayer::Unknown),
                 "queue occurrence fabricated a role for a different producer");
         Require(tracker.Stats().AtmosphereQuadSpans == 1 && tracker.Stats().InvalidQuadOwners == 0,
                 "quad entry scope imbalance");
     }
+    tracker.Reset();
+    const uint32_t source = manager + 0x578U + 6U * 0x600U;
+    const uint32_t destination = manager + 0x578U + 4U * 0x600U;
+    f.W32(destination, f.Model);
+    const std::array moves{Mm3dDekui::NativeQuadQueueMove{source, destination, f.Model, true}};
+    tracker.CommitQuadQueueMoves(moves, f.Memory);
+    const auto drawMoved = [&](uint32_t begin) {
+        f.W32(kMm3dCommandListCursorAddress, begin);
+        s.r[0] = manager; s.r[1] = 4; s.r[14] = returns[4]; observe(kMm3dQuadQueueDrawEntry);
+        s.r[6] = manager + 4U * 0x600U; s.r[4] = 0; observe(0x12C71CU);
+        f.W32(kMm3dCommandListCursorAddress, begin + 0x20U);
+        observe(0x12C730U); observe(returns[4]);
+    };
+    drawMoved(0x14000100U);
+    std::vector<Oot3dPicaCommandListCompositionSpan> moved;
+    tracker.TakeCommandListCompositionSpans(0, 0, moved);
+    Require(moved.size() == 1 && moved[0].Attribution.Layer == Oot3dPicaCompositionLayer::Ui &&
+            moved[0].Attribution.PreserveNativeUiSampling && tracker.Stats().NativeUiQuadMoves == 1,
+            "producer-proved minimap relocation lost UI ownership");
+    // A stale destination must invalidate the sidecar, not confer the role on
+    // the new object now occupying that native queue slot.
+    f.W32(destination, f.Model + 4U);
+    tracker.CommitQuadQueueMoves(moves, f.Memory);
+    drawMoved(0x14000200U);
+    tracker.TakeCommandListCompositionSpans(0, 0, moved);
+    Require(moved.back().Attribution.Layer == Oot3dPicaCompositionLayer::Unknown &&
+            tracker.Stats().InvalidQuadOwners == 1, "stale relocation granted UI ownership");
 }
 
 void TestAcceptedAndSelectedSources() {

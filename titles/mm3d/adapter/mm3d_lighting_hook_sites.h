@@ -25,6 +25,8 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x0012C6A8U, {0xE92D41F0U, 0xE0812081U, 0xE0807101U, 0xE2878A06U}},
     Mm3dLightingHookSite{0x001565ACU, {0xE92D4008U, 0xE59DC008U, 0xE58DC000U, 0xEB000276U}},
     Mm3dLightingHookSite{0x001565BCU, {0xE8BD8008U, 0xE1A03002U, 0xE1A0C001U, 0xE0800103U}},
+    Mm3dLightingHookSite{0x0016160CU, {0xE15A0001U, 0x0A000013U, 0xE0403001U, 0xE0820100U}},
+    Mm3dLightingHookSite{0x00161664U, {0xE8BD07F0U, 0xE12FFF1EU, 0xE52DE004U, 0xE24DD014U}},
     Mm3dLightingHookSite{0x00112CA4U, {0xE3A01000U, 0xE5801008U, 0xE580100CU, 0xE5801010U}},
     Mm3dLightingHookSite{0x00179930U, {0xE3520000U, 0x03A00000U, 0x012FFF1EU, 0xE080C101U}},
     Mm3dLightingHookSite{0x00179AD8U, {0xE3A00000U, 0xE5840240U, 0xE5971014U, 0xE0890089U}},
@@ -79,6 +81,12 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x005EF0D0U, {0xE5940004U, 0xE2855004U, 0xE0840100U, 0xE2800008U}},
 };
 inline constexpr std::array kMm3dCompositionOwnerGuards{
+    // Native stable insertion's exact source/destination movement.
+    std::pair{0x001615ACU, 0xE92D07F0U}, std::pair{0x001615B0U, 0xE0812081U},
+    std::pair{0x001615B4U, 0xE0806101U}, std::pair{0x001615B8U, 0xE0801482U},
+    std::pair{0x001615DCU, 0xE2822F5EU}, std::pair{0x00161620U, 0xE5108004U},
+    std::pair{0x00161648U, 0xE5159008U}, std::pair{0x0016164CU, 0xE5059004U},
+    std::pair{0x0016165CU, 0xE7828101U}, std::pair{0x00161660U, 0xE7874101U},
     // Both native pooled producers store the exact model in the primary queue.
     std::pair{0x00179960U, 0xE5842578U}, std::pair{0x00179AF0U, 0xE5814578U},
     std::pair{0x00191CD8U, 0xE0850480U}, std::pair{0x00191CE0U, 0xE5814578U},

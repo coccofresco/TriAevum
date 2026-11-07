@@ -3,6 +3,7 @@
 #include "core.h"
 #include "core_test_sites.h"
 #include "inventory_menu.h"
+#include "native_minimap.h"
 
 #include <cstdlib>
 #include <fstream>
@@ -37,6 +38,10 @@ struct TestMemory final : Memory {
     std::optional<U32> corrupt;
     bool missing=false,record=false;
     unsigned writes=0;
+    std::vector<NativeQuadQueueMove> quad_moves;
+    void NativeQuadQueueCommitted(std::span<const NativeQuadQueueMove> moves) override {
+        quad_moves.assign(moves.begin(), moves.end());
+    }
     std::optional<U32> Read(U32 at) override {
         if (record) reads.insert(at);
         if (corrupt==at && missing) return std::nullopt;
@@ -253,12 +258,41 @@ void ImageContracts(const char* path) {
               << " Restoration-guarded native sites, " << mutations
               << " corrupt/missing guard checks; 17 appended entries excluded\n";
 }
+void MinimapPublishesExactRelocation() {
+    namespace N = NativeMinimap;
+    for (bool hidden : {false, true}) {
+        TestMemory m; N::Hook hook;
+        constexpr U32 model=0x200000, position=0x210000, size=0x220000, rotation=0x230000;
+        for(unsigned q=0;q<8;++q)m.data[N::Count(q)]=0;
+        m.data[N::Pointer(4,0)]=0;m.data[N::Priority(4,0)]=0;
+        m.data[0x6890ec]=model;m.data[0x6890f0]=0;m.data[0x727970+0x828]=0;
+        hook.Begin(m,1,true);
+        m.data[N::Count(6)]=1;m.data[N::Pointer(6,0)]=model;m.data[N::Priority(6,0)]=1;
+        m.data[model+0x2c8]=1;m.data[model+0x2c4]=1;m.data[model+0x398]=0;
+        m.data[model+0x2b8]=position;m.data[model+0x2c0]=size;m.data[model+0x2bc]=rotation;
+        for(unsigned axis=0;axis<3;++axis){
+            m.data[position+4*axis]=0;m.data[size+4*axis]=std::bit_cast<U32>(1.f);
+            for(unsigned v=0;v<4;++v)m.data[model+0x2cc+12*v+4*axis]=std::bit_cast<U32>(float(v&1));
+        }
+        for(unsigned i=0;i<12;++i)m.data[rotation+4*i]=std::bit_cast<U32>(i==0||i==5||i==10?1.f:0.f);
+        const bool previous=HudAdjustments::hide_minimap.exchange(hidden);
+        hook.End(m,1,true,.3f,1.f,400.f);
+        HudAdjustments::hide_minimap.store(previous);
+        Check(m.quad_moves.size()==1,"minimap commit omitted relocation receipt");
+        const auto& move=m.quad_moves[0];
+        Check(move.SourceSlot==N::Pointer(6,0)&&move.Model==model&&
+              move.DestinationSlot==(hidden?0:N::Pointer(4,0))&&move.NativeUi==!hidden,
+              "minimap guessed identity instead of preserving its exact source slot");
+        Check(m.Read(N::Count(6))==0,"minimap left a moved source queued");
+    }
+}
 } // namespace
 
 int main(int argc,char** argv) {
     try {
         HelpersAndReplay();
         SharedHookFrames();
+        MinimapPublishesExactRelocation();
         std::cout << "PASS helpers and SVC register/stack/VFP replay\n";
         ImageContracts(argc>1 ? argv[1] : std::getenv("MM3D_CODE_BIN"));
         return 0;
