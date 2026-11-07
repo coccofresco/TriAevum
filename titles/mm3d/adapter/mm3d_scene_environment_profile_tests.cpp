@@ -124,7 +124,8 @@ int main() try {
   // Unproved owners stay native.
   auto unproved = floor.Binding;
   unproved.Sources[0].Scope = unproved.Sources[1].Scope = R::PicaNativeLightScope::Local;
-  Check(!R::BuildPicaFragmentBalanceUniforms(true, floor.Layout, unproved, noon), "unproved sun replaced");
+  const auto unprovedBalance=R::BuildPicaFragmentBalanceUniforms(true, floor.Layout, unproved, noon);
+  Check(unprovedBalance && unprovedBalance->Control[1]==8, "unproved sun replaced");
   // An inn wall: global ambient and three lamps, no scene directional.
   R::PicaFragmentLightingLayout wall;
   wall.SchemaVersion = R::kPicaFragmentLightingLayoutSchemaVersion;
@@ -137,12 +138,81 @@ int main() try {
     lamps.Sources[i].SourceIdentity = 0x99099c4U + i * 0x6000U;
     lamps.Sources[i].Origin = R::PicaNativeLightOrigin::Actor;
   }
-  Check(!R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, noon), "a room without a scene key changed");
-  Check(!R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, inn), "an inn wall changed under the Indoor base");
+  const auto wallBalance=R::BuildPicaFragmentBalanceUniforms(true, wall, lamps, inn);
+  Check(wallBalance && wallBalance->Control[1]==8, "a local-only room acquired the actor key");
+  Check(wallBalance->Gains[0]==std::array<float,4>{1,1,1,0}, "inn lamp not native");
   // An actor in the inn lit by the environment's records takes the key.
   const auto actor = R::BuildPicaFragmentBalanceUniforms(true, floor.Layout, floor.Binding, inn);
   Check(actor && actor->Control[1] == 1U, "an inn actor lit by the environment has no key");
 
+  // Exercise the real shipped files through the real resource-default loader,
+  // not an equivalent hard-coded document. User files remain in a private dir.
+  const auto release=std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() /
+      "runtime/triaevum_resources/environments/mm3d";
+  SceneEnvironmentRuntime shipped(directory, [&](const auto& v) { published=v; }, release, Mm3dFallback());
+  uint64_t world=10;
+  std::optional<R::PicaEnvironmentLighting> calibratedIndoor;
+  for (Group group : {Group::Indoor, Group::FixedTime, Group::TimeAtEntry, Group::TimeFlows}) {
+    shipped.ObserveScene(0x6F, at(group, world++, true));
+    const auto snapshot=shipped.Snapshot();
+    Check(snapshot.Error.empty(), "shipped profile invalid");
+    Check(snapshot.Sources[0]==SceneEnvironmentSource::DefaultGroup, "shipped group did not beat fallback");
+    Check(snapshot.SourcePaths[0].parent_path()==release, "foreign title namespace");
+    Check(published.Enabled && published.Rim.Enabled, "shipped rim lost");
+    Check(R::PicaFragmentBalanceProfileSupported(published), "shipped shape refused");
+    Check(published.NativeLocalStrength==1, "shipped profile removes native local lamps");
+    if (group==Group::Indoor || group==Group::TimeFlows) {
+      // The register already includes the draw's material/room-vs-actor
+      // ambient. A constant material-weighted addition cannot replace it.
+      Check(!published.PreserveSceneBrightness && published.NativeAmbientStrength==1,
+            "calibrated day profile loses the native ambient ledger");
+      Check(published.AmbientIntensity==0, "calibrated day profile adds an absolute ambient budget");
+      Check(published.NativeDirectStrength==0 && published.Lights[0].Intensity==1,
+            "calibration disabled the native-following key/shadow");
+      if (group==Group::Indoor) calibratedIndoor=published;
+    }
+    Check(shipped.SetForcedNightWeight(1), "night force failed");
+    if (group==Group::TimeFlows || group==Group::TimeAtEntry) {
+      Check(shipped.Snapshot().Sources[1]==SceneEnvironmentSource::DefaultGroup, "night group missing");
+      Check(shipped.Snapshot().NightProfileExists, "night endpoint not loaded");
+      Check(published.AmbientColor[2]>published.AmbientColor[0], "night palette not loaded");
+    }
+    shipped.SetForcedNightWeight(std::nullopt);
+  }
+  // Scene-lit ambient regression: the active order can put Local points
+  // before the proved Scene directionals, independently of hardware slots.
+  // The captured global ambient is already material-weighted; losing 60%
+  // is wrong even in a full key shadow. No actor/material identity enters
+  // the policy. Multiplicative secondary TEV has a separate shared regression.
+  Check(calibratedIndoor.has_value(), "indoor calibration was not loaded");
+  auto propBinding=floor.Binding;
+  auto fixed=std::make_shared<R::PicaSceneDirectionalLights>(*propBinding.SceneDirectionals);
+  for (uint32_t i=0;i<fixed->Count;++i) fixed->Lights[i].SkyLight=false;
+  propBinding.SceneDirectionals=fixed;
+  R::PicaFragmentLightingLayout propLayout;
+  propLayout.SchemaVersion=R::kPicaFragmentLightingLayoutSchemaVersion;
+  propLayout.ActiveLightCount=4;propLayout.LightPermutation={2,3,0,1};
+  propLayout.Lights[0].Directional=propLayout.Lights[1].Directional=true;
+  for (uint32_t i=2;i<4;++i) {
+    propBinding.Sources[i]={};
+    propBinding.Sources[i].Kind=R::PicaNativeLightSource::Type::Point;
+    propBinding.Sources[i].SourceIdentity=0x100U+i;
+  }
+  const auto prop=R::BuildPicaFragmentBalanceUniforms(true,propLayout,propBinding,*calibratedIndoor);
+  Check(prop && prop->Control[1]==1, "a proved interior key was lost or invented on another slot");
+  Check(prop->Gains[2]==std::array<float,4>{1,1,1,0} &&
+        prop->Gains[3]==std::array<float,4>{1,1,1,0}, "calibration modifies local lamps");
+  for (const auto& ambient : {std::array<float,3>{55/255.F,51/255.F,51/255.F},
+                             std::array<float,3>{127/255.F,149/255.F,139/255.F}})
+    for (float channel : ambient)
+      Check(channel*prop->Parameters[0]==channel,
+            "a full key shadow must not remove the prop/room's native ambient budget");
+  // A local-only room still has NO actor key, but keeps that same ambient.
+  const auto localRoom=R::BuildPicaFragmentBalanceUniforms(true,wall,lamps,*calibratedIndoor);
+  Check(localRoom && localRoom->Control[1]==8 && localRoom->Parameters[0]==1,
+        "local-only room acquired a key or lost ambient");
+  // The release never writes a user profile just by loading its defaults.
+  Check(std::filesystem::is_empty(directory), "loading release defaults wrote user files");
   std::printf("mm3d scene environment profile tests passed: %d checks\n", gChecks);
   return 0;
 } catch (const std::exception &error) {

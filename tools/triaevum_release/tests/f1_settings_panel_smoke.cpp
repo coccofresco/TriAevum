@@ -1269,30 +1269,23 @@ void CheckMm3dSceneEnvironment() {
           "MM3D widget presented unknown time as time-driven");
     Click("Use scene environment");
     Check(environment->Snapshot().Profile.Enabled,"MM3D profile control did not enable explicit override");
-    // The native-preserving profile (native scene direct 1) is not a shape
-    // native fragment lights take: the panel says it is not applied, keeps the
-    // unsupported control editable so it can be set back, and offers the
-    // controls the contract has no use for as unavailable.
+    // Every profile shape now uses the balance evaluator; no unavailable
+    // marks or destructive reset-to-transfer button remain.
     Frame(true);
-    Check(loggedPanelText.find("Not applied: this game is lit by native fragment lights")!=std::string::npos,
-          "unsupported fragment-light profile not explained");
-    Check(!Find("Native scene direct contribution").Disabled,"unsupported native direct cannot be set back");
-    Check(Find("Ambient intensity").Disabled && Find("Native fog contribution").Disabled &&
-              Find("Enable rim light").Disabled,
-          "controls native fragment lights do not apply were offered");
-    Check(!Find("Native local contribution").Disabled,"supported local contribution unavailable");
-    Click("Use the supported shape");
-    Frame(true);
-    {
-        const auto shaped=environment->Snapshot().Profile;
-        Check(shaped.Enabled && shaped.NativeDirectStrength==0.0F && shaped.AmbientIntensity==0.0F &&
-                  shaped.Lights[0].Intensity==1.0F && shaped.Lights[1].Intensity==0.0F &&
-                  shaped.NativeLocalStrength==1.0F && shaped.NativeAmbientStrength==1.0F,
-              "supported shape changed more than the unsupported controls");
-    }
-    Check(loggedPanelText.find("Applied to the native fragment lights")!=std::string::npos,
-          "supported fragment-light profile not confirmed");
-    Check(Find("Native scene direct contribution").Disabled,"native direct still offered once supported");
+    Check(loggedPanelText.find("Applied to native fragment lights")!=std::string::npos,
+          "fragment profile status not explained");
+    Check(loggedPanelText.find("Unavailable with native fragment lights")==std::string::npos,
+          "obsolete fragment-light unavailable marks remain");
+    for (const char* control : {"Native scene direct contribution", "Ambient intensity",
+                               "Native fog contribution", "Enable rim light", "Native local contribution"})
+        Check(!Find(control).Disabled,"supported fragment-light control unavailable");
+    Click("Enable rim light");
+    Check(environment->Snapshot().Profile.Rim.Enabled,"fragment-light rim widget did not publish");
+    Click("Add light at Link");
+    Check(environment->Snapshot().Profile.PlacedLights.size()==1,"fragment-light placed widget did not publish");
+    Click("Save profile");
+    Check(environment->Snapshot().FileExists && !environment->Snapshot().Dirty,
+          "fragment-light authored shape did not save");
     graphics.SetCapability(GraphicsCapability::NativeSurfaceLighting,false,"test unavailable");
     Frame();
     Check(!Find("Use scene environment").Disabled,"unsupported active environment cannot be disabled");

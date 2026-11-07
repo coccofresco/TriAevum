@@ -303,6 +303,7 @@ add_test(NAME pica_temporal_fragment_artifacts COMMAND build_fragment_artifacts 
 add_test(NAME pica_toon_fragment_artifacts COMMAND build_fragment_artifacts --toon --check)
 add_test(NAME pica_uber_fragment_artifacts COMMAND build_fragment_artifacts --uber --check)
 add_test(NAME pica_caster_fragment_artifacts COMMAND build_fragment_artifacts --casters --check)
+add_test(NAME pica_fragment_balance_compile COMMAND build_fragment_artifacts --balance-check)
 set_tests_properties(pica_toon_fragment_artifacts PROPERTIES TIMEOUT 120)
 set_tests_properties(pica_temporal_fragment_artifacts PROPERTIES TIMEOUT 180)
 set_tests_properties(pica_fragment_artifacts PROPERTIES TIMEOUT 120)

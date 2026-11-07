@@ -710,7 +710,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             insertions.push_back({sites.Begin, std::string(Renderer3ds::kPicaFragmentBalanceCaptureBegin)});
             insertions.push_back({sites.Diffuse, std::string(Renderer3ds::kPicaFragmentBalanceCaptureDiffuse)});
             insertions.push_back({sites.Specular, std::string(Renderer3ds::kPicaFragmentBalanceCaptureSpecular)});
-            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V3_NATIVE_POINT_RESPONSE");
+            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V4_PROFILE_NATIVE_POINTS_FACTOR");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
         }
         if (nativeFragmentShadows) {

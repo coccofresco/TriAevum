@@ -1127,6 +1127,19 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         pointReplacement->Points);
                 }
             }
+            if (fragmentBalance) {
+                Renderer3ds::PicaTevProgram tev{};
+                if (draw.FragmentUniformBytes.size() < Extension::kPicaPackedFragmentTevProgramOffset + sizeof(tev)) {
+                    fragmentBalance.reset(); // Unknown material composition keeps the native draw.
+                    pointReplacement.reset();
+                    surfaceBinding.ScenePoints.reset();
+                }
+                else {
+                    std::memcpy(&tev, draw.FragmentUniformBytes.data() +
+                        Extension::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
+                    Renderer3ds::ApplyPicaFragmentSecondaryMaterialFactor(*fragmentBalance, tev);
+                }
+            }
             // An unqualified fragment-lit draw keeps the no-profile native
             // reference (pica_fragment_balance.h).
             const bool balanceFallback = Renderer3ds::PicaFragmentLitTitleDrawKeepsNative(
@@ -1462,7 +1475,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceLighting.has_value(),
             pbrOptions,
             reliefTexture,
-            surfaceLighting && (surfaceLighting->Control[3] & 2U) != 0U,
+            surfaceLighting && (fragmentBalance.has_value() || (surfaceLighting->Control[3] & 2U) != 0U),
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
             surfaceCandidate && surfaceDebug.ShadowCode(surfaceOrdinal) != 0U,
 #endif
@@ -1486,10 +1499,15 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (surfaceLighting) surfaceLighting->Control[1] = 0;
             pointReplacement.reset();
         }
-        if (surfaceLighting && !Extension::HasPicaShaderInstrumentationFeature(
-                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand))
+        if (surfaceLighting && (fragmentBalanceApplied || !Extension::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand)))
             Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting,
-                pbrOptions.NativeBalance || pbrOptions.PreserveNativeUnlit);
+                fragmentBalanceApplied || pbrOptions.PreserveNativeUnlit);
+        // Both evaluators own native slots through the same ledger. Fold the
+        // explicit additions once, then remove their duplicate native terms.
+        // Do this only after admission: fallback shaders keep their old inputs.
+        if (surfaceLighting && fragmentBalanceApplied)
+            Renderer3ds::PreparePicaFragmentProfileSurface(*surfaceLighting, *fragmentBalance, mFrameEnvironment);
         if (surfaceLighting && pointReplacement && fragmentBalance)
             Renderer3ds::ApplyPicaNativePointReplacementControls(*surfaceLighting, *pointReplacement, mFrameEnvironment);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
@@ -1725,7 +1743,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (fragmentBalance) {
                 char balance[256];
                 std::snprintf(balance,sizeof(balance),
-                    ",\"fragmentBalance\":%u,\"balanceKeyIndex\":%u,\"referenceFillMask\":%u,\"balanceGlobalAmbientGain\":%.9g}",
+                    ",\"fragmentBalance\":%u,\"balanceKeyIndex\":%u,\"secondaryMaterialFactor\":%u,\"balanceGlobalAmbientGain\":%.9g}",
                     fragmentBalanceApplied?1U:0U,fragmentBalance->Control[1],fragmentBalance->Control[2],
                     static_cast<double>(fragmentBalance->Parameters[0]));
                 record.pop_back();record+=balance;
