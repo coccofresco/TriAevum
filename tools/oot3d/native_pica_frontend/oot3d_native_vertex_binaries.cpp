@@ -46,6 +46,11 @@ std::span<const Fast::Renderer3ds::PicaVertexArtifact> TitleVertexArtifacts() {
     static const auto artifacts = Fast::Renderer3ds::PicaVertexArtifactsFromPack(Entries());
     return artifacts;
 }
+std::span<const Fast::Renderer3ds::PicaVertexArtifact> AdditionalTitleVertexArtifacts() {
+    static const auto embeddedCount = Fast::Renderer3ds::PicaVertexArtifactsFromPack(
+        Fast::Renderer::ReadSpirvPack(kPack)).size();
+    return TitleVertexArtifacts().subspan(embeddedCount);
+}
 std::span<const Fast::Renderer::PassShaderArtifact> TitlePassArtifacts() {
     static const auto artifacts = Fast::Renderer::PassShaderArtifactsFromPack(Entries());
     return artifacts;
