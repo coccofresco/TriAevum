@@ -1149,6 +1149,22 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                {{"enabled", !launch.AudioPcmDumpPath.empty()},
                 {"path", launch.AudioPcmDumpPath.string()},
                 {"channel_samples", pcmDumpSamples.size()}}},
+              {"output_backend", [&]() {
+                 if (!in.audio) return "unavailable";
+                 switch (in.audio->GetCurrentAudioBackend()) {
+                   case Ship::AudioBackend::WASAPI: return "wasapi";
+                   case Ship::AudioBackend::SDL: return "sdl";
+                   case Ship::AudioBackend::COREAUDIO: return "coreaudio";
+                   case Ship::AudioBackend::NUL: return "null";
+                 }
+                 return "unknown";
+               }()},
+              {"output_player_current", in.audio && in.audio->GetAudioPlayer() == audioPlayer},
+              {"output_policy", in.audio && in.audio->GetOutputPolicy()
+                 ? Ship::SerializeAudioOutputSettings(in.audio->GetOutputPolicy()->Settings())
+                 : nlohmann::json(nullptr)},
+              {"output_window_focused", in.audio && in.audio->GetOutputPolicy()
+                 && in.audio->GetOutputPolicy()->WindowFocused()},
               {"output_initialized",
                audioPlayer != nullptr && audioPlayer->IsInitialized()},
               {"output_sample_rate",

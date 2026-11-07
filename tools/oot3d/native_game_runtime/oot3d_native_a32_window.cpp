@@ -226,7 +226,7 @@ void NativeA32WindowSession::Finish() {
       submissionQueue, hostArgs, window, api,
       nativeUiTextureProvider, ocarinaText, n64UiRenderer, inputTimeline,
       phaseTiming, inputDiagnostics, inputConsumerDiagnostics, nativeControlPollingState,
-      shaderSourceCache, audioPlayer, processResult, frameCount,
+      shaderSourceCache, audio, audioPlayer, processResult, frameCount,
       runFrameCount, presentationFrameCount, nextVblankTick, lateVblankDeadlineCount,
       maximumVblankDeadlineOvershootTicks, savestateStats, presentationScheduler, visualSampleCadence,
       visualContinuityEpoch, picaStats, visualStats, visualInterpolationTiming,

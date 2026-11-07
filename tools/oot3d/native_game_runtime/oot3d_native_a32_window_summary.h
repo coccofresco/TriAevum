@@ -6,6 +6,7 @@
 #include "oot3d_native_a32_window_stats.h"
 #include "oot3d_native_input_admission.h"
 #include "oot3d_native_performance_hint.h"
+#include "ship/audio/Audio.h"
 
 namespace Oot3dA32Window {
 
@@ -45,6 +46,7 @@ struct NativeA32WindowSummaryInputs {
     NativeInputConsumerDiagnostics &inputConsumerDiagnostics;
     NativeControlPollingState &nativeControlPollingState;
     Oot3dNativeGame::Oot3dPicaVulkanShaderSourceCache &shaderSourceCache;
+    std::shared_ptr<Ship::Audio> &audio;
     std::shared_ptr<Ship::AudioPlayer> &audioPlayer;
     Oot3dNativeGame::NativeA32ProcessRunResult &processResult;
     uint32_t &frameCount;
