@@ -1449,9 +1449,12 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   // Keep the existing OoT reader/sequence unchanged. Optional producers reset
   // without guest reads while Off, disconnected, unfocused or in the host menu.
   if (titleSession) {
-    const bool enabled = nativeControlPollingState.RumbleStrength != ThreeDsRecomp::Input::RumbleStrength::Off &&
-                         nativeControlPollingState.ControllerInstance >= 0 &&
-                         SDL_GetKeyboardFocus() != nullptr &&
+    const auto& admission = nativeControlPollingState.RumbleAdmission;
+    if (titleRumbleContextRevision != admission.Revision) {
+      (void)titleSession->RumblePulses(process.Memory(), false);
+      titleRumbleContextRevision = admission.Revision;
+    }
+    const bool enabled = admission.Allowed && SDL_GetKeyboardFocus() != nullptr &&
                          (!inGameMenuStorage || !inGameMenuStorage->IsOpen());
     for (const auto& pulse : titleSession->RumblePulses(process.Memory(), enabled))
       nativeControlPollingState.Rumble.Request(pulse);

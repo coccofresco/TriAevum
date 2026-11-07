@@ -44,6 +44,18 @@ struct Memory {
 }
 int main() {
   using namespace Mm3dRumble;
+  ThreeDsRecomp::Input::GameplayRumbleAdmission admission;
+  using Strength=ThreeDsRecomp::Input::RumbleStrength;
+  Check(!admission.Update(-1,true,true,false,Strength::Strong)&&!admission.Allowed,"no device inert");
+  Check(admission.Update(1,true,true,false,Strength::Strong)&&admission.Allowed,"connect admitted");
+  const auto connected=admission.Revision;
+  Check(!admission.Update(1,true,true,false,Strength::Strong)&&admission.Revision==connected,"stable admission");
+  Check(admission.Update(1,true,false,false,Strength::Strong)&&!admission.Allowed,"focus loss denies");
+  Check(admission.Update(1,true,true,false,Strength::Strong)&&admission.Revision==connected+2,"focus round trip changes generation");
+  Check(admission.Update(2,true,true,false,Strength::Strong)&&admission.Allowed,"device replacement changes generation");
+  Check(admission.Update(2,true,true,true,Strength::Strong)&&!admission.Allowed,"host menu denies");
+  Check(!admission.Update(2,false,true,false,Strength::Strong)&&!admission.Allowed,"disabled controller denies");
+  Check(!admission.Update(2,true,true,false,Strength::Off)&&!admission.Allowed,"Off denies");
   Memory m;
   Source source;
   Check(source.Poll(m,true).empty() && m.reads==0,"unverified source is inert");

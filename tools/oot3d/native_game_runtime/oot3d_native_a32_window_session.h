@@ -332,6 +332,7 @@ private:
   std::optional<Oot3dNativeGame::NativeScenarioCatalog> scenarioCatalog;
   std::optional<Oot3dNativeGame::NativeScenarioBootstrap> scenarioBootstrap;
   bool devFreeCameraOwnedInput = false; // product photo camera also uses this gate
+  uint64_t titleRumbleContextRevision = UINT64_MAX;
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // F1 > Dev Tools warping (developer builds only).
   std::shared_ptr<Oot3dNativeGame::DevWarpTitleAbi> devToolsTitle;

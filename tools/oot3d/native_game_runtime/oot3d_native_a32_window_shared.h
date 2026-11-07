@@ -784,6 +784,7 @@ struct NativeControlPollingState {
   // active pad.
   ThreeDsRecomp::Input::RumbleStrength RumbleStrength = ThreeDsRecomp::Input::RumbleStrength::Off;
   ThreeDsRecomp::Input::RumbleRequests Rumble;
+  ThreeDsRecomp::Input::GameplayRumbleAdmission RumbleAdmission;
   // The input device log (game log, at startup and on hot-plug) and, with
   // TRIAEVUM_INPUT_TRACE=1, the SDL key events and each bound key's edges.
   ThreeDsRecomp::Input::InputDeviceLog DeviceLog;

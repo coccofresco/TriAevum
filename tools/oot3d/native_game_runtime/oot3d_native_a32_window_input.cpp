@@ -100,10 +100,19 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   // user's strength, on the active pad. Off plays nothing (and the adapter
   // reads nothing); host menus hold it.
   pollingState.RumbleStrength = config.Rumble;
+  const bool rumbleContextChanged = pollingState.RumbleAdmission.Update(
+      selectedController.InstanceId, config.ControllerEnabled, SDL_GetKeyboardFocus() != nullptr,
+      hostGuiVisible, config.Rumble);
+  if (rumbleContextChanged || !pollingState.RumbleAdmission.Allowed) {
+    (void)pollingState.Rumble.Take();
+    // Stop a previously admitted pulse when its input owner disappears.
+    if (rumbleContextChanged && selectedController.Controller)
+      (void)SDL_GameControllerRumble(selectedController.Controller, 0, 0, 0);
+  }
   if (pollingState.Rumble.Pending()) {
     const auto pulse = pollingState.Rumble.Take();
     const auto command = ThreeDsRecomp::Input::ResolveRumble(pulse, config.Rumble);
-    const bool played = config.ControllerEnabled && !hostGuiVisible &&
+    const bool played = pollingState.RumbleAdmission.Allowed &&
                         ThreeDsRecomp::Input::PlaySdlRumble(selectedController.Controller, command);
     if (pollingState.KeyTrace)
       SPDLOG_WARN("TRIAEVUM_INPUT_TRACE rumble strength={} intensity={:.3f} ms={} low={} high={} pad={} played={}",

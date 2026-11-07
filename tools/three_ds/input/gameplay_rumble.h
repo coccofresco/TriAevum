@@ -8,6 +8,20 @@
 #include <vector>
 
 namespace ThreeDsRecomp::Input {
+// Input admission generation also detects a disconnect/reconnect or focus
+// round trip between two guest samples. Pending pulses must not cross it.
+struct GameplayRumbleAdmission {
+  uint64_t Revision=0;
+  int32_t ControllerInstance=-1;
+  bool Allowed=false;
+  bool Update(int32_t controller,bool controllerEnabled,bool focused,bool hostUi,RumbleStrength strength) {
+    const bool allowed=controller>=0&&controllerEnabled&&focused&&!hostUi&&strength!=RumbleStrength::Off;
+    const bool changed=controller!=ControllerInstance||allowed!=Allowed;
+    if(changed)++Revision;
+    ControllerInstance=controller; Allowed=allowed;
+    return changed;
+  }
+};
 // Read-only title facts. No guest addresses, device or configured strength.
 struct GameplayRumbleSample {
   bool Gameplay = false;
