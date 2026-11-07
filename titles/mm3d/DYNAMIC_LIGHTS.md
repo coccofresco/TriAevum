@@ -252,3 +252,23 @@ reuse are covered. Day rollback now invalidates the snapshot even when the scene
 and clock match. This is adapter evidence, not a live song/transition capture or
 new GPU shadow-page/keyframe-budget measurement. G06/G08/G21 retain those limits.
 Final run receipts and precise qualification are in `DL/wave2/` and `DL/PROGRESS.md`.
+
+Wave-2 qualification at implementation `fe5485d4`: exactly two safe-runner game
+launches, no retries. Diagnostic On/point-shadows-Off at `1c99e1fd` passed24s;
+final corrected **Off** reference at `fe5485d4` passed27s. The two original
+frame270 Woodfall BMPs are byte-for-byte identical, SHA256
+`2a480dbe3aed1a356ed875a0affa70eb30b6e72d831ff10be5428ab171bb49e0`.
+Corrected binary: `925f1f48a1107cc1cae82b2d1e294fe24b83569d0e8ee9c73e0abac148bedbc3`.
+This isolates the Woodfall reference mismatch; it does **not** establish that
+all historical cube-shadow pixels are correct, close Clock Town torch bases
+(its archived Off has no matching extra-Scene route), or approve the appearance.
+
+Developer/MM-lighting builds/tests, pipeline73, foundation463+1 known skip,
+Python11, ten EUR room guards and116 production GPU cases pass. Five legacy
+fragment families/pass104/generator-consumer pass; regenerated uber/pass packs
+are byte-identical. Historical O2 remains3/3 cap-p13, not a new game run. Logs
+retain11/22 pass-artifact misses; there is no zero-miss corpus claim. No new
+product/OoT/room/song runtime was authorized or run. Two-launch allowance spent.
+G05 unknown variants, G06 material/category proof, G08 real coexistence/modified
+content identity and G21 live/budget integration remain explicitly incomplete;
+old product load failure and full-parity/owner-approval limits are unchanged.
