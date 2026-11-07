@@ -50,3 +50,21 @@ lane's `PROGRESS.md` and `RESULTS.md`; do not infer feature closure from these
 mechanism tests.
 
 No shader producer or packed SPIR-V is changed by this implementation.
+
+### Recorded changed-slice acceptance
+
+Implementation commits `1c5f935c` (raster path) and `2ce2f911` (independent
+surface ownership) each have one targeted acceptance and one OoT O2 smoke.
+Both600-frame MM tests compare matched Off/NIS restores; the second additionally
+executes GTAO with65 guide draws. NIS scene512x853/UI768x1280 receipts prove
+independent raster density. Both preserve1,069 of1,078 sampled white label pixels
+exactly, with maximum RGB8 error1 for the rest (previous reduced-UI maximum97).
+No failed/unresolved effect pass or composition mismatch occurs. O2 preserves
+all three original Kokiri BMP hashes exactly on both changed sources. Eleven
+CPU suites pass; eight packed shader files match the preceding40fcc838 baseline.
+
+The earlier source's same-key registry lifetime weakness was found offline and
+is superseded by2ce2f911. No validation layers were enabled in these game runs.
+Unknown-layer target maximum2 at startup and wider F03/F18 inventories remain
+open; do not generalize this NIS Quality/Woodfall result to all providers or UI.
+Full receipts: `I:/_triaevum_work/mm3d-port/analysis/parity/COMPOSITION/OUTPUT_UI/`.

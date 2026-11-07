@@ -1,8 +1,12 @@
 # Native composition ownership (guarded EUR image)
 
-**Latest receipt: implementation `9daec295`; F03/F18 still incomplete.**
-The sections dated before that implementation below are historical qualification,
-not current closure claims. Latest evidence: `COMPOSITION/CLOSURE/`.
+**Latest receipt: implementation `2ce2f911`; F03/F18 still incomplete.**
+The reduced-resolution NIS HUD blocker is closed for the measured Woodfall slice:
+1,069/1,078 sampled label pixels match Off exactly; the remainder differ by at
+most one RGB8 level, with and without GTAO. Scene raster stays512x853; native UI
+raster is768x1280. This does not close the full title/provider/mode inventory.
+Latest evidence: `COMPOSITION/OUTPUT_UI/`; older qualification sections below are
+historical. Both changed slices have exact three-frame OoT O2 hash preservation.
 
 The adapter observes native producers and consumers; it does not replace guest
 code. `mm3d_lighting_hook_sites.h` guards every observed block and requires its
@@ -58,21 +62,21 @@ pre-overlay anchor the existing scene-composition pass runs its existing FXAA
 shader before native UI. A content-version serial prevents final scanout from
 filtering those pixels again; overlay writes retain it, world writes invalidate
 it. Without a proved boundary, presentation FXAA is omitted rather than applied
-to the UI. Upscalers continue using the existing scene-before-UI snapshot and
-native overlay contract. OoT producers leave the new flags false.
+to the UI. OoT producers leave the new flags false.
 
-`PreserveNativeUiSampling` additionally opts proved MM UI into presentation-grid
-composition. Its content serial follows the same overlay/world-write rules. The
-overlay retains the original fractional viewport sampling phase, rotation and
-flip while final scanout reads one-to-one pixel centres. This removes an extra
-UI filtering stage, **not the earlier loss of HUD raster resolution**: the shared
-upscaler resolution policy still lowers the target into which native HUD draws.
-The NIS appearance criterion remains failed; a full-resolution UI render/replay
-path is still needed. Do not silently disable the upscaler's resolution policy.
+`PreserveNativeUiSampling` now permits a proved top-screen before-UI boundary to
+reconstruct the reduced scene into an output-density native companion. Subsequent
+owned native UI draws retain their original blend/coverage/depth/stencil behavior
+on that companion; final scanout does not reconstruct or filter them again.
+Separate surface registries prevent an identical guest key from retiring live
+scene wrappers. Exact content serials reject stale companions after scene writes;
+restore/target teardown destroys them. The changed-pixel overlay remains the
+legacy path, not the source of recovered native glyph detail. See
+[the renderer contract](../../../docs/NATIVE_UI_OUTPUT_RESOLUTION.md).
 
-Only the native UI overlay shader changed; the regenerated builtin pack differs
-in entry16 of104. The other seven tracked packs and scanout shader producer are
-unchanged. No release environment/GP profile was changed.
+The output-density implementation changes no shader producers/packs. All eight
+packs match40fcc838; the earlier native-overlay shader change (entry16 of104)
+remains preserved, as do the other legacy families. No GP profile was changed.
 Runtime qualification and explicit remaining coverage live in the COMPOSITION
 lane's external PROGRESS.md / RESULTS.md; unit fixtures alone are not a full-title
 or all-primitive runtime qualification.
