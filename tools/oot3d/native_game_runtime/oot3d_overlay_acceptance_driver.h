@@ -1,7 +1,7 @@
 #pragma once
-// Developer-only acceptance input. Uses SDL's real event/device paths, never
-// changes a control setting, prompt family, guest state or widget return value.
-// Receipts distinguish injected SDL devices/events from physical hardware.
+// Developer-only acceptance input through SDL, OS input or the platform pad
+// boundary. Never forces a control setting, prompt family, guest state or
+// widget return value. Synthetic receipts are not physical hardware proof.
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "oot3d_native_control_config.h"
 #include <SDL.h>
@@ -112,6 +112,37 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 SDL_Event e{};e.type=step.value("down",true)?SDL_MOUSEBUTTONDOWN:SDL_MOUSEBUTTONUP;
                 e.button.windowID=wid;e.button.button=SDL_BUTTON_LEFT;e.button.x=x;e.button.y=y;
                 e.button.state=e.type==SDL_MOUSEBUTTONDOWN?SDL_PRESSED:SDL_RELEASED;result=SDL_PushEvent(&e);
+            } else if(op=="os_click") {
+#ifdef _WIN32
+                SDL_SysWMinfo info{};SDL_VERSION(&info.version);
+                if(!window||!SDL_GetWindowWMInfo(window,&info))throw std::runtime_error("no acceptance window");
+                const auto hwnd=info.info.win.window;
+                if(GetForegroundWindow()!=hwnd)throw std::runtime_error("refusing mouse injection outside owned foreground window");
+                int width=0,height=0;SDL_GetWindowSize(window,&width,&height);RECT client{};
+                const int x=step.at("x"),y=step.at("y");
+                if(!GetClientRect(hwnd,&client)||width<=0||height<=0||x<0||y<0||x>=width||y>=height)
+                    throw std::runtime_error("invalid owned client click");
+                POINT position{MulDiv(x,client.right,width),MulDiv(y,client.bottom,height)};
+                if(!ClientToScreen(hwnd,&position)||!SetCursorPos(position.x,position.y))throw std::runtime_error("client cursor positioning failed");
+                POINT check{};
+                if(!GetCursorPos(&check))throw std::runtime_error("cursor verification failed");
+                const auto hit=WindowFromPoint(check);
+                if(!hit || GetAncestor(hit,GA_ROOT)!=hwnd)throw std::runtime_error("another window covers acceptance click");
+                if(!ScreenToClient(hwnd,&check)||client.right<=0||client.bottom<=0)
+                    throw std::runtime_error("client projection failed");
+                const int actualX=MulDiv(check.x,width,client.right),actualY=MulDiv(check.y,height,client.bottom);
+                emit({{"mouse_projection",{{"requested_x",x},{"requested_y",y},{"actual_x",actualX},{"actual_y",actualY}}}});
+                if(std::abs(actualX-x)>2 || std::abs(actualY-y)>2)throw std::runtime_error("native GUI cursor projection mismatch");
+                // One atomic click avoids leaving an injected button held if
+                // foreground changes between separate scheduled actions.
+                INPUT input[2]{};input[0].type=INPUT_MOUSE;input[1].type=INPUT_MOUSE;
+                input[0].mi.dwFlags=MOUSEEVENTF_LEFTDOWN;input[1].mi.dwFlags=MOUSEEVENTF_LEFTUP;
+                result=int(SendInput(2,input,sizeof(INPUT)));
+                if(result==1)SendInput(1,&input[1],sizeof(INPUT));
+                if(result!=2)throw std::runtime_error("owned mouse click injection failed");
+#else
+                throw std::runtime_error("os_click is Windows-only");
+#endif
             } else if(op=="attach") {
                 if(s.pad)throw std::runtime_error("virtual pad already attached");
                 SDL_VirtualJoystickDesc d{};d.version=SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
