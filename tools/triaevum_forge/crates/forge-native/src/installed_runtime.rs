@@ -168,6 +168,7 @@ pub fn validate_installed_runtime(
         ("scene_lights", "--scene-light-catalog", "scene light catalog"),
         ("romfs_overlay", "--romfs-overlay", "RomFS mods"),
         ("pica_shader_pack", "--pica-aot-shader-pack", "PICA shader pack"),
+        ("title_program_pack", "--title-program-pack", "title program pack"),
     ] {
         let resource = get(runtime, field);
         if resource.is_null() {

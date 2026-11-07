@@ -22,12 +22,32 @@ pub fn prepare(
     identity: Map<String, Value>,
     build: impl FnOnce() -> Result<(Vec<u8>, Value)>,
 ) -> Result<PathBuf> {
+    prepare_impl(data_root, kind, file_name, identity, build, false)
+}
+
+/// Content-verified publisher tables can repair even a truncated receipt.
+/// Legacy catalogs retain their established malformed-receipt error policy.
+pub fn prepare_repairable(
+    data_root: &Path, kind: &str, file_name: &str, identity: Map<String, Value>,
+    build: impl FnOnce() -> Result<(Vec<u8>, Value)>,
+) -> Result<PathBuf> {
+    prepare_impl(data_root, kind, file_name, identity, build, true)
+}
+
+fn prepare_impl(
+    data_root: &Path, kind: &str, file_name: &str, identity: Map<String, Value>,
+    build: impl FnOnce() -> Result<(Vec<u8>, Value)>, repair: bool,
+) -> Result<PathBuf> {
     let directory = data_root.join("cache").join(kind).join(identity_key(&identity)?);
     let identity = Value::Object(identity);
     let catalog = directory.join(file_name);
     let receipt_path = directory.join("receipt.json");
     if catalog.is_file() && receipt_path.is_file() {
-        let receipt = load_json_object(&receipt_path)?;
+        let receipt = match load_json_object(&receipt_path) {
+            Ok(receipt) => receipt,
+            Err(_) if repair => Map::new(),
+            Err(error) => return Err(error),
+        };
         if receipt.get("source").is_some_and(|source| py_eq(source, &identity)) {
             let bytes = std::fs::read(&catalog)
                 .map_err(|error| ForgeError::io(format!("Cannot read {}", catalog.display()), error))?;

@@ -209,7 +209,9 @@ def install_precompiled_title(prepared_directory: Path, *, root: Path, recipe: d
             ui_texture_pack=ui_textures,
             water_texture_catalog=water_textures,
             scene_light_catalog=scene_lights, romfs_overlay=romfs_overlay, package_root=root,
-            pica_shader_pack=shader_pack, renderer_cache_directory=renderer_cache)
+            pica_shader_pack=shader_pack,
+            title_program_pack=checked_file(root, item["title_program_pack"]) if "title_program_pack" in item else None,
+            renderer_cache_directory=renderer_cache)
         activation = forge.activate_prepared_title(prepared.directory, active_title_state=active_title_state)
     return {"status": "ready", "install_model": MODEL, "objects_compiled": 0,
             "interior_sun": interior_sun,

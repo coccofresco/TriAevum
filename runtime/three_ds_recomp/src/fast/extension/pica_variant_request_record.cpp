@@ -88,6 +88,10 @@ Json EncodePicaVariantRequest(uint64_t canonicalPipelineId, uint32_t effectsId, 
     if (request.ReflectionProfile.has_value())
         reflection = Json::array({std::bit_cast<uint32_t>(request.ReflectionProfile->Reflectivity),
                                   std::bit_cast<uint32_t>(request.ReflectionProfile->Roughness)});
+    bool shadowProbe = false;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    shadowProbe = request.ShadowProbe;
+#endif
     return {
         {"record", "request"},
         {"pipeline_id", Hex64(canonicalPipelineId)},
@@ -118,6 +122,10 @@ Json EncodePicaVariantRequest(uint64_t canonicalPipelineId, uint32_t effectsId, 
         {"reflection", reflection},
         {"native_fidelity", request.RequireNativeFidelity},
         {"surface_lighting", request.SurfaceLightingAvailable},
+        {"fragment_context", {{"operand", request.FragmentLightingOperand},
+                              {"balance", request.FragmentLightingBalance},
+                              {"native_shadows", request.NativeFragmentLitShadows},
+                              {"shadow_probe", shadowProbe}}},
         {"pbr",
          {{"slot", request.Pbr.TextureSlot},
           {"native_lighting", request.Pbr.NativeFragmentLighting},
@@ -183,6 +191,19 @@ bool DecodePicaVariantRequest(const Json& line, PicaVariantRequestRecord& record
                 std::bit_cast<float>(reflection.at(1).get<uint32_t>())};
         request.RequireNativeFidelity = line.at("native_fidelity").get<bool>();
         request.SurfaceLightingAvailable = line.at("surface_lighting").get<bool>();
+        decoded.HasFragmentContext = line.contains("fragment_context");
+        if (decoded.HasFragmentContext) {
+            const auto& context = line.at("fragment_context");
+            request.FragmentLightingOperand = context.at("operand").get<bool>();
+            request.FragmentLightingBalance = context.at("balance").get<bool>();
+            request.NativeFragmentLitShadows = context.at("native_shadows").get<bool>();
+            const bool probe = context.at("shadow_probe").get<bool>();
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+            request.ShadowProbe = probe;
+#else
+            if (probe) throw std::runtime_error("shadow probe requires developer tools");
+#endif
+        }
         const auto& pbr = line.at("pbr");
         request.Pbr.TextureSlot = pbr.at("slot").get<uint8_t>();
         request.Pbr.NativeFragmentLighting = pbr.at("native_lighting").get<bool>();
@@ -383,6 +404,12 @@ void PicaVariantRequestRecorder::Observe(uint64_t canonicalPipelineId, const Pic
                                   (request.Pbr.PreserveNativeUnlit ? 32768U : 0U)));
     append(request.Pbr.TextureSlot);
     append(request.ReliefTexture);
+    append(request.FragmentLightingOperand);
+    append(request.FragmentLightingBalance);
+    append(request.NativeFragmentLitShadows);
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    append(request.ShadowProbe);
+#endif
     if (request.ReflectionProfile.has_value()) {
         append(request.ReflectionProfile->Reflectivity);
         append(request.ReflectionProfile->Roughness);

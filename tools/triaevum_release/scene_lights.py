@@ -869,6 +869,12 @@ def prepare_scene_lights(*, data_root: Path, recipe: dict, romfs: Path, table: P
     """The catalog for this RomFS, generated once and reused while its receipt
     matches. A release table (integrity-checked by the caller) supplies the
     rooms it covers."""
+    if "room_catalog" in recipe:
+        try:
+            from .room_catalog import prepare
+        except ImportError:
+            from room_catalog import prepare
+        return prepare(data_root, recipe, romfs, report)
     source = recipe.get("inputs", {}).get("romfs", {}).get("sha256")
     if not source:
         return None

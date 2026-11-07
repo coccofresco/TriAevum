@@ -45,6 +45,7 @@ struct Oot3dNativeGameLaunch {
     std::filesystem::path WaterTextureCatalogPath;
     // The installer's local scene light catalog (scene_lights.json).
     std::filesystem::path SceneLightCatalogPath;
+    std::filesystem::path TitleProgramPackPath;
     std::filesystem::path PicaEffectiveShaderInventoryPath;
     std::filesystem::path PicaPipelineInventoryPath;
     std::filesystem::path PicaPipelineManifestPath;

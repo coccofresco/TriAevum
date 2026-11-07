@@ -46,3 +46,39 @@ cargo test -p forge-assets --test real_romfs profiled_water_matches_python -- --
 This supplies one catalog preparation step, not a new supported-ROM recipe,
 translated title module, full shader corpus or installed PBR material pack.
 Those require their own publication and qualification contracts.
+
+## Publisher room analysis
+
+An optional `room_catalog` recipe object routes the existing native Forge
+scene-light preparation/activation step to hash-bound publisher analysis. No
+Python or model analysis runs on the player's machine. The shared Rust/Python
+implementation knows no MM scene IDs or material eligibility rules.
+
+Version 1 fields: `title`, `directory`, `generator_sha256`, `catalog_json`, and
+optional `excluded_rooms`. `catalog_json` is compact ASCII JSON containing the
+existing `triaevum.scene-lights` v1 schema, plus each room's logical `source`
+and SHA-256 of its **decompressed complete file**. Keeping this as a string
+preserves publisher decimal spellings exactly across language implementations.
+The catalog must have no rejected rooms. The recipe binds the whole RomFS SHA;
+installation checks it against the actual image, including on cache reuse.
+Directory-form developer inputs instead verify every room individually.
+
+Every matching `_info.zsi`/`_info.zsi.lzs` file must be represented exactly once.
+Publisher-derived exclusions contain `source`, `sourceSha256`, `reason`; they
+are still hash/coverage checked, not a skip pattern. MM's producer derives them
+from absence in its guarded native scene table, never a manual scene list.
+Changed, extra, missing, malformed or foreign-title data fails closed. Room
+keys/fingerprints, finite placements, positive radii, categories and surface
+identities are validated before writing. The receipt binds RomFS, generator,
+profile and output hashes. Corrupt output or a truncated receipt regenerates;
+legacy OoT receipt behavior is unchanged.
+
+`titles/mm3d/tools/scene_emitters.py::forge_profile` supplies the title analysis;
+`tools/mm3d/prepare_catalogs.py` emits a **recipe fragment**, not a supported
+revision/module publication. Its payload is derived emitter placement/identity
+metadata, never geometry, texture bytes or ROM files. Release qualification and
+allowlist review remain mandatory before publishing this data.
+
+Tests: `test_room_catalog.py`, Rust `forge-assets --test room_catalog` (including
+optional real-data byte oracle via `TRIAEVUM_ROOM_RECIPE`, `TRIAEVUM_ROMFS`,
+`TRIAEVUM_ROOM_ORACLE`; `TRIAEVUM_ROOM_RESULT` optionally retains the result).

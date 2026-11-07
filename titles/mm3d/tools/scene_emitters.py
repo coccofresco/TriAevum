@@ -194,13 +194,17 @@ def scene_ids(code: bytes) -> dict[str, int]:
 
 
 def generate(code: bytes, files) -> dict:
-    ids, rooms, rejected = scene_ids(code), [], []
+    ids, rooms, rejected, unreferenced = scene_ids(code), [], [], []
     for name, packed in files:
         match = re.fullmatch(r"scenes/(.+)_(\d+)_info\.zsi", name)
-        if not match or match[1] not in ids:
+        if not match:
             continue
         try:
             data = decompress(packed)
+            if match[1] not in ids:
+                unreferenced.append(dict(source=name, sourceSha256=hashlib.sha256(data).hexdigest(),
+                                         reason="not-referenced-by-native-scene-table"))
+                continue
             fingerprint = room_fingerprint(data)
             emitters, search = [], 0
             while (offset := data.find(b"cmb ", search)) >= 0:
@@ -215,7 +219,22 @@ def generate(code: bytes, files) -> dict:
         except (ValueError, struct.error, UnicodeError) as error:
             rejected.append(dict(source=name, reason=str(error)))
     return dict(schema="triaevum.scene-lights", version=1, title="mm3d", generatorRevision=1,
-                fingerprintMode="mm3d-zsi-header-v1", rooms=rooms, rejected=rejected)
+                fingerprintMode="mm3d-zsi-header-v1", rooms=rooms, rejected=rejected,
+                unreferencedRooms=unreferenced)
+
+
+def forge_profile(catalog: dict, generator_sha256: str) -> dict:
+    """Publisher analysis only; native Forge verifies every room before reuse.
+
+    Contains derived placements/identities, never model or texture bytes. New
+    or altered rooms require publisher regeneration, not a user-side compiler.
+    """
+    if catalog.get("title") != "mm3d" or catalog.get("rejected") or not catalog.get("rooms"):
+        raise ValueError("cannot publish incomplete MM3D room analysis")
+    return {"version": 1, "title": "mm3d", "directory": "scenes",
+            "generator_sha256": generator_sha256,
+            "catalog_json": json.dumps(catalog, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False),
+            "excluded_rooms": catalog.get("unreferencedRooms", [])}
 
 
 def main():

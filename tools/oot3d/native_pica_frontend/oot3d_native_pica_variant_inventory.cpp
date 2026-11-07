@@ -153,6 +153,9 @@ struct Options {
     std::vector<std::filesystem::path> SynthesizeEffects;
     std::filesystem::path SynthesisTrace;
     bool RequireWitness = false;
+    // Recover only output-equivalent legacy contexts, never synthesize new
+    // coverage from unknown inputs. Original witnesses remain mandatory.
+    bool RecoverLegacyFragmentContext = false;
     // Every resolved request has an always-available program (strategy A.1).
     bool RequireUber = false;
     std::filesystem::path UberGapSources;
@@ -264,6 +267,12 @@ PicaShaderPipelineRequest ContextOf(const PicaShaderPipelineRequest& recorded) {
     context.ReflectionProfile = recorded.ReflectionProfile;
     context.RequireNativeFidelity = recorded.RequireNativeFidelity;
     context.SurfaceLightingAvailable = recorded.SurfaceLightingAvailable;
+    context.FragmentLightingOperand = recorded.FragmentLightingOperand;
+    context.FragmentLightingBalance = recorded.FragmentLightingBalance;
+    context.NativeFragmentLitShadows = recorded.NativeFragmentLitShadows;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    context.ShadowProbe = recorded.ShadowProbe;
+#endif
     context.Pbr = recorded.Pbr;
     context.ReliefTexture = recorded.ReliefTexture;
     return context;
@@ -493,6 +502,8 @@ int Run(const Options& options) {
         Fast::Extension::PicaShaderPipelineCache cache;
         uint64_t unresolvedRaw = 0, resolveFailures = 0, outputWitnessMismatches = 0, instrumented = 0;
         Json failures = Json::array();
+        Json recovered = Json::array();
+        Json mismatchSamples = Json::array();
         Json uberCounts = Json::object();
         // The recorded request bound to this build's regenerated canonical plan.
         const auto bind = [](const Fast::Extension::PicaVariantRequestRecord& record, const CanonicalPlan& canonical) {
@@ -517,7 +528,7 @@ int Run(const Options& options) {
                 continue;
             }
             const auto& canonical = plan->second;
-            const PicaShaderPipelineRequest request = bind(*record, canonical);
+            PicaShaderPipelineRequest request = bind(*record, canonical);
             const auto& effects = requests.Effects.at(record->EffectsId);
             cache.BeginFrame(record->EffectsId);
             const Fast::Extension::PicaShaderPipelineResult* result = nullptr;
@@ -530,8 +541,37 @@ int Run(const Options& options) {
                                         {"error", exception.what()}});
                 continue;
             }
+            if (options.RecoverLegacyFragmentContext && !record->HasFragmentContext &&
+                !(Fast::Extension::WitnessPicaVariantRequest(request, *result) == record->Witness)) {
+                // These three booleans were omitted from v1. Enumerate the
+                // bounded space; accept only the COMPLETE original witness,
+                // including source sizes, both hashes, keys and feature masks.
+                // Several contexts can be equivalent under these effects:
+                // report all, but do not export guessed inputs for synthesis.
+                Json matches = Json::array();
+                const auto original = request;
+                for (unsigned bits = 0; bits < 8; ++bits) {
+                    auto candidate = original;
+                    candidate.FragmentLightingOperand = (bits & 1U) != 0;
+                    candidate.FragmentLightingBalance = (bits & 2U) != 0;
+                    candidate.NativeFragmentLitShadows = (bits & 4U) != 0;
+                    const auto& resolved = cache.Resolve(candidate, effects);
+                    if (Fast::Extension::WitnessPicaVariantRequest(candidate, resolved) == record->Witness) {
+                        if (matches.empty()) { request = candidate; result = &resolved; }
+                        matches.push_back(bits);
+                    }
+                }
+                if (!matches.empty()) recovered.push_back({{"pipeline_id", Hex64(record->CanonicalPipelineId)},
+                    {"effects", record->EffectsId}, {"matching_context_masks", matches}});
+            }
             const auto witness = Fast::Extension::WitnessPicaVariantRequest(request, *result);
-            if (!(witness == record->Witness)) ++outputWitnessMismatches;
+            if (!(witness == record->Witness)) {
+                ++outputWitnessMismatches;
+                if (mismatchSamples.size() < 16U) mismatchSamples.push_back({
+                    {"pipeline_id", Hex64(record->CanonicalPipelineId)},
+                    {"recorded", Fast::Extension::EncodePicaVariantRequest(0, 0, 0, request, record->Witness)["witness"]},
+                    {"replayed", Fast::Extension::EncodePicaVariantRequest(0, 0, 0, request, witness)["witness"]}});
+            }
             if (!result->IsCanonical()) ++instrumented;
             countUber(uberCounts, *result, canonical);
             const auto schema = canonical.DescriptorSchemaVersion;
@@ -616,7 +656,9 @@ int Run(const Options& options) {
                             {"requests_without_raw_draw", unresolvedRaw},
                             {"resolve_failures", failures},
                             {"uber_programs", uberCounts},
-                            {"output_witness_mismatches", outputWitnessMismatches}});
+                            {"output_witness_mismatches", outputWitnessMismatches},
+                            {"witness_mismatch_samples", mismatchSamples},
+                            {"legacy_context_recoveries", recovered}});
     }
 
     Json synthesis = nullptr;
@@ -905,6 +947,8 @@ int main(int argc, char** argv) {
             options.Report = next();
         } else if (argument == "--require-witness") {
             options.RequireWitness = true;
+        } else if (argument == "--recover-legacy-fragment-context") {
+            options.RecoverLegacyFragmentContext = true;
         } else if (argument == "--require-uber") {
             options.RequireUber = true;
         } else if (argument == "--uber-gap-sources") {
@@ -923,6 +967,9 @@ int main(int argc, char** argv) {
     }
     if (options.Sessions.empty() || options.ShaderInventory.empty() || options.Report.empty()) return Usage();
     try {
+        if (options.RecoverLegacyFragmentContext &&
+            (!options.RequireWitness || !options.SynthesizeCaches.empty() || !options.InferReport.empty()))
+            throw std::runtime_error("legacy recovery requires --require-witness and forbids synthesis/inference");
         return Run(options);
     } catch (const std::exception& exception) {
         std::cerr << "oot3d_native_pica_variant_inventory: " << exception.what() << '\n';

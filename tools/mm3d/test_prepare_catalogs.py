@@ -18,10 +18,13 @@ class PrepareCatalogTests(unittest.TestCase):
     def test_title_roles_do_not_promote_nonwater_assets(self):
         profile = json.loads((ROOT / "titles/mm3d/catalogs/water.json").read_text())
         for name, role in (("yado_mizu", 1), ("gb_sea_00", 1), ("bh_taki_01", 4),
-                           ("gb_uvwater_01", 8), ("taki_sea_01", 1), ("nm_dokutaki_01", 4)):
+                           ("gb_uvwater_01", 8), ("taki_sea_01", 1), ("nm_dokutaki_01", 4),
+                           ("gb_wt_01", 1), ("Zm_wt_02", 1), ("taki_wt_01", 1),
+                           ("zse_pipe_wt_01r", 1), ("gb_uvwater_wt_01", 8)):
             self.assertEqual(model_catalog.water_role(name, profile), role, name)
         for name in ("bh_mizukemuri", "taki_tree_01", "taki_kabe_01", "water_bomb01", "dekubaba_water_",
-                     "taki_kusa_01", "torch4_water01", "seahorse_00", "seafairyfish_00"):
+                     "taki_kusa_01", "torch4_water01", "seahorse_00", "seafairyfish_00",
+                     "tree_wt_01", "kabe_wt_01", "water_bomb_wt_01", "sword_white_01"):
             self.assertEqual(model_catalog.water_role(name, profile), 0, name)
 
     def test_manifest_receipts_and_room_catalog_reuse(self):
@@ -32,8 +35,8 @@ class PrepareCatalogTests(unittest.TestCase):
             code.write_bytes(b"synthetic, generator is mocked")
             room = b"ZSI\x09" + bytes(12) + cmb([("water", 8, 8, bytes(64))], profile)
             romfs.write_bytes(level3_romfs({"scenes": {"room_info.zsi": lzs(room)}}))
-            generator = Mock()
-            generator.generate.return_value = {"rooms": [{"emitters": []}], "rejected": []}
+            generator = prepare.scene_generator()
+            generator.generate = Mock(return_value={"title": "mm3d", "rooms": [{"emitters": []}], "rejected": []})
             with patch.object(prepare, "scene_generator", return_value=generator):
                 one = prepare.prepare(code, romfs, root / "data")
                 two = prepare.prepare(code, romfs, root / "data")
