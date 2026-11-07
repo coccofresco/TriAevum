@@ -26,6 +26,7 @@
 #include "mm3d_photo_camera_hook.h"
 #include "mm3d_presentation_settings.h"
 #include "mm3d_timing_observer.h"
+#include "mm3d_frame_pacing.h"
 #include "mm3d_ui_subsystems.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "mm3d_dev_tools.h"
@@ -194,6 +195,9 @@ public:
     if (!mTiming.Verify(process.Memory(), [](uint32_t pc) {
           return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
         })) std::fprintf(stderr, "MM3D timing receipts disabled: guard or registry block mismatch\n");
+    if (!mFramePacing.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D frame pacing disabled: EUR guard or registry mismatch\n");
     mHostMemory = &process.Memory();
     if (!mLightArena.Verify(process.Memory()))
       std::fprintf(stderr, "MM3D light overflow disabled: EUR arena contract mismatch\n");
@@ -207,6 +211,7 @@ public:
 
   void ObserveBlockEntry(TitleBlockEntry &entry) override {
     mTiming.Observe(entry.Pc, entry.State, entry.Memory);
+    mFramePacing.Observe(entry.Pc, entry.State, entry.Memory);
     mVisibility.Observe(entry.Pc, entry.State, entry.Memory, mLightArena.Verified());
     mFoliage.Observe(entry.Pc, entry.State, entry.Memory);
     // Same allocator PC, one dispatch: relocate BEFORE lighting invalidates the
@@ -341,11 +346,12 @@ public:
     GuestByteAccess guest(memory);
     return mPhotoCamera.OwnsInput(guest);
   }
-  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); mVisibility.Reset(); mProjectionHistory.Reset(); mTiming.Reset(); }
+  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); mVisibility.Reset(); mProjectionHistory.Reset(); mTiming.Reset(); mFramePacing.Reset(); }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
     const auto &photo = mPhotoCamera.Stats();
+    const auto &pacing = mFramePacing.Stats();
     auto projections=nlohmann::json::array();
     for(unsigned i=0;i<mProjectionHistory.Count();++i) {
       const auto& s=mProjectionHistory.Segments()[i];
@@ -355,6 +361,14 @@ public:
           {"vertical_expansion",s.Settings.VerticalExpansion},{"edd",s.Settings.ExtendedDrawDistance}});
     }
     return nlohmann::json{
+        {"frame_pacing", {{"verified",mFramePacing.Verified()}, {"simulation_hz",30},
+            {"native_interval_writes",0}, {"begins",pacing.FramePacingFramesObserved},
+            {"decisions",pacing.FramePacingDecisionsObserved}, {"commits",pacing.FramePacingCommitsObserved},
+            {"interval_writes",pacing.FramePacingWrites}, {"deadline_writes",pacing.FramePacingDeadlineWrites},
+            {"read_failures",pacing.ReadFailures}, {"write_failures",pacing.WriteFailures},
+            {"rejected",mFramePacing.Rejected}, {"unpaired",mFramePacing.Unpaired},
+            {"resets",mFramePacing.Resets}, {"output_samples",mFramePacing.OutputSamples},
+            {"output_violations",mFramePacing.OutputViolations}}},
         {"timing", {{"verified",mTiming.Verified()}, {"read_only",true},
             {"game_calls",mTiming.GameCalls}, {"game_samples",mTiming.GameSamples},
             {"player_calls",mTiming.PlayerCalls}, {"player_samples",mTiming.PlayerSamples},
@@ -481,6 +495,7 @@ private:
   Mm3dRumble::Source mRumble;
   Mm3dPhotoCamera mPhotoCamera;
   Mm3dTiming::Observer mTiming;
+  Mm3dTiming::FramePacing mFramePacing;
   bool mImageMounted = false;
   bool mActorInteractionGuards = false;
 };
