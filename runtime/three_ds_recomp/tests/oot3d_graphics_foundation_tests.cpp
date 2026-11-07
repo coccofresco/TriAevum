@@ -3345,6 +3345,33 @@ TEST(Oot3dUpscalerGuides, ResampleShaderCompiles) {
 }
 #endif
 
+TEST(Oot3dNativeUiOverlay, PresentationGridIsExplicitAndAvoidsASecondUiFilter) {
+    using namespace Fast::Extension;
+    const std::array<uint32_t, 2> intermediate{360U, 600U}, presentation{720U, 1200U};
+    EXPECT_EQ(ResolveNativeUiOverlayExtent(false, 360, 600, 720, 1200), intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, 720, 1200), presentation);
+    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, 719.5F, 1200), intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, 0, 1200), intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, INFINITY, 1200), intermediate);
+    const auto sample = [](const auto& values, uint32_t pixel, uint32_t extent) {
+        const auto tap = ResolveNativeUiOverlayTap(pixel, extent, uint32_t(values.size()));
+        const auto at = [&](int32_t index) { return values[size_t(std::clamp(index, 0, int32_t(values.size()) - 1))]; };
+        return at(tap.First) * (1.0F - tap.Fraction) + at(tap.First + 1) * tap.Fraction;
+    };
+    const std::array native{0.0F, 1.0F, 1.0F, 0.0F};
+    std::array<float, 6> oldOverlay{};
+    std::array<float, 12> directOverlay{};
+    for (uint32_t x = 0; x < oldOverlay.size(); ++x) oldOverlay[x] = sample(native, x, oldOverlay.size());
+    for (uint32_t x = 0; x < directOverlay.size(); ++x) directOverlay[x] = sample(native, x, directOverlay.size());
+    bool oldPathDiffers = false;
+    for (uint32_t x = 0; x < directOverlay.size(); ++x) {
+        const float reference = sample(native, x, directOverlay.size());
+        EXPECT_FLOAT_EQ(sample(directOverlay, x, directOverlay.size()), reference);
+        oldPathDiffers |= std::abs(sample(oldOverlay, x, directOverlay.size()) - reference) > 0.01F;
+    }
+    EXPECT_TRUE(oldPathDiffers);
+}
+
 TEST(Oot3dNativeUiOverlay, MapsTheUpscaledTexelOntoItsDisplayFootprint) {
     using namespace Fast::Extension;
     // An identity extent lands on the texel itself with no neighbour weight.

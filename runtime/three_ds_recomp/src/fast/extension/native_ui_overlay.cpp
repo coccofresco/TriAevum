@@ -13,6 +13,17 @@ NativeUiOverlayTap ResolveNativeUiOverlayTap(
     return {int32_t(first), position - first};
 }
 
+std::array<uint32_t, 2> ResolveNativeUiOverlayExtent(
+    bool preserveSampling, uint32_t upscaledWidth, uint32_t upscaledHeight,
+    float presentationWidth, float presentationHeight) noexcept {
+    if (!preserveSampling || !std::isfinite(presentationWidth) || !std::isfinite(presentationHeight) ||
+        presentationWidth < 1.0F || presentationHeight < 1.0F ||
+        presentationWidth > 65536.0F || presentationHeight > 65536.0F ||
+        presentationWidth != std::floor(presentationWidth) || presentationHeight != std::floor(presentationHeight))
+        return {upscaledWidth, upscaledHeight};
+    return {uint32_t(presentationWidth), uint32_t(presentationHeight)};
+}
+
 std::string BuildNativeUiOverlayShader() {
     return R"glsl(#version 450
 layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
@@ -25,7 +36,7 @@ layout(push_constant) uniform OverlayState {
     uvec2 extent;
     uvec2 display_extent;
     uint linear_output;
-    uint reserved0;
+    uint resample_upscaled;
     uint reserved1;
     uint reserved2;
 } pc;
@@ -41,7 +52,21 @@ vec3 oot3d_srgb_to_linear(vec3 value) {
 void main(){
     ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
     if(any(greaterThanEqual(pixel,ivec2(pc.extent)))) return;
-    vec4 color=texelFetch(sampler2D(upscaled,point_sampler),pixel,0);
+    vec4 color;
+    if(pc.resample_upscaled!=0u){
+        ivec2 size=textureSize(sampler2D(upscaled,point_sampler),0);
+        vec2 source=(vec2(pixel)+0.5)*vec2(size)/vec2(pc.extent)-0.5;
+        ivec2 first=ivec2(floor(source));
+        vec2 weight=fract(source);
+        color=vec4(0.0);
+        for(int y=0;y<2;++y) for(int x=0;x<2;++x){
+            float w=(x==0 ? 1.0-weight.x : weight.x)*(y==0 ? 1.0-weight.y : weight.y);
+            color+=w*texelFetch(sampler2D(upscaled,point_sampler),clamp(first+ivec2(x,y),ivec2(0),size-1),0);
+        }
+    }else{
+        // Preserve the original path and its exact texel fetch by default.
+        color=texelFetch(sampler2D(upscaled,point_sampler),pixel,0);
+    }
     // The bilinear footprint of this texel in the display
     // (ResolveNativeUiOverlayTap): its texels the UI changed carry the UI.
     vec2 position=(vec2(pixel)+0.5)*vec2(pc.display_extent)/vec2(pc.extent)-0.5;
@@ -57,14 +82,17 @@ void main(){
             vec3 scene=texelFetch(sampler2D(display_scene,point_sampler),texel,0).rgb;
             if(any(notEqual(shown,scene))){
                 float weight=(x==0 ? 1.0-fraction.x : fraction.x)*(y==0 ? 1.0-fraction.y : fraction.y);
-                ui+=weight*(pc.linear_output!=0u ? oot3d_srgb_to_linear(shown) : shown);
+                ui+=weight*(pc.linear_output!=0u && pc.resample_upscaled==0u ? oot3d_srgb_to_linear(shown) : shown);
                 coverage+=weight;
             }
         }
     }
     // Where the UI changed nothing the upscaled scene is kept as it is.
-    if(coverage>0.0)
+    if(coverage>0.0){
+        if(pc.resample_upscaled!=0u && pc.linear_output!=0u)
+            ui=coverage*oot3d_srgb_to_linear(ui/coverage);
         color.rgb=mix(color.rgb,ui/coverage,coverage);
+    }
     imageStore(composed,pixel,color);
 }
 )glsl";

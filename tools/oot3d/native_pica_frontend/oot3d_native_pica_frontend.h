@@ -173,6 +173,9 @@ struct Oot3dPicaCompositionAttribution {
     // Title-proven overlay that must not pass through presentation FXAA.
     // Default false preserves existing producers' scanout behavior.
     bool ExcludeFromPresentationFxaa = false;
+    // Composite proved UI directly on the presentation grid, not an
+    // upscaler's intermediate grid followed by a second bilinear filter.
+    bool PreserveNativeUiSampling = false;
 
     bool operator==(const Oot3dPicaCompositionAttribution&) const = default;
 };

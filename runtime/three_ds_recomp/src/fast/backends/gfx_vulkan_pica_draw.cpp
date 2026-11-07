@@ -3008,7 +3008,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 (draw.Composition.ExcludeFromPresentationFxaa ||
                  (renderTarget.PresentationFxaaExcludedSerial != 0U &&
                   renderTarget.PresentationFxaaExcludedSerial == renderTarget.ContentWriteSerial));
+            const bool preserveNativeUiSampling = overlayDraw &&
+                (draw.Composition.PreserveNativeUiSampling ||
+                 (renderTarget.NativeUiSamplingSerial != 0U &&
+                  renderTarget.NativeUiSamplingSerial == renderTarget.ContentWriteSerial));
             renderTarget.ContentWriteSerial = ++mGpuTextureCopyWriteSerial;
+            if (preserveNativeUiSampling)
+                renderTarget.NativeUiSamplingSerial = renderTarget.ContentWriteSerial;
             if (excludePresentationFxaa)
                 renderTarget.PresentationFxaaExcludedSerial = renderTarget.ContentWriteSerial;
             if (retainResolvedScene)

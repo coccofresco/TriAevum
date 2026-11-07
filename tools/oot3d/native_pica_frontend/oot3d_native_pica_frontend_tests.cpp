@@ -1237,6 +1237,7 @@ int main(int argc, char** argv) {
     temporalAttribution.TemporalIdentity = {7U, 11U, 1U, 2ULL << 32U, 13U};
     temporalAttribution.TemporalCommandBufferIdentity = true;
     temporalAttribution.ExcludeFromPresentationFxaa = true;
+    temporalAttribution.PreserveNativeUiSampling = true;
     for (uint64_t lifetime : {13U, 17U}) {
         temporalAttribution.TemporalIdentity.Lifetime = lifetime;
         const size_t first = frontend.PendingDrawPackets().size();
@@ -1248,6 +1249,8 @@ int main(int argc, char** argv) {
                     Fast::Renderer3ds::PicaTemporalIdentity{7U, 11U, 0x14294600U, 2ULL << 32U, lifetime} &&
                     !draws[first].Composition.TemporalCommandBufferIdentity &&
                     draws[first].Composition.ExcludeFromPresentationFxaa &&
+                    draws[first].Composition.PreserveNativeUiSampling &&
+                    !draws[first + 1U].Composition.PreserveNativeUiSampling &&
                     !draws[first + 1U].Composition.ExcludeFromPresentationFxaa &&
                     !draws[first + 1U].Composition.TemporalIdentity.Available(),
                 "source-buffer identity lost ownership/lifetime or escaped on return");

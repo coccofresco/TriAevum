@@ -726,6 +726,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // resolved serial, any other write ends it.
         uint64_t SceneBeforeUiSerial = 0;
         uint64_t PresentationFxaaExcludedSerial = 0;
+        uint64_t NativeUiSamplingSerial = 0;
         VkImage MsaaColorImage = VK_NULL_HANDLE;
         VkDeviceMemory MsaaColorMemory = VK_NULL_HANDLE;
         VkImageView MsaaColorView = VK_NULL_HANDLE;
@@ -801,6 +802,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // (mNativePicaSceneBeforeUiDisplays).
         bool SceneBeforeUi = false;
         bool PresentationFxaaExcluded = false;
+        bool PreserveNativeUiSampling = false;
     };
 
     struct PresentRequest {

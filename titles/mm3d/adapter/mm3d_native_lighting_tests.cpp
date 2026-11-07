@@ -244,8 +244,9 @@ void TestQuadEntryOwnership() {
         // survive the model/actor frame reset; the manager owns its lifetime.
         s.r[0] = f.Play; observe(0x15E9ECU);
         // Same model handle, different native slot/producer. Never transfer
-        // the atmosphere role by a per-model lookup.
-        s.r[0] = manager; s.r[1] = q; s.r[2] = f.Model; observe(0x179930U);
+        // the atmosphere role by a per-model lookup. The textured quad pool
+        // has its own guarded producer, separate from the flat-color pool.
+        s.r[5] = manager; s.r[10] = q; s.r[4] = f.Model; observe(0x191CC8U);
         f.W32(slot + 4U, f.Model); f.W32(manager + 0x14U + q * 4U, 2);
         f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
         s.r[0] = manager; s.r[1] = q; s.r[14] = returns[q]; observe(kMm3dQuadQueueDrawEntry);

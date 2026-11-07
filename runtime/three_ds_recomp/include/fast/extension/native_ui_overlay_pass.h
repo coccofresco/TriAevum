@@ -27,6 +27,9 @@ class NativeUiOverlayPass final {
         uint32_t Width = 0U;
         uint32_t Height = 0U;
         bool LinearOutput = false;
+        // Zero keeps the upscaled extent (legacy behavior).
+        uint32_t OutputWidth = 0U;
+        uint32_t OutputHeight = 0U;
     };
 
     NativeUiOverlayPass();

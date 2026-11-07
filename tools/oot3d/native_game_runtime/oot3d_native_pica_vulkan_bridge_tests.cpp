@@ -493,9 +493,11 @@ int main() {
     auto firstPlan = plan;
     firstPlan.SubmissionId = 31U;
     firstPlan.Composition.ExcludeFromPresentationFxaa = true;
+    firstPlan.Composition.PreserveNativeUiSampling = true;
     auto secondPlan = plan;
     secondPlan.SubmissionId = 32U;
     secondPlan.Composition.ExcludeFromPresentationFxaa = true;
+    secondPlan.Composition.PreserveNativeUiSampling = true;
     Oot3dNativeGame::Oot3dPicaMemoryFillSubmission scheduledFill;
     scheduledFill.BeforeDrawSubmissionId = firstPlan.SubmissionId;
     scheduledFill.StartPhysicalAddress = 0x18400000U;
@@ -557,6 +559,7 @@ int main() {
                 backend.CompositionDraws[0].Domain ==
                     Oot3d::Renderer::PicaCompositionDomain::Scene &&
                 backend.CompositionDraws[0].Composition.ExcludeFromPresentationFxaa &&
+                backend.CompositionDraws[0].Composition.PreserveNativeUiSampling &&
                 backend.CompositionDraws[0].Composition ==
                     backend.DrawComposition,
             "presentation scheduler lost the exact composition sequence");

@@ -135,6 +135,7 @@ struct PicaCompositionAttribution {
     // never on the display containing these pixels. Unknown boundaries fail
     // closed (no presentation FXAA), not by filtering the overlay anyway.
     bool ExcludeFromPresentationFxaa = false;
+    bool PreserveNativeUiSampling = false;
 
     bool operator==(const PicaCompositionAttribution&) const = default;
 };

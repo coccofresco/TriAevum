@@ -344,6 +344,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             child.Attribution.NativeProjectedShadow = owner->second.Shadow;
             child.Attribution.IsolatedLighting = owner->second.Isolated;
             child.Attribution.ExcludeFromPresentationFxaa |= owner->second.Isolated;
+            child.Attribution.PreserveNativeUiSampling |= owner->second.Isolated;
             if (owner->second.Isolated) ++mStats.IsolatedModelSpans;
             if (owner->second.Atmosphere && WorldLayer(child.Attribution.Layer)) {
                 child.Attribution.Layer = Oot3dPicaCompositionLayer::Atmosphere;
@@ -437,6 +438,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                               ? mSceneLighting
                               : Fast::Renderer3ds::PicaNativeLightBinding{}};
     mActive->Attribution.ExcludeFromPresentationFxaa = scope->Layer == Oot3dPicaCompositionLayer::Ui;
+    mActive->Attribution.PreserveNativeUiSampling = mActive->Attribution.ExcludeFromPresentationFxaa;
     if (pc == kMm3dQuadQueueDrawEntry) mQuadQueue = state.r[1];
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         ++mStats.SceneFrames;
@@ -479,9 +481,9 @@ bool Mm3dNativePicaCompositionTracker::ObserveQuads(
             else { mEnvironmentProducers.clear(); ++mStats.InvalidQuadOwners; }
             return true;
         }
-    if (pc == 0x00179930U || pc == 0x00179AD8U) {
-        const uint32_t manager = state.r[pc == 0x00179930U ? 0 : 6];
-        const uint32_t queue = state.r[pc == 0x00179930U ? 1 : 9];
+    if (pc == 0x00179930U || pc == 0x00179AD8U || pc == 0x00191CC8U) {
+        const uint32_t manager = state.r[pc == 0x00179930U ? 0 : pc == 0x00179AD8U ? 6 : 5];
+        const uint32_t queue = state.r[pc == 0x00179930U ? 1 : pc == 0x00179AD8U ? 9 : 10];
         const uint32_t model = state.r[pc == 0x00179930U ? 2 : 4];
         uint32_t count = 0;
         if (!model || !manager || queue > 7 || uint64_t{manager} + 0x3600U > UINT32_MAX ||
@@ -501,6 +503,7 @@ bool Mm3dNativePicaCompositionTracker::ObserveQuads(
                 owner.Attribution.Layer = Oot3dPicaCompositionLayer::Atmosphere;
         }
         owner.Attribution.ExcludeFromPresentationFxaa = owner.Attribution.Layer == Oot3dPicaCompositionLayer::Ui;
+        owner.Attribution.PreserveNativeUiSampling = owner.Attribution.ExcludeFromPresentationFxaa;
         mQuadOwners[manager + 0x578U + queue * 0x600U + count * 4U] = owner;
         return true;
     }
@@ -539,6 +542,7 @@ bool Mm3dNativePicaCompositionTracker::ObserveQuads(
     child.Slot = uint32_t(slot); child.Begin = begin; child.Attribution = mActive->Attribution;
     child.Attribution.Layer = Oot3dPicaCompositionLayer::Unknown;
     child.Attribution.ExcludeFromPresentationFxaa = false;
+    child.Attribution.PreserveNativeUiSampling = false;
     const auto owner = mQuadOwners.find(uint32_t(slot));
     if (owner != mQuadOwners.end() && owner->second.Model == model && owner->second.Generation == mQuadGeneration)
         child.Attribution = owner->second.Attribution;

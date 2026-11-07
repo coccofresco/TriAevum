@@ -142,6 +142,7 @@ Oot3dNativeGame::Oot3dPicaRawDraw RawDraw(uint64_t id) {
     packet.Composition.SourcePc = 0x002E2CD0;
     packet.Composition.IsolatedLighting = true;
     packet.Composition.ExcludeFromPresentationFxaa = true;
+    packet.Composition.PreserveNativeUiSampling = true;
     for (size_t i = 0; i < packet.Registers.size(); ++i) packet.Registers[i] = static_cast<uint32_t>(i * 2654435761U);
     packet.VertexShader.ProgramWordCount = 3;
     packet.VertexShader.Program[0] = 0x4e000000;
@@ -187,11 +188,14 @@ void RawDrawRoundTrip(const std::filesystem::path& directory) {
             return id;
         });
     Require(reencoded == encoded && second == resources, "raw draw re-encodes identically");
-    Require(decoded.Packet.Composition.ExcludeFromPresentationFxaa, "overlay FXAA contract round trips");
+    Require(decoded.Packet.Composition.ExcludeFromPresentationFxaa &&
+            decoded.Packet.Composition.PreserveNativeUiSampling, "overlay contracts round trip");
     auto legacy = encoded;
     legacy["composition"].erase("exclude_presentation_fxaa");
+    legacy["composition"].erase("preserve_native_ui_sampling");
     Require(Oot3dNativeGame::DecodeOot3dPicaRawDraw(legacy, resources, decoded, &error) &&
-            !decoded.Packet.Composition.ExcludeFromPresentationFxaa,
+            !decoded.Packet.Composition.ExcludeFromPresentationFxaa &&
+            !decoded.Packet.Composition.PreserveNativeUiSampling,
             "legacy records do not opt in to the overlay FXAA contract");
 
     const auto path = directory / "raw-draws.jsonl";

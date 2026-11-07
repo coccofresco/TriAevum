@@ -3,6 +3,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
+#include "fast/extension/native_ui_overlay.h"
 
 namespace Fast {
 
@@ -357,6 +358,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
             // display's UI over its output.
             display.PresentationFxaaExcluded = source->PresentationFxaaExcludedSerial != 0U &&
                 source->PresentationFxaaExcludedSerial == source->ContentWriteSerial;
+            display.PreserveNativeUiSampling = source->NativeUiSamplingSerial != 0U &&
+                source->NativeUiSamplingSerial == source->ContentWriteSerial;
             display.SceneBeforeUi = false;
             if (mPresentationUpscaler && nriDisplayCopy && display.SceneEffectsResolved &&
                 source->SceneBeforeUiSerial != 0U &&
@@ -3601,10 +3604,10 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 mTaaOutputEncodingThisFrame);
         }
         if (fsrForDisplay || dlssForDisplay || nisForDisplay) {
-            const uint32_t outputWidth = fsrForDisplay
+            uint32_t outputWidth = fsrForDisplay
                 ? fsrOutputWidth
                 : dlssForDisplay ? dlssOutputWidth : nisOutputWidth;
-            const uint32_t outputHeight = fsrForDisplay
+            uint32_t outputHeight = fsrForDisplay
                 ? fsrOutputHeight
                 : dlssForDisplay ? dlssOutputHeight : nisOutputHeight;
             VkImage upscaledImage = mNriUpscalerPass.OutputImage();
@@ -3618,6 +3621,13 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
             #endif
             if (effectPlan.NativeUiOverlay) {
+                const auto picture = mPresentationPicture.Valid() ? mPresentationPicture :
+                    Extension::PresentationPicture{0U, 0U, mSwapchainExtent.width, mSwapchainExtent.height};
+                const auto fit = FitNativePicaPresentation(picture.Width, picture.Height,
+                    static_cast<float>(display.Height), static_cast<float>(display.Width));
+                const auto overlayExtent = Extension::ResolveNativeUiOverlayExtent(
+                    display.PreserveNativeUiSampling && fit.X == std::floor(fit.X) && fit.Y == std::floor(fit.Y),
+                    outputWidth, outputHeight, fit.Height, fit.Width);
                 // The upscaler reconstructed the scene before native UI: lay
                 // the display's UI over it (once per frame, reused with it).
                 bool overlaid = canReuseUpscaler && mNativeUiOverlayExecutedThisFrame;
@@ -3640,7 +3650,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                          shown.Width, shown.Height,
                          upscaledImage, VK_FORMAT_R16G16B16A16_SFLOAT,
                          outputWidth, outputHeight,
-                         Extension::SceneColorIsLinear(mUpscalerOutputEncodingThisFrame)});
+                         Extension::SceneColorIsLinear(mUpscalerOutputEncodingThisFrame),
+                          overlayExtent[0], overlayExtent[1]});
                     mGpuProfiler.EndScope(
                         mCurrentFrame, Extension::GpuProfileScope::Upscaler, command);
                     if (!overlaid) {
@@ -3653,6 +3664,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                     mNativeUiOverlayExecutedThisFrame = true;
                     mDiagnostics.RecordNativeUiOverlay();
                 }
+                outputWidth = overlayExtent[0];
+                outputHeight = overlayExtent[1];
                 upscaledImage = mNativeUiOverlayPass.OutputImage();
                 upscaledView = mNativeUiOverlayPass.OutputView();
             }
@@ -4154,6 +4167,8 @@ bool GfxRenderingAPIVulkan::ComposeNativePicaSceneForCopy(
         NativePicaSceneFullyResolvedForTarget(
             source.Key.RenderTargetNamespace,
             source.Key.ColorPhysicalAddress);
+    boundaryImage.PreserveNativeUiSampling = source.NativeUiSamplingSerial != 0U &&
+        source.NativeUiSamplingSerial == source.ContentWriteSerial;
     boundaryImage.PresentationFxaaExcluded = source.PresentationFxaaExcludedSerial != 0U &&
         source.PresentationFxaaExcludedSerial == source.ContentWriteSerial;
     if (!ExecuteNativePicaDisplayGraph(

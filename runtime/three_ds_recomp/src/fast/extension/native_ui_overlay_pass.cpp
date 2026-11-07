@@ -147,18 +147,20 @@ bool NativeUiOverlayPass::Execute(uint32_t frameSlot, uint64_t frameId, const In
     (void)frameId;
     return false;
 #else
-    if (mImpl->Width != inputs.Width || mImpl->Height != inputs.Height) {
+    const uint32_t outputWidth = inputs.OutputWidth ? inputs.OutputWidth : inputs.Width;
+    const uint32_t outputHeight = inputs.OutputHeight ? inputs.OutputHeight : inputs.Height;
+    if (mImpl->Width != outputWidth || mImpl->Height != outputHeight) {
         // Recorded frames may still read the previous image.
         if (mImpl->Width != 0U && !mImpl->Interop->CompleteRecordedWork())
             return false;
         InvalidateScreenResources();
-        if (!mImpl->Interop->CreateOwnedTexture2D(inputs.Width, inputs.Height, VK_FORMAT_R16G16B16A16_SFLOAT,
+        if (!mImpl->Interop->CreateOwnedTexture2D(outputWidth, outputHeight, VK_FORMAT_R16G16B16A16_SFLOAT,
                                                   mImpl->Output)) {
             mImpl->Reason = "native UI overlay allocation failed";
             return false;
         }
-        mImpl->Width = inputs.Width;
-        mImpl->Height = inputs.Height;
+        mImpl->Width = outputWidth;
+        mImpl->Height = outputHeight;
     }
     const std::array sources{ inputs.DisplayUi, inputs.DisplayScene, inputs.Upscaled };
     const std::array formats{ inputs.DisplayUiFormat, inputs.DisplaySceneFormat, inputs.UpscaledFormat };
@@ -204,8 +206,9 @@ bool NativeUiOverlayPass::Execute(uint32_t frameSlot, uint64_t frameId, const In
     if (!transition(ResourceAccess::ComputeWrite))
         return false;
     NativeUiOverlayConstants push{};
-    push.Width = inputs.Width;
-    push.Height = inputs.Height;
+    push.Width = outputWidth;
+    push.Height = outputHeight;
+    push.ResampleUpscaled = outputWidth != inputs.Width || outputHeight != inputs.Height;
     push.DisplayWidth = inputs.DisplayWidth;
     push.DisplayHeight = inputs.DisplayHeight;
     push.LinearOutput = inputs.LinearOutput ? 1U : 0U;
@@ -216,7 +219,7 @@ bool NativeUiOverlayPass::Execute(uint32_t frameSlot, uint64_t frameId, const In
     mImpl->Core->CmdSetDescriptorSet(*command, descriptors);
     const nri::SetRootConstantsDesc constants{ 0, &push, sizeof(push) };
     mImpl->Core->CmdSetRootConstants(*command, constants);
-    mImpl->Core->CmdDispatch(*command, { (inputs.Width + 7U) / 8U, (inputs.Height + 7U) / 8U, 1 });
+    mImpl->Core->CmdDispatch(*command, { (outputWidth + 7U) / 8U, (outputHeight + 7U) / 8U, 1 });
     return transition(ResourceAccess::ShaderRead);
 #endif
 }
