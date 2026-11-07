@@ -112,7 +112,7 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 SDL_Event e{};e.type=step.value("down",true)?SDL_MOUSEBUTTONDOWN:SDL_MOUSEBUTTONUP;
                 e.button.windowID=wid;e.button.button=SDL_BUTTON_LEFT;e.button.x=x;e.button.y=y;
                 e.button.state=e.type==SDL_MOUSEBUTTONDOWN?SDL_PRESSED:SDL_RELEASED;result=SDL_PushEvent(&e);
-            } else if(op=="os_click") {
+            } else if(op=="os_click" || op=="os_move") {
 #ifdef _WIN32
                 SDL_SysWMinfo info{};SDL_VERSION(&info.version);
                 if(!window||!SDL_GetWindowWMInfo(window,&info))throw std::runtime_error("no acceptance window");
@@ -135,13 +135,15 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 if(std::abs(actualX-x)>2 || std::abs(actualY-y)>2)throw std::runtime_error("native GUI cursor projection mismatch");
                 // One atomic click avoids leaving an injected button held if
                 // foreground changes between separate scheduled actions.
-                INPUT input[2]{};input[0].type=INPUT_MOUSE;input[1].type=INPUT_MOUSE;
-                input[0].mi.dwFlags=MOUSEEVENTF_LEFTDOWN;input[1].mi.dwFlags=MOUSEEVENTF_LEFTUP;
-                result=int(SendInput(2,input,sizeof(INPUT)));
-                if(result==1)SendInput(1,&input[1],sizeof(INPUT));
-                if(result!=2)throw std::runtime_error("owned mouse click injection failed");
+                if(op=="os_click") {
+                    INPUT input[2]{};input[0].type=INPUT_MOUSE;input[1].type=INPUT_MOUSE;
+                    input[0].mi.dwFlags=MOUSEEVENTF_LEFTDOWN;input[1].mi.dwFlags=MOUSEEVENTF_LEFTUP;
+                    result=int(SendInput(2,input,sizeof(INPUT)));
+                    if(result==1)SendInput(1,&input[1],sizeof(INPUT));
+                    if(result!=2)throw std::runtime_error("owned mouse click injection failed");
+                }
 #else
-                throw std::runtime_error("os_click is Windows-only");
+                throw std::runtime_error("native OS pointer actions are Windows-only");
 #endif
             } else if(op=="attach") {
                 if(s.pad)throw std::runtime_error("virtual pad already attached");
