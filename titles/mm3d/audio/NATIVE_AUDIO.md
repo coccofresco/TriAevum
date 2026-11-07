@@ -74,3 +74,33 @@ Safe single-shot locale/audio runs and their exact successes/omissions are kept
 in the external LANGAUDIO results. The parameter conversion and native effect
 mixer are now dynamically covered; this offline fixture is not an entire
 mixer-to-DSP/device replay. No FULL F14 closure is claimed by offline proof alone.
+
+### Non-silent live state smoke and real-time limit (fourth continuation)
+
+Runtime production source remains `3047bf8a`; the executed dual-title/v10 binary
+was built at `07a87492` (later changes are offline tests/documentation only).
+The external LANGAUDIO receipts bind exact executable/input hashes.
+
+- One cold-boot real-time acceptance ran 75.022 seconds, producing 51.342 seconds
+  of native PCM, 111 underruns and 1,411 dropped refreshes. Only 1,170 presentation
+  frames completed: save at 1,100 happened, load at 1,400 and capture at 1,700 did
+  not. The three-refresh limit was active; 15.596 presentations/second cannot
+  sustain 60 refreshes/second under that limit. Native pipeline creation totaled
+  0.293 seconds; attributing the whole deficit to cold pipeline compilation is
+  unsupported. Guest/render timers overlap; host contention was not isolated.
+- The single complementary fixed-clock smoke loaded that newly saved state,
+  saved once and loaded it live once. **218,240 stereo frames (6.668296 seconds)
+  replay byte-identically**, with nonzero samples in all seven intersected
+  one-second blocks. Native capture rate/count/FNV agree with runtime. No stale
+  pre-load native audio appears in that compared interval.
+- The actual post-load image is **English file select**, not gameplay. It proves
+  continued rendering and a native music replay, not a room transition or an
+  active reverb tail. The intended cold-boot gameplay route was not achieved.
+  Fixed-clock playback reports one underrun; it is not device-continuity proof.
+
+The native non-silent state replay subgate is closed for this file-select
+fixture. FULL F13/F14 remain open: real-time starvation, gameplay/room/effect
+and interactive/physical-platform audio qualification remain unresolved. No
+repeat of the failed timed test or speculative buffer/catch-up increase was
+performed. Evidence: `LANGAUDIO/{cold-replay-04,fixed-state-smoke-04}-analysis.json`,
+`cold-replay-04-diagnosis.json`, and `fixed-state-smoke-04/post-restore.png`.
