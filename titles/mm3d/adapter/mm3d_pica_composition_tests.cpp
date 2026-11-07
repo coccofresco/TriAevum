@@ -155,7 +155,6 @@ void TestMm3dSceneLighting() {
         const auto& attribution=spans.back().Attribution;
         const bool hud=name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop";
         Require(IsMm3dGameplayHud(attribution.SourcePc,attribution.NativeValue)==hud,"HUD-only attribution");
-        Require(attribution.ExcludeFromPresentationFxaa,"HUD classification must retain native UI FXAA exclusion");
         begin+=0x40;
     }
     Require(!IsMm3dGameplayHud(kMm3dQuadQueueDrawEntry,kMm3dUiTag|1U),"mixed sprites never blanket HUD");

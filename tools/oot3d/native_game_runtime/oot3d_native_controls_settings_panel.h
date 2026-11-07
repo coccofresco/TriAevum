@@ -11,7 +11,6 @@ namespace Oot3dNativeGame {
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateNativeControlsSettingsPanel(
     std::shared_ptr<NativeControlConfigRuntime> controls,
-    std::shared_ptr<TopScreenUiConfigRuntime> topScreen,
-    bool nativeButtonOverlay = false);
+    std::shared_ptr<TopScreenUiConfigRuntime> topScreen);
 
 } // namespace Oot3dNativeGame

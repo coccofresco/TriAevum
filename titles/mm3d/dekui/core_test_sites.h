@@ -8,7 +8,7 @@
 #include <cstdint>
 namespace Mm3dDekui::TestData {
 struct Site {std::uint32_t pc,word,replacement;const char* module;bool restoration_dependency;};
-inline constexpr std::array<Site,151> Sites{{
+inline constexpr std::array<Site,150> Sites{{
     {0x00104da4U,0xe1a04000U,0xefffff90U,"menu_page_switch",false},
     {0x0010fd2cU,0xe12fff32U,0xeffffe80U,"menu_memory",false},
     {0x0010fd50U,0xe5c40010U,0xeffffe81U,"menu_memory",false},
@@ -20,7 +20,6 @@ inline constexpr std::array<Site,151> Sites{{
     {0x001262c8U,0xe2842008U,0xeffffff2U,"native_inventory",false},
     {0x001262d4U,0xe5860000U,0xeffffff3U,"native_inventory",false},
     {0x001267ecU,0xe1a04000U,0xeffffff1U,"native_inventory",false},
-    {0x00134de4U,0xe5940028U,0xeffffa40U,"button_emission",false},
     {0x001391f4U,0x95c40000U,0x9fffff98U,"menu_sound",false},
     {0x00141d44U,0xe280c01cU,0xefffffb9U,"pause_capture",false},
     {0x001619a4U,0xe1a04000U,0xefffff92U,"menu_page_switch",false},

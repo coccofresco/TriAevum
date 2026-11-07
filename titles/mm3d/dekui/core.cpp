@@ -6,8 +6,6 @@
 namespace Mm3dDekui {
 U32 Core::Instruction(Memory& memory,U32 pc,U32 word) {
 
-    if (pc==ButtonEmission::Pc && word==ButtonEmission::Word && ButtonEmission::CodeMatches(memory))
-        return 0xef000000|ButtonEmission::Svc;
     if (pc >= 0x007cf000U) return word; // ref appended Restoration range
     if(VegetationDrawDistance::Instruction(pc,word)!=word&&VegetationDrawDistance::CodeMatches(memory,pc))
         return VegetationDrawDistance::Instruction(pc,word);
@@ -198,14 +196,6 @@ U32 Core::Instruction(Memory& memory,U32 pc,U32 word) {
 void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
 
     auto& r=cpu.Regs();
-    if(swi==ButtonEmission::Svc) {
-        const bool replaced=host.layout_draw && host.layout_draw(memory,
-            overlay_layouts.empty()?memory.Read(r[4]+4).value_or(0):overlay_layouts.back(),r[4],inventory_hook.pass);
-        // Native null-geometry path skips only this pane, not its children.
-        // Otherwise replay the displaced LDR exactly. Flags/VFP/SP unchanged.
-        r[0]=replaced?0:memory.Read(r[4]+0x28).value_or(0);
-        return;
-    }
     if(swi>=VegetationDrawDistance::FirstSVC&&swi<VegetationDrawDistance::FirstSVC+VegetationDrawDistance::Hooks.size()) {
         VegetationDrawDistance::Load(memory,swi-VegetationDrawDistance::FirstSVC,r,cpu.ExtRegs(),PropDrawDistance::multiplier.load());return;
     }
@@ -500,12 +490,9 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],&item_present_hook);
                 regs[2]=file_select_prompt_hook.Root(guest,file_select_hook,options_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive());
-                if(overlay_layouts.size()==64)overlay_layouts.clear();
-                overlay_layouts.push_back(regs[4]);
                 if(regs[2]!=regs[4]+8)regs[13]=regs[2];
                 break;
             case 3:
-                if(!overlay_layouts.empty())overlay_layouts.pop_back();
                 if(const auto sp=file_select_prompt_hook.End(guest))regs[13]=sp;
                 if(const auto sp=select_help_hook.scratch.End(guest))regs[13]=sp;
                 if(const auto sp=menu_help_hook.scratch.End(guest))regs[13]=sp;
@@ -793,7 +780,6 @@ std::vector<U32> Core::CandidatePcs() {
         0x001262c8U, // ref 0x001262f0; native_inventory
         0x001262d4U, // ref 0x001262fc; native_inventory
         0x001267ecU, // ref 0x00126814; native_inventory
-        ButtonEmission::Pc,
         0x001391f4U, // ref 0x0013921c; menu_sound
         0x00141d44U, // ref 0x00141d88; pause_capture
         0x001619a4U, // ref 0x00161aec; menu_page_switch

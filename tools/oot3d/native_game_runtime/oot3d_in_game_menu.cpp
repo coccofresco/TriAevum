@@ -819,21 +819,6 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
     row.Modified = [this] { return mControls.ButtonPrompts != NativeButtonPrompts::Automatic; };
     tab.Rows.push_back(std::move(row));
   }
-  if (mOwners.NativeButtonOverlay) {
-    Row row;
-    row.Key = "Native button labels";
-    row.Kind = RowKind::Choice;
-    row.Help = "Controller glyphs on the native MM3D HUD and prompts. Original 3DS and touch keep native artwork.";
-    row.Choices = {"Controller", "Original 3DS"};
-    row.Read = [this] { return mControls.NativeButtonLabels ? 0 : 1; };
-    row.Write = [this](int value) {
-      auto config = mControls;
-      config.NativeButtonLabels = value == 0;
-      return ApplyControls(config);
-    };
-    row.Modified = [this] { return !mControls.NativeButtonLabels; };
-    tab.Rows.push_back(std::move(row));
-  }
   {
     Row row;
     row.Key = "Control preset";
@@ -853,7 +838,6 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
       config.GyroscopeBiasDegreesPerSecond = previous.GyroscopeBiasDegreesPerSecond;
       config.AccelerometerNeutral = previous.AccelerometerNeutral;
       config.ButtonPrompts = previous.ButtonPrompts;
-      config.NativeButtonLabels = previous.NativeButtonLabels;
       config.Rumble = previous.Rumble;
       return ApplyControls(config);
     };
