@@ -4,7 +4,7 @@
 
 namespace Oot3dNativeGame {
 
-// Majora's Mask 3D (code.bin 6eec27b1..., v1.0): code addresses its adapter
+// Majora's Mask 3D (code.bin 6eec27b1..., EUR/USA v1.1): code addresses its adapter
 // uses. Each was recovered from the binary and is checked at its use.
 
 // Builds a 4x4 perspective frustum matrix: r0 = output matrix, s0..s5 =

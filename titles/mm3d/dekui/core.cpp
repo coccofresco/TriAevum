@@ -708,12 +708,28 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
         }
         if(swi==Mm3dDekui::CameraLive::ProjectionSVC) {
             // SVC is a synchronization boundary: R4 and S0 are live here.
-            // Emulate the replaced VLDR, changing only its destination register.
+            // Emulate VLDR; product supplies the live scene aspect as well.
             const U32 native=memory.Read32(cpu.Regs()[4]+0x18);
             auto& guest=memory;
             const auto projection=cpu.Regs()[4];
             const float configured=Mm3dDekui::CameraLive::ConfiguredFov(guest,projection);
-            const auto output=Mm3dDekui::CameraLive::ProjectionValue(native,configured);
+            U32 output=native;
+            if(Mm3dDekui::CameraLive::renderer_owned.load()) {
+                if(Mm3dDekui::CameraLive::PrimaryGameplayProjection(guest,projection)) {
+                    const float h=Mm3dDekui::CameraLive::Expansion(Mm3dDekui::CameraLive::horizontal_expansion.load());
+                    const float v=Mm3dDekui::CameraLive::Expansion(Mm3dDekui::CameraLive::vertical_expansion.load());
+                    output=Mm3dDekui::CameraLive::PresentedProjectionValue(native,
+                        Mm3dDekui::CameraLive::ScriptedCamera(guest),
+                        Mm3dDekui::CameraLive::renderer_fov_multiplier.load(),v);
+                    const U32 aspect=std::bit_cast<U32>((400.f/240.f)*h/v);
+                    // First call uses S1; second reloads View.aspect at +14.
+                    // Native code recomputes it on the next View projection.
+                    if(guest.Read(projection+0x14)!=std::optional<U32>(aspect))guest.Write(projection+0x14,aspect);
+                    cpu.ExtRegs()[1]=aspect;
+                }
+            } else {
+                output=Mm3dDekui::CameraLive::ProjectionValue(native,configured);
+            }
             cpu.ExtRegs()[0]=output;
             // Manual form capture remains available for all supported forms, including Deku.
             if(Mm3dDekui::FormCamera::diagnostics.load()) {

@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -124,6 +125,11 @@ public:
   void SetNativeGameplayHudVisible(bool visible) noexcept {
     mNativeGameplayHudVisible = visible;
   }
+  // Optional title-owned presentation classifier. No classifier preserves
+  // OoT's legacy source-PC rule. Native/dependency execution is never filtered.
+  void SetGameplayHudClassifier(std::function<bool(uint32_t,uint32_t)> classifier) {
+    mGameplayHudClassifier = std::move(classifier);
+  }
   // The running title's static shadow actor policy (its own actor ids). A
   // scheduler that is never told keeps OoT3D's.
   void SetStaticShadowActorPolicy(const StaticShadowActorPolicy &policy) noexcept {
@@ -166,6 +172,7 @@ private:
   // Per sample draw: left out of this execution (HUD off).
   std::vector<bool> mOmittedDrawScratch;
   bool mNativeGameplayHudVisible = true;
+  std::function<bool(uint32_t,uint32_t)> mGameplayHudClassifier;
   StaticShadowActorPolicy mStaticShadowActors = Oot3dStaticShadowActorPolicy();
   std::map<SnapshotTarget, uint64_t> mSnapshotCompletions;
 };

@@ -149,6 +149,8 @@ void NativeA32WindowSession::Setup() {
   std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
             << " code_sha256=" << manifest->CodeBinSha256 << '\n';
   titleSession = Oot3dNativeGame::CreateTitleSession(titleAdapter);
+  if (titleSession) picaPresentationScheduler.SetGameplayHudClassifier(
+      [title=titleSession.get()](uint32_t pc,uint32_t value) { return title->IsGameplayHud(pc,value); });
   // Before any settings load: configurations older than schema 15 take the
   // title's shipped grass source and mask rules. OoT3D's rules are keyed by
   // its own textures; another title's configuration drops an unedited copy
@@ -1994,6 +1996,12 @@ void NativeA32WindowSession::UpdateScenePresentation() {
           std::max<uint32_t>(1, presentationPicture.Width),
           std::max<uint32_t>(1, presentationPicture.Height));
   widescreenProjection.Projection.FovMultiplier = graphics.FovMultiplier;
+  widescreenProjection.Projection.TitleOwnsSceneProjection = titleSession && titleSession->OwnsSceneProjection();
+  if (titleSession) {
+    const auto& presentation = widescreenProjection.Projection.Presentation;
+    titleSession->SetPresentation({graphics.FovMultiplier, presentation.HorizontalFovExpansion,
+                                   presentation.VerticalFovExpansion, graphics.ExtendedDrawDistance});
+  }
   auto &visibility = widescreenProjection.ActorVisibility;
   visibility.ExtendedDrawDistance = graphics.ExtendedDrawDistance;
   visibility.Presentation = widescreenProjection.Projection.Presentation;

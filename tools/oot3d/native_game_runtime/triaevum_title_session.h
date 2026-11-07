@@ -14,6 +14,8 @@
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
 #include "fast/extension/grass_types.h"
+#include "gameplay_rumble.h"
+#include "triaevum_title_presentation.h"
 
 #include <nlohmann/json.hpp>
 
@@ -130,6 +132,27 @@ public:
   // case letters, digits, '_' and '-'). OoT3D (no session) keeps the
   // original file names.
   [[nodiscard]] virtual std::string_view PipelineCacheNamespace() const = 0;
+
+  [[nodiscard]] virtual bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const {
+    (void)sourcePc; (void)nativeValue; return false;
+  }
+  virtual void SetPresentation(const TitlePresentationSettings& settings) { (void)settings; }
+  // A title may apply the renderer/window policy at its native scene projection
+  // loads. Its unrelated stereo/base-frustum helper must then stay untouched.
+  [[nodiscard]] virtual bool OwnsSceneProjection() const { return false; }
+
+  // Optional product photo-camera input gate. nullopt preserves legacy title
+  // handling; false releases gameplay input to menus/cutscenes/transitions.
+  [[nodiscard]] virtual std::optional<bool> PhotoCameraOwnsInput(
+      oot3d::recomp::a32::MemoryBus& memory) const { (void)memory; return std::nullopt; }
+
+  // Input owns admission/strength/playback. Disabled must reset history without
+  // reading guest memory; absent producers return no events.
+  [[nodiscard]] virtual std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) {
+    (void)memory; (void)enabled;
+    return {};
+  }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }

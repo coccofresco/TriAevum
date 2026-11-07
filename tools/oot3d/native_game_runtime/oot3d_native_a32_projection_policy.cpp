@@ -935,8 +935,9 @@ void ApplyNativeWidescreenProjectionPolicy(
   callsite.LastFrustum = {left, right, bottom, top, nearPlane, farPlane};
   const auto resolved = Fast::Extension::ResolvePerspectiveFov({
       {left, right, bottom, top, nearPlane, farPlane},
-      projection.FovMultiplier,
-      projection.Presentation,
+      projection.TitleOwnsSceneProjection ? 1.0F : projection.FovMultiplier,
+      projection.TitleOwnsSceneProjection
+          ? Fast::Extension::ResolveScenePresentationPolicy(400U, 240U) : projection.Presentation,
       true,
   });
   const float resolvedLeft = resolved.Frustum.Left;

@@ -14,13 +14,17 @@
 #include "mm3d_single_screen.h"
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
+#include "../gameplay/mm3d_rumble_events.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_pica_draw_state.h"
+#include "mm3d_photo_camera_hook.h"
+#include "mm3d_presentation_settings.h"
+#include "mm3d_ui_subsystems.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-#include "mm3d_dev_camera_hook.h"
+#include "mm3d_dev_tools.h"
 #endif
 
 #include <algorithm>
@@ -81,6 +85,18 @@ public:
   // MM3D's own pipeline cache files, apart from OoT3D's.
   std::string_view PipelineCacheNamespace() const override { return "mm3d"; }
 
+  bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const override {
+    return IsMm3dGameplayHud(sourcePc, nativeValue);
+  }
+  bool OwnsSceneProjection() const override { return true; }
+  void SetPresentation(const TitlePresentationSettings& settings) override {
+    ApplyMm3dPresentationSettings(settings);
+  }
+  std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
+    return mRumble.Poll(memory, enabled);
+  }
+
   void InstallHooks(TitleSessionHookSetup &setup) override {
     // MM3D's perspective frustum builder: the scene widens to the output
     // and takes the scene FOV. Its frusta also serve views other than the
@@ -117,9 +133,7 @@ public:
       mSingleScreen.emplace(setup.PresentationClock);
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
-      RegisterMm3dDevCamera(mGuestPatches, *setup.DevToolsTitle, setup.FreeCamera);
-#endif
+      RegisterMm3dPhotoCamera(mGuestPatches, mPhotoCamera, setup.FreeCamera);
       mGuestCalls.Install(mGuestPatches);
       mRestoration.emplace(mGuestCalls);
       mRestoration->Register(mGuestPatches);
@@ -191,6 +205,8 @@ public:
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #endif
     }
+    mRumble.Verify(process.Memory());
+    if (!mRumble.Verified()) std::fprintf(stderr, "MM3D rumble disabled: EUR guard mismatch\n");
     mActorInteractionGuards = Mm3dActorInteractionGuardsHold(process.Memory());
     if (!mActorInteractionGuards)
       std::fprintf(stderr, "MM3D actor interactions disabled: EUR collider guard words do not match\n");
@@ -209,10 +225,10 @@ public:
     const auto environment = CaptureMm3dSceneEnvironment(memory);
     TraceMm3dSceneEnvironment(environment, entry.HostFrame, entry.Pc, entry.State.r[14]);
     if (entry.PendingSceneFrustum.has_value()) {
-      // The scene's camera for its opaque pass: the current View's field of
-      // view and clip planes, at the aspect (and widening) of the frustum the
-      // pass draws with, and its eye and target. The default View (no current
-      // one) has a placeholder eye and target, so it publishes no camera.
+      // The stereo frustum only proves the native pass boundary. Decode the
+      // actual fovy/aspect projection at View+BC, which already includes the
+      // renderer multiplier, picture shape and scripted 49 base. View+18 is
+      // the game's animated FOV, not the presented FOV.
       const auto &frustum = *entry.PendingSceneFrustum;
       uint32_t currentView = 0;
       bool read = memory.Read32(kMm3dCurrentViewPointer, &currentView);
@@ -222,29 +238,27 @@ public:
         read = read && memory.Read32(address, &word);
         value = std::bit_cast<float>(word);
       };
-      float view[3] = {};
+      float view[3] = {}, projectionY = 0;
       std::array<float, 3> eye{}, at{};
-      readFloat(base + kMm3dViewFovyOffset, view[0]);
+      readFloat(base + 0xBCU, view[0]);
+      readFloat(base + 0xD0U, projectionY);
       readFloat(base + kMm3dViewNearOffset, view[1]);
       readFloat(base + kMm3dViewFarOffset, view[2]);
       for (uint32_t axis = 0; axis < 3U; ++axis) {
         readFloat(base + kMm3dViewEyeOffset + axis * 4U, eye[axis]);
         readFloat(base + kMm3dViewAtOffset + axis * 4U, at[axis]);
       }
-      const float frustumHeight = frustum.Top - frustum.Bottom;
-      if (read && view[0] > 1.0F && view[0] < 179.0F && view[1] > 0.0F &&
-          view[2] > view[1] && frustumHeight > 0.0F) {
-        const float top = view[1] * std::tan(view[0] * 0.5F * 3.14159265F / 180.0F);
-        const float scale = 2.0F * top / frustumHeight;
+      const auto presented = DecodeSymmetricPerspective(view[0], projectionY, view[1], view[2]);
+      if (read && presented) {
+        const float top = presented->Top;
+        const float right = presented->Right;
         if (currentView != 0U) {
           entry.SceneView->ObservePerspectiveCamera(
-              frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-              frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+              frustum.Pc, frustum.ReturnAddress, -right, right, -top, top,
               view[1], view[2], eye, at);
         } else {
           entry.SceneView->ObservePerspective(
-              frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-              frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+              frustum.Pc, frustum.ReturnAddress, -right, right, -top, top,
               view[1], view[2]);
         }
       }
@@ -316,8 +330,14 @@ public:
   }
 #endif
 
+  std::optional<bool> PhotoCameraOwnsInput(oot3d::recomp::a32::MemoryBus& memory) const override {
+    GuestByteAccess guest(memory);
+    return mPhotoCamera.OwnsInput(guest);
+  }
   void Reset() override {
     mComposition.Reset();
+    mRumble.Reset();
+    mPhotoCamera.Reset();
     if (mSingleScreen) mSingleScreen->ResetButtonOverlay();
   }
 
@@ -369,6 +389,8 @@ private:
   Mm3dGuestCalls mGuestCalls;
   std::optional<Mm3dRestorationPort> mRestoration;
   Mm3dGuestPatches mGuestPatches;
+  Mm3dRumble::Source mRumble;
+  Mm3dPhotoCamera mPhotoCamera;
   bool mImageMounted = false;
   bool mActorInteractionGuards = false;
 };
