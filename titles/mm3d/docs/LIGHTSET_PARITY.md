@@ -50,6 +50,20 @@ untouched. This deliberately changes MM Modern **Off** captures from older DL
 receipts; their “Off = native” labels remain historical, not new references.
 Native/Authentic admission and OoT legacy shader families are unchanged.
 
+## Qualification
+
+- O1 owning CPU suites and both production GPU probes pass (87 GPU cases).
+  O6 passes: 12,851 full-panel and 2,720 scene-panel assertions.
+- O5: native, temporal, toon, uber, casters and pass packs regenerate
+  byte-identically. OoT O2: all three captures match `cap-p13.sha256`.
+- One MM3D launch, four profile hot-reload phases: both off, fairies only,
+  other lights only, both on. Traces show respectively 0/1/4/5 active sources,
+  proving Tatl and both native torches switch independently. Captures are
+  supporting evidence, not a pixel-aligned four-way comparison.
+- O7 product configure/build and `developer_tools: false` pass. The separate
+  Authentic/Enhanced product gameplay matrix was **not run**: the one-MM-run
+  budget was spent on the targeted settings proof. No full O7 pass is claimed.
+
 Local qualification receipts and run counts are outside Git under
 `W/analysis/parity/LIGHTSET/{PROGRESS,RESULTS}.md`. This document describes
 implementation, not an owner look approval or full-title parity verdict.
