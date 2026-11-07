@@ -43,6 +43,13 @@ void main() {
  visibility=inputs.values[index].parameters.y;
  pica_view=vec3(0,0,1);
  pica_surface_normal=vec3(0,0,1);
+ pica_surface_tint=vec4(1);
+ if (inputs.values[index].parameters.z != 0.0) {
+     // Off's production legacy vertex-colour fallback. Native FPRI/TEV is
+     // downstream; the VTX factor alone must remain .25 at native ownership.
+     outputs.values[index]=Result(vec4(pica_surface_primary(vec3(.25),pica_surface_normal),.37),vec4(0,0,0,.63));
+     return;
+ }
  vec3 pica_lighting_normal=vec3(0,0,1), pica_lighting_tangent=vec3(1,0,0), pica_normalized_view=vec3(0,0,1);
  vec4 pica_shadow_factor=vec4(1);
  fragment_uniforms.lighting_program.control=uvec4(1,0,0,0);
@@ -136,6 +143,15 @@ void main() {
         }
         want.Primary[3]=.37F;want.Secondary[3]=.63F;expected.push_back(want);
       }
+    for (bool corrected : {false, true}) {
+        Case c{};auto& s=c.Lighting.Surface;
+        s.Control={0,0,2,0};
+        s.SceneDirections[0]={0,0,1,0};s.SceneDirections[1]={0,0,-1,0};
+        s.SceneDirectionalColors[0]={.2F,.1F,0,0};s.SceneDirectionalColors[1]={.4F,.3F,.2F,0};
+        if (corrected) PreservePicaNativeFragmentSceneReference(s,true,true);
+        c.Parameters={70,1,1,0};cases.push_back(c);
+        expected.push_back({corrected?V4{.25F,.25F,.25F,.37F}:V4{.45F,.35F,.25F,.37F},V4{0,0,0,.63F}});
+    }
     std::vector<Result> output(cases.size());
     RunComputeTest(shader,std::as_bytes(std::span(cases)),std::as_writable_bytes(std::span(output)),uint32_t(cases.size()));
     unsigned failed=0;

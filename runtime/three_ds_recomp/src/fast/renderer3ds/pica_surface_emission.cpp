@@ -43,9 +43,15 @@ PicaSurfaceEmissionRegistry& PicaSurfaceEmissionRegistry::Instance() {
 
 void PicaSurfaceEmissionRegistry::Follow(std::span<const uint64_t> textures) {
     std::scoped_lock lock(mMutex);
-    mFollowed.clear();
+    std::unordered_set<uint64_t> next;
     for (const uint64_t texture : textures)
-        if (texture != 0U) mFollowed.insert(texture);
+        if (texture != 0U) next.insert(texture);
+    for (const auto texture : mFollowed)
+        if (!next.contains(texture)) {
+            mStrength.erase(texture);
+            mRemoved.insert(texture);
+        }
+    mFollowed = std::move(next);
 }
 
 float PicaSurfaceEmissionRegistry::Strength(uint64_t texture) const {
@@ -56,7 +62,9 @@ float PicaSurfaceEmissionRegistry::Strength(uint64_t texture) const {
 
 void PicaSurfaceEmissionRegistry::BeginFrame() {
     std::scoped_lock lock(mMutex);
-    for (const auto& [texture, emission] : mFrame) mStrength[texture] = emission;
+    for (const auto& [texture, emission] : mFrame)
+        if (!mRemoved.contains(texture) && mFollowed.contains(texture)) mStrength[texture] = emission;
+    mRemoved.clear();
     // Only followed surfaces keep a strength.
     std::erase_if(mStrength, [this](const auto& entry) { return !mFollowed.contains(entry.first); });
     mFrame.clear();

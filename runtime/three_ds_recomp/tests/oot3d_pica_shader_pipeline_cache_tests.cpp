@@ -2767,6 +2767,30 @@ TEST(PicaFragmentBalance, ProfileFactorAndExactPointsKeepSeparatePayloadOwnershi
     EXPECT_EQ(surface.ScenePoints[1].Color,once.ScenePoints[1].Color); // no second material fold
 }
 
+TEST(PicaFragmentBalance, LocalOnlyNativeReferenceDoesNotRelightVertexColourWhenPointsAreOff) {
+    using namespace Fast::Renderer3ds;
+    // Woodfall room trace: no native Scene slot, two supplemental Scene
+    // directionals survived exclusion. Off then rewrote the VTX*4 factor;
+    // converted On used only native fragment response. Neither should do so.
+    for (uint32_t points : {0U, 5U}) {
+        PicaSurfaceLightingUniforms surface{};
+        surface.Control = {0, points, 2, points ? 2U : 0U};
+        surface.MaterialDiffuse = {1, 1, 1, 0};
+        const auto before = surface;
+        PreservePicaNativeFragmentSceneReference(surface, true, true);
+        EXPECT_EQ(surface.Control[2], 0U);
+        surface.Control[2] = 2;
+        EXPECT_EQ(std::memcmp(&surface, &before, sizeof(surface)), 0); // no other edits
+        for (auto eligibility : {std::pair{false, true}, std::pair{true, false}}) {
+            PreservePicaNativeFragmentSceneReference(surface, eligibility.first, eligibility.second);
+            EXPECT_EQ(std::memcmp(&surface, &before, sizeof(surface)), 0); // OoT/water unchanged
+        }
+        surface.Control[0] = 1;
+        PreservePicaNativeFragmentSceneReference(surface, true, true);
+        EXPECT_EQ(surface.Control[2], 2U); // real vertex lighting unchanged
+    }
+}
+
 TEST(PicaFragmentBalance, UnqualifiedFragmentLitDrawKeepsTheNativeReference) {
     using Fast::Renderer3ds::PicaFragmentLitTitleDrawKeepsNative;
     // Arguments: title draw under a profile, balanced, fragment lit, full model.

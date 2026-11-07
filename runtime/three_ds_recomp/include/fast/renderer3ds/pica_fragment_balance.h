@@ -208,6 +208,17 @@ inline PicaNativeLightBinding PicaFragmentProfileBinding(const PicaNativeLightBi
     return balanceTitleDraw && !balanced && (fragmentLit || !fullSceneLighting);
 }
 
+// Native-fragment geometry is not the baked/vertex-lit reference class.
+// Even when its native slots contain only Local points, missing Scene slots
+// are not permission to relight the TEV vertex-colour factor. Keep the
+// supplemental Scene array out of both Off/fallback and converted draws.
+// Explicit profile keys and water's separate lighting contract are unchanged.
+inline void PreservePicaNativeFragmentSceneReference(PicaSurfaceLightingUniforms& surface,
+    bool nativeFragmentDraw, bool nonWaterEligible) noexcept {
+    if (nativeFragmentDraw && nonWaterEligible && surface.Control[0] == 0U)
+        surface.Control[2] = 0U;
+}
+
 // Specialized variants only: native radiance/LUTs are already per pixel.
 // The exact point row supplies user tint and cube visibility, not a second
 // material coefficient or the supplemental selector's exposure/fade.
