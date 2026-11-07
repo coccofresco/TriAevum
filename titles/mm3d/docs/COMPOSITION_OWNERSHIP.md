@@ -56,3 +56,23 @@ No shader source/pack or release environment profile changes are required.
 Runtime qualification and explicit remaining coverage live in the COMPOSITION
 lane's external PROGRESS.md / RESULTS.md; unit fixtures alone are not a full-title
 or all-primitive runtime qualification.
+
+## Qualification receipt (2026-11-07)
+
+The COMPOSITION lane remains a **partial F03/F18 delivery**. CPU suites, the
+schedule/bridge regression, 53 native guards, 12 normal-guide compile cases and
+shader-family preservation checks passed. The first MM HUD/temporal run failed
+on omitted scheduler propagation of the new overlay flag; that defect was fixed
+and tested offline, without retrying the consumed gameplay test.
+
+A separate final-source 600-frame MM run completed with GTAO/CACAO, outlines and
+HiZ in the declared effect graph, 65 normal-guide draws at each capture and zero
+composition/effect-graph failures. Its requested normal-agreement diagnostic was
+not visible, so it does not establish numerical normal correctness. No successful
+FXAA/upscaler/TAA gameplay acceptance or live title-logo qualification is claimed.
+
+One 400-frame OoT-only Kokiri run passed: all three original BMP hashes match
+`I:/_triaevum_work/retuned/cap-p13.sha256` exactly. There were three gameplay
+attempts total (two MM, one OoT), no retries. Complete hashes, logs, captures,
+remaining gaps and build configuration are recorded under
+`I:/_triaevum_work/mm3d-port/analysis/parity/COMPOSITION/RESULTS.md`.
