@@ -50,14 +50,18 @@ class AudioRestoreAcceptanceTests(unittest.TestCase):
             runtime['dsp_audio'][key] += 1
             self.assertFalse(qualify(runtime, self.rate, self.pcm)['native_replay_pass'], key)
 
-    def test_real_output_and_pacing(self):
+    def test_native_replay_does_not_claim_realtime_or_device_output(self):
         for key, value in [('host_output_enabled', False), ('output_initialized', False),
                            ('output_player_current', False), ('output_backend', 'null')]:
             runtime = copy.deepcopy(self.runtime)
             runtime['dsp_audio'][key] = value
-            self.assertFalse(qualify(runtime, self.rate, self.pcm)['native_replay_pass'])
+            result = qualify(runtime, self.rate, self.pcm)
+            self.assertTrue(result['native_replay_pass'])
+            self.assertFalse(result['device_queue']['current_real_output'])
         self.runtime['realtime_pacing']['enabled'] = False
-        self.assertFalse(qualify(self.runtime, self.rate, self.pcm)['native_replay_pass'])
+        result = qualify(self.runtime, self.rate, self.pcm)
+        self.assertTrue(result['native_replay_pass'])
+        self.assertFalse(result['device_queue']['realtime_pacing'])
 
     def test_underruns_do_not_disappear_in_replay_pass(self):
         self.runtime['dsp_audio']['output_underruns'] = 85

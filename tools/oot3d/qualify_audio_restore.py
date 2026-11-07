@@ -53,9 +53,6 @@ def qualify(runtime, rate, pcm, minimum_seconds=5.0):
         'capture_matches_runtime': (
             rate == audio['output_sample_rate'] and frames == audio['stereo_samples_mixed']
             and digest == audio['pcm_fnv1a64'] and nonzero == audio['nonzero_channel_samples']),
-        'current_real_output': (audio['host_output_enabled'] and audio['output_initialized']
-                                and audio['output_player_current'] and audio['output_backend'] != 'null'),
-        'realtime_pacing': runtime['realtime_pacing']['enabled'],
     }
     checkpoints = audio['output_queue']['checkpoints']
     # One save and one subsequent live load; initial loads are allowed. Never
@@ -101,6 +98,9 @@ def qualify(runtime, rate, pcm, minimum_seconds=5.0):
                 'sha256': hashlib.sha256(pcm).hexdigest()},
         'device_queue': {'output_underruns': audio['output_underruns'],
                          'zero_underruns': audio['output_underruns'] == 0,
+                         'realtime_pacing': runtime['realtime_pacing']['enabled'],
+                         'current_real_output': bool(audio['host_output_enabled'] and audio['output_initialized']
+                             and audio['output_player_current'] and audio['output_backend'] != 'null'),
                          'maximum_submit_gap_seconds': audio['output_queue']['maximum_submit_gap_seconds']},
         'checkpoints': checkpoints,
         'guest_refreshes_dropped': runtime['frame_rate']['guest_refreshes_dropped'],
