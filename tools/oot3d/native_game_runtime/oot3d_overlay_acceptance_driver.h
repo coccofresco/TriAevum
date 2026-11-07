@@ -13,6 +13,7 @@
 #include <windows.h>
 #include <SDL_syswm.h>
 #endif
+#include "three_ds_virtual_pad.h"
 namespace Oot3dNativeGame {
 inline uint64_t OverlayAcceptanceFrame=0;
 inline bool OverlayAcceptanceReleaseTimeline=false;
@@ -140,6 +141,18 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 e.tfinger.windowID=wid;e.tfinger.touchId=42;e.tfinger.fingerId=step.value("finger",1);
                 e.tfinger.x=step.at("x");e.tfinger.y=step.at("y");e.tfinger.pressure=step.value("down",true)?1.f:0.f;
                 result=SDL_PushEvent(&e);
+            } else if(op=="touch_button") {
+                // Synthetic producer at the actual platform pad boundary,
+                // not an SDL finger and not Android hit-testing certification.
+                const auto mask=step.at("mask").get<uint32_t>();
+                if(!mask || (mask&~0xcfffU))throw std::runtime_error("invalid touch HID button mask");
+                for(unsigned bit=0;bit<16;++bit) {
+                    ThreeDsRecomp::Input::DigitalControl control{};
+                    if((mask&(1u<<bit)) && ThreeDsRecomp::Input::DigitalControlForHidBit(bit,&control))
+                        ThreeDsRecomp::Input::TouchOverlayPad().SetControl(control,step.value("down",true));
+                }
+            } else if(op=="touch_release") {
+                ThreeDsRecomp::Input::TouchOverlayPad().ReleaseAll();
             } else if(op=="focus") {
                 // Reclaim only this acceptance window, without injecting keys
                 // into whichever unrelated window currently owns foreground.
