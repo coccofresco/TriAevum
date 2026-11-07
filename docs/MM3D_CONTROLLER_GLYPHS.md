@@ -12,6 +12,24 @@ still emit. Mixed A/B ring art remains native.
 replacement HUD, but later F1-open frames lose it with unchanged settings.
 Do not treat this implementation as merge-ready or complete parity.
 
+### Closure campaign: still blocked
+
+The `alpha-hud`, `context-hud` and `pass-live` attempts did not close the HUD
+blocker. Finite alpha saturation and layout-local pass scoping have regression
+coverage, but neither is a demonstrated fix for the live loss. In `pass-live`,
+frame 5500 lacks the replacement glyphs and frame 5600 has them again. All 58
+settings receipts retain Keyboard, enabled native labels and identical controls.
+The late diagnostic samples alternate between 0 and 28 primitives; this is
+activity evidence, not a root-cause proof or acceptance pass.
+
+Capture accounting now distinguishes unbound bindings, unexpected ring geometry,
+capacity limits and duplicate panes, and reports pending label/pane counts.
+Those counters were added **after** these runs; they cannot explain earlier
+samples retroactively. The overlay suite passes 100 checks with the EUR image,
+and the single-screen suite passes. No additional game was launched for the
+accounting change. Notebook/pause/dialogue, gameplay device switching, platform
+touch, settings persistence and the current-code OoT regression gate remain open.
+
 ## Controls
 
 F1 → Controls → Devices, or Esc → Controls:
@@ -52,8 +70,13 @@ including the configured dekui poses; the only canvas conversion is MM's
 centered 400×240 origin into its 16:9 presentation canvas.
 
 The host stores complete snapshots, including empty ones, keyed by submitted
-PICA draw IDs. Presentation selects the previous materialization, matching
-native command-list submission timing. Reset and backwards IDs clear history.
+PICA draw IDs. Presentation currently selects the previous host-refresh record.
+That timing assumption is **not qualified for MM3D**: the closure campaign still
+observes alternating empty/nonempty records and visible replacement loss.
+Do not retain the last nonempty record as a workaround: genuinely hidden labels
+must disappear. Native emission, command-list submission and completed-frame
+ownership need to be distinguished before changing this policy.
+Reset and backwards IDs clear history.
 Snapshots also retain binding/family settings, so a switch cannot remove a
 replacement before its corresponding native frame changes. Slots contain
 values, not guest pointers to temporary scratch data. Wide labels fit their

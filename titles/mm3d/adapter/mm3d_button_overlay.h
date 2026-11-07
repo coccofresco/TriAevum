@@ -14,8 +14,10 @@ namespace Oot3dNativeGame {
 // identity is the live registry entry, not pixels, a scene or a texture hash.
 class Mm3dButtonOverlay {
 public:
-  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0, StandaloneLabels=0, EmptyRecords=0, PassRejected=0, GuardRejected=0, Candidates=0, TintRejected=0, PoseRejected=0; };
+  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0, StandaloneLabels=0, EmptyRecords=0, PassRejected=0, GuardRejected=0, Candidates=0, TintRejected=0, PoseRejected=0, UnboundCandidates=0, RingGeometryRejected=0, CapacityRejected=0, DuplicateCandidates=0; };
   const Counters& Stats() const { return mStats; }
+  size_t PendingLabels() const { return mPending.size(); }
+  size_t PendingPanes() const { return mSeen.size(); }
   void Configure(const NativeControlConfig& controls, NativePromptSet prompts) {
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
     mControls = controls; mPrompts = prompts; mActive = active;
@@ -115,8 +117,11 @@ private:
       action=NativeControlAction::B;ring=true;
     }
     if(action!=NativeControlAction::Count)++mStats.Candidates;
-    if (action==NativeControlAction::Count || (!dpad && !NativeButtonOverlayGlyph(action,mPrompts,mControls)) ||
-        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls))) return false;
+    if (action==NativeControlAction::Count) return false;
+    if ((!dpad && !NativeButtonOverlayGlyph(action,mPrompts,mControls)) ||
+        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls))) {
+      ++mStats.UnboundCandidates; return false;
+    }
     auto x=Float(m,*geo+0x14),y=Float(m,*geo+0x18),w=Float(m,*geo+0x20),h=Float(m,*geo+0x24);
     if (text) { x=(*text)[0]; y=(*text)[1]; w=(*text)[2]; h=(*text)[3]; }
     const auto xx=Float(m,node+0xe0),xy=Float(m,node+0xe4),yx=Float(m,node+0xf0),yy=Float(m,node+0xf4),
@@ -127,7 +132,7 @@ private:
     if(std::max({*r,*g,*b})<=0){++mStats.TintRejected;return false;}
     // A/B letters occupy the top of the 38x38 native ring. The crop is a
     // title asset fact (HUD atlas A:24..32,0..10; B:64..72,0..10).
-    if (ring) { if (*w!=38 || *h!=38) return false; *x+=16; *w=8; *h=10; }
+    if (ring) { if (*w!=38 || *h!=38) {++mStats.RingGeometryRejected;return false;} *x+=16; *w=8; *h=10; }
     const float cx=*x+*w*.5f, cy=*y+*h*.5f;
     NativeButtonOverlaySlot slot;
     slot.Action=action;slot.Modifier=modifier;
@@ -144,7 +149,7 @@ private:
     if(*a>1)++mStats.SaturatedAlpha;
     slot.Color={*r,*g,*b,std::min(*a,1.f)};
     if (slot.Height<=0 || slot.Height>128 || std::abs(slot.X)>1024 || std::abs(slot.Y)>1024) {++mStats.PoseRejected;return false;}
-    if(mPending.size()>=252)return false;
+    if(mPending.size()>=252){++mStats.CapacityRejected;return false;}
     bool suppress=!ring;
     // A shared embedded tree may be visited by its parent and by its own draw.
     if (mSeen.insert({node,slot.X,slot.Y}).second) {
@@ -168,11 +173,13 @@ private:
         if(text) ++mStats.Text;
       }
     }
+    else ++mStats.DuplicateCandidates;
     // Mixed A/B ring art remains native. A partially unbound D-pad retains
     // its cross; pure labels/pictograms and the exact ZR+ legend are replaced.
     if(dpad) for(auto direction:{NativeControlAction::DpadUp,NativeControlAction::DpadDown,
         NativeControlAction::DpadLeft,NativeControlAction::DpadRight})
       if(!NativeButtonOverlayGlyph(direction,mPrompts,mControls))suppress=false;
+    if(dpad && !suppress)++mStats.UnboundCandidates;
     return suppress;
   }
   Counters mStats;

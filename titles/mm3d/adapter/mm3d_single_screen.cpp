@@ -94,7 +94,10 @@ std::map<std::string, uint64_t> Mm3dSingleScreen::ButtonOverlaySummary() const {
             {"pictograms",s.Pictograms},{"dpad_directions",s.Dpad},{"zr_legends",s.Text},
              {"saturated_alpha",s.SaturatedAlpha},{"standalone_labels",s.StandaloneLabels},
              {"empty_records",s.EmptyRecords},{"pass_rejected",s.PassRejected},{"guard_rejected",s.GuardRejected},
-             {"candidates",s.Candidates},{"tint_rejected",s.TintRejected},{"pose_rejected",s.PoseRejected}};
+             {"candidates",s.Candidates},{"tint_rejected",s.TintRejected},{"pose_rejected",s.PoseRejected},
+              {"unbound_candidates",s.UnboundCandidates},{"ring_geometry_rejected",s.RingGeometryRejected},
+              {"capacity_rejected",s.CapacityRejected},{"duplicate_candidates",s.DuplicateCandidates},
+              {"pending_labels",mButtonOverlay->PendingLabels()},{"pending_panes",mButtonOverlay->PendingPanes()}};
 }
 
 Mm3dSingleScreen::~Mm3dSingleScreen() = default;

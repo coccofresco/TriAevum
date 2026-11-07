@@ -111,6 +111,31 @@ void TestFrames(){
  frames.Record(30,{},NativePromptSet::Touch,original);frames.Select(30,true);
  Check(frames.Presented().empty()&&!frames.Controls().NativeButtonLabels,"Original/touch native frame clears replacements at presentation, not early");
 }
+void TestCaptureAccounting(){
+ auto m=Fixture();Mm3dButtonOverlay overlay;
+ overlay.Configure(NativeControlDefaults(),NativePromptSet::Keyboard);
+ Check(overlay.Capture(m,layout,node,3),"first pane captured for accounting");
+ Check(overlay.Capture(m,layout,node,3),"duplicate pure pane still suppressed");
+ Check(overlay.Stats().Candidates==2 && overlay.Stats().Labels==1 &&
+       overlay.Stats().DuplicateCandidates==1 && overlay.PendingLabels()==1 && overlay.PendingPanes()==1,
+       "duplicate candidate distinguished from missing binding and empty pending data");
+ overlay.Record(10);
+ Check(overlay.PendingLabels()==0 && overlay.PendingPanes()==0,"record drains labels and dedup keys together");
+ Check(overlay.Capture(m,layout,node,3) && overlay.Stats().Labels==2,"next recording admits the same pane");
+ overlay.Record(20);overlay.Record(30);
+ Check(overlay.Stats().EmptyRecords==1,"empty record distinguished from duplicate emission");
+ auto unbound=NativeControlDefaults();unbound.Bindings[size_t(NativeControlAction::X)]={};
+ overlay.Configure(unbound,NativePromptSet::Keyboard);
+ Check(!overlay.Capture(m,layout,node,3) && overlay.Stats().UnboundCandidates==1,"unbound candidate accounted");
+ overlay.Configure(NativeControlDefaults(),NativePromptSet::Keyboard);
+ auto ring=Fixture();ring.Name(0x10020100,"AActionIconBase");ring.Name(0x10020200,"bb00_ybtn");
+ Check(!overlay.Capture(ring,layout,node,3) && overlay.Stats().RingGeometryRejected==1,"wrong ring geometry accounted");
+ for(unsigned i=0;i<252;++i){m.F(node+0xec,float(i));overlay.Capture(m,layout,node,3);}
+ Check(overlay.PendingLabels()==252,"pending cap fixture filled");
+ m.F(node+0xec,300);
+ Check(!overlay.Capture(m,layout,node,3) && overlay.Stats().CapacityRejected==1,"capacity rejection accounted without suppression");
+ overlay.Reset();Check(overlay.PendingLabels()==0 && overlay.PendingPanes()==0,"reset drains accounting state");
+}
 void TestSettings(){
  auto config=NativeControlDefaults();std::string text,error;NativeControlConfig parsed;
  Check(SerializeNativeControlConfigText(config,&text,&error),"default serialize");
@@ -130,7 +155,7 @@ void TestSettings(){
 }
 }
 int main(int argc,char** argv){try{
- TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestSettings();
+ TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSettings();
  if(argc==2){std::ifstream in(argv[1],std::ios::binary);Check(bool(in),"code image opens");
   for(auto [pc,word]:ButtonEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR emission guard agrees");}}
  std::cout<<checks<<" overlay checks passed\n";return 0;
