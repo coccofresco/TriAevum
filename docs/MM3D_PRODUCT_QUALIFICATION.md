@@ -92,6 +92,53 @@ the supplied states, without developer-only freecam overrides. State/settings
 and graphics-schedule CLI actions remain available in that binary. OoT O2 uses
 its separately built OoT-only binary from the same frozen runtime source.
 
+## Fixed-cut execution receipt (2026-11-07)
+
+Frozen runtime source **3a1fb05f4e9f69a9dfb4cb63c33e1b716265d609**.
+Later storage-test/documentation commits do not alter the captured runtime.
+The product executable is dual-title, registry v10, developer tools OFF;
+SHA-256 `8608795eae572f6ee9cdbfc2e0567d372c6fe3747474712aea7d0cfe46df9a60`.
+OoT-only O2 executable SHA-256
+`ad20408cf024ac67d165ae05e303a66c757f1f0b9308ffb3cba1f76579996535`.
+
+- O1/O6: 46 offline invocations passed on the frozen source, including actual
+  full/environment/grass F1 widgets. O5: six legacy packs unchanged, new
+  104-program native-lighting family regenerated and checked.
+- O2: one execution, all three Kokiri BMP hashes equal `cap-p13.sha256`.
+- Product smoke: **FAILED before the first frame**. The prepared LANGAUDIO
+  O3RO changes the RomFS service view; the supplied legacy state has open
+  handles with offset 0 / size 659384080. The restore compatibility check
+  correctly refuses the new view. No smoke retry and no guard bypass.
+- After offline decoding all five states, the separate planned MM batch used
+  their original `mods/dekui-romfs` directory overlay, not the new O3RO/message
+  bundle. Noon/night/field/Inn/Woodfall all exited 0 on the same product binary.
+  These runs do not retroactively pass the consumed Authentic smoke or qualify
+  the new language preparation.
+- Field: one save+settings and two in-run loads (with settings, then state-only)
+  succeeded; current display and language were retained, the MM settings omission
+  was disclosed. Grass was restored Off with settings and remained On after the
+  later state-only load. This is bounded live state/settings proof, not all reset
+  identities or native cartridge-save gameplay qualification.
+- Additional offline CTR filesystem test: 79,384 opaque bytes from a read-only
+  real local save pass through SVC/IPC, rooted storage, flush and host restore.
+  Only disposable output is written. A mismatched RomFS size is rejected without
+  damaging the live handle. This is filesystem proof, not a game save/load cycle.
+
+F07 and F15 remain **OPEN**. Beyond the absent approved MM recipe/module, Forge's
+`forge-core/src/backup.rs` still declares `GAME = "oot3d"`; its existing backup
+receipts cannot be described as title-isolated MM installed recovery. Do not
+relabel MM bytes as an OoT backup or relax supported-recipe/restore checks.
+Required follow-up is a title-bound Forge backup contract together with the
+qualified MM installation, native game save/restart and supported-platform
+matrix. Neither the current registry run nor synthetic recovery tests supplies
+that dependency. Historical bad_alloc remains unresolved; this smoke failed for
+an independently diagnosed RomFS mismatch instead.
+
+No additional game acceptance is implied by this document. The reserved seven
+executions were consumed: six succeeded, one smoke failed. Full button OVERLAY,
+newer producer tips, full shader corpus, physical devices/platforms and complete
+rendering parity are not qualified by this cut.
+
 ## Evidence
 
 External private receipts: `W/analysis/parity/INTEG/final-product/`, with integration
