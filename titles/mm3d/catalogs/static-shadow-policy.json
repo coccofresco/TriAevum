@@ -1,0 +1,21 @@
+{
+  "schema": "triaevum.static-shadow",
+  "version": 1,
+  "kind": "policy",
+  "title": "mm3d",
+  "code_sha256": "6eec27b1827eab2c87744ac38066d569ffe6fe75790b1eb3300bd91f5099038d",
+  "image_base": "0x00100000",
+  "min_pairs": 300,
+  "excluded": [
+    {"id": "0x0000", "name": "Player"},
+    {"id": "0x000D", "name": "En_Horse"}
+  ],
+  "required_cases": [
+    "destroy_and_address_reuse",
+    "room_unload_reload",
+    "savestate_restore",
+    "changed_static_pages_over_budget"
+  ],
+  "provenance": "../docs/STATIC_SHADOW_QUALIFICATION.md",
+  "scope": "Offline qualification policy only. Not a populated catalog or runtime admission."
+}
