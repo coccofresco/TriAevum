@@ -608,16 +608,22 @@ int main() {
         hudSample.MemoryFills = hudFrame.MemoryFills;
         hudSample.DisplayTransfers = hudFrame.DisplayTransfers;
         for (const auto& draw : hudFrame.Draws) hudSample.Draws.push_back({.BasePlan = &draw});
-        for (const bool visible : {true, false}) {
+        for (const unsigned classifier : {0U, 1U, 2U}) {
+          hudFrame.Draws[0].Composition.SourcePc = classifier ? 0x00100000U : Oot3dNativeGame::kOot3dGameplayHudDrawEntry;
+          hudFrame.Draws[0].Composition.NativeValue = classifier == 1U ? 7U : 0U;
+          for (const bool visible : {true, false}) {
             for (const auto kind : {Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::CurrentFrame,
                                     Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::NativeFrame}) {
                 Oot3dNativeGame::Oot3dPicaPresentationScheduler hudScheduler;
                 hudScheduler.SetNativeGameplayHudVisible(visible);
+                if (classifier) hudScheduler.SetGameplayHudClassifier([](uint32_t pc,uint32_t value) {
+                    return pc == 0x00100000U && value == 7U;
+                });
                 hudScheduler.BeginPresentation(1U);
                 backend.Operations.clear();
                 Require(hudScheduler.Execute(backend, hudSample, 7U, kind, false, &error), error);
                 const bool omitted =
-                    !visible && kind == Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::CurrentFrame;
+                    !visible && classifier != 2U && kind == Oot3dNativeGame::Oot3dPicaPresentationExecutionKind::CurrentFrame;
                 const std::vector<std::string> expected = omitted
                     ? std::vector<std::string>{"composition:1:1", "fill:406847488", "transfer:40",
                                                "draw:32", "transfer:41"}
@@ -628,6 +634,7 @@ int main() {
                             hudScheduler.Stats().ExecutedDraws == (omitted ? 1U : 2U),
                         "HUD-off presentation did not leave out exactly the native HUD draw");
             }
+          }
         }
     }
 

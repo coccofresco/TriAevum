@@ -22,6 +22,7 @@
 #include "oot3d_native_pica_draw_state.h"
 #include "mm3d_photo_camera_hook.h"
 #include "mm3d_presentation_settings.h"
+#include "mm3d_ui_subsystems.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "mm3d_dev_tools.h"
 #endif
@@ -62,6 +63,9 @@ public:
     return contacts;
   }
 
+  bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const override {
+    return IsMm3dGameplayHud(sourcePc, nativeValue);
+  }
   bool OwnsSceneProjection() const override { return true; }
   void SetPresentation(const TitlePresentationSettings& settings) override {
     ApplyMm3dPresentationSettings(settings);

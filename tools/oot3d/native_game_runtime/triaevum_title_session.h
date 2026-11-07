@@ -105,6 +105,9 @@ public:
     return {};
   }
 
+  [[nodiscard]] virtual bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const {
+    (void)sourcePc; (void)nativeValue; return false;
+  }
   virtual void SetPresentation(const TitlePresentationSettings& settings) { (void)settings; }
   // A title may apply the renderer/window policy at its native scene projection
   // loads. Its unrelated stereo/base-frustum helper must then stay untouched.

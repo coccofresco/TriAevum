@@ -1,6 +1,7 @@
 #include "mm3d_pica_composition.h"
 
 #include "mm3d_title_contracts.h"
+#include "mm3d_ui_subsystems.h"
 #include "mm3d_scene_environment.h"
 #include "mm3d_lighting_hook_sites.h"
 #include "recomp/a32_runtime.h"
@@ -310,6 +311,11 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                           WorldLayer(scope->Layer)
                               ? mSceneLighting
                               : Fast::Renderer3ds::PicaNativeLightBinding{}};
+    if (scope->EntryPc == kMm3dLayoutOwnerDrawEntry) {
+        const auto subsystem = ReadMm3dUiSubsystem(memory, state.r[1]);
+        if (subsystem != Mm3dUiSubsystem::Unknown)
+            mActive->Attribution.NativeValue = kMm3dUiTag | uint32_t(subsystem);
+    }
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         ++mStats.SceneFrames;
         const uint64_t frame = mStats.SceneFrames;
