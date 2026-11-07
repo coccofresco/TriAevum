@@ -186,10 +186,21 @@ enum class NativeSimulationCatchUpPolicy : uint8_t {
     PreserveBoundedDebt,
 };
 
+// Real-time audio consumes every native refresh's PCM. Discarding a refresh
+// on each small presentation overrun creates permanent audio-clock drift.
+// Keep the existing bounded debt mechanism for that path; deterministic and
+// throughput captures retain their previous policy.
+constexpr NativeSimulationCatchUpPolicy ResolveNativeSimulationCatchUpPolicy(
+    GameplayTimingMode mode, bool realtimeAudio) noexcept {
+    return realtimeAudio || mode == GameplayTimingMode::Enhanced60
+        ? NativeSimulationCatchUpPolicy::PreserveBoundedDebt
+        : NativeSimulationCatchUpPolicy::DropExcess;
+}
+
 // Separates host presentation from the CTR 60 Hz display clock. Additional
 // host frames cannot advance guest gameplay, audio or physics. A 30 Hz host
-// frame may execute two complete CTR refreshes; longer catch-up is discarded
-// so a slow frame cannot create an unbounded recovery loop.
+// frame may execute two complete CTR refreshes. The selected policy discards
+// excess or retains at most eight refreshes of debt, never an unbounded loop.
 class NativePresentationScheduler {
   public:
     explicit NativePresentationScheduler(

@@ -404,6 +404,8 @@ NativeA32WindowSession::SaveState(const std::filesystem::path &path, bool withSe
           picaFrontend, submissionQueue, dspHle, &ioResult, &error)) {
     return FailSave("savestate save failed: " + error);
   }
+  audioOutputDiagnostics.Checkpoint("state-saved", frameCount,
+      dspStats.SamplesMixed, audioPlayer ? audioPlayer->OutputUnderruns() : 0U);
   ++savestateStats.SaveCount;
   savestateStats.SaveBytes += ioResult.FileBytes;
   savestateStats.LastSemanticFingerprint = ioResult.SemanticFingerprint;
@@ -557,6 +559,8 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   ++visualContinuityEpoch;
   RestoreSavestatePicaVisualReplayState(runtime);
   pcmContinuityDiagnostics = {};
+  audioOutputDiagnostics.Checkpoint("state-loaded", frameCount,
+      dspStats.SamplesMixed, audioPlayer ? audioPlayer->OutputUnderruns() : 0U, true);
   realtimePacer.ResetDeadline();
   lastPresentationTime = std::chrono::steady_clock::now();
   ++savestateStats.LoadCount;

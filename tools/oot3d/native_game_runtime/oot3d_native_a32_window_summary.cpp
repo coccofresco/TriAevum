@@ -1196,6 +1196,10 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                  audioOutputDiagnostics.ShortGrowthSubmissions},
                 {"estimated_shortfall_frames",
                  audioOutputDiagnostics.EstimatedShortfallFrames},
+                {"checkpoints", audioOutputDiagnostics.Checkpoints},
+                {"starvation_events_truncated",
+                 audioOutputDiagnostics.StarvationObservations >
+                     audioOutputDiagnostics.StarvationEvents.size()},
                 {"starvation_observations",
                  audioOutputDiagnostics.StarvationObservations},
                 {"starvation_events",

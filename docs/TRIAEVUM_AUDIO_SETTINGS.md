@@ -149,6 +149,30 @@ gain of 0 only when the setting is on. Off by default, so scripted runs and
 captures are unaffected. Not offered on Android, where the activity pauses
 in the background.
 
+## Real-time native clock and restore diagnostics
+
+Real-time audio uses the existing bounded native-refresh catch-up policy in
+`NativePresentationScheduler`, in both Native30 and Enhanced60 modes. Ordinary
+30 Hz presentation jitter must not discard a native DSP refresh permanently:
+25 ms followed by 41.667 ms still represents four 60 Hz refreshes. Work remains
+bounded to two refreshes per presentation and eight deferred refreshes. Longer
+stalls can still exhaust that bound and underrun; this is not concealment by
+resampling, time stretching or increased device latency. Guest timing fields,
+native mixer/effects and PCM processing are unchanged.
+
+Fixed-delta and throughput runs keep their previous catch-up policy. A bounded
+`--frames N` run disables the real-time presentation pacer; for device timing
+acceptance use `--frames 0 --max-seconds N`, without fixed delta. An unpaced
+capture is not a real-time device qualification.
+
+For scripted state round trips, bind `--quick-state <file>` and use pathless
+`--savestate-action FRAME:save` / `FRAME:load`. A request path suffix names a
+load source, not a save destination. Runtime audio queue checkpoints record
+cumulative PCM offsets and underruns at successful saves/loads, allowing exact
+native-tail replay comparisons. Loading flushes stale device audio; diagnostics
+restart priming and submission-gap tracking without clearing cumulative errors.
+These are native pre-policy PCM receipts, not physical-device recordings.
+
 ## Verification
 
 - `triaevum_audio_output_tests`: gain law, codec clamping, owner apply/save
