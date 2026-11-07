@@ -82,6 +82,7 @@ void PrintOot3dNativeGameUsage() {
                  "[--renderer-cache-directory <directory>] "
                  "[--water-texture-catalog <water_textures.txt>] "
                  "[--scene-light-catalog <scene_lights.json>] "
+                 "[--title-message-edits <message_edits.json>] "
                  "[--pica-aot-shader-strict] "
                  "[--pica-effective-shader-inventory <inventory.json>] "
                  "[--pica-pipeline-inventory <inventory.json>] "
@@ -231,6 +232,9 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
                 std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
         } else if (arg == "--scene-light-catalog" && index + 1 < argc) {
             launch.SceneLightCatalogPath =
+                std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
+        } else if (arg == "--title-message-edits" && index + 1 < argc) {
+            launch.TitleMessageEditsPath =
                 std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
         } else if (arg == "--pica-aot-shader-pack" &&
                    index + 1 < argc) {

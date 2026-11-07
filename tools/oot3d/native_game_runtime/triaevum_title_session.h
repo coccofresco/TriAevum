@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -61,6 +62,8 @@ struct TitleSessionHookSetup {
   // and the free camera its hooks drive.
   std::shared_ptr<DevWarpTitleAbi> *DevToolsTitle = nullptr;
   std::shared_ptr<DevFreeCamera> FreeCamera;
+  // Local launcher preparation, never serialized into a game savestate.
+  std::filesystem::path MessageEditsPath;
 };
 
 // What the session lends a title at an observed block entry.
