@@ -115,7 +115,11 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 if(s.pad)throw std::runtime_error("virtual pad already attached");
                 SDL_VirtualJoystickDesc d{};d.version=SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
                 d.type=SDL_JOYSTICK_TYPE_GAMECONTROLLER;d.naxes=SDL_CONTROLLER_AXIS_MAX;d.nbuttons=SDL_CONTROLLER_BUTTON_MAX;
-                d.vendor_id=0x045e;d.product_id=0x028e;d.name="OVERLAY acceptance virtual Xbox (not hardware)";
+                const auto family=step.value("family",std::string("xbox"));
+                if(family=="xbox") {d.vendor_id=0x045e;d.product_id=0x028e;d.name="OVERLAY virtual Xbox (not hardware)";}
+                else if(family=="playstation") {d.vendor_id=0x054c;d.product_id=0x09cc;d.name="OVERLAY virtual PS4 (not hardware)";}
+                else if(family=="nintendo") {d.vendor_id=0x057e;d.product_id=0x2009;d.name="OVERLAY virtual Switch (not hardware)";}
+                else throw std::runtime_error("unknown virtual device family");
                 d.button_mask=(1u<<SDL_CONTROLLER_BUTTON_MAX)-1;d.axis_mask=(1u<<SDL_CONTROLLER_AXIS_MAX)-1;
                 result=SDL_JoystickAttachVirtualEx(&d);if(result<0)throw std::runtime_error(SDL_GetError());
                 s.pad=SDL_JoystickOpen(result);
