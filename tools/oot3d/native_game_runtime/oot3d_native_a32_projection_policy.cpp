@@ -909,9 +909,6 @@ void ApplyNativeWidescreenProjectionPolicy(
     return;
   }
   auto &projection = runtime.Projection;
-  // MM's scene projection is the fovy/aspect builder, not the stereo base
-  // frustum. Its adapter applies these same owners at the two live loads.
-  if (projection.TitleOwnsSceneProjection && pc == projection.PerspectiveFrustumEntry) return;
   if (pc != projection.PerspectiveFrustumEntry &&
       pc != kMtx4x4BuildOrthographicProjectionRotated) {
     return;
@@ -938,8 +935,9 @@ void ApplyNativeWidescreenProjectionPolicy(
   callsite.LastFrustum = {left, right, bottom, top, nearPlane, farPlane};
   const auto resolved = Fast::Extension::ResolvePerspectiveFov({
       {left, right, bottom, top, nearPlane, farPlane},
-      projection.FovMultiplier,
-      projection.Presentation,
+      projection.TitleOwnsSceneProjection ? 1.0F : projection.FovMultiplier,
+      projection.TitleOwnsSceneProjection
+          ? Fast::Extension::ResolveScenePresentationPolicy(400U, 240U) : projection.Presentation,
       true,
   });
   const float resolvedLeft = resolved.Frustum.Left;

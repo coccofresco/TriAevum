@@ -27,6 +27,14 @@ int main(){
  Near(std::bit_cast<float>(C::PresentedProjectionValue(bits(45.f),false,1.1f,1)),49.5f);
  Near(std::bit_cast<float>(C::PresentedProjectionValue(bits(45.f),true,1.f,1)),49.f);
  Near(std::bit_cast<float>(C::PresentedProjectionValue(bits(45.f),true,1.1f,1)),53.9f);
+ for(float fov:{45.f,49.f,49.5f,53.9f})for(float aspect:{400.f/240.f,16.f/9.f,21.f/9.f}) {
+   const float y=1.f/std::tan(fov*3.14159265358979323846f/360.f);
+   const auto decoded=DecodeSymmetricPerspective(y/aspect,y,80.f,1000.f);
+   Check(decoded.has_value(),"actual matrix produces scene camera");
+   Near(decoded->Right/decoded->Top,aspect);
+   Near(std::atan(decoded->Top/decoded->Near)*360.f/3.14159265358979323846f,fov);
+ }
+ Check(!DecodeSymmetricPerspective(0,1,80,1000)&&!DecodeSymmetricPerspective(1,1,1000,80),"invalid matrix denied");
  const auto nan=bits(std::numeric_limits<float>::quiet_NaN());Check(C::PresentedProjectionValue(nan,false,1.1f,1)==nan,"invalid native preserved");
  ApplyMm3dPresentationSettings({1.1f,1.2f,1.f,true});
  Check(C::renderer_owned&&Mm3dDekui::Widescreen::Active(),"one product owner");

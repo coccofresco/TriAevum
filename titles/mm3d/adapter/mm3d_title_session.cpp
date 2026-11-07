@@ -192,10 +192,10 @@ public:
     const auto environment = CaptureMm3dSceneEnvironment(memory);
     TraceMm3dSceneEnvironment(environment, entry.HostFrame, entry.Pc, entry.State.r[14]);
     if (entry.PendingSceneFrustum.has_value()) {
-      // The scene's camera for its opaque pass: the current View's field of
-      // view and clip planes, at the aspect (and widening) of the frustum the
-      // pass draws with, and its eye and target. The default View (no current
-      // one) has a placeholder eye and target, so it publishes no camera.
+      // The stereo frustum only proves the native pass boundary. Decode the
+      // actual fovy/aspect projection at View+BC, which already includes the
+      // renderer multiplier, picture shape and scripted 49 base. View+18 is
+      // the game's animated FOV, not the presented FOV.
       const auto &frustum = *entry.PendingSceneFrustum;
       uint32_t currentView = 0;
       bool read = memory.Read32(kMm3dCurrentViewPointer, &currentView);
@@ -205,29 +205,27 @@ public:
         read = read && memory.Read32(address, &word);
         value = std::bit_cast<float>(word);
       };
-      float view[3] = {};
+      float view[3] = {}, projectionY = 0;
       std::array<float, 3> eye{}, at{};
-      readFloat(base + kMm3dViewFovyOffset, view[0]);
+      readFloat(base + 0xBCU, view[0]);
+      readFloat(base + 0xD0U, projectionY);
       readFloat(base + kMm3dViewNearOffset, view[1]);
       readFloat(base + kMm3dViewFarOffset, view[2]);
       for (uint32_t axis = 0; axis < 3U; ++axis) {
         readFloat(base + kMm3dViewEyeOffset + axis * 4U, eye[axis]);
         readFloat(base + kMm3dViewAtOffset + axis * 4U, at[axis]);
       }
-      const float frustumHeight = frustum.Top - frustum.Bottom;
-      if (read && view[0] > 1.0F && view[0] < 179.0F && view[1] > 0.0F &&
-          view[2] > view[1] && frustumHeight > 0.0F) {
-        const float top = view[1] * std::tan(view[0] * 0.5F * 3.14159265F / 180.0F);
-        const float scale = 2.0F * top / frustumHeight;
+      const auto presented = DecodeSymmetricPerspective(view[0], projectionY, view[1], view[2]);
+      if (read && presented) {
+        const float top = presented->Top;
+        const float right = presented->Right;
         if (currentView != 0U) {
           entry.SceneView->ObservePerspectiveCamera(
-              frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-              frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+              frustum.Pc, frustum.ReturnAddress, -right, right, -top, top,
               view[1], view[2], eye, at);
         } else {
           entry.SceneView->ObservePerspective(
-              frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-              frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+              frustum.Pc, frustum.ReturnAddress, -right, right, -top, top,
               view[1], view[2]);
         }
       }
