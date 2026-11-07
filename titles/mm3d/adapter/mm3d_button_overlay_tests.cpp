@@ -196,6 +196,15 @@ void TestInlineAndChordBounds(){
  Check(!hotbarGlyphs.empty(),"left-edge hotbar chord exists");
  float tallest=0;for(const auto& p:hotbarGlyphs){Check(p.destination.x>=-.01f,"hotbar modifier stays on canvas");tallest=std::max(tallest,p.destination.height);}
  Check(tallest>=16,"hotbar chord retains readable native height instead of shrinking to a single letter cell");
+ NativeButtonOverlaySlot anchor;anchor.Action=NativeControlAction::X;anchor.X=100;anchor.Y=20;anchor.Height=8;
+ std::vector<oot3d::ui::UiPrimitive> mainOnly,anchored;
+ AppendNativeButtonOverlay(mainOnly,{anchor},NativePromptSet::Keyboard,NativeControlDefaults(),3);
+ anchor.Modifier=NativeControlAction::Zr;anchor.ChordMainAnchor=true;
+ AppendNativeButtonOverlay(anchored,{anchor},NativePromptSet::Keyboard,NativeControlDefaults(),3);
+ Check(!mainOnly.empty() && anchored.size()>mainOnly.size() &&
+       mainOnly.front().destination.x==anchored.front().destination.x &&
+       mainOnly.front().destination.width==anchored.front().destination.width,
+       "HUD main key stays over mixed-art native letter when adding modifier");
  auto m=Fixture();constexpr U32 groups=0x10060000,entries=groups+0x100,resource=groups+0x200,
      descriptor=groups+0x400,pixels=0x11000000,record=groups+0x500;
  m.words[NotebookPrompt::RegistryLiteral]=NotebookPrompt::Registry;

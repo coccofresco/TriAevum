@@ -15,6 +15,16 @@
 #endif
 namespace Oot3dNativeGame {
 inline uint64_t OverlayAcceptanceFrame=0;
+inline bool OverlayAcceptanceReleaseTimeline=false;
+inline void ObserveOverlayAcceptanceGuest(uint32_t buttons,bool scripted) {
+    const char* path=std::getenv("TRIAEVUM_OVERLAY_ACCEPTANCE");if(!path||!*path)return;
+    static std::ofstream out(std::string(path)+".guest-input.jsonl");
+    static uint32_t previous=~0u;static bool previousScripted=false;
+    if(buttons!=previous || scripted!=previousScripted) {
+        out<<nlohmann::json{{"frame",OverlayAcceptanceFrame},{"buttons",buttons},{"timeline",scripted}}.dump()<<'\n';
+        out.flush();previous=buttons;previousScripted=scripted;
+    }
+}
 inline void ObserveOverlayAcceptanceTouch(uint32_t held,uint32_t pressed,bool gui) {
     const char* path=std::getenv("TRIAEVUM_OVERLAY_ACCEPTANCE");if(!path||!*path)return;
     static std::ofstream out(std::string(path)+".touch.jsonl");
@@ -126,6 +136,10 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 e.tfinger.windowID=wid;e.tfinger.touchId=42;e.tfinger.fingerId=step.value("finger",1);
                 e.tfinger.x=step.at("x");e.tfinger.y=step.at("y");e.tfinger.pressure=step.value("down",true)?1.f:0.f;
                 result=SDL_PushEvent(&e);
+            } else if(op=="release_timeline") {
+                // End boot-only synthetic input; subsequent gameplay comes
+                // from the normal physical/virtual-device/platform input path.
+                OverlayAcceptanceReleaseTimeline=true;
             } else if(op=="quit") {
                 SDL_Event e{};e.type=SDL_QUIT;result=SDL_PushEvent(&e);
             } else if(op!="checkpoint")throw std::runtime_error("unknown input operation");

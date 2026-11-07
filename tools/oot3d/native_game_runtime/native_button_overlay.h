@@ -17,6 +17,7 @@ struct NativeButtonOverlaySlot {
   float Width = 0; // optional native cell width, keeps wide bindings out of adjacent text
   bool SuffixPlus = false;
   float PlusX = 0, PlusY = 0;
+  bool ChordMainAnchor = false; // mixed HUD art: main key covers its native letter
 };
 
 inline std::optional<Menu::ButtonGlyph> NativeButtonOverlayGlyph(
@@ -46,7 +47,7 @@ inline void AppendNativeButtonOverlay(std::vector<oot3d::ui::UiPrimitive>& outpu
     const float unitWidth=Menu::ButtonGlyphWidth(*glyph,1.f)+
         (modifier?Menu::ButtonGlyphWidth(*modifier,1.f)+.6f:0.f);
     const float height = slot.Width > 0 ? std::min(slot.Height,slot.Width / unitWidth) : slot.Height;
-    const float mainX=slot.X+(modifier?(Menu::ButtonGlyphWidth(*modifier,height)+.6f*height)*.5f:0.f);
+    const float mainX=slot.X+(modifier && !slot.ChordMainAnchor?(Menu::ButtonGlyphWidth(*modifier,height)+.6f*height)*.5f:0.f);
     Menu::AppendButtonGlyph(output, *glyph, mainX, slot.Y, height, slot.Color.alpha, 30,
         Menu::ButtonGlyphCellForPixels(height * pixelsPerUnit), colors);
     if (slot.SuffixPlus) {

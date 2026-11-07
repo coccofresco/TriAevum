@@ -498,7 +498,11 @@ Oot3dNativeGame::NativeA32InputFrame ResolveNativeA32GuestInput(
     Oot3dNativeGame::NativeA32PolledButtonLatch &startButtonLatch,
     Oot3dNativeGame::TopScreenStartRoutingState &startRoutingState) {
   auto resolved = physical;
-  if (timeline.Enabled()) {
+  bool scripted=timeline.Enabled();
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  scripted=scripted && !Oot3dNativeGame::OverlayAcceptanceReleaseTimeline;
+#endif
+  if (scripted) {
     resolved = timeline.Sample(guestFrameIndex, runFrameIndex);
     resolved.Exit = physical.Exit;
   } else {
@@ -515,6 +519,9 @@ Oot3dNativeGame::NativeA32InputFrame ResolveNativeA32GuestInput(
   Oot3dNativeGame::ApplyTopScreenStartRouting(
       resolved, topScreenUiProfile, topScreenStartRoutingEligible,
       nativeFrontendTouchEnabled, true, startRoutingState);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  Oot3dNativeGame::ObserveOverlayAcceptanceGuest(resolved.Hid.Buttons,scripted);
+#endif
   return resolved;
 }
 

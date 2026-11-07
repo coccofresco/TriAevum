@@ -251,15 +251,17 @@ private:
     slot.Width=ring?0:width;
     if(modifier!=NativeControlAction::Count) {
       // A HUD/hotbar I cell is a narrow letter, not a text advance. Keep
-      // readable key height in the surrounding icon area; center the complete
-      // chord and move it inward at the canvas edges. Inline prose uses the
+      // readable key height in the surrounding icon area. Keep the main key
+      // over the native mixed-art letter; move inward only at canvas edges.
+      // Inline prose uses the
       // separate CaptureInline path and remains within its reserved advance.
       const auto main=NativeButtonOverlayGlyph(action,mPrompts,mControls);
       const auto mod=NativeButtonOverlayGlyph(modifier,mPrompts,mControls);
-      const float half=(Menu::ButtonGlyphWidth(*main,slot.Height)+
-          Menu::ButtonGlyphWidth(*mod,slot.Height)+.6f*slot.Height)*.5f;
-      if(std::isfinite(half) && half<200.f)slot.X=std::clamp(slot.X,half,400.f+80.f/3.f-half);
-      slot.Width=0;
+      const float right=Menu::ButtonGlyphWidth(*main,slot.Height)*.5f;
+      const float left=right+Menu::ButtonGlyphWidth(*mod,slot.Height)+.6f*slot.Height;
+      if(std::isfinite(left) && left+right<400.f+80.f/3.f)
+        slot.X=std::clamp(slot.X,left,400.f+80.f/3.f-right);
+      slot.Width=0;slot.ChordMainAnchor=true;
     }
     slot.SuffixPlus=text.has_value();
     if(text) {slot.PlusX=*tx+*xx*(*text)[4]+*xy*cy+40.f/3.f;slot.PlusY=*ty+*yx*(*text)[4]+*yy*cy;}
