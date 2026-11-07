@@ -104,6 +104,11 @@ public:
     return {};
   }
 
+  // Optional product photo-camera input gate. nullopt preserves legacy title
+  // handling; false releases gameplay input to menus/cutscenes/transitions.
+  [[nodiscard]] virtual std::optional<bool> PhotoCameraOwnsInput(
+      oot3d::recomp::a32::MemoryBus& memory) const { (void)memory; return std::nullopt; }
+
   // Input owns admission/strength/playback. Disabled must reset history without
   // reading guest memory; absent producers return no events.
   [[nodiscard]] virtual std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(

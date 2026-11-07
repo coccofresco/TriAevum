@@ -2,6 +2,7 @@
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "oot3d_dev_free_camera.h"
 #include "mm3d_hook_sites.h"
+#include "mm3d_photo_camera.h"
 #include "oot3d_dev_warp.h"
 #include <algorithm>
 #include <array>
@@ -49,39 +50,7 @@ template <class T> bool Read(DevWarpGuest &g, uint32_t a, T &v) {
   static_assert(std::endian::native == std::endian::little);
   return g.Read(a, std::span<uint8_t>(reinterpret_cast<uint8_t *>(&v), sizeof(v)));
 }
-struct Write {
-  uint32_t Address;
-  std::vector<uint8_t> Before, After;
-};
-class Transaction {
-  DevWarpGuest &mGuest;
-  std::vector<Write> mWrites;
-
-public:
-  explicit Transaction(DevWarpGuest &g) : mGuest(g) {}
-  template <class T> bool Add(uint32_t address, const T &value) {
-    Write w{address, std::vector<uint8_t>(sizeof(T)), std::vector<uint8_t>(sizeof(T))};
-    if (!mGuest.Read(address, w.Before))
-      return false;
-    std::memcpy(w.After.data(), &value, sizeof(T));
-    mWrites.push_back(std::move(w));
-    return true;
-  }
-  bool Commit() {
-    for (size_t i = 0; i < mWrites.size(); ++i) {
-      if (mGuest.Write(mWrites[i].Address, mWrites[i].After))
-        continue;
-      // Include the attempted write: a guest writer may fail after partial IO.
-      bool restored = true;
-      for (size_t j = i + 1; j != 0; --j)
-        restored = mGuest.Write(mWrites[j - 1].Address, mWrites[j - 1].Before) && restored;
-      if (!restored)
-        throw std::runtime_error("MM3D dev write rollback failed; stop guest execution");
-      return false;
-    }
-    return true;
-  }
-};
+using Transaction = GuestWriteTransaction<DevWarpGuest>;
 inline bool Pointer(uint32_t p, uint32_t bytes) {
   return p >= 0x08000000 && !(p & 3U) && p < 0x40000000 && bytes <= 0x40000000 - p;
 }
@@ -306,8 +275,7 @@ inline Mm3dDevWarpScript ParseMm3dDevWarpScript(std::string_view spec, std::span
 class Mm3dDevTools final : public DevWarpTitleAbi {
   Mm3dDevProof mProof;
   std::array<DevWarpAxis, 3> mAxes;
-  mutable uint32_t mLastCameraPlay = 0, mLastCameraFrame = 0;
-  mutable int16_t mLastCameraScene = -1;
+  Mm3dPhotoCamera mPhotoCamera;
 
 public:
   explicit Mm3dDevTools(Mm3dDevProof proof = kMm3dDevProof)
@@ -526,50 +494,10 @@ public:
     return text;
   }
   bool CameraOwnsInput(DevWarpGuest &g) const override {
-    using namespace Mm3dDevAbi;
-    if (!mProof.FreeCamera)
-      return false;
-    const uint32_t p = Play(g);
-    DevWarpObservation o;
-    int16_t busy = -1;
-    uint32_t actor = 0, slot = 0;
-    uint16_t id = 1, status = 0, setting = 0;
-    return Observe(g, p, o, busy, actor) && o.Gameplay && Read(g, p + 0xA68, slot) && slot == p + 0x408 &&
-           Read(g, slot + 0x178, id) && id == 0 && Read(g, slot + 0x154, status) && status == 7 &&
-           Read(g, slot + 0x156, setting) && setting != 9 && setting != 10;
+    return mProof.FreeCamera && mPhotoCamera.OwnsInput(g);
   }
   bool ApplyCamera(DevWarpGuest &g, DevFreeCamera &free, uint32_t out, uint32_t camera) const override {
-    using namespace Mm3dDevAbi;
-    if (!free.Active() || !CameraOwnsInput(g))
-      return false;
-    const uint32_t p = Play(g);
-    if (camera != p + 0x408 || !Pointer(out, 6))
-      return false;
-    uint32_t frame = 0;
-    int16_t scene = -1;
-    if (!Read(g, p + 0x138, frame) || !Read(g, p + 0x148, scene))
-      return false;
-    if (mLastCameraPlay && (p != mLastCameraPlay || scene != mLastCameraScene || frame < mLastCameraFrame))
-      free.ResetToGame();
-    std::array<float, 3> eye{}, at{};
-    if (!Read(g, camera + 0x5C, eye) || !Read(g, camera + 0x50, at) || !Finite(eye) || !Finite(at))
-      return false;
-    const auto view = free.ResolveView(eye, at, false);
-    if (!view || !Finite(view->Eye) || !Finite(view->At))
-      return false;
-    Transaction tx(g);
-    const std::array<float, 3> up{0, 1, 0};
-    const std::array<int16_t, 3> direction{view->Pitch, view->Yaw, 0};
-    if (!tx.Add(camera + 0x50, view->At) || !tx.Add(camera + 0x5C, view->Eye) || !tx.Add(camera + 0x68, up) ||
-        !tx.Add(camera + 0x74, view->Eye) || !tx.Add(p + 0x220, view->Eye) || !tx.Add(p + 0x22C, view->At) ||
-        !tx.Add(p + 0x238, up) || !tx.Add(camera + 0x148, direction) || !tx.Add(camera + 0x14E, direction) ||
-        !tx.Add(out, direction) || !tx.Commit())
-      return false;
-    free.MarkApplied(*view);
-    mLastCameraPlay = p;
-    mLastCameraScene = scene;
-    mLastCameraFrame = frame;
-    return true;
+    return mProof.FreeCamera && mPhotoCamera.Apply(g, free, out, camera);
   }
 };
 } // namespace Oot3dNativeGame

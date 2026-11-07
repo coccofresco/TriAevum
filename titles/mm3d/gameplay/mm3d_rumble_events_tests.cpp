@@ -33,6 +33,7 @@ struct Memory {
     Put(P+0x13D,uint8_t{4}); Put(P+0x13C,uint8_t{2}); Put(P+0x138,100U);
     Put(Mm3dRumble::Common+0x1361C,0U); Put(Mm3dRumble::Common+0x1C,0U);
     Put(P+0xAAC,uint16_t{0}); Put(P+0xA7A,uint16_t{0}); Put(P+0xC529,uint8_t{0});
+    Put(P+0xC85A,uint8_t{0}); Put(P+0xCCAA,uint16_t{0});
     Put(P+0x148,uint16_t{0x6F}); Put(P+0x20DC,A);
     Put(A,uint16_t{0}); Put(A+2,uint8_t{2}); Put(A+0x140,0x1F9C70U);
     Put(Mm3dRumble::Common+0x26,uint8_t{4}); Put(Mm3dRumble::Common+0x13C,uint16_t{48});
@@ -72,6 +73,12 @@ int main() {
     m.Put(Memory::A+0x94,flag); Check(source.Poll(m,true).empty(),"water cancels landing");
   }
   m.Put(Memory::A+0x94,uint16_t{1});
+  for(uint32_t offset:{0xC529U,0xC85AU}) {
+    m.Put(Memory::P+offset,uint8_t{1}); Check(!Read(m).Event.Gameplay,"fade/transition resets");
+    m.Put(Memory::P+offset,uint8_t{0});
+  }
+  m.Put(Memory::P+0xCCAA,uint16_t{1}); Check(!Read(m).Event.Gameplay,"override transition resets");
+  m.Put(Memory::P+0xCCAA,uint16_t{0});
   m.Put(Memory::P+0xAAC,uint16_t{1}); Check(source.Poll(m,true).empty(),"pause resets");
   m.Put(Common+0x13C,uint16_t{32}); m.Put(Memory::P+0xAAC,uint16_t{0});
   Check(source.Poll(m,true).empty(),"unpause does not replay damage");

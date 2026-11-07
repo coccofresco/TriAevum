@@ -20,8 +20,9 @@
 #include "oot3d_native_a32_registry.h"
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_pica_draw_state.h"
+#include "mm3d_photo_camera_hook.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-#include "mm3d_dev_camera_hook.h"
+#include "mm3d_dev_tools.h"
 #endif
 
 #include <algorithm>
@@ -101,9 +102,7 @@ public:
       mSingleScreen.emplace(setup.PresentationClock);
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
-      RegisterMm3dDevCamera(mGuestPatches, *setup.DevToolsTitle, setup.FreeCamera);
-#endif
+      RegisterMm3dPhotoCamera(mGuestPatches, mPhotoCamera, setup.FreeCamera);
       mGuestCalls.Install(mGuestPatches);
       mRestoration.emplace(mGuestCalls);
       mRestoration->Register(mGuestPatches);
@@ -291,7 +290,11 @@ public:
   }
 #endif
 
-  void Reset() override { mComposition.Reset(); mRumble.Reset(); }
+  std::optional<bool> PhotoCameraOwnsInput(oot3d::recomp::a32::MemoryBus& memory) const override {
+    GuestByteAccess guest(memory);
+    return mPhotoCamera.OwnsInput(guest);
+  }
+  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
@@ -339,6 +342,7 @@ private:
   std::optional<Mm3dRestorationPort> mRestoration;
   Mm3dGuestPatches mGuestPatches;
   Mm3dRumble::Source mRumble;
+  Mm3dPhotoCamera mPhotoCamera;
   bool mImageMounted = false;
   bool mActorInteractionGuards = false;
 };

@@ -39,8 +39,8 @@ struct Sample {
 template<class M> Sample Read(M& m) {
   Sample out;
   uint32_t view=0, owner=0, player=0, mode=0, frame=0, velocity=0, calc=0, cutscene=0;
-  uint16_t scene=0, health=0, id=1, flags=0, pause=0, camera=0, distance=0;
-  uint8_t type=0, state=0, category=0, form=0, transition=0, csAction=0;
+  uint16_t scene=0, health=0, id=1, flags=0, pause=0, camera=0, distance=0, overrideEntrance=0;
+  uint8_t type=0, state=0, category=0, form=0, transition=0, csAction=0, transitionMode=0;
   if (!m.Read32(ViewSlot,&view) || view < 0x1F8 || !Pointer(view-0x1F8,0x11030)) return out;
   const auto play = view-0x1F8;
   if (!m.Read8(play+0x13D,&type) || type!=4 || !m.Read8(play+0x13C,&state) || state!=2 ||
@@ -49,6 +49,8 @@ template<class M> Sample Read(M& m) {
       !m.Read32(Common+0x1C,&cutscene) || cutscene>=0xFFF0 ||
       !m.Read16(play+0xAAC,&pause) || pause!=0 || !m.Read16(play+0xA7A,&camera) || camera!=0 ||
       !m.Read8(play+0xC529,&transition) || transition!=0 ||
+      !m.Read8(play+0xC85A,&transitionMode) || transitionMode!=0 ||
+      !m.Read16(play+0xCCAA,&overrideEntrance) || overrideEntrance!=0 ||
       !m.Read16(play+0x148,&scene) || scene>0x74 || !m.Read32(play+0x138,&frame) ||
       !m.Read32(play+0x20DC,&player) || !Pointer(player,0x12CB8) ||
       !m.Read16(player,&id) || id!=0 || !m.Read8(player+2,&category) || category!=2 ||

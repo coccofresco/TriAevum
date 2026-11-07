@@ -1451,7 +1451,8 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   if (titleSession) {
     const bool enabled = nativeControlPollingState.RumbleStrength != ThreeDsRecomp::Input::RumbleStrength::Off &&
                          nativeControlPollingState.ControllerInstance >= 0 &&
-                         SDL_GetKeyboardFocus() != nullptr && !inGameMenu.IsOpen();
+                         SDL_GetKeyboardFocus() != nullptr &&
+                         (!inGameMenuStorage || !inGameMenuStorage->IsOpen());
     for (const auto& pulse : titleSession->RumblePulses(process.Memory(), enabled))
       nativeControlPollingState.Rumble.Request(pulse);
   }
@@ -3168,8 +3169,16 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   const float mouseY = static_cast<float>(sources.DevMouseDeltaY);
   sources.DevMouseDeltaX = sources.DevMouseDeltaY = 0;
   if (!freeCamera.Active()) return;
+  const auto productOwns = titleSession
+      ? titleSession->PhotoCameraOwnsInput(processStorage->Memory()) : std::nullopt;
+  if (productOwns) {
+    const bool owns = *productOwns;
+    if (!owns && devFreeCameraOwnedInput) freeCamera.ResetToGame();
+    devFreeCameraOwnedInput = owns;
+    if (!owns) return;
+  }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-  if (devToolsTitle) {
+  if (!productOwns && devToolsTitle) {
     if (!devWarpGuest) devWarpGuest = Oot3dNativeGame::MakeDevWarpProcessGuest(*processStorage);
     const bool owns = devToolsTitle->CameraOwnsInput(*devWarpGuest);
     if (!owns && devFreeCameraOwnedInput) freeCamera.ResetToGame();
