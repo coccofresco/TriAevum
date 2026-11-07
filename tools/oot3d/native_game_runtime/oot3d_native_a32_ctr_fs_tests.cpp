@@ -225,6 +225,15 @@ void TestFsFailuresAndRestore() {
     Require(f.Host.RuntimeProfile().FsUnservedRequests == count, "restore rewound diagnostics");
     f.Read(f.Rom, 0U, 4U);
     Require(f.Word(1) == 0U && f.Word(2) == 4U, "restored read");
+    auto wrongSize = snapshot;
+    for (auto &object : wrongSize["kernel_objects"])
+        if (object["type"] == "client_session:file:romfs")
+            object["file_size"] = 5U;
+    Require(!f.Host.RestoreState(wrongSize, f.Process, &error),
+            "restore accepted a different RomFS service view size");
+    f.Read(f.Rom, 0U, 4U);
+    Require(f.Word(1) == 0U && f.Word(2) == 4U,
+            "size-mismatched restore damaged live RomFS handle");
     for (auto &object : snapshot["kernel_objects"])
         if (object["type"] == "client_session:file:romfs")
             object["file_offset"] = 1U;
@@ -289,7 +298,7 @@ void TestFullHistoryIntentionalWait() {
             "full history missed an unimplemented SVC");
 }
 
-void TestFsRootedRoundTrip() {
+void TestFsRootedRoundTrip(std::span<const uint8_t> externalSave = {}) {
     using namespace triaevum::module;
     const auto directory =
         std::filesystem::temp_directory_path() /
@@ -317,6 +326,39 @@ void TestFsRootedRoundTrip() {
     TriAevumCtrFilesystemClientBridge bridge(client);
     {
         FsFixture f(bridge);
+        if (!externalSave.empty()) {
+            // Exercise real file bytes through SVC/IPC and the rooted service, never
+            // mount the input's directory writable. The game format stays opaque.
+            constexpr uint32_t chunkSize = 512U;
+            for (size_t offset = 0; offset < externalSave.size(); offset += chunkSize) {
+                const auto count = static_cast<uint32_t>(
+                    std::min<size_t>(chunkSize, externalSave.size() - offset));
+                Require(f.Memory.WriteBytes(FsFixture::Buffer, externalSave.subspan(offset, count)),
+                        "external save request bytes");
+                f.Call(f.Save, {0x08030102U, static_cast<uint32_t>(offset), 0U, count,
+                                1U, (count << 4U) | 0xAU, FsFixture::Buffer});
+                Require(f.Word(1) == 0U && f.Word(2) == count, "external save write");
+            }
+            f.Call(f.Save, {0x08090000U});
+            Require(f.Word(1) == 0U, "external save flush");
+            const auto savedHost = f.Host.CaptureState();
+            Require(f.Host.RestoreState(savedHost, f.Process, &error), error);
+            std::array<uint8_t, chunkSize> actual{};
+            for (size_t offset = 0; offset < externalSave.size(); offset += chunkSize) {
+                const auto count = static_cast<uint32_t>(
+                    std::min<size_t>(chunkSize, externalSave.size() - offset));
+                f.Read(f.Save, offset, count, (count << 4U) | 0xCU);
+                Require(f.Word(1) == 0U && f.Word(2) == count, "external save restored read");
+                Require(f.Memory.ReadBytes(FsFixture::Buffer,
+                                          std::span<uint8_t>(actual.data(), count)),
+                        "external save reply bytes");
+                Require(std::equal(actual.begin(), actual.begin() + count,
+                                   externalSave.begin() + offset),
+                        "external save bytes changed across host restore");
+            }
+            f.Call(f.Save, {0x08050080U, 0U, 0U});
+            Require(f.Word(1) == 0U, "reset disposable external save");
+        }
         f.Call(f.Save, {0x08030102U, 0U, 0U, 4U, 1U, 0x4AU, FsFixture::Buffer});
         Require(f.Word(1) == 0U, "rooted write");
         f.Read(f.Save, 3U, 4U);
@@ -346,9 +388,24 @@ void TestFsRootedRoundTrip() {
 }
 } // namespace
 
-int main() {
+int main(int argc, char **argv) {
+    Require(argc <= 2, "usage: ctr_fs_tests [read-only external save fixture]");
+    std::vector<uint8_t> externalSave;
+    if (argc == 2) {
+        std::ifstream input(argv[1], std::ios::binary | std::ios::ate);
+        Require(input.good(), "open external save fixture");
+        const auto size = input.tellg();
+        Require(size > 0 && size <= 1024 * 1024, "external save fixture size (1..1MiB)");
+        externalSave.resize(static_cast<size_t>(size));
+        input.seekg(0);
+        input.read(reinterpret_cast<char *>(externalSave.data()), size);
+        Require(input.good(), "read external save fixture");
+    }
     TestFullHistoryIntentionalWait();
     TestFsFailuresAndRestore();
-    TestFsRootedRoundTrip();
+    TestFsRootedRoundTrip(externalSave);
+    if (!externalSave.empty())
+        std::cout << "external save SVC/IPC rooted round trip: " << externalSave.size()
+                  << " bytes (not native gameplay save qualification)\n";
     std::cout << "oot3d_native_a32_ctr_fs_tests: ok\n";
 }
