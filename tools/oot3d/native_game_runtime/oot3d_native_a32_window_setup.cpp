@@ -1165,7 +1165,8 @@ void NativeA32WindowSession::Setup() {
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur ||
       titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
     applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(
-        sceneEnvironment, {.NativeFragmentLighting = titleSession && titleSession->NativeFragmentLighting()}));
+        sceneEnvironment, {.NativeFragmentLighting = titleSession && titleSession->NativeFragmentLighting(),
+                           .CompanionLightName = titleSession ? std::string(titleSession->CompanionLightName()) : "Navi"}));
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // The developer tours, lab and emitter inventory drive OoT3D's guest

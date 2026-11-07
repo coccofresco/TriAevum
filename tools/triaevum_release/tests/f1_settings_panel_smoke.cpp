@@ -1265,13 +1265,47 @@ void CheckMm3dSceneEnvironment() {
     // MM3D's time is unknown here: not time-driven, no night profile.
     environment->ObserveScene(0x2A);
     // MM3D's scene is lit by native fragment lights (TitleSession::NativeFragmentLighting).
-    InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment,{.NativeFragmentLighting=true})});
+    InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment,{.NativeFragmentLighting=true,.CompanionLightName="Tatl"})});
     size=ImVec2(760,2600);
     Frame();Frame();Click("Lighting");Click("Lights & Shadows");Frame(true);
     Check(!environment->Snapshot().Profile.Enabled && !graphics.SnapshotForRendering().Environment.Enabled,
           "MM3D widget enabled a missing profile");
     Check(loggedPanelText.find("Fixed scene lighting")!=std::string::npos,
           "MM3D widget presented unknown time as time-driven");
+    // Same four owners and controls as OoT, in the title's vocabulary.
+    // Points remain editable with the ambient/directional profile disabled.
+    Check(loggedPanelText.find("Navi point lights")==std::string::npos,
+          "foreign companion label leaked into MM panel");
+    for (const char* name : {"Tatl", "Fairy", "Flame", "Architecture"}) {
+        const auto before = environment->Snapshot().Profile.PointLights;
+        const size_t i = std::string_view(name)=="Tatl" ? 0 : std::string_view(name)=="Fairy" ? 1 :
+                         std::string_view(name)=="Flame" ? 2 : 3;
+        EditScalar((std::string(name)+" intensity").c_str(), "2.5");
+        EditScalar((std::string(name)+" radius scale").c_str(), "1.75");
+        Click((std::string(name)+" point lights").c_str());
+        const auto after = graphics.SnapshotForRendering().Environment.PointLights;
+        Check(!after[i].Enabled && after[i].Intensity==2.5F && after[i].RadiusScale==1.75F,
+              "point group controls did not publish independently of the scene profile");
+        for (size_t j=0;j<4;++j) if (j!=i)
+            Check(after[j]==before[j],"point widget changed another group");
+        Click((std::string(name)+" point lights").c_str());
+    }
+    const auto points = environment->Snapshot().Profile.PointLights;
+    Click("Save profile");
+    Check(environment->Reload() && environment->Snapshot().Profile.PointLights==points,
+          "MM point controls did not survive save/reload");
+    for (auto preset : {GraphicsPreset::Authentic, GraphicsPreset::Enhanced, GraphicsPreset::Toon,
+                        GraphicsPreset::Custom, GraphicsPreset::EnhancedForMobile}) {
+        graphics.Apply(GraphicsSettingsService::Preset(preset));
+        Check(environment->Snapshot().Profile.PointLights==points,
+              "graphics preset stole environment-owned point settings");
+        if (preset!=GraphicsPreset::Authentic &&
+            UsesFullSceneLighting(graphics.Snapshot().Effects.SurfaceLighting))
+            Check(graphics.SnapshotForRendering().Environment.PointLights==points,
+                  "modern preset lost independent point settings");
+    }
+    graphics.Apply(settings);
+    Frame();
     Click("Use scene environment");
     Check(environment->Snapshot().Profile.Enabled,"MM3D profile control did not enable explicit override");
     // Every profile shape now uses the balance evaluator; no unavailable

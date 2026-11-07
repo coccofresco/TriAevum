@@ -73,7 +73,7 @@ bool pbr_valid_frame=false;vec4 combiner_output=vec4(.5,.5,.5,.37);
     const size_t bodyAt=shader.size();
     shader+=body;
     shader+="outputs.values[index]=vec4(pbr_lit,combiner_output.a);}\n";
-    std::array<Case,12> cases{};std::array<V4,12> expected{},output{};
+    std::array<Case,13> cases{};std::array<V4,13> expected{},output{};
     const float albedo=std::pow((.5F+.055F)/1.055F,2.4F),window=1.F-121.F/400.F;
     for(size_t i=0;i<cases.size();++i){
         auto& c=cases[i];auto& s=c.Lighting.Surface;auto& b=c.Lighting.Balance;
@@ -96,6 +96,7 @@ bool pbr_valid_frame=false;vec4 combiner_output=vec4(.5,.5,.5,.37);
             s.EnvironmentAmbient={.1F,.1F,.1F,0};}
         if(i==10)b.Gains[0][1]=2;
         if(i==11)b.Gains[0][1]=.5F;
+        if(i==12){s.Control[1]=0;b.Gains[0]={0,0,1,0};} // group Off: native ambient only
         FoldPicaSurfaceMaterialForPbr(s,true);
         if (b.Gains[0][3] >= 4) s.ScenePoints[0].Color={1,1,1,0}; // matched row is a user tint
         const float metal=parameters.MetallicFactor,f0=.04F*(1-metal)+albedo*metal;
@@ -103,7 +104,8 @@ bool pbr_valid_frame=false;vec4 combiner_output=vec4(.5,.5,.5,.37);
         float irradiance=i==3?.5F:i==4?0:.5F*c.Parameters[0];
         if(i==5)irradiance*=window; // unmatched supplemental point still uses its own falloff
         if(i==5)irradiance+=.1F;
-        if(i>=9)irradiance*=std::max(0.F,1.F-.55F/b.Gains[0][1]);
+        if(i==12)irradiance=0;
+        else if(i>=9)irradiance*=std::max(0.F,1.F-.55F/b.Gains[0][1]);
         const float ambient=.02F*(i>=9?.45F:1.F)+.04F*b.Parameters[0]+(i==8?.08F:0.F);
         for(size_t k=0;k<3;++k)expected[i][k]=brdf*irradiance+ambient*albedo*(1-metal)+parameters.EmissiveFactor[k];
         expected[i][3]=.37F;

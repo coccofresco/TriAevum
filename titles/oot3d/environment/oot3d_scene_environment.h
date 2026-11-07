@@ -260,6 +260,8 @@ private:
 // draw-specific ownership/admission stays in the shared renderer.
 struct SceneEnvironmentPanelOptions {
   bool NativeFragmentLighting = false;
+  // Display-only title vocabulary; group indices and profile storage stay shared.
+  std::string CompanionLightName = "Navi";
 };
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime,
