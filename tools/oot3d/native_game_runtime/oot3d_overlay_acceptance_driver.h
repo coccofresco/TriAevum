@@ -140,6 +140,25 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 e.tfinger.windowID=wid;e.tfinger.touchId=42;e.tfinger.fingerId=step.value("finger",1);
                 e.tfinger.x=step.at("x");e.tfinger.y=step.at("y");e.tfinger.pressure=step.value("down",true)?1.f:0.f;
                 result=SDL_PushEvent(&e);
+            } else if(op=="focus") {
+                // Reclaim only this acceptance window, without injecting keys
+                // into whichever unrelated window currently owns foreground.
+                SDL_RaiseWindow(window);
+#ifdef _WIN32
+                SDL_SysWMinfo info{};SDL_VERSION(&info.version);
+                if(!window||!SDL_GetWindowWMInfo(window,&info))throw std::runtime_error("no acceptance window");
+                const auto hwnd=info.info.win.window;
+                const DWORD own=GetCurrentThreadId();
+                const DWORD foreground=GetWindowThreadProcessId(GetForegroundWindow(),nullptr);
+                const bool joined=foreground && foreground!=own && AttachThreadInput(own,foreground,TRUE);
+                if(IsIconic(hwnd))ShowWindow(hwnd,SW_RESTORE);
+                BringWindowToTop(hwnd);SetForegroundWindow(hwnd);SetFocus(hwnd);
+                if(joined)AttachThreadInput(own,foreground,FALSE);
+                result=GetForegroundWindow()==hwnd?1:0;
+                if(!result)throw std::runtime_error("acceptance window foreground request denied; no input injected");
+#else
+                result=(SDL_GetWindowFlags(window)&SDL_WINDOW_INPUT_FOCUS)?1:0;
+#endif
             } else if(op=="release_timeline") {
                 // End boot-only synthetic input; subsequent gameplay comes
                 // from the normal physical/virtual-device/platform input path.
@@ -147,7 +166,7 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
             } else if(op=="quit") {
                 SDL_Event e{};e.type=SDL_QUIT;result=SDL_PushEvent(&e);
             } else if(op!="checkpoint")throw std::runtime_error("unknown input operation");
-            emit({{"injected",step},{"result",result},{"source","SDL virtual device/event; not physical hardware"}});
+            emit({{"injected",step},{"result",result},{"source","developer input/window action; not physical hardware"}});
         }
     } catch(const std::exception& e){emit({{"error",e.what()}});}
     const auto snapshot=controls.Snapshot();std::string config,error;
