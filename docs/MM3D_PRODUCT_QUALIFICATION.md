@@ -32,8 +32,9 @@ settings, host controls and selected game language. Display/window/output/VSync,
 monitor and refresh remain machine-owned. Language changes require a full restart.
 Authored scene-environment files are not copied into states.
 
-MM-specific dekui/Restoration, presentation and damage settings are **not** in
-that snapshot. The MM adapter supplies an explicit notice to the shared save-state
+External MM-specific dekui/Restoration configuration (including
+`presentation.json`) and damage overrides are **not** in that snapshot. Shared
+graphics camera/FOV preferences remain part of the graphics owner above. The MM adapter supplies an explicit notice to the shared save-state
 panel, save result, state metadata and settings-restore log. This is an omission
 disclosure, not implementation of MM settings persistence. Ordinary state-only
 load leaves current host settings in place. A malformed schema is rejected before

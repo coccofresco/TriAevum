@@ -44,7 +44,7 @@ public:
   bool NativeFragmentLighting() const override { return true; }
   std::string_view CompanionLightName() const override { return "Tatl"; }
   std::string_view SavestateSettingsNotice() const override {
-    return "MM-specific dekui/Restoration, presentation and damage settings are not "
+    return "MM-specific dekui/Restoration configuration and damage overrides are not "
            "included in state + settings; their current configuration is kept.";
   }
   bool HasButtonOverlay() const override { return true; }
