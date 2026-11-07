@@ -76,7 +76,7 @@ Mm3dSingleScreen::Mm3dSingleScreen(std::function<std::int64_t()> globalTimeUs)
     : mCore(std::make_unique<Mm3dDekui::Core>(Mm3dDekui::HostFacts{std::move(globalTimeUs), {}})),
       mButtonOverlay(std::make_unique<Mm3dButtonOverlay>()) {
     mCore->host.layout_draw = [this](Mm3dDekui::Memory& memory, uint32_t layout, uint32_t root, uint32_t pass) {
-        mButtonOverlay->Capture(memory, layout, root, pass);
+        return mButtonOverlay->Capture(memory, layout, root, pass);
     };
 }
 
@@ -85,12 +85,13 @@ void Mm3dSingleScreen::ConfigureButtonOverlay(const NativeControlConfig& config,
 }
 void Mm3dSingleScreen::RecordButtonOverlay(uint64_t draw) { mButtonOverlay->Record(draw); }
 void Mm3dSingleScreen::SelectButtonOverlay(uint64_t draw) { mButtonOverlay->Select(draw); }
-void Mm3dSingleScreen::ResetButtonOverlay() { mButtonOverlay->Reset(); }
+void Mm3dSingleScreen::ResetButtonOverlay() { mButtonOverlay->Reset(); mCore->ResetButtonEmission(); }
 std::vector<oot3d::ui::UiPrimitive> Mm3dSingleScreen::ButtonOverlay(float scale) const { return mButtonOverlay->Compose(scale); }
 std::map<std::string, uint64_t> Mm3dSingleScreen::ButtonOverlaySummary() const {
     const auto& s = mButtonOverlay->Stats();
-    return {{"layouts",s.Layouts},{"labels",s.Labels},{"parts",s.Parts},{"hud",s.Hud},
-            {"rings",s.Rings},{"frames",s.Frames},{"presented",s.Presented}};
+    return {{"emissions",s.Layouts},{"labels",s.Labels},{"parts",s.Parts},{"hud",s.Hud},
+            {"rings",s.Rings},{"frames",s.Frames},{"presented",s.Presented},
+            {"pictograms",s.Pictograms},{"dpad_directions",s.Dpad},{"zr_legends",s.Text}};
 }
 
 Mm3dSingleScreen::~Mm3dSingleScreen() = default;

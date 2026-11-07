@@ -106,6 +106,7 @@ struct InGameMenuOwners {
   // The host audio service's output policy (master volume, mute); null
   // leaves the Audio rows out.
   std::shared_ptr<Ship::AudioOutputPolicy> Audio;
+  bool NativeButtonOverlay = false;
 };
 
 class InGameMenu {

@@ -19,7 +19,7 @@ struct MemoryFixture {
 constexpr U32 layout=0x10000000,node=layout+8,geo=0x10010000;
 MemoryFixture Fixture(){
  MemoryFixture m;
- for(unsigned i=0;i<NativeInventory::PCs.size();++i)m.words[NativeInventory::PCs[i]]=NativeInventory::Words[i];
+ for(auto [pc,word]:ButtonEmission::Guards)m.words[pc]=word;
  m.words[0x1262d0]=0xeb003ab0;m.words[0x59e564]=0xe59410c0;
  m.words[layout+4]=0x10020000;m.words[0x10020018]=0x10020100;m.Name(0x10020100,"HudItemIconSet");
  m.words[node+4]=layout;m.words[node+0x10]=0x10020200;m.Name(0x10020200,"disp_x_pane");
@@ -39,12 +39,16 @@ std::vector<oot3d::ui::UiPrimitive> Capture(MemoryFixture& m,NativeControlConfig
 void TestCapture(){
  auto m=Fixture();const auto original=m.words;auto glyphs=Capture(m);
  Check(!glyphs.empty(),"native named HUD label captured");Check(m.words==original,"no guest writes");
+ Mm3dButtonOverlay replacement;replacement.Configure(NativeControlDefaults(),NativePromptSet::Xbox);
+ Check(replacement.Capture(m,layout,node,3),"pure native letter geometry replaced, not double printed");
+ auto mixed=Fixture();mixed.Name(0x10020100,"AActionIconBase");mixed.Name(0x10020200,"bb00_ybtn");
+ mixed.F(geo+0x20,38);mixed.F(geo+0x24,38);
+ Check(!replacement.Capture(mixed,layout,node,3),"mixed ring art retained");
  Check(Capture(m,NativeControlDefaults(),NativePromptSet::Touch).empty(),"touch keeps native letters");
  auto config=NativeControlDefaults();config.NativeButtonLabels=false;m.reads=0;
  Check(Capture(m,config).empty()&&m.reads==0,"Original performs no reads");
  Check(Capture(m,NativeControlDefaults(),NativePromptSet::Xbox,5).empty(),"lower screen excluded");
- for(auto pc:NativeInventory::PCs){auto bad=Fixture();bad.words[pc]^=1;Check(Capture(bad).empty(),"each draw guard fails closed");}
- for(U32 pc:{0x1262d0U,0x59e564U}){auto bad=Fixture();bad.words[pc]^=1;Check(Capture(bad).empty(),"adjacent guard fails closed");}
+ for(auto [pc,word]:ButtonEmission::Guards){auto bad=Fixture();bad.words[pc]^=1;Check(Capture(bad).empty(),"each emission guard fails closed");}
  m=Fixture();m.words[node+0xd4]&=~1U;Check(Capture(m).empty(),"hidden pane omitted");
  m=Fixture();m.F(node+0x134,0);Check(Capture(m).empty(),"zero fade omitted");
  m=Fixture();m.F(node+0xec,std::numeric_limits<float>::quiet_NaN());Check(Capture(m).empty(),"nonfinite pose omitted");
@@ -54,6 +58,20 @@ void TestCapture(){
  for(auto set:{NativePromptSet::Keyboard,NativePromptSet::Xbox,NativePromptSet::PlayStation,NativePromptSet::Nintendo,NativePromptSet::SteamDeck,NativePromptSet::Generic}){
   m=Fixture();Check(!Capture(m,NativeControlDefaults(),set).empty(),"all controller families use same art");
  }
+}
+void TestPictogramAndDpad(){
+ auto m=Fixture();m.Name(0x10020100,"Pictogram");m.Name(0x10020200,"pict");
+ constexpr U32 reg=NotebookPrompt::Registry,groups=0x10060000,entries=groups+0x100,record=groups+0x200;
+ m.words[NotebookPrompt::RegistryLiteral]=reg;m.words[reg+0x28]=groups;m.words[reg+0x2c]=entries;
+ m.words[groups]=12;m.words[entries+44]=record;m.words[record+4]=11<<16;m.words[geo+0x10]=record+12;
+ m.F(geo+0x28,112.f/256);m.F(geo+0x2c,0);m.F(geo+0x30,16.f/256);m.F(geo+0x34,16.f/128);
+ Check(!Capture(m).empty(),"separately emitted notebook/dialogue A without a parent tree");
+ Check(!Capture(m,NativeControlDefaults(),NativePromptSet::Xbox,~0u).empty(),"native-validated standalone emission without LayoutBase pass");
+ m.words[record+4]=12<<16;Check(Capture(m).empty(),"foreign atlas stays native");
+ m=Fixture();m.Name(0x10020100,"HudDpad");m.Name(0x10020200,"pane_dpad");
+ auto out=Capture(m);Check(out.size()>=4,"four D-pad binding glyphs");
+ auto controls=NativeControlDefaults();controls.Bindings[size_t(NativeControlAction::DpadLeft)]={};
+ Check(Capture(m,controls).size()<out.size(),"unbound D-pad direction not invented");
 }
 void TestText(){
  auto m=Fixture();m.Name(0x10020100,"MenuItem");m.words[geo+4]=3;
@@ -80,6 +98,12 @@ void TestFrames(){
  frames.Record(40,{});frames.Select(40,true);Check(frames.Presented().empty(),"hidden label never retained");
  frames.Record(1,{a});frames.Select(1,true);Check(frames.Presented().empty(),"save restore clears history");
  frames.Reset();frames.Select(100,true);Check(frames.Presented().empty(),"reset clears presented labels");
+ auto original=NativeControlDefaults();original.NativeButtonLabels=false;
+ frames.Record(10,{a},NativePromptSet::Xbox,NativeControlDefaults());
+ frames.Record(20,{},NativePromptSet::Touch,original);frames.Select(20,true);
+ Check(frames.Prompts()==NativePromptSet::Xbox&&frames.Controls().NativeButtonLabels,"already suppressed native frame retains its binding snapshot during a switch");
+ frames.Record(30,{},NativePromptSet::Touch,original);frames.Select(30,true);
+ Check(frames.Presented().empty()&&!frames.Controls().NativeButtonLabels,"Original/touch native frame clears replacements at presentation, not early");
 }
 void TestSettings(){
  auto config=NativeControlDefaults();std::string text,error;NativeControlConfig parsed;
@@ -100,8 +124,8 @@ void TestSettings(){
 }
 }
 int main(int argc,char** argv){try{
- TestCapture();TestText();TestFrames();TestSettings();
+ TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestSettings();
  if(argc==2){std::ifstream in(argv[1],std::ios::binary);Check(bool(in),"code image opens");
-  for(unsigned i=0;i<NativeInventory::PCs.size();++i){U32 w=0;in.seekg(NativeInventory::PCs[i]-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==NativeInventory::Words[i],"EUR native guard agrees");}}
+  for(auto [pc,word]:ButtonEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR emission guard agrees");}}
  std::cout<<checks<<" overlay checks passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

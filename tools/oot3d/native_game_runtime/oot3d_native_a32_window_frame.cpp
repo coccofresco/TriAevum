@@ -1,5 +1,6 @@
 // Native A32 window session: one frame of the loop and the renderer-side work it schedules.
 #include "oot3d_native_a32_window_session.h"
+#include "oot3d_overlay_acceptance_driver.h"
 #include "fast/extension/visual_clock.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
@@ -143,6 +144,9 @@ void AppendTopScreenDpadPickerHoldRings(
 } // namespace
 
 bool NativeA32WindowSession::RunFrame() {
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  if(controlConfigRuntime) Oot3dNativeGame::DriveOverlayAcceptance(presentationFrameCount,*controlConfigRuntime);
+#endif
   auto &process = *processStorage;
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
   auto &window = *windowPointer;
