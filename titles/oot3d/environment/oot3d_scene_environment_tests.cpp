@@ -26,6 +26,15 @@ void Check(bool condition, const char *what) {
 void Write(const std::filesystem::path &path, const std::string &text) {
   std::ofstream file(path, std::ios::binary | std::ios::trunc);
   file << text;
+  file.close();
+  if (!file) throw std::runtime_error("fixture write failed: " + path.string());
+  // Settle advances the poll clock, not the filesystem clock. Rapid equal-size
+  // writes can otherwise retain the same timestamp and correctly look unchanged
+  // to the production watcher. Model distinct edits without sleeps, including
+  // filesystems with coarse (two-second) timestamp resolution.
+  static auto stamp = std::filesystem::file_time_type::clock::now();
+  stamp += std::chrono::seconds(2);
+  std::filesystem::last_write_time(path, stamp);
 }
 
 std::string Profile(float ambient, bool night) {
