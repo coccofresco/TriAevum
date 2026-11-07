@@ -157,7 +157,9 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         mQueueOwners.clear(); mActorDrawStack.clear(); mModelSubmit.reset(); mModelScope.reset();
         mOverlaySubmit.reset();
         mPrimitiveScope.reset(); mPendingPrimitives.clear();
-        mEnvironmentProducers.clear(); mQuadOwners.clear(); mQuadScope.reset();
+        // UI producers may have already populated the native quad manager.
+        // Its own reset, not Play_Draw, owns that queue's generation.
+        mEnvironmentProducers.clear();
         mActive.reset(); mFineSuppressed = false;
     }
     if (ObserveQuads(pc, state, memory)) return Event::None;
@@ -453,6 +455,14 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
 bool Mm3dNativePicaCompositionTracker::ObserveQuads(
     uint32_t pc, const oot3d::recomp::a32::GuestState& state,
     oot3d::recomp::a32::MemoryBus& memory) {
+    if (pc == 0x00112CA4U) {
+        ++mQuadGeneration; mQuadOwners.clear();
+        if (mQuadScope) {
+            ++mStats.InvalidQuadOwners; mQuadScope.reset(); mActive.reset();
+            mPendingPrimitives.clear(); mPrimitiveScope.reset();
+        }
+        return true;
+    }
     constexpr std::array environments{
         EnvironmentProducer{0x00172D18U, 0x0015ED08U},
         EnvironmentProducer{0x0016FD3CU, 0x0015F0B4U},
@@ -474,10 +484,10 @@ bool Mm3dNativePicaCompositionTracker::ObserveQuads(
         const uint32_t queue = state.r[pc == 0x00179930U ? 1 : 9];
         const uint32_t model = state.r[pc == 0x00179930U ? 2 : 4];
         uint32_t count = 0;
-        if (!model || !manager || queue > 6 || uint64_t{manager} + 0x3000U > UINT32_MAX ||
+        if (!model || !manager || queue > 7 || uint64_t{manager} + 0x3600U > UINT32_MAX ||
             !memory.Read32(manager + 0x14U + queue * 4U, &count) || count >= 0x180U) return true;
         QuadOwner owner;
-        owner.Model = model; owner.Generation = mQueueGeneration;
+        owner.Model = model; owner.Generation = mQuadGeneration;
         owner.Attribution = {queue >= 4 ? Oot3dPicaCompositionLayer::Ui : Oot3dPicaCompositionLayer::Unknown,
             Oot3dPicaCompositionProvenance::NativeControlFlow, pc, queue};
         if (!mEnvironmentProducers.empty()) {
@@ -530,7 +540,7 @@ bool Mm3dNativePicaCompositionTracker::ObserveQuads(
     child.Attribution.Layer = Oot3dPicaCompositionLayer::Unknown;
     child.Attribution.ExcludeFromPresentationFxaa = false;
     const auto owner = mQuadOwners.find(uint32_t(slot));
-    if (owner != mQuadOwners.end() && owner->second.Model == model && owner->second.Generation == mQueueGeneration)
+    if (owner != mQuadOwners.end() && owner->second.Model == model && owner->second.Generation == mQuadGeneration)
         child.Attribution = owner->second.Attribution;
     // Atmosphere is excluded from scene relighting, but guide-space transforms
     // still belong to this view. No actor/temporal identity is invented for quads.
@@ -566,8 +576,9 @@ bool Mm3dNativePicaCompositionTracker::ObservePrimitive(
     }
     constexpr std::array returns{0x001323F8U, 0x001413C0U, 0x005E320CU, 0x005E32F8U,
                                 0x005E4218U, 0x005E9124U, 0x005E9210U, 0x005EA1CCU};
-    if (std::find(returns.begin(), returns.end(), state.r[14]) == returns.end() ||
-        mFineSuppressed || !mActive) {
+    const auto caller = std::find(returns.begin(), returns.end(), state.r[14]);
+    if (caller != returns.end()) ++mStats.PrimitiveCallerEntries[size_t(caller - returns.begin())];
+    if (caller == returns.end() || mFineSuppressed || !mActive) {
         ++mStats.UnownedPrimitives; return true;
     }
     PrimitiveScope primitive;
@@ -694,7 +705,7 @@ void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     mActorDrawStack.clear(); mQueueOwners.clear(); mModelSubmit.reset(); mModelScope.reset();
     mOverlaySubmit.reset();
     mPrimitiveScope.reset(); mPendingPrimitives.clear();
-    mEnvironmentProducers.clear(); mQuadOwners.clear(); mQuadScope.reset();
+    mEnvironmentProducers.clear(); mQuadOwners.clear(); mQuadScope.reset(); ++mQuadGeneration;
     mFineSuppressed = false;
     ++mQueueGeneration;
     mStats = {};

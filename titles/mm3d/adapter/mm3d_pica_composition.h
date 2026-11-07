@@ -75,7 +75,8 @@ struct Mm3dNativePicaCompositionStats {
     uint64_t PrimitiveEntries = 0, PrimitiveSpans = 0, TemporalPrimitiveSpans = 0;
     uint64_t UnownedPrimitives = 0, InvalidPrimitives = 0;
     uint64_t AtmosphereQuadSpans = 0, UiQuadSpans = 0, InvalidQuadOwners = 0;
-    std::array<uint64_t, 7> UnknownQuadSpans{};
+    std::array<uint64_t, 8> UnknownQuadSpans{};
+    std::array<uint64_t, 8> PrimitiveCallerEntries{};
 };
 
 // Records the command-list byte range each native pass writes, with its
@@ -182,6 +183,7 @@ class Mm3dNativePicaCompositionTracker final
     std::unordered_map<uint32_t, QuadOwner> mQuadOwners;
     std::optional<ModelScope> mQuadScope;
     uint32_t mQuadQueue = 0;
+    uint64_t mQuadGeneration = 0;
     std::optional<PrimitiveScope> mPrimitiveScope;
     std::vector<Oot3dPicaCommandListCompositionSpan> mPendingPrimitives;
     Mm3dNativeA32LightingProbe mLighting;

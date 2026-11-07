@@ -25,6 +25,7 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x0012C6A8U, {0xE92D41F0U, 0xE0812081U, 0xE0807101U, 0xE2878A06U}},
     Mm3dLightingHookSite{0x001565ACU, {0xE92D4008U, 0xE59DC008U, 0xE58DC000U, 0xEB000276U}},
     Mm3dLightingHookSite{0x001565BCU, {0xE8BD8008U, 0xE1A03002U, 0xE1A0C001U, 0xE0800103U}},
+    Mm3dLightingHookSite{0x00112CA4U, {0xE3A01000U, 0xE5801008U, 0xE580100CU, 0xE5801010U}},
     Mm3dLightingHookSite{0x00179930U, {0xE3520000U, 0x03A00000U, 0x012FFF1EU, 0xE080C101U}},
     Mm3dLightingHookSite{0x00179AD8U, {0xE3A00000U, 0xE5840240U, 0xE5971014U, 0xE0890089U}},
     Mm3dLightingHookSite{0x0012C71CU, {0xE0860104U, 0xE5900578U, 0xE5901000U, 0xE5911030U}},
@@ -77,6 +78,10 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x005EF0D0U, {0xE5940004U, 0xE2855004U, 0xE0840100U, 0xE2800008U}},
 };
 inline constexpr std::array kMm3dCompositionOwnerGuards{
+    // Manager reset clears all eight primary and secondary queue counts.
+    std::pair{0x00112CB4U, 0xE5801014U}, std::pair{0x00112CD4U, 0xE5801030U},
+    std::pair{0x00112CD8U, 0xE5821178U}, std::pair{0x00112CF4U, 0xE5821194U},
+    std::pair{0x00112CF8U, 0xE12FFF1EU},
     // Primitive builder and native descriptor/record caller ABIs.
     std::pair{0x00156F98U, 0xE92D47F0U}, std::pair{0x00156F9CU, 0xE1A06000U},
     std::pair{0x00156FD0U, 0xE5960000U}, std::pair{0x00156FD4U, 0xE5900008U},

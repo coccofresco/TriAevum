@@ -307,6 +307,7 @@ public:
         {"ui_quad_spans", stats.UiQuadSpans},
         {"unknown_quad_spans", stats.UnknownQuadSpans},
         {"invalid_quad_owners", stats.InvalidQuadOwners},
+        {"primitive_caller_entries", stats.PrimitiveCallerEntries},
         {"primitive_entries", stats.PrimitiveEntries},
         {"primitive_spans", stats.PrimitiveSpans},
         {"temporal_primitive_spans", stats.TemporalPrimitiveSpans},

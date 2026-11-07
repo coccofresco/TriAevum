@@ -240,6 +240,9 @@ void TestQuadEntryOwnership() {
         const uint32_t slot = manager + 0x578U + q * 0x600U;
         f.W32(slot, f.Model); f.W32(manager + 0x14U + q * 4U, 1);
         observe(0x15EF58U);
+        // Native UI update can enqueue before Play_Draw. That entry must
+        // survive the model/actor frame reset; the manager owns its lifetime.
+        s.r[0] = f.Play; observe(0x15E9ECU);
         // Same model handle, different native slot/producer. Never transfer
         // the atmosphere role by a per-model lookup.
         s.r[0] = manager; s.r[1] = q; s.r[2] = f.Model; observe(0x179930U);
