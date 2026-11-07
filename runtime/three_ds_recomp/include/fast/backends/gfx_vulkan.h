@@ -20,6 +20,7 @@
 #include "fast/renderer3ds/pica_pbr_material.h"
 #include "fast/renderer3ds/pica_pbr_seams.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include "fast/renderer3ds/pica_surface_uniform_upload.h"
 #include "fast/renderer3ds/pica_surface_calibration_trace.h"
 #include "fast/renderer3ds/gpu_memory_residency.h"
 #include "fast/renderer3ds/vulkan_memory_budget.h"
@@ -491,6 +492,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         VkDeviceSize UniformBytesUsed = 0;
         std::optional<VkDeviceSize> SurfaceLightingUniformOffset;
         Renderer3ds::PicaSurfaceLightingUniforms SurfaceLightingUniforms;
+        Renderer3ds::PicaBalancedSurfaceUploadCache BalancedSurfaceUniforms;
         VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
         std::map<TextureDescriptorKey, VkDescriptorSet> TextureDescriptorSets;
         std::vector<uint64_t> NativePicaCompletionIds;

@@ -2617,11 +2617,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceDebug.ShadowRecord("shadow_receiver", mFrameCounter, draw.SubmissionId, fields);
         }
 #endif
+        const VkDeviceSize surfacePayloadSize =
+            Renderer3ds::PicaSurfaceUniformUploadSize(uniformSurface, drawBalanceApplied);
         const std::array<VkDeviceSize, 7> uniformSizes{
             draw.VertexUniformBytes.size(), previousVertexUniformBytes.size(),
             draw.FragmentUniformBytes.size(), uniformShadow ? directionalShadowUniformSize : 0U,
             uniformToon ? toonBytes.size() : 0U,
-            uniformSurface ? sizeof(*surfaceLighting) : 0U,
+            surfacePayloadSize,
             uniformPbr ? sizeof(*pbrUniforms) : 0U};
         VkDeviceSize uniformBytes = 0;
         for (const auto size : uniformSizes)
@@ -2666,10 +2668,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         const VkDeviceSize toonUniformSize = uniformToon
             ? toonBytes.size() : directionalShadowUniformSize;
         VkDeviceSize surfaceUniformOffset = directionalShadowUniformOffset;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        const VkDeviceSize surfaceUploadStart = frame.UniformBytesUsed;
+#endif
         if (uniformSurface && drawBalanceApplied) {
             const Renderer3ds::PicaBalancedSurfaceUniforms packed{*surfaceLighting, *fragmentBalance};
-            surfaceUniformOffset = uploadUniform(std::span<const uint8_t>(
-                reinterpret_cast<const uint8_t*>(&packed), sizeof(packed)));
+            surfaceUniformOffset = frame.BalancedSurfaceUniforms.Resolve(packed, uploadUniform);
         } else if (uniformSurface) {
             // Compare host-cached state, not potentially write-combined mapped
             // upload memory. The offset belongs to this frame and arena only.
@@ -2681,9 +2685,18 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             }
             surfaceUniformOffset = *frame.SurfaceLightingUniformOffset;
         }
-        const VkDeviceSize surfaceUniformSize = uniformSurface
-            ? (drawBalanceApplied ? sizeof(Renderer3ds::PicaBalancedSurfaceUniforms) : sizeof(*surfaceLighting))
-            : directionalShadowUniformSize;
+        const VkDeviceSize surfaceUniformSize = uniformSurface ? surfacePayloadSize : directionalShadowUniformSize;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (uniformSurface && surfaceDebug.ShadowSelected(surfaceOrdinal)) {
+            char fields[256];
+            std::snprintf(fields, sizeof(fields),
+                ",\"balanced\":%u,\"payload_bytes\":%llu,\"reused\":%u,\"offset\":%llu",
+                drawBalanceApplied ? 1U : 0U, static_cast<unsigned long long>(surfacePayloadSize),
+                frame.UniformBytesUsed == surfaceUploadStart ? 1U : 0U,
+                static_cast<unsigned long long>(surfaceUniformOffset));
+            surfaceDebug.ShadowRecord("surface_upload", mFrameCounter, draw.SubmissionId, fields);
+        }
+#endif
         const VkDeviceSize pbrUniformOffset = uniformPbr
             ? uploadUniform(std::span<const uint8_t>(
                 reinterpret_cast<const uint8_t*>(&pbrUniforms.value()), sizeof(*pbrUniforms)))

@@ -51,6 +51,11 @@ target_compile_features(pica_surface_coordinates_tests PRIVATE cxx_std_20)
 target_include_directories(pica_surface_coordinates_tests PRIVATE ../include)
 add_test(NAME pica_surface_coordinates_tests COMMAND pica_surface_coordinates_tests)
 
+add_executable(pica_surface_uniform_upload_tests pica_surface_uniform_upload_tests.cpp)
+target_compile_features(pica_surface_uniform_upload_tests PRIVATE cxx_std_20)
+target_include_directories(pica_surface_uniform_upload_tests PRIVATE ../include)
+add_test(NAME pica_surface_uniform_upload_tests COMMAND pica_surface_uniform_upload_tests)
+
 add_executable(pica_surface_appearance_tests pica_surface_appearance_tests.cpp)
 target_compile_features(pica_surface_appearance_tests PRIVATE cxx_std_20)
 target_include_directories(pica_surface_appearance_tests PRIVATE ../include)
