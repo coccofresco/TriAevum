@@ -393,6 +393,8 @@ void main() {
                 binding, settings, &*view, nullptr, true);
             if (!lighting) throw std::runtime_error("native-point builder rejected fixture");
             entry.Lighting.Surface = *lighting;
+            FoldPicaSurfaceMaterialForPbr(entry.Lighting.Surface, true);
+            PreparePicaFragmentProfileSurface(entry.Lighting.Surface, entry.Lighting.Balance, settings);
             if (replacement) ApplyPicaNativePointReplacementControls(entry.Lighting.Surface, *replacement, settings);
             if (i == 1) entry.Visibility[0] = 0;
             if (i == 2) entry.Visibility[0] = .5F;
@@ -418,6 +420,7 @@ void main() {
     pica_surface=inputs.cases[index].lighting;
     point_visibility=inputs.cases[index].visibility.x;
     pica_view=vec3(0); pica_surface_normal=vec3(0,1,0);
+    vec3 pica_lighting_normal=pica_surface_normal;
     bool surface_water=false;
     vec4 primary_fragment_color=vec4(1,.3,.3,.37);
     vec4 secondary_fragment_color=vec4(.4,0,0,.63);

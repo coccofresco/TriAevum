@@ -79,7 +79,7 @@ void main() {
     // native reach, including outside it. Radius expansion must also recover
     // native radiance that was zero at the original radius (no divide by zero).
     for (float distance : {1.F,70.F,125.F,200.F,249.F,300.F})
-      for (unsigned mode=0;mode<6;++mode) {
+      for (unsigned mode=0;mode<8;++mode) {
         Case c{}; auto& s=c.Lighting.Surface; auto& b=c.Lighting.Balance;
         PicaFragmentLightingLayout layout; layout.SchemaVersion=kPicaFragmentLightingLayoutSchemaVersion;
         layout.ActiveLightCount=1;layout.LightPermutation[0]=0;
@@ -92,7 +92,14 @@ void main() {
         PicaEnvironmentLighting e;e.PointLights[2].Enabled=mode!=0;
         if(mode==4){e.PointLights[2].Intensity=.4F;e.PointLights[2].ColorTint={.5F,1,1};}
         if(mode==5)e.PointLights[2].RadiusScale=2;
-        const auto replacement=BuildPicaNativePointReplacement(true,layout,binding,e,{});
+        if(mode>=6) {
+            e.Enabled=true;e.NativeAmbientStrength=.6F;e.PreserveSceneBrightness=false;
+            e.KeyDirection=mode==6?PicaEnvironmentKeyDirection::Authored:PicaEnvironmentKeyDirection::SceneMain;
+            points->Count=2;points->Lights[1]={43,{0,0,69},{.1F,.2F,.3F},250,3};
+            points->Lights[1].IndependentEmission=true;
+        }
+        const auto replacement=BuildPicaNativePointReplacement(true,layout,binding,e,
+            mode>=6?BuildPicaFragmentBalanceUniforms(true,layout,binding,e):std::nullopt);
         b.Control={1,8,0,0};b.Parameters[0]=1;b.Gains[0]={1,1,1,0};
         s.MaterialDiffuse={.498F,.498F,.498F,0};
         for(unsigned k=0;k<3;++k)s.ViewToWorldLinear[k][k]=1;
@@ -100,6 +107,17 @@ void main() {
             b=replacement->Balance;s.Control={0,1,0,2};
             s.ScenePoints[0].PositionRadius={0,0,distance-1,250*e.PointLights[2].RadiusScale};
             s.ScenePoints[0].Color={.01F,.007F,0,0};
+            if(mode>=6) {
+                s.Control[1]=2;s.MaterialAmbient={1,1,1,0};
+                s.ScenePoints[1].PositionRadius={0,0,69,250};
+                s.ScenePoints[1].Color={.1F,.2F,.3F,-1};
+                s.EnvironmentParameters={1,.6F,1,1};
+                s.EnvironmentAmbient={.02F,.03F,.04F,0};
+                s.EnvironmentDirections[0]={0,0,1,1};
+                s.EnvironmentColors[0]={.03F,.04F,.05F,0};
+            }
+            FoldPicaSurfaceMaterialForPbr(s,true);
+            PreparePicaFragmentProfileSurface(s,b,e);
             ApplyPicaNativePointReplacementControls(s,*replacement,e);
         }
         const float visibility=mode==2?0.F:mode==3?.5F:1.F;
@@ -110,7 +128,10 @@ void main() {
         for(unsigned k=0;k<3;++k){
             const float diffuse=V4{86.F/255,60.F/255,0,0}[k],spec=V4{.06F,.03F,0,0}[k];
             const float factor=visibility*e.PointLights[2].Intensity*e.PointLights[2].ColorTint[k];
-            want.Primary[k]=diffuse*convertedAtt*factor+V4{.01F,.02F,.03F,0}[k]*nativeAtt+V4{.04F,.05F,.06F,0}[k];
+            want.Primary[k]=diffuse*convertedAtt*factor+V4{.01F,.02F,.03F,0}[k]*nativeAtt+V4{.04F,.05F,.06F,0}[k]*(mode>=6?.6F:1.F);
+            if(mode>=6) want.Primary[k]+=V4{.02F,.03F,.04F,0}[k]+
+                V4{.1F,.2F,.3F,0}[k]*.498F*(1.F-70.F*70.F/(250.F*250.F))+
+                (mode==6?V4{.03F,.04F,.05F,0}[k]*.498F:0.F);
             want.Secondary[k]=spec*convertedAtt*factor;
         }
         want.Primary[3]=.37F;want.Secondary[3]=.63F;expected.push_back(want);

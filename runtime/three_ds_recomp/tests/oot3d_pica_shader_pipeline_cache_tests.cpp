@@ -2725,6 +2725,45 @@ TEST(PicaFragmentBalance, NativeSecondaryMaterialProductSurvivesPrimaryReplaceme
     EXPECT_NE(kPicaFragmentBalanceBody.find("balance_control.z & 1u"),std::string_view::npos);
 }
 
+TEST(PicaFragmentBalance, ProfileFactorAndExactPointsKeepSeparatePayloadOwnership) {
+    using namespace Fast::Renderer3ds;
+    FragmentLitNightFixture f;
+    f.Profile.PointLights[2].RadiusScale=2;
+    auto points=std::make_shared<PicaScenePointLights>();points->Count=2;
+    points->Lights[0]={f.Binding.Sources[0].SourceIdentity,{0,70,0},{.2F,.1F,0},250,2};
+    points->Lights[0].ReplacesNativeLocal=true;
+    points->Lights[1]={987654,{0,10,0},{.1F,.2F,.3F},250,3};
+    points->Lights[1].IndependentEmission=true;f.Binding.ScenePoints=points;
+    const auto replacement=BuildPicaNativePointReplacement(true,f.Layout,f.Binding,f.Profile,
+        BuildPicaFragmentBalanceUniforms(true,f.Layout,f.Binding,f.Profile));
+    ASSERT_TRUE(replacement);
+    auto balance=replacement->Balance;
+    PicaTevProgram tev{};for(auto& stage:tev.Stages)stage[0]=15;
+    tev.Stages[0]={0x21,0,1,0};
+    ApplyPicaFragmentSecondaryMaterialFactor(balance,tev);
+    EXPECT_EQ(balance.Control[2],1U);
+    EXPECT_EQ(balance.Gains[0],replacement->Balance.Gains[0]); // y is radius, not specular
+    EXPECT_FLOAT_EQ(balance.Gains[1][1],1);
+    PicaSurfaceLightingUniforms surface;
+    surface.Control={0,2,2,2};surface.MaterialDiffuse={.5F,0,.25F,0};
+    surface.MaterialAmbient={.2F,.3F,.4F,0};
+    surface.ScenePoints[0].Color={.2F,.1F,0,-1};
+    surface.ScenePoints[1].Color={.1F,.2F,.3F,-1};
+    surface.EnvironmentAmbient={.5F,.5F,.5F,0};
+    surface.EnvironmentColors[0]={1,1,1,0};
+    FoldPicaSurfaceMaterialForPbr(surface,true);
+    PreparePicaFragmentProfileSurface(surface,balance,f.Profile);
+    ApplyPicaNativePointReplacementControls(surface,*replacement,f.Profile);
+    EXPECT_EQ(surface.ScenePoints[0].Color,(std::array<float,4>{1,1,1,-1}));
+    EXPECT_EQ(surface.ScenePoints[1].Color,(std::array<float,4>{.05F,0,.075F,-1}));
+    EXPECT_EQ(surface.EnvironmentColors[0],(std::array<float,4>{.5F,0,.25F,0}));
+    EXPECT_EQ(surface.ResolvedAmbient,(std::array<float,4>{.1F,.15F,.2F,0}));
+    EXPECT_EQ(surface.Control[2],0U); // captured native Scene terms are not re-added
+    auto once=surface;FoldPicaSurfaceMaterialForPbr(surface,true);
+    EXPECT_EQ(surface.ScenePoints[0].Color,once.ScenePoints[0].Color);
+    EXPECT_EQ(surface.ScenePoints[1].Color,once.ScenePoints[1].Color); // no second material fold
+}
+
 TEST(PicaFragmentBalance, UnqualifiedFragmentLitDrawKeepsTheNativeReference) {
     using Fast::Renderer3ds::PicaFragmentLitTitleDrawKeepsNative;
     // Arguments: title draw under a profile, balanced, fragment lit, full model.
