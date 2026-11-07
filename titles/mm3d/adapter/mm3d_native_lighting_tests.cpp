@@ -37,6 +37,7 @@ struct Fixture {
             for (uint32_t i = 0; i < 4; ++i) W32(hook.Pc + 4U * i, hook.Words[i]);
         for (const auto& guard : kMm3dRoomEmitterGuards) W32(guard[0], guard[1]);
         W8(Play + 0xC2C4U, 0xFF);
+        for (const auto [pc, word] : kMm3dCompositionOwnerGuards) W32(pc, word);
         W32(kMm3dCurrentViewPointer, Play + kMm3dPlayViewOffset);
         W8(Play + 0x13DU, 4); W32(Play + 0x4A8U, Play); W16(Play + 0x148U, 0x6F); W32(Play + 0x138U, 1);
         W8(Play + 0x87FFU, 0xFF); W32(Play + 0x8824U, std::bit_cast<uint32_t>(1.0F));
@@ -62,6 +63,97 @@ struct Fixture {
     }
     void Link(uint32_t node, uint32_t info, uint32_t next) { W32(node,info); W32(node+8U,next); }
 };
+
+void TestCompositionTemporalLifetimes() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "temporal hooks verified");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    uint32_t frame = 1;
+    const auto beginFrame = [&] {
+        f.W32(f.Play + 0x138U, frame++);
+        s.r[0] = f.Play; observe(0x15E9ECU);
+    };
+    const auto enqueue = [&](uint16_t id = 0, uint32_t callback = 0x1F8E28U) {
+        f.W16(f.Actor, id); f.W32(f.Actor + 0x144U, callback);
+        s.r[0] = f.Actor; s.r[2] = callback; observe(0x182C44U);
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
+        observe(0x182C48U);
+    };
+    const auto consume = [&](uint32_t pass = 0x11EF3CU) {
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = pass; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000020U);
+        observe(0x5EF0D0U); observe(pass);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 1, "one precise model range");
+        return spans.front().Attribution;
+    };
+    beginFrame(); enqueue();
+    const auto first = consume();
+    Require(first.TemporalIdentity.Available() && first.TemporalCommandBufferIdentity &&
+            first.TemporalIdentity.Owner == f.Actor && first.TemporalIdentity.Instance == f.Model &&
+            !first.ExcludeFromPresentationFxaa,
+            "guarded actor/model did not publish a temporal source-buffer contract");
+    beginFrame(); enqueue();
+    Require(consume().TemporalIdentity == first.TemporalIdentity, "continuous lifetime changed each frame");
+    for (uint32_t site : {0x191238U, 0x1749C4U, 0x174EBCU, 0x191200U, 0x5EC220U}) {
+        beginFrame(); enqueue();
+        s.r[0] = site == 0x5EC220U ? f.Model : f.Actor; s.r[4] = f.Actor; observe(site);
+        const auto dead = consume();
+        Require(!dead.TemporalIdentity.Available() && !dead.NativeActorGeometry && !dead.IsolatedLighting,
+                "queued ownership survived native lifetime end");
+        beginFrame(); enqueue();
+        const auto replacement = consume();
+        Require(replacement.TemporalIdentity.Available() &&
+                replacement.TemporalIdentity.Lifetime != first.TemporalIdentity.Lifetime,
+                "recycled actor/model matched the former lifetime");
+    }
+    beginFrame();
+    f.W32(f.Queue + 4U, 0);
+    s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+    f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
+    const auto background = consume();
+    Require(background.TemporalIdentity.Available() && !background.NativeActorGeometry &&
+            (background.TemporalIdentity.Owner & (1ULL << 63U)), "scene-owned model lost native temporal identity");
+    tracker.Reset(); beginFrame(); enqueue();
+    Require(consume().TemporalIdentity.Lifetime != first.TemporalIdentity.Lifetime,
+            "restore rewound temporal lifetime allocator");
+    beginFrame(); enqueue(); const auto beforeScene = consume().TemporalIdentity;
+    f.W16(f.Play + 0x148U, 0x61); beginFrame(); enqueue();
+    Require(consume().TemporalIdentity.Lifetime != beforeScene.Lifetime, "scene change retained lifetime");
+    const auto beforeRollback = consume().TemporalIdentity;
+    frame = 1; beginFrame(); enqueue();
+    Require(consume().TemporalIdentity.Lifetime != beforeRollback.Lifetime, "frame rollback retained lifetime");
+    beginFrame(); enqueue(0x87, 0x39F068U);
+    const auto logo = consume(0x11EFD4U);
+    Require(logo.IsolatedLighting && logo.ExcludeFromPresentationFxaa &&
+            logo.Layer == Oot3dPicaCompositionLayer::Ui &&
+            !logo.TemporalIdentity.Available(), "title logo lost isolated native UI ownership");
+    beginFrame(); enqueue(0x87, 0x39F068U);
+    const auto worldLogo = consume();
+    Require(worldLogo.IsolatedLighting && worldLogo.ExcludeFromPresentationFxaa &&
+            !worldLogo.TemporalIdentity.Available(), "world-queued logo acquired scene temporal history");
+    beginFrame(); enqueue(0x41, 0x4C03F4U);
+    Require(consume().Layer == Oot3dPicaCompositionLayer::Atmosphere, "kankyo model became relightable world");
+    beginFrame(); enqueue(0x41, 0x1F8E28U);
+    Require(consume().Layer == Oot3dPicaCompositionLayer::OpaqueWorld, "actor id alone classified atmosphere");
+    beginFrame(); enqueue(); f.W32(f.Model, 0U);
+    // A new unproved model cannot acquire temporal ownership.
+    s.r[0] = f.Model; observe(0x5EC220U);
+    beginFrame(); enqueue();
+    Require(!consume().TemporalIdentity.Available(), "unproved model ABI got identity");
+    for (const auto [pc, word] : kMm3dCompositionOwnerGuards) {
+        f.W32(pc, word ^ 1U);
+        Require(!tracker.VerifyHooks(f.Memory), "corrupt owner guard accepted");
+        f.W32(pc, word);
+    }
+}
 
 void TestAcceptedAndSelectedSources() {
     Fixture f; Mm3dNativeA32LightingProbe probe;
@@ -569,6 +661,7 @@ void TestLightFunctionsAndGroup() {
 }
 } // namespace
 int main() {
+    TestCompositionTemporalLifetimes();
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();TestClockCutsAndDayReset();

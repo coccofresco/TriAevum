@@ -1,6 +1,7 @@
 #pragma once
 #include "mm3d_guest_patches.h"
 #include <array>
+#include <utility>
 namespace Oot3dNativeGame {
 struct Mm3dLightingHookSite { uint32_t Pc; std::array<uint32_t, 4> Words; };
 // code.bin SHA256 6eec27b1827eab2c87744ac38066d569ffe6fe75790b1eb3300bd91f5099038d
@@ -21,6 +22,14 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x00126A64U, {0xE28D0010U, 0xE320F000U, 0xEB000045U, 0xE5951008U}},
     Mm3dLightingHookSite{0x00126AA8U, {0xE320F000U, 0xE320F000U, 0xEB000AD9U, 0xE28730DCU}},
     Mm3dLightingHookSite{0x0012C6A8U, {0xE92D41F0U, 0xE0812081U, 0xE0807101U, 0xE2878A06U}},
+    // Actor init dispatches (UpdateAll's two paths and spawn-time Actor_Init),
+    // Actor_Destroy, and the model vtable destructor. EUR v1.1, re-derived
+    // from callback loads +138/+13c and vtable 63bed4; never replace guest code.
+    Mm3dLightingHookSite{0x001749C4U, {0xE5942138U, 0xE1A01007U, 0xE1A00004U, 0xE12FFF32U}},
+    Mm3dLightingHookSite{0x00174EBCU, {0xE5942138U, 0xE59D1084U, 0xE1A00004U, 0xE12FFF32U}},
+    Mm3dLightingHookSite{0x00191200U, {0xE5942138U, 0xE1A01006U, 0xE1A00004U, 0xE12FFF32U}},
+    Mm3dLightingHookSite{0x00191238U, {0xE92D47F0U, 0xE1A04000U, 0xE1A07001U, 0xE3A06000U}},
+    Mm3dLightingHookSite{0x005EC220U, {0xE92D4010U, 0xE1A04000U, 0xE59F00C0U, 0xE5840000U}},
     Mm3dLightingHookSite{0x0015E9ECU, {0xE92D4FF0U, 0xE1A04000U, 0xE2807B33U, 0xE3A00000U}},
     Mm3dLightingHookSite{0x00182C44U, {0xE12FFF32U, 0xE59400CCU, 0xE3500000U, 0x0A00004FU}},
     Mm3dLightingHookSite{0x00182C48U, {0xE59400CCU, 0xE3500000U, 0x0A00004FU, 0xE5D40004U}},
@@ -45,6 +54,12 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x005EF0CCU, {0xE12FFF32U, 0xE5940004U, 0xE2855004U, 0xE0840100U}},
     Mm3dLightingHookSite{0x005EF0D0U, {0xE5940004U, 0xE2855004U, 0xE0840100U, 0xE2800008U}},
 };
+inline constexpr std::array kMm3dCompositionOwnerGuards{
+    std::pair{0x0039F068U, 0xE92D4070U}, std::pair{0x0039F06CU, 0xE1A04000U},
+    std::pair{0x004C03F4U, 0xE92D4FF0U}, std::pair{0x004C03F8U, 0xE3A09000U},
+    std::pair{0x0063BED4U, 0x005EC220U},
+    std::pair{0x0067C9E8U, 0x00060087U}, std::pair{0x0067CA04U, 0x0039F068U},
+    std::pair{0x00689C3CU, 0x00070041U}, std::pair{0x00689C58U, 0x004C03F4U}};
 // Observers decline replacement: the original instruction always executes.
 // Also exported by --block-boundaries; adding a runtime site alone does not
 // regenerate an already-built registry.

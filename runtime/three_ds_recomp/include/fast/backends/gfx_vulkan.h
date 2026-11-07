@@ -726,6 +726,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // before UI kept for an upscaler; native UI writes carry it like the
         // resolved serial, any other write ends it.
         uint64_t SceneBeforeUiSerial = 0;
+        uint64_t PresentationFxaaExcludedSerial = 0;
         VkImage MsaaColorImage = VK_NULL_HANDLE;
         VkDeviceMemory MsaaColorMemory = VK_NULL_HANDLE;
         VkImageView MsaaColorView = VK_NULL_HANDLE;
@@ -800,6 +801,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // The same transfer of the scene before native UI was made this frame
         // (mNativePicaSceneBeforeUiDisplays).
         bool SceneBeforeUi = false;
+        bool PresentationFxaaExcluded = false;
     };
 
     struct PresentRequest {
@@ -1708,7 +1710,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                                        uint64_t afterDrawSubmissionId,
                                        GpuTextureCopySourceImport& output,
                                        std::string* error,
-                                       const Renderer3ds::PicaCompositionStageAnchor* beforeUi = nullptr);
+                                       const Renderer3ds::PicaCompositionStageAnchor* beforeUi = nullptr,
+                                       bool fxaaBeforeUi = false);
     // The display graph body, shared between presentation and the raw copy's
     // scene-source composition so the graph is executed exactly once and in the
     // same order in both cases. `copyOutput` (and the `copySource` it belongs
@@ -1722,7 +1725,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const NativePicaDisplayImage& display,
         NativePicaRenderTarget* copySource,
         GpuTextureCopySourceImport* copyOutput, std::string* error,
-        bool beforeNativeUi = false);
+        bool beforeNativeUi = false, bool fxaaBeforeUi = false);
     bool SubmitNativePicaTextureCopy(const GfxNativePicaDisplayTransferView& transfer, std::string* error);
     // GPU producers a later draw samples without a raw copy: a colour target
     // written by earlier draws, and the tiled result of a DisplayTransfer.

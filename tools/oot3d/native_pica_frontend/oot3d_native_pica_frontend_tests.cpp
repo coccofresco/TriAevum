@@ -1230,6 +1230,38 @@ int main(int argc, char** argv) {
                     Oot3dNativeGame::Oot3dPicaCompositionLayer::Unknown,
             "a called buffer's draws did not take the calling jump's span");
 
+    // Persistent source-buffer identities are explicit, transient metadata.
+    // The caller arena and its returned direct draw must never become parts.
+    auto temporalCallSpans = callSpans;
+    auto& temporalAttribution = temporalCallSpans[0].Attribution;
+    temporalAttribution.TemporalIdentity = {7U, 11U, 1U, 2ULL << 32U, 13U};
+    temporalAttribution.TemporalCommandBufferIdentity = true;
+    temporalAttribution.ExcludeFromPresentationFxaa = true;
+    for (uint64_t lifetime : {13U, 17U}) {
+        temporalAttribution.TemporalIdentity.Lifetime = lifetime;
+        const size_t first = frontend.PendingDrawPackets().size();
+        Require(frontend.SetNextCommandListCompositionSpans(
+                    callSubmit.Parameters[0], callSubmit.Parameters[1], temporalCallSpans, &error) &&
+                    frontend.SubmitGspCommand(callSubmit, callerList, &error), error);
+        const auto& draws = frontend.PendingDrawPackets();
+        Require(draws[first].Composition.TemporalIdentity ==
+                    Fast::Renderer3ds::PicaTemporalIdentity{7U, 11U, 0x14294600U, 2ULL << 32U, lifetime} &&
+                    !draws[first].Composition.TemporalCommandBufferIdentity &&
+                    draws[first].Composition.ExcludeFromPresentationFxaa &&
+                    !draws[first + 1U].Composition.ExcludeFromPresentationFxaa &&
+                    !draws[first + 1U].Composition.TemporalIdentity.Available(),
+                "source-buffer identity lost ownership/lifetime or escaped on return");
+    }
+    // A direct write with the same opt-in fails closed, even in a valid span.
+    temporalCallSpans[0].BeginAddress = 0x14000B18U;
+    temporalCallSpans[0].EndAddress = 0x14000B20U;
+    const size_t directFirst = frontend.PendingDrawPackets().size();
+    Require(frontend.SetNextCommandListCompositionSpans(
+                callSubmit.Parameters[0], callSubmit.Parameters[1], temporalCallSpans, &error) &&
+                frontend.SubmitGspCommand(callSubmit, callerList, &error), error);
+    Require(!frontend.PendingDrawPackets()[directFirst + 1U].Composition.TemporalIdentity.Available(),
+            "a transient direct command destination became a persistent part");
+
     frontend.SetCommandBufferReader({});
     Require(!frontend.SubmitGspCommand(jumpSubmit, jumpCommandList, &error),
             "PICA command buffer jump without a reader was accepted");
