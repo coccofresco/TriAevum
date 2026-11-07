@@ -1,12 +1,26 @@
 # Native composition ownership (guarded EUR image)
 
-**Latest receipt: implementation `2ce2f911`; F03/F18 still incomplete.**
-The reduced-resolution NIS HUD blocker is closed for the measured Woodfall slice:
-1,069/1,078 sampled label pixels match Off exactly; the remainder differ by at
-most one RGB8 level, with and without GTAO. Scene raster stays512x853; native UI
-raster is768x1280. This does not close the full title/provider/mode inventory.
-Latest evidence: `COMPOSITION/OUTPUT_UI/`; older qualification sections below are
-historical. Both changed slices have exact three-frame OoT O2 hash preservation.
+**Latest receipt: implementations `df32ec81` / `a40d3495`; F03/F18 still incomplete.**
+Deferred CMB resource identities are revalidated at consumption/publication.
+Shared object history now handles proved consecutive native sources across
+host-only refreshes; see `docs/NATIVE_TEMPORAL_HISTORY.md`. The first providers
+run passed HUD acceptance but failed exact-motion coverage. Its offline cadence
+diagnosis led to the shared fix, not a retry. The distinct pause→DLSS gameplay
+smoke has25 exact rigid/object draws at capture (maximum26);24 draws still lack
+identity and temporal primitive spans remain0. OoT O2 retains all3 original hashes.
+
+The measured Woodfall NIS HUD blocker remains closed (prior1,069/1,078 exact
+label pixels, remaining max1 RGB8, with/without GTAO). New FSR/DLSS comparisons
+are1,074/1,075 of1,078 exact, remaining max1. Scene raster stays512x853; native UI
+raster is768x1280. FSR final-source exact motion was not rerun. Pause/map is
+readable and restores safely, but has2 unknown-layer targets,0 stage anchors and
+0 NIS dispatch despite NIS configuration: not full menu ownership/appearance
+qualification. Deformed motion, broad lifecycle/rebinding, normal-guide and full
+provider/UI/output-extent coverage remain open.
+
+Latest evidence: `COMPOSITION/LIFETIME/`; earlier NIS evidence is under
+`COMPOSITION/OUTPUT_UI/`. Twelve CPU suites and142 native guards pass; all8 packs
+are unchanged. Older qualification sections below remain historical.
 
 The adapter observes native producers and consumers; it does not replace guest
 code. `mm3d_lighting_hook_sites.h` guards every observed block and requires its
