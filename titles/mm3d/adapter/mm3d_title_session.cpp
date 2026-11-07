@@ -43,6 +43,15 @@ public:
   Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
   bool NativeFragmentLighting() const override { return true; }
   std::string_view CompanionLightName() const override { return "Tatl"; }
+  bool HasButtonOverlay() const override { return true; }
+  void ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) override {
+    if (mSingleScreen) mSingleScreen->ConfigureButtonOverlay(config, prompts);
+  }
+  void RecordButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->RecordButtonOverlay(draw); }
+  void SelectButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->SelectButtonOverlay(draw); }
+  std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float scale) const override {
+    return mSingleScreen ? mSingleScreen->ButtonOverlay(scale) : std::vector<oot3d::ui::UiPrimitive>{};
+  }
   std::string_view GrassRuleNamespace() const override { return "mm3d"; }
   std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
       oot3d::recomp::a32::MemoryBus& memory, uint64_t sourceFrame) const override {
@@ -284,11 +293,15 @@ public:
   }
 #endif
 
-  void Reset() override { mComposition.Reset(); }
+  void Reset() override {
+    mComposition.Reset();
+    if (mSingleScreen) mSingleScreen->ResetButtonOverlay();
+  }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
     return nlohmann::json{
+        {"button_overlay", mSingleScreen ? nlohmann::json(mSingleScreen->ButtonOverlaySummary()) : nlohmann::json::object()},
         {"scope_entries", stats.ScopeEntries},
         {"scope_exits", stats.ScopeExits},
         {"recorded_spans", stats.RecordedSpans},

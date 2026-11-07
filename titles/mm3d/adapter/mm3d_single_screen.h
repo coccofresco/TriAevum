@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mm3d_guest_patches.h"
+#include "native_button_overlay.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -16,6 +17,7 @@ class Core;
 namespace Oot3dNativeGame {
 
 class Mm3dRestorationPort;
+class Mm3dButtonOverlay;
 
 // Majora's Mask 3D's single-screen mode: mm3d-dekui's guest side
 // (titles/mm3d/dekui, ported onto the vanilla v1.1 code.bin) run the way
@@ -50,10 +52,17 @@ class Mm3dSingleScreen {
     static bool LoadSettings(const std::filesystem::path& path);
     // dekui's difficulty option (1..16), until the F1 menu owns its settings.
     static void SetDamageMultiplier(int multiplier);
+    void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet);
+    void RecordButtonOverlay(uint64_t);
+    void SelectButtonOverlay(uint64_t);
+    void ResetButtonOverlay();
+    std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float) const;
+    std::map<std::string, uint64_t> ButtonOverlaySummary() const;
 
   private:
     // dekui's headers stay out of the window's translation units.
     std::unique_ptr<Mm3dDekui::Core> mCore;
+    std::unique_ptr<Mm3dButtonOverlay> mButtonOverlay;
     std::map<std::uint32_t, std::uint32_t> mReplacements;
     Mm3dRestorationPort* mRestoration = nullptr;
 };

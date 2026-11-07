@@ -201,6 +201,11 @@ summary and the help card show the buttons of the device in the user's hands
 
 ## HUD button labels
 
+MM3D has a separate dekui/Restoration native-layout adapter, configured through
+F1 > Controls > Devices > **Native button labels**. See
+[MM3D controller glyphs](MM3D_CONTROLLER_GLYPHS.md) for ownership, persistence
+and the live-qualification boundary. The TopScreen details below are OoT-specific.
+
 The letters that name the 3DS buttons on the TopScreen HUD (A, B, X, Y, ZL,
 ZR) show the glyph of the button or key the player has bound to that 3DS
 button, in the prompt family of the device in use (UX decision 7):

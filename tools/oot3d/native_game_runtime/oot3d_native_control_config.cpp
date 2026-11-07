@@ -157,10 +157,10 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     SetError(error, "native control config root/output is invalid");
     return false;
   }
-  constexpr std::array<std::string_view, 14> kAllowedFields{
+  constexpr std::array<std::string_view, 15> kAllowedFields{
       "schema", "profile", "devices", "bindings", "analog", "aim",
       "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse", "controller_touchpad",
-      "button_prompts", "rumble"};
+      "button_prompts", "rumble", "native_button_labels"};
   const std::set<std::string_view> allowed(kAllowedFields.begin(),
                                            kAllowedFields.end());
   for (const auto& [key, value] : document.items()) {
@@ -241,6 +241,14 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
   if (!ReadNamedField(document, "button_prompts", &parsed.ButtonPrompts,
                       ThreeDsRecomp::Input::ParseButtonPrompts, error)) {
     return false;
+  }
+
+  if (document.contains("native_button_labels")) {
+    if (!document.at("native_button_labels").is_boolean()) {
+      SetError(error, "native_button_labels must be a boolean");
+      return false;
+    }
+    parsed.NativeButtonLabels = document.at("native_button_labels").get<bool>();
   }
 
   if (!ReadNamedField(document, "rumble", &parsed.Rumble,
@@ -729,6 +737,7 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
   };
   // Written only when fixed: a file with the default stays readable by a
   // build that does not know the field.
+  if (!config.NativeButtonLabels) document["native_button_labels"] = false;
   if (config.ButtonPrompts != NativeButtonPrompts::Automatic)
     document["button_prompts"] = ThreeDsRecomp::Input::ButtonPromptsName(config.ButtonPrompts);
   if (config.Rumble != NativeRumbleStrength::Off)

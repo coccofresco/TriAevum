@@ -490,6 +490,7 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],&item_present_hook);
                 regs[2]=file_select_prompt_hook.Root(guest,file_select_hook,options_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive());
+                if(host.layout_draw)host.layout_draw(guest,regs[4],regs[2],inventory_hook.pass);
                 if(regs[2]!=regs[4]+8)regs[13]=regs[2];
                 break;
             case 3:
