@@ -318,6 +318,24 @@ int main() {
                     process.Memory().Read32(0x00100020U, &word) &&
                     word == 0xDEADBEEFU,
                 "savestate accepted a document size the frame contradicts");
+        // Negative container inputs must not mutate the running process.
+        auto badVersion = file;
+        writeWord(badVersion, 8U, 4U, 99U);
+        auto corrupt = file;
+        corrupt.back() ^= 0x80U;
+        auto truncated = file;
+        truncated.resize(file.size() - 1U);
+        for (const auto& damaged : {badVersion, corrupt, truncated}) {
+            const auto damagedPath = root / "damaged.oot3dsav";
+            std::ofstream(damagedPath, std::ios::binary)
+                .write(reinterpret_cast<const char*>(damaged.data()),
+                       static_cast<std::streamsize>(damaged.size()));
+            Require(!LoadNativeA32State(damagedPath, compatibility, refused,
+                                       process, host, picaFrontend, submissionQueue,
+                                       dspHle, nullptr, &refusal) &&
+                        process.Memory().Read32(0x00100020U, &word) && word == 0xDEADBEEFU,
+                    "damaged/version-incompatible state mutated or loaded the process");
+        }
         NativeA32SavestateRuntimeState legacyRuntime;
         Require(LoadNativeA32State(legacyPath, compatibility, legacyRuntime,
                                    process, host, picaFrontend,
@@ -475,6 +493,30 @@ int main() {
                 statePath, incompatible, runtime, process, host,
                 picaFrontend, submissionQueue, dspHle, nullptr, &error),
             "savestate accepted an incompatible code.bin identity");
+
+    // Same synthetic memory/code is not permission to cross title identities.
+    // This is a host-format fixture, not native MM gameplay save qualification.
+    auto mmCompatibility = compatibility;
+    mmCompatibility.ProcessName = "mm3d";
+    const auto mmPath = root / "mm3d-synthetic.oot3dsav";
+    Require(SaveNativeA32State(mmPath, mmCompatibility, runtime, process, host,
+                              picaFrontend, submissionQueue, dspHle, nullptr, &error), error);
+    Require(process.Memory().Write32(0x00100020U, 0xDEADBEEFU), "cannot set sentinel");
+    uint32_t titleSentinel = 0U;
+    Require(!LoadNativeA32State(mmPath, compatibility, runtime, process, host,
+                               picaFrontend, submissionQueue, dspHle, nullptr, &error) &&
+                process.Memory().Read32(0x00100020U, &titleSentinel) && titleSentinel == 0xDEADBEEFU,
+            "foreign title state was accepted or mutated memory");
+    auto wrongSnapshot = mmCompatibility;
+    wrongSnapshot.A32SourceSnapshotId = "foreign-generated-runtime";
+    Require(!LoadNativeA32State(mmPath, wrongSnapshot, runtime, process, host,
+                               picaFrontend, submissionQueue, dspHle, nullptr, &error) &&
+                process.Memory().Read32(0x00100020U, &titleSentinel) && titleSentinel == 0xDEADBEEFU,
+            "foreign source snapshot state was accepted or mutated memory");
+    Require(LoadNativeA32State(mmPath, mmCompatibility, runtime, process, host,
+                              picaFrontend, submissionQueue, dspHle, nullptr, &error), error);
+    Require(process.Memory().Read32(0x00100020U, &titleSentinel) && titleSentinel == 0x12345678U,
+            "MM-tagged synthetic state did not round trip");
 
     // A state holds the game moment at the guest extent: targets carry colour,
     // depth and stencil only, and the optional host settings travel beside it.

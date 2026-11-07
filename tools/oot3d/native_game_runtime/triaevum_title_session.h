@@ -88,6 +88,9 @@ public:
   [[nodiscard]] virtual bool NativeFragmentLighting() const { return false; }
   // Display name of point group zero, not a separate settings owner.
   [[nodiscard]] virtual std::string_view CompanionLightName() const { return "Navi"; }
+  // Title-owned settings not serialized by the shared state+settings owners.
+  // Shown before saving/loading and retained in the state metadata.
+  [[nodiscard]] virtual std::string_view SavestateSettingsNotice() const { return {}; }
   // The actor profiles (the title's own ids) whose rigid geometry may be
   // cached in static shadow layers. None by default: every actor is dynamic.
   [[nodiscard]] virtual StaticShadowActorPolicy StaticShadowActors() const { return {}; }

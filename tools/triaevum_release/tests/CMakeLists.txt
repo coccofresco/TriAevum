@@ -21,6 +21,7 @@ add_executable(triaevum_f1_settings_smoke EXCLUDE_FROM_ALL
     ../../../titles/oot3d/environment/oot3d_scene_environment_codec.cpp
     ../../../titles/oot3d/environment/oot3d_scene_environment_panel.cpp
     ../../oot3d/native_game_runtime/oot3d_savestate_panel.cpp
+    ../../oot3d/native_game_runtime/oot3d_savestate_settings.cpp
     ../../oot3d/native_game_runtime/oot3d_savestate_library.cpp
     ${_f1_imgui_source}/imgui.cpp
     ${_f1_imgui_source}/imgui_draw.cpp

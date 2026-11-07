@@ -1243,7 +1243,9 @@ void NativeA32WindowSession::Setup() {
             topScreenConfigRuntime));
   }
   applicationSettingsTabs.push_back(
-      Oot3dNativeGame::CreateSavestatePanel(savestateLibrary));
+      Oot3dNativeGame::CreateSavestatePanel(
+          savestateLibrary, titleSession ? std::string(titleSession->SavestateSettingsNotice())
+                                        : std::string{}));
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
 #if defined(__ANDROID__)
   constexpr bool kOfferAudioFocusMute = false;

@@ -43,6 +43,10 @@ public:
   Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
   bool NativeFragmentLighting() const override { return true; }
   std::string_view CompanionLightName() const override { return "Tatl"; }
+  std::string_view SavestateSettingsNotice() const override {
+    return "MM-specific dekui/Restoration, presentation and damage settings are not "
+           "included in state + settings; their current configuration is kept.";
+  }
   bool HasButtonOverlay() const override { return true; }
   void ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) override {
     if (mSingleScreen) mSingleScreen->ConfigureButtonOverlay(config, prompts);

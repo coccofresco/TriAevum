@@ -7,6 +7,7 @@
 #include "oot3d_photo_mode_panel.h"
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
+#include "oot3d_savestate_settings.h"
 #include "triaevum_audio_settings_panel.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS) && defined(TRIAEVUM_TITLE_MM3D)
 #include "oot3d_dev_tools_panel.h"
@@ -532,13 +533,44 @@ void CheckAudioPanel() {
 // with its default, the listing that picks the state F8 loads, and status.
 void CheckSavestatePanel() {
     using namespace Oot3dNativeGame;
+    SavestateSettingsOwners owners;
+    owners.TitleSettingsNotice = "Adapter settings are omitted; current configuration is kept.";
+    const auto captured = CaptureSavestateSettings(owners);
+    Check(nlohmann::json::parse(captured).at("title_settings_notice") == owners.TitleSettingsNotice,
+          "state metadata lost the settings omission notice");
+    const auto applied = ApplySavestateSettings(captured, owners);
+    Check(applied.Success && std::find(applied.Lines.begin(), applied.Lines.end(),
+          owners.TitleSettingsNotice) != applied.Lines.end(), "load did not disclose omitted settings");
+    const auto before = CaptureSavestateSettings(owners);
+    for (const auto* invalid : {"{", "[]", "{}", "{\"schema\":null}",
+             "{\"schema\":\"1\"}", "{\"schema\":[]}", "{\"schema\":{}}",
+             "{\"schema\":true}", "{\"schema\":1.0}", "{\"schema\":2}"}) {
+        const auto rejected = ApplySavestateSettings(invalid, owners);
+        Check(!rejected.Success && CaptureSavestateSettings(owners) == before,
+              "damaged settings threw, succeeded or mutated a live owner");
+    }
+    auto saved = GraphicsSettingsRuntime::Instance().Snapshot();
+    auto current = saved;
+    current.DisplayIndex = saved.DisplayIndex + 1;
+    current.RefreshRate = saved.RefreshRate + 1;
+    current.Window = saved.Window == WindowMode::Windowed ? WindowMode::Borderless : WindowMode::Windowed;
+    current.OutputWidth = saved.OutputWidth + 16;
+    current.OutputHeight = saved.OutputHeight + 16;
+    current.VSync = !saved.VSync;
+    const auto merged = MergeSavedGraphicsSettings(saved, current);
+    Check(merged.DisplayIndex == current.DisplayIndex && merged.RefreshRate == current.RefreshRate &&
+          merged.Window == current.Window && merged.OutputWidth == current.OutputWidth &&
+          merged.OutputHeight == current.OutputHeight && merged.VSync == current.VSync,
+          "state settings replaced machine display selection");
     const auto root = std::filesystem::temp_directory_path() /
         ("triaevum-savestates-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto defaultFolder = root / "exe" / "savestates";
     auto library = std::make_shared<SavestateLibrary>(root / "config" / "savestates.json", defaultFolder);
-    InstallGraphicsSettingsPanelTabs({CreateSavestatePanel(library)});
+    InstallGraphicsSettingsPanelTabs({CreateSavestatePanel(library, owners.TitleSettingsNotice)});
     Frame(); Frame();
-    Click("Game"); Click("Save states"); Frame();
+    Click("Game"); Click("Save states"); Frame(true);
+    Check(loggedPanelText.find(owners.TitleSettingsNotice) != std::string::npos,
+          "save-state settings omission is not visible before the action");
     Check(Find("Load last state (F8)").Disabled && Find("Load last state + settings (Shift+F8)").Disabled,
           "load buttons enabled without any state");
     const auto expectRequest = [&](const char* button, SavestateRequestKind kind, bool withSettings) {

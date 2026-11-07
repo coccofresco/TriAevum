@@ -24,6 +24,8 @@ struct SavestateSettingsOwners {
   std::shared_ptr<TopScreenUiConfigRuntime> TopScreen;
   std::shared_ptr<NativeControlConfigRuntime> Controls;
   std::shared_ptr<GameLanguageSettings> Language;
+  // Adapter-authored disclosure, never supplied by an untrusted state file.
+  std::string TitleSettingsNotice;
 };
 
 // JSON object text.
