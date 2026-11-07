@@ -21,6 +21,7 @@
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_pica_draw_state.h"
 #include "mm3d_photo_camera_hook.h"
+#include "mm3d_presentation_settings.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "mm3d_dev_tools.h"
 #endif
@@ -61,6 +62,10 @@ public:
     return contacts;
   }
 
+  bool OwnsSceneProjection() const override { return true; }
+  void SetPresentation(const TitlePresentationSettings& settings) override {
+    ApplyMm3dPresentationSettings(settings);
+  }
   std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
       oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
     return mRumble.Poll(memory, enabled);

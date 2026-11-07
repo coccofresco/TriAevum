@@ -1982,6 +1982,12 @@ void NativeA32WindowSession::UpdateScenePresentation() {
           std::max<uint32_t>(1, presentationPicture.Width),
           std::max<uint32_t>(1, presentationPicture.Height));
   widescreenProjection.Projection.FovMultiplier = graphics.FovMultiplier;
+  widescreenProjection.Projection.TitleOwnsSceneProjection = titleSession && titleSession->OwnsSceneProjection();
+  if (titleSession) {
+    const auto& presentation = widescreenProjection.Projection.Presentation;
+    titleSession->SetPresentation({graphics.FovMultiplier, presentation.HorizontalFovExpansion,
+                                   presentation.VerticalFovExpansion, graphics.ExtendedDrawDistance});
+  }
   auto &visibility = widescreenProjection.ActorVisibility;
   visibility.ExtendedDrawDistance = graphics.ExtendedDrawDistance;
   visibility.Presentation = widescreenProjection.Projection.Presentation;

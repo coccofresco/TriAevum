@@ -447,6 +447,7 @@ struct NativeSceneProjectionState {
   // whose frusta also serve other views holds the latest one until its
   // composition tracker reaches the opaque world pass, and publishes that.
   bool FrustumIsSceneView = true;
+  bool TitleOwnsSceneProjection = false;
   using PendingFrustum = Oot3dNativeGame::TitleSceneFrustum;
   std::optional<PendingFrustum> PendingSceneFrustum;
   uint64_t FrustumCalls = 0;

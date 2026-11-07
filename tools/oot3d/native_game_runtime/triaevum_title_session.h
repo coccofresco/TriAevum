@@ -14,6 +14,7 @@
 #include "triaevum_title_adapter.h"
 #include "fast/extension/grass_types.h"
 #include "gameplay_rumble.h"
+#include "triaevum_title_presentation.h"
 
 #include <nlohmann/json.hpp>
 
@@ -103,6 +104,11 @@ public:
     (void)memory; (void)sourceFrame;
     return {};
   }
+
+  virtual void SetPresentation(const TitlePresentationSettings& settings) { (void)settings; }
+  // A title may apply the renderer/window policy at its native scene projection
+  // loads. Its unrelated stereo/base-frustum helper must then stay untouched.
+  [[nodiscard]] virtual bool OwnsSceneProjection() const { return false; }
 
   // Optional product photo-camera input gate. nullopt preserves legacy title
   // handling; false releases gameplay input to menus/cutscenes/transitions.

@@ -909,6 +909,9 @@ void ApplyNativeWidescreenProjectionPolicy(
     return;
   }
   auto &projection = runtime.Projection;
+  // MM's scene projection is the fovy/aspect builder, not the stereo base
+  // frustum. Its adapter applies these same owners at the two live loads.
+  if (projection.TitleOwnsSceneProjection && pc == projection.PerspectiveFrustumEntry) return;
   if (pc != projection.PerspectiveFrustumEntry &&
       pc != kMtx4x4BuildOrthographicProjectionRotated) {
     return;

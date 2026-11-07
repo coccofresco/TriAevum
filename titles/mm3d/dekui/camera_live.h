@@ -27,6 +27,23 @@ inline std::mutex mutex;
 inline Snapshot published;
 inline std::atomic<float> desired_fov{45.f};
 inline std::atomic<float> desired_cutscene_fov{49.f}; // dekui 6e36dfb4 scripted-camera setting
+// Product host owns these; standalone dekui retains its legacy settings path.
+inline std::atomic<bool> renderer_owned{false};
+inline std::atomic<float> renderer_fov_multiplier{1.f}, horizontal_expansion{1.f}, vertical_expansion{1.f};
+inline float Expansion(float v) { return std::isfinite(v) ? std::max(1.f,v) : 1.f; }
+inline U32 PresentedProjectionValue(U32 native_bits,bool scripted,float multiplier,float vertical) {
+    const float native=std::bit_cast<float>(native_bits);
+    if(!std::isfinite(native)||native<=0.f||native>=170.f)return native_bits;
+    constexpr float rad=3.14159265358979323846f/360.f;
+    // Same degree multiplier as renderer ResolvePerspectiveFov. Preserve native
+    // animation; scripted cameras have dekui's 49-vs-45 base before scaling.
+    float degrees=scripted?std::atan(std::tan(native*rad)*std::tan(49.f*rad)/std::tan(45.f*rad))/rad:native;
+    multiplier=std::isfinite(multiplier)?std::clamp(multiplier,1.f,1.5f):1.f;
+    vertical=Expansion(vertical);
+    if(!scripted&&multiplier==1.f&&vertical==1.f)return native_bits;
+    degrees=std::min(degrees*multiplier,178.f);
+    return std::bit_cast<U32>(std::atan(std::tan(degrees*rad)*vertical)/rad);
+}
 // Translation-only replacement of the two verified primary projection loads.
 // This does not patch the ROM or guest code/data memory.
 constexpr U32 ProjectionSVC=0x00fffffe;
@@ -73,6 +90,25 @@ template<class M> bool ChangeModeCodeMatches(M& m) {
         0xe1a02006,ChangeModeWord,0xecbd0b20,0xe49df004};
     for(unsigned i=0;i<code.size();++i)if(m.Read(0x007d08e4+4*i)!=std::optional<U32>(code[i]))return false; // ref 0x7d08e4 (Restoration source port)
     return true;
+}
+// The product aspect bridge also changes S1/View.aspect. Guard its two
+// consumers and the fovy/aspect builder, not merely the original VLDR S0.
+inline constexpr std::array<std::pair<U32,U32>,8> SceneProjectionGuards{{
+    {0x18d410,0xedc40a05},{0x18d424,0xeb00a3df},
+    {0x18d430,0xedd40a05},{0x18d444,0xeb00a3d7},
+    {0x1b63a8,0xe92d4030},{0x1b63ac,0xe1a05001},
+    {0x1b63b0,0xe1a04000},{0x1b63b4,0xed2d8b04}
+}};
+template<class M> bool PrimaryGameplayProjection(M& m,U32 projection) {
+    for(const auto& [pc,word]:SceneProjectionGuards)
+        if(m.Read(pc)!=std::optional<U32>(word))return false;
+    if(projection<0x080001f8||projection>=0x40000000||projection&3)return false;
+    const U32 play=projection-0x1f8;
+    const auto type=m.Read(play+0x13c);
+    return m.Read(CameraPointer)==std::optional<U32>(projection)&&type&&((*type>>8)&255)==4&&
+      m.Read(play+0x4a8)==std::optional<U32>(play)&&
+      m.Read(projection+4)==std::optional<U32>(0)&&m.Read(projection+8)==std::optional<U32>(400)&&
+      m.Read(projection+12)==std::optional<U32>(0)&&m.Read(projection+16)==std::optional<U32>(240);
 }
 template<class M> float ConfiguredFov(M& m,U32 projection) {
     // Only the live top-screen projection, not menu or preview cameras.
