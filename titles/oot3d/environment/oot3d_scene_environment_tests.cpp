@@ -26,6 +26,14 @@ void Check(bool condition, const char *what) {
 void Write(const std::filesystem::path &path, const std::string &text) {
   std::ofstream file(path, std::ios::binary | std::ios::trunc);
   file << text;
+  file.close();
+  Check(bool(file), "cannot write profile fixture");
+  // Polling observes size/mtime. Simulated settling must not depend on the
+  // scratch filesystem's wall-clock granularity (same-size writes can share
+  // an mtime, notably on FAT/exFAT). Give every fixture write a distinct tick.
+  static auto stamp = std::filesystem::file_time_type::clock::now();
+  stamp += std::chrono::seconds(2);
+  std::filesystem::last_write_time(path, stamp);
 }
 
 std::string Profile(float ambient, bool night) {
