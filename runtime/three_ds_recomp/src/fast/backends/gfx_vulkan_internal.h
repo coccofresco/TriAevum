@@ -112,10 +112,15 @@ using Renderer3ds::LoadPipelineCacheData;
 using Renderer3ds::StorePipelineCacheData;
 using Renderer3ds::kMaximumNriPipelineCacheBytes;
 
+// The running title's own pipeline cache file (its namespace,
+// fast/renderer3ds/title_shader_preparation.h). Empty without a cache
+// directory or with an invalid namespace: the cache then stays in memory.
 std::filesystem::path VulkanPipelineCachePath(bool nri = false) {
     const auto directory = VulkanShaderCacheDirectory();
-    return directory.empty() ? std::filesystem::path{}
-        : directory / (nri ? Renderer3ds::kNriPipelineCacheFilename : "pipeline_cache.bin");
+    const auto filename = Renderer3ds::TitlePipelineCacheFilename(
+        nri ? Renderer3ds::kNriPipelineCacheFilename : "pipeline_cache.bin",
+        Renderer3ds::InstalledTitleShaderPreparation().PipelineCacheNamespace);
+    return directory.empty() || filename.empty() ? std::filesystem::path{} : directory / filename;
 }
 
 void CheckVk(VkResult result, const char* operation) {

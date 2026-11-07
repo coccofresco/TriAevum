@@ -112,6 +112,18 @@ public:
   virtual void RecordButtonOverlay(uint64_t) {}
   virtual void SelectButtonOverlay(uint64_t) {}
   virtual std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float) const { return {}; }
+  // Whether the title has prepared shaders: a vertex-program family and
+  // fragment-family packs built in, and a scenario corpus and Forge
+  // preparation behind the persistent pipeline cache
+  // (fast/renderer3ds/title_shader_preparation.h). Without them the renderer
+  // uses no always-available programs; every program a draw uses is still
+  // compiled when the draw needs it. OoT3D (no session) has them.
+  [[nodiscard]] virtual bool PreparedShaders() const { return false; }
+  // The title's pipeline cache namespace: its own pipeline cache files in
+  // the renderer cache directory, never another title's (non-empty; lower
+  // case letters, digits, '_' and '-'). OoT3D (no session) keeps the
+  // original file names.
+  [[nodiscard]] virtual std::string_view PipelineCacheNamespace() const = 0;
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }
@@ -170,5 +182,21 @@ public:
 // adapter needs none (OoT3D EUR, generic titles). Throws when the title's
 // adapter is not part of this build.
 std::unique_ptr<TitleSession> CreateTitleSession(TitleAdapter adapter);
+
+// Whether the running title has prepared shaders (TitleSession::PreparedShaders):
+// its session says so; OoT3D's adapter, still wired into the window session
+// itself, has them; a generic title has none.
+[[nodiscard]] inline bool TitlePreparedShaders(TitleAdapter adapter, const TitleSession *session) {
+  return session != nullptr ? session->PreparedShaders() : adapter == TitleAdapter::Oot3dEur;
+}
+
+// The running title's pipeline cache namespace (TitleSession::
+// PipelineCacheNamespace): its session's; OoT3D keeps the original file
+// names (empty); a generic title has its own files, apart from OoT3D's.
+[[nodiscard]] inline std::string_view TitlePipelineCacheNamespace(TitleAdapter adapter,
+                                                                 const TitleSession *session) {
+  if (session != nullptr) return session->PipelineCacheNamespace();
+  return adapter == TitleAdapter::Oot3dEur ? std::string_view{} : std::string_view{"generic"};
+}
 
 } // namespace Oot3dNativeGame

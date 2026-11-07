@@ -9,6 +9,7 @@
 #include "oot3d_savestate_migration.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/title_grass_rules_file.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
 
@@ -1317,6 +1318,10 @@ void NativeA32WindowSession::Setup() {
   if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {
     Fast::Extension::InstallGraphicsSettingsWindowTitle(title);
   }
+  // The renderer reads it when the context starts it.
+  Fast::Renderer3ds::InstallTitleShaderPreparation(
+      {Oot3dNativeGame::TitlePreparedShaders(titleAdapter, titleSession.get()),
+       std::string(Oot3dNativeGame::TitlePipelineCacheNamespace(titleAdapter, titleSession.get()))});
   InitContextForDemo(hostArgs);
   // What the title itself provides to the graphics settings: the effects
   // that need a scene view, and the scene FOV, stay inactive without it.
@@ -1365,6 +1370,9 @@ void NativeA32WindowSession::Setup() {
   alwaysAvailablePrograms =
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
+  // The title pass programs serve the shared renderer passes (shadow
+  // casters among them) of every title: registering them is a lookup table,
+  // and MM3D's draws hit them.
   if (programPreparation != nullptr)
     programPreparation->RegisterTitlePassPrograms(
         Oot3dNativeGame::NativePicaTitlePassPrograms());
