@@ -1,0 +1,9 @@
+# Native object history across host-only refreshes
+
+Object history uses proved title identities and compatible vertex inputs, never draw order or geometry hashes. A presentation sequence declares the complete draw set; culling or ambiguity cannot seed reusable history. Native-memory dependency replays neither seed nor advance presentation history, including when they occur on another host frame.
+
+Host refreshes and native scene presentations need not have the same cadence. Original30 can present scene work on host frames 2, 4, 6 while intervening refreshes repeat scanout. Requiring consecutive host numbers discarded every object history in the measured MM3D Woodfall FSR/DLSS run (25–26 `MissingPrevious` draws per sampled scene submission).
+
+`PicaTemporalHistory::PrepareSequence` accepts optional explicit presentation-sample evidence. It may bridge a host-frame gap only when both samples are valid, non-reset, non-synthetic authoritative samples with interpolation disabled, matching continuity epochs and rates, and strictly consecutive source IDs. Each sample must identify a single source (`PreviousSourceFrameId == CurrentSourceFrameId`). Missing evidence, skipped sources, interpolation gaps and backward host time retain conservative rejection. Existing identity/lifetime, target, shader/layout, input and uniform-size checks remain mandatory. An intervening published cull still retires the object.
+
+The Vulkan backend supplies the published sample. The mechanism contains no title addresses or scene rules. CPU regression tests cover host-only gaps, dependency replay on an idle host frame, culling and invalid continuity evidence. This is not proof of all native object ownership, deforming-mesh coverage or arbitrary source skips. No shader family or shader pack changes are required.

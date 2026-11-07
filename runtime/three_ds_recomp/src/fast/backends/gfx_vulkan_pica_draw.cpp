@@ -78,7 +78,8 @@ bool GfxRenderingAPIVulkan::PublishPicaCompositionSequence(
                 "native PICA composition schedule failed: " +
                 compileError);
         }
-        if (mTemporalMotionEnabled && !mPicaTemporalHistory.PrepareSequence(sequence, mFrameCounter) &&
+        if (mTemporalMotionEnabled && !mPicaTemporalHistory.PrepareSequence(
+                sequence, mFrameCounter, &mPicaSceneFrame.TemporalSample()) &&
             mPicaTemporalHistory.DuplicateTargetSequences == 1U)
             std::fprintf(stderr, "TRIAEVUM_TEMPORAL_DUPLICATE_TARGET frame=%llu: a target was presented twice in one "
                          "host frame; its second sequence draws without motion history\n",
