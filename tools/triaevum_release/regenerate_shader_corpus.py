@@ -309,8 +309,8 @@ def main() -> int:
                         help="Publisher SPIR-V cache shared between regenerations (private)")
     parser.add_argument("--jobs", type=int, help="Parallel compiler workers (default: up to 8)")
     args = parser.parse_args()
-    if not args.capture_corpus and not args.capture_inventory and not args.citra_cache:
-        parser.error("at least one capture corpus, capture inventory or Citra cache is required")
+    if not args.capture_corpus and not args.capture_inventory and not args.citra_cache and not args.variant_records:
+        parser.error("at least one capture corpus, capture inventory, Citra cache or recorded variant session is required")
     print(json.dumps(regenerate(args.tools, args.capture_corpus, args.citra_cache, args.output,
                                 args.variant_records, compile_cache=args.compile_cache, jobs=args.jobs,
                                 synthesis_effects=args.synthesis_effects,

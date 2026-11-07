@@ -1,3 +1,4 @@
+import io
 import json
 import tempfile
 import unittest
@@ -37,6 +38,15 @@ class VariantRecordTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+
+    def test_cli_accepts_complete_variant_sessions_without_a_separate_capture_import(self):
+        argv = ['regenerate_shader_corpus', '--tools', str(self.root / 'tools'),
+                '--output', str(self.root / 'out'), '--variant-records', str(self.root / 'records')]
+        with patch('sys.argv', argv), patch('sys.stdout', new_callable=io.StringIO), \
+                patch.object(regeneration, 'regenerate', return_value={}) as run:
+            self.assertEqual(regeneration.main(), 0)
+        self.assertEqual(run.call_args.args[1:3], ([], []))
+        self.assertEqual(run.call_args.args[4], [self.root / 'records'])
 
     def test_sessions_are_found_recursively(self):
         _session(self.root / "records" / "kokiri")
