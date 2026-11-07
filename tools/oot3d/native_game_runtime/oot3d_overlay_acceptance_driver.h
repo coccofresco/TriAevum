@@ -138,7 +138,20 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
         {"automatic",ThreeDsRecomp::Input::PromptSetLabel(controls.AutomaticPromptSet())},
         {"controls",nlohmann::json::parse(config)}};
     const auto text=observed.dump();
-    if(text!=s.last || frame%100==0){emit({{"observed",observed}});s.last=text;}
+    if(text!=s.last || frame%100==0){
+        nlohmann::json report{{"observed",observed}};
+#ifdef _WIN32
+        auto* window=SDL_GetWindowFromID(1);SDL_SysWMinfo info{};SDL_VERSION(&info.version);
+        if(window&&SDL_GetWindowWMInfo(window,&info)) {
+            int w=0,h=0;SDL_GetWindowSize(window,&w,&h);
+            report["window"]={{"width",w},{"height",h},{"flags",SDL_GetWindowFlags(window)},
+              {"owner_thread",GetWindowThreadProcessId(info.info.win.window,nullptr)},
+              {"poll_thread",GetCurrentThreadId()},{"foreground",GetForegroundWindow()==info.info.win.window},
+              {"hung",IsHungAppWindow(info.info.win.window)!=FALSE}};
+        }
+#endif
+        emit(std::move(report));s.last=text;
+    }
 }
 }
 #endif
