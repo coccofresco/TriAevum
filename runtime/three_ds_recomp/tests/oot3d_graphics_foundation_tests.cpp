@@ -4407,6 +4407,14 @@ TEST(Oot3dPicaScanout, PolicySuppressesAllEffectsAlreadyComposited) {
     EXPECT_EQ(output.Reflections, 0U);
     EXPECT_EQ(output.Outline, 0U);
 
+    input.GuideDiagnostic = true;
+    output = Fast::Extension::BuildPicaScanoutPushConstants(input);
+    EXPECT_EQ(output.Outline, 1U) << "bound diagnostics survive pre-UI composition";
+    EXPECT_EQ(output.AmbientOcclusion, 0U);
+    EXPECT_EQ(output.Reflections, 0U);
+    input.GuideDiagnostic = false;
+    EXPECT_EQ(Fast::Extension::BuildPicaScanoutPushConstants(input).Outline, 0U);
+
     input.EffectsComposited = false;
     output = Fast::Extension::BuildPicaScanoutPushConstants(input);
     EXPECT_EQ(output.AmbientOcclusion, 1U);

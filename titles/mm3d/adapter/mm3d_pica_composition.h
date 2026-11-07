@@ -69,6 +69,8 @@ struct Mm3dNativePicaCompositionStats {
     uint64_t LightBindings = 0;
     uint32_t SceneDirectionalLights = 0;
     uint64_t TemporalModelSpans = 0;
+    uint64_t IsolatedModelSpans = 0;
+    uint64_t AtmosphereModelSpans = 0;
     uint64_t LifecycleInvalidations = 0;
 };
 
@@ -117,6 +119,7 @@ class Mm3dNativePicaCompositionTracker final
     struct ActorLifetime { uint64_t Identity = 0, Lifetime = 0; };
     struct ModelLifetime { uint64_t Owner = 0, OwnerEpoch = 0, Lifetime = 0; };
     struct ModelSubmit { uint32_t Model = 0, ReturnPc = 0; bool Shadow = false; };
+    struct OverlaySubmit { uint32_t Model = 0, List = 0, ReturnPc = 0; };
     struct ModelScope {
         uint32_t ReturnPc = 0, Slot = 0, Begin = 0;
         Oot3dPicaCompositionAttribution Attribution;
@@ -150,6 +153,7 @@ class Mm3dNativePicaCompositionTracker final
     std::vector<uint64_t> mActorDrawStack;
     std::unordered_map<uint32_t, QueueOwner> mQueueOwners;
     std::optional<ModelSubmit> mModelSubmit;
+    std::optional<OverlaySubmit> mOverlaySubmit;
     std::optional<ModelScope> mModelScope;
     Mm3dNativeA32LightingProbe mLighting;
     std::optional<ActiveScope> mActive;

@@ -146,6 +146,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         mPlay = valid ? play : 0U; mScene = scene; mPlayFrame = frame;
         ++mQueueGeneration;
         mQueueOwners.clear(); mActorDrawStack.clear(); mModelSubmit.reset(); mModelScope.reset();
+        mOverlaySubmit.reset();
         mActive.reset(); mFineSuppressed = false;
     }
     if (pc == 0x00182C44U) {
@@ -171,7 +172,19 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (!mModelSubmit || state.r[1] != mModelSubmit->Model || state.r[14] != mModelSubmit->ReturnPc)
             mModelSubmit.reset();
     } else if (pc == 0x00223EDCU) mModelSubmit.reset();
+    if (pc == 0x0011F000U) {
+        // The 2D helper tail-calls the list append with its caller's LR.
+        // Bind the exact model/list/return tuple, not an LR or model guess.
+        uint32_t list = 0;
+        mOverlaySubmit.reset();
+        if (state.r[0] && state.r[0] <= UINT32_MAX - 8U &&
+            memory.Read32(state.r[0] + 8U, &list) && list)
+            mOverlaySubmit = OverlaySubmit{state.r[1], list, state.r[14]};
+    }
     if (pc == 0x00224104U) {
+        const bool overlayProducer = mOverlaySubmit && mOverlaySubmit->List == state.r[0] &&
+            mOverlaySubmit->Model == state.r[1] && mOverlaySubmit->ReturnPc == state.r[14];
+        mOverlaySubmit.reset();
         uint32_t count = 0;
         if (state.r[0] != 0U && state.r[0] <= UINT32_MAX - 0x408U &&
             memory.Read32(state.r[0] + 4U, &count) && count < 256U) {
@@ -179,8 +192,9 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                 if (it->second.List == state.r[0]) it = mQueueOwners.erase(it); else ++it;
             }
             const uint32_t slot = state.r[0] + 8U + count * 4U;
-            const bool producer = state.r[14] == 0x0020A8DCU || state.r[14] == 0x0020A8F8U || state.r[14] == 0x0020A918U;
-            const bool shadow = producer && mModelSubmit && mModelSubmit->Model == state.r[1] && mModelSubmit->Shadow;
+            const bool producer = overlayProducer || state.r[14] == 0x0020A8DCU ||
+                state.r[14] == 0x0020A8F8U || state.r[14] == 0x0020A918U;
+            const bool shadow = producer && !overlayProducer && mModelSubmit && mModelSubmit->Model == state.r[1] && mModelSubmit->Shadow;
             // Always replace the slot, including unrelated producers; never key by model alone.
             QueueOwner owner{state.r[1], mQueueGeneration,
                 !producer || shadow || mActorDrawStack.empty() ? 0U : mActorDrawStack.back(), shadow, state.r[0]};
@@ -193,16 +207,18 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             const uint64_t temporalOwner = liveActor ? owner.Actor :
                 mActorDrawStack.empty() && mPlay ? (1ULL << 63U) | (uint64_t{mScene} << 32U) | mPlay : 0U;
             const uint64_t ownerEpoch = liveActor ? actor->second.Lifetime : 0U;
+            // Semantic ownership belongs to the guarded actor callback, not
+            // the CMB temporal ABI: effects and 2D models may have other vtables.
+            if (liveActor && memory.Read32(uint32_t(owner.Actor) + 0x144U, &callback)) {
+                owner.Isolated = (owner.Actor >> 32U) == 0x87U && callback == 0x0039F068U;
+                owner.Atmosphere = (owner.Actor >> 32U) == 0x41U && callback == 0x004C03F4U;
+            }
             if (producer && !shadow && temporalOwner &&
                 memory.Read32(state.r[1], &vtable) && vtable == 0x0063BED4U) {
                 auto& model = mModelLifetimes[state.r[1]];
                 if (model.Owner != temporalOwner || model.OwnerEpoch != ownerEpoch || !model.Lifetime)
                     model = {temporalOwner, ownerEpoch, NextLifetime()};
                 owner.Lifetime = model.Lifetime;
-                if (liveActor && memory.Read32(uint32_t(owner.Actor) + 0x144U, &callback)) {
-                    owner.Isolated = (owner.Actor >> 32U) == 0x87U && callback == 0x0039F068U;
-                    owner.Atmosphere = (owner.Actor >> 32U) == 0x41U && callback == 0x004C03F4U;
-                }
             }
             mQueueOwners[slot] = owner;
         }
@@ -304,8 +320,11 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             child.Attribution.NativeProjectedShadow = owner->second.Shadow;
             child.Attribution.IsolatedLighting = owner->second.Isolated;
             child.Attribution.ExcludeFromPresentationFxaa |= owner->second.Isolated;
-            if (owner->second.Atmosphere && WorldLayer(child.Attribution.Layer))
+            if (owner->second.Isolated) ++mStats.IsolatedModelSpans;
+            if (owner->second.Atmosphere && WorldLayer(child.Attribution.Layer)) {
                 child.Attribution.Layer = Oot3dPicaCompositionLayer::Atmosphere;
+                ++mStats.AtmosphereModelSpans;
+            }
             const auto lifetime = mModelLifetimes.find(model);
             if (WorldLayer(child.Attribution.Layer) && !child.Attribution.IsolatedLighting && owner->second.Lifetime &&
                 lifetime != mModelLifetimes.end() && lifetime->second.Lifetime == owner->second.Lifetime) {
@@ -470,6 +489,7 @@ void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     mSceneLighting = {};
     mLighting.Reset();
     mActorDrawStack.clear(); mQueueOwners.clear(); mModelSubmit.reset(); mModelScope.reset();
+    mOverlaySubmit.reset();
     mFineSuppressed = false;
     ++mQueueGeneration;
     mStats = {};
