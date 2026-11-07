@@ -1652,12 +1652,14 @@ void NativeA32WindowSession::Setup() {
   WriteSwitchBootStage("audio_runtime_initialized");
 #endif
   phaseStart = std::chrono::steady_clock::now();
+  const bool realtimeAudioClock =
+      !launch.DisableAudio && hostArgs.FixedDeltaSeconds <= 0.0 &&
+      !hostArgs.ThroughputBenchmark;
   auto &presentationScheduler = presentationSchedulerStorage.emplace(
       frameRateContract.SimulationRateHz,
       Oot3dNativeGame::ResolveNativeSimulationCatchUpPolicy(
-          frameRateContract.Mode,
-          !launch.DisableAudio && hostArgs.FixedDeltaSeconds <= 0.0 &&
-              !hostArgs.ThroughputBenchmark));
+          frameRateContract.Mode, realtimeAudioClock),
+      Oot3dNativeGame::NativeAudioRefreshBatchLimit(realtimeAudioClock));
   if (const char* watchRange = std::getenv("TRIAEVUM_WATCH_GUEST_RANGE")) {
     unsigned long long start = 0, size = 0;
     const int parsed = std::sscanf(watchRange, "%llx:%llx", &start, &size);

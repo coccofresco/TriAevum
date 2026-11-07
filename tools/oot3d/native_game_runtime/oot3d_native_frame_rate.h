@@ -41,6 +41,17 @@ inline constexpr uint32_t kMaximumGuestRefreshesPerPresentation = 2U;
 #endif
 inline constexpr uint32_t kMaximumDeferredGuestRefreshes = 8U;
 
+constexpr uint32_t NativeAudioRefreshBatchLimit(bool realtimeAudio) noexcept {
+#if defined(__SWITCH__)
+    // Preserve the platform's explicit slow-host safety policy.
+    return kMaximumGuestRefreshesPerPresentation;
+#else
+    // At 30 presentations/s, two refreshes only sustain 60 Hz; a third
+    // provides bounded recovery capacity for audio after a small stall.
+    return realtimeAudio ? 3U : kMaximumGuestRefreshesPerPresentation;
+#endif
+}
+
 enum class GameplayTimingMode : uint8_t {
     Native30Interpolated,
     Native30NoInterpolation,
@@ -192,6 +203,9 @@ enum class NativeSimulationCatchUpPolicy : uint8_t {
 // throughput captures retain their previous policy.
 constexpr NativeSimulationCatchUpPolicy ResolveNativeSimulationCatchUpPolicy(
     GameplayTimingMode mode, bool realtimeAudio) noexcept {
+#if defined(__SWITCH__)
+    realtimeAudio = false;
+#endif
     return realtimeAudio || mode == GameplayTimingMode::Enhanced60
         ? NativeSimulationCatchUpPolicy::PreserveBoundedDebt
         : NativeSimulationCatchUpPolicy::DropExcess;
@@ -199,14 +213,16 @@ constexpr NativeSimulationCatchUpPolicy ResolveNativeSimulationCatchUpPolicy(
 
 // Separates host presentation from the CTR 60 Hz display clock. Additional
 // host frames cannot advance guest gameplay, audio or physics. A 30 Hz host
-// frame may execute two complete CTR refreshes. The selected policy discards
-// excess or retains at most eight refreshes of debt, never an unbounded loop.
+// frame normally executes two CTR refreshes. Real-time audio may admit one
+// extra catch-up refresh. The selected policy discards excess or retains at
+// most eight refreshes of debt, never an unbounded loop.
 class NativePresentationScheduler {
   public:
     explicit NativePresentationScheduler(
         uint32_t visualSampleRateHz = kOot3dNativeTimeUnitsPerSecond,
         NativeSimulationCatchUpPolicy catchUpPolicy =
-            NativeSimulationCatchUpPolicy::DropExcess);
+            NativeSimulationCatchUpPolicy::DropExcess,
+        uint32_t maximumRefreshBatch = kMaximumGuestRefreshesPerPresentation);
 
     NativePresentationStep Advance(double elapsedSeconds);
     void Reset();
@@ -215,8 +231,10 @@ class NativePresentationScheduler {
     NativePresentationSchedulerState CaptureState() const noexcept;
 
     const NativePresentationSchedulerStats& Stats() const;
+    uint32_t MaximumRefreshBatch() const noexcept { return mMaximumRefreshBatch; }
 
   private:
+    uint32_t mMaximumRefreshBatch = kMaximumGuestRefreshesPerPresentation;
     NativePresentationSchedulerStats mStats;
     uint32_t mVisualSampleRateHz = kOot3dNativeTimeUnitsPerSecond;
     NativeSimulationCatchUpPolicy mCatchUpPolicy =

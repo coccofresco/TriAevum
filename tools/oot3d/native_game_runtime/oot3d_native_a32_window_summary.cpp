@@ -764,7 +764,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                    {"maximum_guest_refresh_batch",
                     presentationStats.MaximumGuestRefreshBatch},
                    {"guest_refresh_batch_limit",
-                    Oot3dNativeGame::kMaximumGuestRefreshesPerPresentation},
+                    presentationScheduler.MaximumRefreshBatch()},
                    {"maximum_deferred_guest_refreshes",
                     presentationStats.MaximumDeferredGuestRefreshes},
                    {"deferred_guest_refresh_limit",

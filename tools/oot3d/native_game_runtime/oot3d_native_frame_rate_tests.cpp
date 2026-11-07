@@ -351,10 +351,42 @@ void RunNativeFrameRateTests() {
                 throw std::runtime_error("native audio clock lost time to presentation jitter");
         }
     }
+#if !defined(__SWITCH__)
+    // A paced 30 Hz host needs recovery capacity beyond two refreshes. Even
+    // a steady 34ms host frame otherwise accumulates debt forever.
+    for (const double period : {0.034, 0.040, 0.045}) {
+        Oot3dNativeGame::NativePresentationScheduler audioClock(30U,
+            Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt,
+            Oot3dNativeGame::NativeAudioRefreshBatchLimit(true));
+        (void)audioClock.Advance(0.0);
+        for (unsigned frame = 0; frame < 1000; ++frame) {
+            const auto step = audioClock.Advance(period);
+            if (step.GuestRefreshesDue > 3U || step.DroppedGuestRefreshes != 0U)
+                throw std::runtime_error("paced audio clock lacks recovery capacity");
+        }
+        const auto expected = 1U + static_cast<uint64_t>(std::llround(period * 60000.0));
+        if (audioClock.Stats().GuestRefreshes != expected)
+            throw std::runtime_error("paced audio clock accumulated permanent drift");
+        const auto stall = audioClock.Advance(1.0);
+        if (stall.GuestRefreshesDue != 3U || stall.DeferredGuestRefreshes != 8U ||
+            stall.DroppedGuestRefreshes != 49U)
+            throw std::runtime_error("audio recovery lost its long-stall safety bound");
+    }
+    for (const uint32_t invalidBatch : {0U, 4U, 1000U}) {
+        bool rejected = false;
+        try {
+            Oot3dNativeGame::NativePresentationScheduler invalid(30U,
+                Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt,
+                invalidBatch);
+        } catch (const std::invalid_argument&) { rejected = true; }
+        if (!rejected) throw std::runtime_error("unbounded audio recovery batch accepted");
+    }
+#endif
     // Fixed 60 Hz captures retain the exact old scheduling even if debt is on.
     Oot3dNativeGame::NativePresentationScheduler deterministicOld(30U);
     Oot3dNativeGame::NativePresentationScheduler deterministicDebt(30U,
-        Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt);
+        Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt,
+        Oot3dNativeGame::NativeAudioRefreshBatchLimit(true));
     for (unsigned frame = 0; frame < 4000; ++frame) {
         const auto a = deterministicOld.Advance(1.0 / 60.0);
         const auto b = deterministicDebt.Advance(1.0 / 60.0);
