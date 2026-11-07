@@ -346,6 +346,8 @@ fn android_backups_carry_the_touch_preferences_the_app_serializes() {
         env: &no_env,
         sizes: false,
     };
+    write_json(&installation.layout.package.join("recipes/oot3d.json"),
+        &json!({"format": "triaevum_supported_revisions_v1", "recipes": [{"id": RECIPE}]}));
     let inventory = resolve_inventory(&installation).unwrap();
     assert!(backup_plan(&inventory, &[], None).unwrap().needs_touch_preferences);
     let touch = json!({"touch_opacity": 0.6, "touch_layout": "compact"});
@@ -483,6 +485,99 @@ fn smuggle(manifest: &mut Value, files: &mut Vec<(String, Vec<u8>)>, unit: &str,
     files.push((format!("files/{unit}/{path}"), bytes));
 }
 
+/// Deliberately synthetic recipe metadata, not supported game inputs/modules.
+fn title_site(site: &Site, game: &str) {
+    write_json(&site.package.join("recipes/oot3d.json"), &json!({
+        "format": "triaevum_supported_revisions_v1",
+        "recipes": [{"id": RECIPE, "game": "oot3d"}, {"id": "fixture-other", "game": "mm3d"}]
+    }));
+    write_json(&site.data.join("active-title.json"), &json!({
+        "format": "triaevum_active_title_v1", "game": game,
+        "recipe": if game == "oot3d" { RECIPE } else { "fixture-other" }
+    }));
+}
+
+#[test]
+fn title_bound_backups_round_trip_and_refuse_both_foreign_directions() {
+    let a = tempfile::tempdir().unwrap();
+    let b = tempfile::tempdir().unwrap();
+    let oot = windows_site(&a);
+    let mm = windows_site(&b);
+    title_site(&oot, "oot3d");
+    title_site(&mm, "mm3d");
+    // Optional private opaque real-save bytes; never writes the source or
+    // claims that a synthetic installation has performed a native game save.
+    let external = std::env::var_os("TRIAEVUM_TEST_NATIVE_SAVE").map(PathBuf::from);
+    let save = external.as_ref().map(|p| std::fs::read(p).unwrap())
+        .unwrap_or_else(|| b"opaque second-title save".to_vec());
+    write(&mm.data.join("savedata/system/save00.bin"), &save);
+    let out = tempfile::tempdir().unwrap();
+    let oot_zip = out.path().join("oot.zip");
+    let mm_zip = out.path().join("mm.zip");
+    assert_eq!(backup_of(&oot, &oot_zip, &[])["game"], "oot3d");
+    assert_eq!(backup_of(&mm, &mm_zip, &[])["game"], "mm3d");
+    assert_eq!(backup_plan(&mm.inventory(), &[], None).unwrap().to_value()["game"], "mm3d");
+    let cancel = CancelToken::new();
+    let opened = forge_core::backup::open_backup_for_game(&mm_zip, "mm3d", None, &cancel).unwrap();
+    assert_eq!(opened.manifest.game, "mm3d");
+    assert!(open_backup(&mm_zip, None, &cancel).is_err(), "legacy reader remains OoT-only");
+    for (site, foreign) in [(&oot, &mm_zip), (&mm, &oot_zip)] {
+        let before = tree(&site.root);
+        let error = restore_preview(&site.inventory(), foreign, &RestoreOptions::default(), &cancel).unwrap_err();
+        assert_eq!(error.reason, Some(Reason::OtherGame));
+        assert_eq!(restore_into(site, foreign).unwrap_err().reason, Some(Reason::OtherGame));
+        assert_eq!(tree(&site.root), before, "cross-title refusal must write nothing");
+    }
+    // Even a forged game label cannot smuggle a revision from the other
+    // supported title into this active title's data root.
+    let forged = out.path().join("forged.zip");
+    tampered(&oot_zip, &forged, |m, _| m["game"] = json!("mm3d"));
+    let before = tree(&mm.root);
+    assert_eq!(restore_into(&mm, &forged).unwrap_err().reason, Some(Reason::OtherGame));
+    assert_eq!(tree(&mm.root), before);
+    write(&mm.data.join("savedata/system/save00.bin"), b"later");
+    let preview = restore_preview(&mm.inventory(), &mm_zip, &RestoreOptions::default(), &cancel).unwrap();
+    assert_eq!(preview.to_value()["backup"]["game"], "mm3d");
+    restore_into(&mm, &mm_zip).unwrap();
+    assert_eq!(std::fs::read(mm.data.join("savedata/system/save00.bin")).unwrap(), save);
+    if let Some(path) = external {
+        assert_eq!(std::fs::read(path).unwrap(), save, "original fixture is read-only");
+        eprintln!("opaque native-save bytes={} sha256={}", save.len(), sha256_hex(&save));
+    }
+    // A verified object cannot bypass title admission through plan_restore.
+    let before = tree(&oot.root);
+    assert_eq!(forge_core::restore::plan_restore(&oot.inventory(), &opened,
+        &RestoreOptions::default(), &cancel).unwrap_err().reason, Some(Reason::OtherGame));
+    assert_eq!(tree(&oot.root), before);
+}
+
+#[test]
+fn unknown_or_ambiguous_installation_identity_never_creates_a_backup() {
+    let directory = tempfile::tempdir().unwrap();
+    let site = windows_site(&directory);
+    let out = tempfile::tempdir().unwrap();
+    let zip = out.path().join("refused.zip");
+    let request = BackupRequest { destination: zip.clone(), ..BackupRequest::default() };
+    for case in ["missing-active", "unknown-recipe", "wrong-game", "malformed-active", "partial-catalog", "missing-catalog"] {
+        title_site(&site, "mm3d");
+        let active = site.data.join("active-title.json");
+        let catalog = site.package.join("recipes/oot3d.json");
+        match case {
+            "missing-active" => std::fs::remove_file(&active).unwrap(),
+            "unknown-recipe" => { let mut v = read_json(&active); v["recipe"] = json!("unknown"); write_json(&active, &v); }
+            "wrong-game" => { let mut v = read_json(&active); v["game"] = json!("oot3d"); write_json(&active, &v); }
+            "malformed-active" => write(&active, b"{"),
+            "partial-catalog" => { let mut v = read_json(&catalog); v["recipes"][0].as_object_mut().unwrap().remove("game"); write_json(&catalog, &v); }
+            "missing-catalog" => std::fs::remove_file(&catalog).unwrap(),
+            _ => unreachable!(),
+        }
+        let before = tree(&site.root);
+        assert!(create_backup(&site.inventory(), &request, &mut |_, _, _| {}, &CancelToken::new()).is_err(), "{case}");
+        assert_eq!(tree(&site.root), before, "{case}");
+        assert!(!zip.exists() && !out.path().join(".refused.zip.partial").exists(), "{case}");
+    }
+}
+
 #[test]
 fn tampered_backups_are_refused_before_anything_is_written() {
     let directory = tempfile::tempdir().unwrap();
@@ -604,6 +699,9 @@ fn an_interrupted_restore_after_two_categories_recovers_the_previous_version() {
     let site = windows_site(&directory);
     let out = tempfile::tempdir().unwrap();
     let zip = out.path().join("backup.zip");
+    // Exercise the same durable recovery on a title-aware non-OoT target;
+    // the other round-trip/portable tests retain legacy OoT coverage.
+    title_site(&site, "mm3d");
     backup_of(&site, &zip, &[]);
     // A later version, changed in every category.
     write(&site.data.join("savedata/system/save00.bin"), b"later save");
