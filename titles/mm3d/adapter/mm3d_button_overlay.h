@@ -133,9 +133,35 @@ private:
     if ((*kind&65535)==3 && !text) return false;
     auto action=text ? NativeControlAction::Zr : NativeControlAction::Count, modifier=NativeControlAction::Count;
     const auto u=Float(m,*geo+0x28),v=Float(m,*geo+0x2c),uw=Float(m,*geo+0x30),vh=Float(m,*geo+0x34);
-    if (!text && parts && *texture==parts && u&&v&&uw&&vh) action=PartsButton(*u,*v,*uw,*vh);
+    if (!text && parts && *texture==parts && u&&v&&uw&&vh) {
+      // Pane::BuildMatrix animates the UV affine separately from shared
+      // geometry (also consumed by ScheduleDetail::Clip). Pictogram.mfl's
+      // nominal x96 cell alone cannot identify its currently displayed button.
+      const auto ux=Float(m,node+0x110),uy=Float(m,node+0x114),ut=Float(m,node+0x118),
+          vx=Float(m,node+0x11c),vy=Float(m,node+0x120),vt=Float(m,node+0x124);
+      if(ux&&uy&&ut&&vx&&vy&&vt && *uy==0 && *vx==0 && *ux>0 && *vy>0) {
+        const float left=*ux**u+*ut,top=*vy**v+*vt,width=*ux**uw,height=*vy**vh;
+        action=PartsButton(left,top,width,height);
+        // Restoration's amber inventory/inline cells, proven parts atlas
+        // row32: I at160, X at176, Y at192, II at208.
+        if(top==32.f/128 && width==16.f/256 && height==16.f/128) {
+          if(left==160.f/256 || left==176.f/256)action=NativeControlAction::X;
+          if(left==192.f/256 || left==208.f/256)action=NativeControlAction::Y;
+          if(left==160.f/256 || left==208.f/256)modifier=NativeControlAction::Zr;
+        }
+      }
+    }
     const auto owner=m.Read(node+4);
-    if (owner && (LayoutNamed(m,*owner,"HudItemIconSet") || LayoutNamed(m,*owner,"ItemIconSet2"))) {
+    // The notebook's attached A badge has animated native UVs. Its nominal
+    // Pictogram.mfl cell is x96, not the final atlas A cell. Use the same
+    // validated anchor binding as NativeNotebook, not a static crop guess.
+    if(action==NativeControlAction::Count && parts && *texture==parts && owner &&
+        LayoutNamed(m,*owner,"Pictogram") && Named(m,node,"pict")) {
+      const auto anchor=m.Read(*owner+0x180);
+      if(anchor && Named(m,*anchor,"disp_a_icon_n"))action=NativeControlAction::A;
+    }
+    if (action==NativeControlAction::Count && owner &&
+        (LayoutNamed(m,*owner,"HudItemIconSet") || LayoutNamed(m,*owner,"ItemIconSet2"))) {
       if (Named(m,node,"disp_x_pane")) action=NativeControlAction::X;
       if (Named(m,node,"disp_y_pane")) action=NativeControlAction::Y;
       // Restoration uses ZR+X/Y for I/II, NOT OoT's direct ZR/ZL mapping.
