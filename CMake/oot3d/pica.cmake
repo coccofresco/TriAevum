@@ -168,6 +168,9 @@ foreach(_variant_target oot3d_native_pica_variant_inventory oot3d_native_pica_va
         runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment_binaries.cpp
         runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment.spvpack)
     triaevum_add_spirv_pack(${_variant_target}
+        runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment_binaries.cpp
+        runtime/three_ds_recomp/src/fast/extension/pica_native_lighting_uber.spvpack)
+    triaevum_add_spirv_pack(${_variant_target}
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment_binaries.cpp
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment.spvpack)
     target_include_directories(${_variant_target} PRIVATE tools/oot3d/native_game_runtime titles/oot3d/topscreen titles/oot3d/gameplay titles/oot3d/environment)

@@ -83,6 +83,7 @@ struct PicaPbrUberShader {
 [[nodiscard]] std::optional<PicaPbrShader> BuildPicaPbrShader(
     const PicaShaderHookLayout& hooks, const PicaPbrShaderOptions& options);
 [[nodiscard]] PicaPbrUberShader BuildPicaPbrUberShader(
-    const PicaPbrUberControls& controls, bool nativeLighting, bool primitiveIds);
+    const PicaPbrUberControls& controls, bool nativeLighting, bool primitiveIds,
+    bool nativeBalance = false, bool preserveNativeUnlit = false);
 
 } // namespace Fast::Renderer3ds

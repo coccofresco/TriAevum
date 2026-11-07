@@ -32,7 +32,31 @@ struct PicaUberEffectProgramRequest {
     // come in both forms; a device without the capability never sees one
     // that declares them.
     bool PrimitiveIds = false;
+    // Separate structural family: never reinterpret legacy uniform semantics.
+    bool FragmentLightingOperand = false;
+    bool FragmentLightingBalance = false;
+    bool NativeFragmentLitShadows = false;
+    bool PbrNativeBalance = false;
+    bool PbrNativeUnlit = false;
 };
+
+[[nodiscard]] inline PicaUberEffectProgramRequest WithPicaUberLightingPolicy(
+    PicaUberEffectProgramRequest request, const PicaEffectDecisions& decisions) {
+    request.FragmentLightingOperand = decisions.FragmentLightingOperand;
+    request.FragmentLightingBalance = decisions.FragmentLightingBalance;
+    request.NativeFragmentLitShadows = decisions.NativeFragmentLitShadows;
+    request.PbrNativeBalance = decisions.PbrNativeBalance;
+    request.PbrNativeUnlit = decisions.PbrNativeUnlit;
+    return request;
+}
+
+// Every structural choice must participate in the renderer AND replay caches.
+[[nodiscard]] inline uint8_t PicaUberEffectVariantKey(const PicaUberEffectProgramRequest& request) {
+    return (request.TemporalInputs ? 1U : 0U) | (request.SurfaceInputs ? 2U : 0U) |
+        (request.PrimitiveIds ? 4U : 0U) | (request.FragmentLightingOperand ? 8U : 0U) |
+        (request.FragmentLightingBalance ? 16U : 0U) | (request.NativeFragmentLitShadows ? 32U : 0U) |
+        (request.PbrNativeBalance ? 64U : 0U) | (request.PbrNativeUnlit ? 128U : 0U);
+}
 
 // Empty when the base lacks a hook the composition needs.
 [[nodiscard]] std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& request);
