@@ -144,7 +144,14 @@ std::optional<GrassDrawMemoKey> BuildGrassDrawMemoKey(const Renderer3ds::PicaDra
     const auto row = [&](uint8_t reg) { uniform.Part(d.VertexUniformBytes, 80 + size_t(reg) * 16, 16); };
     if (const auto* uv = d.TemporalVertexProgram.Hooks.TextureCoordinate(0)) {
         static_assert(std::has_unique_object_representations_v<Renderer3ds::PicaVertexTextureCoordinateLayout>);
-        uniform.Add(*uv);
+        // An absent optional guard must not change legacy OoT3D memo keys.
+        uniform.Bytes({reinterpret_cast<const uint8_t*>(uv),
+                       offsetof(Renderer3ds::PicaVertexTextureCoordinateLayout, AffineGuards)});
+        if (uv->AffineGuards.Version != 0) {
+            uniform.Add(uv->AffineGuards);
+            const auto& g = uv->AffineGuards;
+            for (const auto& r : {g.RootMode, g.Zero, g.Stride, g.DirectModes[0], g.DirectModes[1]}) scalar(r[0], r[1]);
+        }
         scalar(uv->SourceSelectorUniform, uv->SourceSelectorComponent);
         for (auto c : uv->SourceSelectorConstantComponents)
             scalar(uv->SourceSelectorConstantUniform, c);

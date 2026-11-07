@@ -13,6 +13,7 @@
 #include "mm3d_scene_environment_profile.h"
 #include "mm3d_single_screen.h"
 #include "mm3d_title_contracts.h"
+#include "../gameplay/mm3d_actor_interactions.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
@@ -41,6 +42,22 @@ public:
   const char *GameName() const override { return "Majora's Mask 3D"; }
   Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
   bool NativeFragmentLighting() const override { return true; }
+  std::string_view GrassRuleNamespace() const override { return "mm3d"; }
+  std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
+      oot3d::recomp::a32::MemoryBus& memory, uint64_t sourceFrame) const override {
+    auto contacts = CollectMm3dActorInteractions(memory, sourceFrame, mActorInteractionGuards);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+    if (std::getenv("OOT3D_GRASS_DIAGNOSTICS") && sourceFrame % 60 == 0) {
+      std::fprintf(stderr, "MM3D grass colliders: frame=%llu count=%zu guarded=%d\n",
+                   static_cast<unsigned long long>(sourceFrame), contacts.size(), mActorInteractionGuards);
+      for (const auto& contact : contacts)
+        if (contact.Type != Fast::Extension::GrassInteractor::Kind::SceneActor)
+          std::fprintf(stderr, "MM3D grass collider: role=%u radius=%.3f halfHeight=%.3f y=%.3f\n",
+                       unsigned(contact.Type), contact.Radius, contact.HalfHeight, contact.Position[1]);
+    }
+#endif
+    return contacts;
+  }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {
     // MM3D's perspective frustum builder: the scene widens to the output
@@ -141,6 +158,9 @@ public:
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #endif
     }
+    mActorInteractionGuards = Mm3dActorInteractionGuardsHold(process.Memory());
+    if (!mActorInteractionGuards)
+      std::fprintf(stderr, "MM3D actor interactions disabled: EUR collider guard words do not match\n");
     mImageMounted = true;
   }
 
@@ -311,6 +331,7 @@ private:
   std::optional<Mm3dRestorationPort> mRestoration;
   Mm3dGuestPatches mGuestPatches;
   bool mImageMounted = false;
+  bool mActorInteractionGuards = false;
 };
 
 } // namespace

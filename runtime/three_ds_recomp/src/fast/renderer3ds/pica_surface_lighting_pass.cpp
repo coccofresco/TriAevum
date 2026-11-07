@@ -1,5 +1,6 @@
 #include "fast/renderer3ds/pica_surface_lighting_pass.h"
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
+#include "fast/renderer3ds/pica_fragment_grass_lighting.h"
 
 #ifdef ENABLE_RENDERER3DS_VULKAN
 #include <algorithm>
@@ -38,6 +39,7 @@ struct PicaSurfaceLightingPass::Impl {
         uint64_t FrameId = ~uint64_t{};
         uint32_t Used = 0;
         bool Initialized = false;
+        std::map<uintptr_t, VkImageView> LightingLutViews;
     };
     VkPhysicalDevice Physical{};
     VkFormat Format = VK_FORMAT_UNDEFINED;
@@ -52,7 +54,7 @@ struct PicaSurfaceLightingPass::Impl {
     VkRenderPass RenderPass{};
     VkSampler Sampler{};
     std::array<Slot, kSlots> Slots;
-    std::map<std::tuple<uint64_t, uint64_t, bool>, VkPipeline> Pipelines;
+    std::map<std::tuple<uint64_t, uint64_t, bool, uint64_t, uint32_t>, VkPipeline> Pipelines;
     std::set<uint64_t> ExportedMaterials;
 
     VkShaderModule Compile(std::string_view source, Renderer::SpirvStage stage, const char* name) {
@@ -68,7 +70,11 @@ struct PicaSurfaceLightingPass::Impl {
         if (!draw.VertexShader || !draw.VertexLayout || !draw.VertexShader->VertexHooksAvailable())
             return {};
         const bool surfaceLighting = draw.SurfaceLightingUniformSize != 0;
-        const auto key = std::tuple{ draw.VertexShader->Key, draw.VertexLayout->StructuralKey, surfaceLighting };
+        const bool fragmentLit = draw.Material.FragmentFeatures.FragmentLightingEnabled;
+        if (fragmentLit && (!draw.FragmentShader || !draw.FragmentShader->FragmentHooksAvailable())) return {};
+        const auto key = std::tuple{ draw.VertexShader->Key, draw.VertexLayout->StructuralKey, surfaceLighting,
+                                     fragmentLit ? draw.FragmentShader->Key : uint64_t{0},
+                                     fragmentLit ? draw.Material.FragmentFeatures.SurfaceColorResponse.Fragment.Key() : 0U };
         if (auto found = Pipelines.find(key); found != Pipelines.end())
             return found->second;
         auto source = BuildPicaSurfaceLightingVertexShader(draw.VertexShader->Source, draw.VertexShader->VertexHooks,
@@ -79,8 +85,14 @@ struct PicaSurfaceLightingPass::Impl {
         VkPipeline result{};
         try {
             vertex = Compile(source, Renderer::SpirvStage::Vertex, "native_surface_lighting.vert");
-            fragment = Compile(BuildPicaSurfaceLightingFragmentShader(surfaceLighting, ShadowCoefficients), Renderer::SpirvStage::Fragment,
-                               "native_surface_lighting.frag");
+            const auto fragmentSource = fragmentLit
+                ? BuildPicaFragmentGrassLightingShader(draw.FragmentShader->Source,
+                      draw.FragmentShader->FragmentHooks, surfaceLighting, ShadowCoefficients,
+                      draw.Material.FragmentFeatures.SurfaceColorResponse.Fragment)
+                : BuildPicaSurfaceLightingFragmentShader(surfaceLighting, ShadowCoefficients);
+            if (fragmentSource.empty()) throw std::runtime_error("native fragment grass atlas hooks unavailable");
+            fragment = Compile(fragmentSource, Renderer::SpirvStage::Fragment,
+                               fragmentLit ? "native_fragment_grass_lighting.frag" : "native_surface_lighting.frag");
             std::vector<VkVertexInputBindingDescription> bindings;
             std::vector<VkVertexInputAttributeDescription> attributes;
             for (const auto& b : draw.VertexLayout->Bindings)
@@ -142,10 +154,11 @@ bool PicaSurfaceLightingPass::Initialize(VkPhysicalDevice physical, VkDevice dev
             if ((props.optimalTilingFeatures & required) == required) { p.Format = format; break; }
         }
         if (p.Format == VK_FORMAT_UNDEFINED) throw std::runtime_error("surface floating-point atlas unsupported");
-        const std::array<VkDescriptorSetLayoutBinding, 2> bindings{
-            { { 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr },
-              { 16, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr } }
-        };
+        const std::array<VkDescriptorSetLayoutBinding, 4> bindings{{
+            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+            {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+            {13, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
+            {16, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}}};
         VkDescriptorSetLayoutCreateInfo dl{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
         dl.bindingCount = static_cast<uint32_t>(bindings.size());
         dl.pBindings = bindings.data();
@@ -158,11 +171,13 @@ bool PicaSurfaceLightingPass::Initialize(VkPhysicalDevice physical, VkDevice dev
         pl.pushConstantRangeCount = 1;
         pl.pPushConstantRanges = &push;
         Check(vkCreatePipelineLayout(device, &pl, nullptr, &p.Layout));
-        VkDescriptorPoolSize size{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSets * kSlots * 2 };
+        const std::array<VkDescriptorPoolSize, 2> sizes{{
+            {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSets * kSlots * 3},
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSets * kSlots}}};
         VkDescriptorPoolCreateInfo pool{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
         pool.maxSets = kSets * kSlots;
-        pool.poolSizeCount = 1;
-        pool.pPoolSizes = &size;
+        pool.poolSizeCount = static_cast<uint32_t>(sizes.size());
+        pool.pPoolSizes = sizes.data();
         Check(vkCreateDescriptorPool(device, &pool, nullptr, &p.Pool));
         std::array<VkAttachmentDescription, 3> attachments{};
         std::array<VkAttachmentReference, 3> colors{};
@@ -222,7 +237,14 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
     auto& p = *mImpl;
     if (!p.Device) return false;
     auto& slot = p.Slots[frameSlot % kSlots];
-    if (slot.FrameId != frameId) { slot.FrameId = frameId; slot.Used = 0; }
+    if (slot.FrameId != frameId) {
+        // The caller has waited this frame slot's fence. Do not retain views
+        // of native textures past that lifetime (handles can be recycled).
+        for (const auto& [image, view] : slot.LightingLutViews)
+            if (view) vkDestroyImageView(p.Device, view, nullptr);
+        slot.LightingLutViews.clear();
+        slot.FrameId = frameId; slot.Used = 0;
+    }
     VkImageMemoryBarrier barrier{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
     barrier.srcAccessMask = slot.Initialized ? VK_ACCESS_SHADER_READ_BIT : 0;
     barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
@@ -246,9 +268,14 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
             return d.SubmissionId == request.SubmissionId &&
                 d.RenderTarget.RenderTargetNamespace == request.RenderTargetNamespace;
         });
-        if (found == scene.Draws.end() || found->CompositionDomain != PicaCompositionDomain::Scene ||
-            found->Material.FragmentFeatures.FragmentLightingEnabled) continue;
+        if (found == scene.Draws.end() || found->CompositionDomain != PicaCompositionDomain::Scene) continue;
         const auto& draw = *found;
+        const bool fragmentLit = draw.Material.FragmentFeatures.FragmentLightingEnabled;
+        // A texture normal/shadow is not reconstructed from a source root.
+        // Keep the existing fallback for those rare material classes.
+        if (fragmentLit && (!draw.Material.FragmentFeatures.SurfaceColorResponse.Fragment.Valid() ||
+                            draw.NativeFragmentLighting.Layout.BumpMode != PicaFragmentLightingBumpMode::None ||
+                            draw.NativeFragmentLighting.Layout.ShadowFactorEnabled)) continue;
         if (const char* directory = std::getenv("TRIAEVUM_SURFACE_LIGHTING_DUMP");
             directory && *directory && draw.FragmentShader &&
             p.ExportedMaterials.insert(draw.FragmentShader->Key).second) {
@@ -267,6 +294,9 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
         bool valid = draw.UniformBuffer.NativeHandle && draw.GeometryBuffer.NativeHandle && draw.VertexUniformSize &&
                      draw.VertexUniformOffset <= draw.UniformBuffer.Size &&
                      draw.VertexUniformSize <= draw.UniformBuffer.Size - draw.VertexUniformOffset;
+        if (fragmentLit)
+            valid &= draw.FragmentUniformSize != 0 && draw.FragmentUniformOffset <= draw.UniformBuffer.Size &&
+                     draw.FragmentUniformSize <= draw.UniformBuffer.Size - draw.FragmentUniformOffset;
         if (draw.SurfaceLightingUniformSize != 0)
             valid &= draw.SurfaceLightingUniformSize == sizeof(PicaSurfaceLightingUniforms) &&
                      draw.SurfaceLightingUniformOffset <= draw.UniformBuffer.Size &&
@@ -300,6 +330,30 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
         write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         write.pBufferInfo = &uniform;
         vkUpdateDescriptorSets(p.Device, 1, &write, 0, nullptr);
+        if (fragmentLit) {
+            const VkDescriptorBufferInfo fragmentUniform{uniform.buffer, draw.FragmentUniformOffset, draw.FragmentUniformSize};
+            write.dstBinding = 1;
+            write.pBufferInfo = &fragmentUniform;
+            vkUpdateDescriptorSets(p.Device, 1, &write, 0, nullptr);
+            if (draw.LightingLut.Bound) {
+                const auto& lut = draw.LightingLut;
+                auto [view, added] = slot.LightingLutViews.try_emplace(lut.NativeImageHandle, VK_NULL_HANDLE);
+                if (added) {
+                    VkImageViewCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+                    info.image = reinterpret_cast<VkImage>(lut.NativeImageHandle);
+                    info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+                    info.format = VK_FORMAT_R32_UINT;
+                    info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                    Check(vkCreateImageView(p.Device, &info, nullptr, &view->second));
+                }
+                const VkDescriptorImageInfo image{p.Sampler, view->second, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+                VkWriteDescriptorSet lutWrite{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+                lutWrite.dstSet = set; lutWrite.dstBinding = 13; lutWrite.descriptorCount = 1;
+                lutWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                lutWrite.pImageInfo = &image;
+                vkUpdateDescriptorSets(p.Device, 1, &lutWrite, 0, nullptr);
+            }
+        }
         if (draw.SurfaceLightingUniformSize != 0) {
             const VkDescriptorBufferInfo surfaceUniform{ uniform.buffer, draw.SurfaceLightingUniformOffset,
                                                          draw.SurfaceLightingUniformSize };
@@ -311,15 +365,21 @@ bool PicaSurfaceLightingPass::Prepare(VkCommandBuffer command, uint32_t frameSlo
         vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_GRAPHICS, p.Layout, 0, 1, &set, 0, nullptr);
         VkBuffer geometry = reinterpret_cast<VkBuffer>(draw.GeometryBuffer.NativeHandle);
         for (const auto& b : bindings) { VkDeviceSize offset = b.Offset; vkCmdBindVertexBuffers(command, b.Binding, 1, &geometry, &offset); }
+        uint32_t nativeDirectionalMask = 0;
+        if (fragmentLit)
+            for (uint32_t i = 0; i < 8; ++i)
+                if (draw.NativeFragmentLighting.Layout.Lights[i].Directional) nativeDirectionalMask |= 1U << i;
         struct Push {
             std::array<uint32_t, 4> Allocation;
             std::array<float, 4> ShadowDirection;
-        } push{{base, kWidth, kHeight, 0}, {shadowDirection[0], shadowDirection[1], shadowDirection[2], 0}};
+        } push{{base, kWidth, kHeight, nativeDirectionalMask}, {shadowDirection[0], shadowDirection[1], shadowDirection[2], 0}};
         vkCmdPushConstants(command, p.Layout, VK_SHADER_STAGE_VERTEX_BIT |
             (p.ShadowCoefficients ? VK_SHADER_STAGE_FRAGMENT_BIT : 0U), 0, p.ShadowCoefficients ? 32U : 16U, &push);
         vkCmdDraw(command, request.VertexCount, 1, 0, 0);
         request.AtlasBase = base; request.Available = true; base += request.VertexCount;
-        request.ColorResponse = draw.Material.FragmentFeatures.SurfaceColorResponse;
+        // Fragment atlas already factors native TEV gains/tint, without the
+        // terrain albedo. Applying the vertex passthrough scale again doubles them.
+        if (!fragmentLit) request.ColorResponse = draw.Material.FragmentFeatures.SurfaceColorResponse;
     }
     vkCmdEndRenderPass(command);
     barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -336,6 +396,8 @@ void PicaSurfaceLightingPass::Shutdown() {
     if (p.Device) {
         for (auto& [key, pipeline] : p.Pipelines) if (pipeline) vkDestroyPipeline(p.Device, pipeline, nullptr);
         for (auto& slot : p.Slots) {
+            for (const auto& [image, view] : slot.LightingLutViews)
+                if (view) vkDestroyImageView(p.Device, view, nullptr);
             if (slot.Framebuffer) vkDestroyFramebuffer(p.Device, slot.Framebuffer, nullptr);
             if (slot.View) vkDestroyImageView(p.Device, slot.View, nullptr);
             for (auto attachment : slot.Attachments) if (attachment) vkDestroyImageView(p.Device, attachment, nullptr);

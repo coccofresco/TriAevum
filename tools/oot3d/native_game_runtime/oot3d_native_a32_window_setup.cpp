@@ -8,6 +8,7 @@
 #include "triaevum_host_audio.h"
 #include "oot3d_savestate_migration.h"
 #include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/title_grass_rules_file.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
 
@@ -224,6 +225,18 @@ void NativeA32WindowSession::Setup() {
     }
     directories.push_back(launch.UiTexturePackDirectory / "common");
     Oot3d::Renderer::AzaharTexturePackRuntime::Instance().SetBaseDirectories(std::move(directories));
+  }
+  // Optional title-owned grass authoring files. OoT3D retains its existing
+  // config storage and output; titles choosing a namespace cannot overwrite
+  // its sources/masks even when they share the host configuration file.
+  {
+    auto& file = Fast::Extension::ActiveTitleGrassRulesFile();
+    file.SetPath({});
+    if (titleSession && !titleSession->GrassRuleNamespace().empty()) {
+      const auto config = std::filesystem::absolute(
+          launch.Host.ConfigurationPath.empty() ? "oot3d_native_game.json" : launch.Host.ConfigurationPath);
+      file.SetPath(config.parent_path() / "grass" / titleSession->GrassRuleNamespace() / "rules.json");
+    }
   }
   // The installed game's program ID and the managed custom texture folders
   // (UX plan WP-05C), kept across every settings reconfigure; the

@@ -58,6 +58,7 @@ if(TRIAEVUM_TITLE_MM3D)
     add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
         titles/mm3d/adapter/mm3d_scene_environment_tests.cpp)
     target_include_directories(mm3d_scene_environment_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/runtime/three_ds_recomp/include"
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_game_runtime"
         "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/topscreen"
         "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/gameplay"

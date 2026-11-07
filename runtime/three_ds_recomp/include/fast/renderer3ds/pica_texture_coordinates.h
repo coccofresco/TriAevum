@@ -40,11 +40,26 @@ inline PicaAffineUv DecodePicaAffineUv(const PicaVertexTextureCoordinateLayout* 
         result.Status = PicaAffineUvStatus::Procedural;
         return result;
     }
+    const auto& guards = layout->AffineGuards;
+    if (guards.Version == 1) {
+        const auto value = [&](const auto& r) { return scalar(r[0], r[1]); };
+        if (value(guards.Zero) != 0.0F || value(guards.RootMode) != 0.0F ||
+            !std::isfinite(value(guards.Stride)) || scalar(layout->HomogeneousUniform, layout->HomogeneousComponent) != 1.0F) {
+            result.Status = PicaAffineUvStatus::UnsupportedProgram;
+            return result;
+        }
+        if (!std::isfinite(mode) || mode < 1.0F ||
+            (mode != value(guards.DirectModes[0]) && mode != value(guards.DirectModes[1]))) {
+            result.Status = PicaAffineUvStatus::Procedural;
+            return result;
+        }
+    }
     const float selector = scalar(layout->SourceSelectorUniform, layout->SourceSelectorComponent);
+    const auto sourceEqual = [&](float a, float b) { return guards.Version == 1 ? a == b : equal(a, b); };
     const bool first =
-        equal(selector, scalar(layout->SourceSelectorConstantUniform, layout->SourceSelectorConstantComponents[0]));
+        sourceEqual(selector, scalar(layout->SourceSelectorConstantUniform, layout->SourceSelectorConstantComponents[0]));
     const bool second =
-        equal(selector, scalar(layout->SourceSelectorConstantUniform, layout->SourceSelectorConstantComponents[1]));
+        sourceEqual(selector, scalar(layout->SourceSelectorConstantUniform, layout->SourceSelectorConstantComponents[1]));
     const size_t index = first && !second ? 0 : !first && second ? 1 : !first && !second ? 2 : 3;
     if (index >= layout->SourceCount) {
         result.Status = PicaAffineUvStatus::InvalidSource;
