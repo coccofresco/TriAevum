@@ -162,6 +162,12 @@ Native30 debt). Longer stalls can still exhaust the bound and underrun; this is 
 resampling, time stretching or increased device latency. Guest timing fields,
 native mixer/effects and PCM processing are unchanged.
 
+This is recovery capacity, not a slow-host continuity guarantee. With a batch
+limit of three, fewer than 20 host presentations per second cannot supply 60
+native refreshes per second even before stalls. A larger fixed limit alone can
+create a catch-up spiral; diagnose guest/render costs and resource contention
+before changing it. Report dropped native time separately from device underruns.
+
 Fixed-delta and throughput runs keep their previous catch-up policy. A bounded
 `--frames N` run disables the real-time presentation pacer; for device timing
 acceptance use `--frames 0 --max-seconds N`, without fixed delta. An unpaced
@@ -174,6 +180,19 @@ cumulative PCM offsets and underruns at successful saves/loads, allowing exact
 native-tail replay comparisons. Loading flushes stale device audio; diagnostics
 restart priming and submission-gap tracking without clearing cumulative errors.
 These are native pre-policy PCM receipts, not physical-device recordings.
+Frame-based actions may not be reached before a real-time wall limit on a slow
+host. A successful process exit does not prove that the scheduled load or
+screenshot happened; inspect actual action counters and artifacts.
+
+`tools/oot3d/qualify_audio_restore.py --runtime runtime.json --pcm native.wav
+--output replay.json` validates capture rate/extent/nonzero count/FNV against the
+runtime, exactly one save/subsequent live load, restored host frame, and at least
+five seconds of non-silent byte-identical native replay. It also accepts WAV.gz.
+Silent equal tails, missing actions and short/mismatched captures fail. Its exit
+code describes **native replay only**: pacing, backend and all underruns are
+reported separately under `device_queue`. A fixed-clock native replay can pass
+while real-time playback fails. Even a non-silent pass proves no particular
+room/effect tail unless that native scenario was independently established.
 
 ## Verification
 
