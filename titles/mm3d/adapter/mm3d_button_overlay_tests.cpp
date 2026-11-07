@@ -51,6 +51,12 @@ void TestCapture(){
  for(auto [pc,word]:ButtonEmission::Guards){auto bad=Fixture();bad.words[pc]^=1;Check(Capture(bad).empty(),"each emission guard fails closed");}
  m=Fixture();m.words[node+0xd4]&=~1U;Check(Capture(m).empty(),"hidden pane omitted");
  m=Fixture();m.F(node+0x134,0);Check(Capture(m).empty(),"zero fade omitted");
+ for(float alpha:{1.000001f,1.25f,255.f}) {
+  m=Fixture();m.F(node+0x134,alpha);auto saturated=Capture(m);
+  Check(!saturated.empty(),"finite native alpha overshoot saturates instead of dropping labels");
+  for(const auto& primitive:saturated)Check(primitive.color.alpha<=1.f,"saturated host alpha stays normalized");
+ }
+ m=Fixture();m.F(node+0x134,std::numeric_limits<float>::infinity());Check(Capture(m).empty(),"nonfinite alpha remains rejected");
  m=Fixture();m.F(node+0xec,std::numeric_limits<float>::quiet_NaN());Check(Capture(m).empty(),"nonfinite pose omitted");
  m=Fixture();m.Name(0x10020100,"Unrelated");Check(Capture(m).empty(),"same name outside HUD not promoted");
  m=Fixture();m.Name(0x10020200,"disp_1_pane");auto chord=Capture(m);Check(chord.size()>glyphs.size(),"Restoration I is ZR+X chord");

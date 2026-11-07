@@ -14,7 +14,7 @@ namespace Oot3dNativeGame {
 // identity is the live registry entry, not pixels, a scene or a texture hash.
 class Mm3dButtonOverlay {
 public:
-  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0; };
+  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0; };
   const Counters& Stats() const { return mStats; }
   void Configure(const NativeControlConfig& controls, NativePromptSet prompts) {
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
@@ -116,7 +116,7 @@ private:
         tx=Float(m,node+0xec),ty=Float(m,node+0xfc),r=Float(m,node+0x128),g=Float(m,node+0x12c),
         b=Float(m,node+0x130),a=Float(m,node+0x134);
     if (!x||!y||!w||!h||!xx||!xy||!yx||!yy||!tx||!ty||!r||!g||!b||!a ||
-        *a<=0 || *a>1 || std::max({*r,*g,*b})<=0 || *w<=0 || *h<=0) return false;
+        *a<=0 || std::max({*r,*g,*b})<=0 || *w<=0 || *h<=0) return false;
     // A/B letters occupy the top of the 38x38 native ring. The crop is a
     // title asset fact (HUD atlas A:24..32,0..10; B:64..72,0..10).
     if (ring) { if (*w!=38 || *h!=38) return false; *x+=16; *w=8; *h=10; }
@@ -130,7 +130,11 @@ private:
     slot.Width=ring?0:width;
     slot.SuffixPlus=text.has_value();
     if(text) {slot.PlusX=*tx+*xx*(*text)[4]+*xy*cy+40.f/3.f;slot.PlusY=*ty+*yx*(*text)[4]+*yy*cy;}
-    slot.Color={*r,*g,*b,*a};
+    // Native animation/world-alpha products can overshoot one. The native
+    // color conversion saturates; rejecting the pane makes every label blink
+    // back to its placeholder art instead of following that conversion.
+    if(*a>1)++mStats.SaturatedAlpha;
+    slot.Color={*r,*g,*b,std::min(*a,1.f)};
     if (slot.Height<=0 || slot.Height>128 || std::abs(slot.X)>1024 || std::abs(slot.Y)>1024) return false;
     if(mPending.size()>=252)return false;
     bool suppress=!ring;

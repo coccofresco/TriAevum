@@ -91,7 +91,8 @@ std::map<std::string, uint64_t> Mm3dSingleScreen::ButtonOverlaySummary() const {
     const auto& s = mButtonOverlay->Stats();
     return {{"emissions",s.Layouts},{"labels",s.Labels},{"parts",s.Parts},{"hud",s.Hud},
             {"rings",s.Rings},{"frames",s.Frames},{"presented",s.Presented},
-            {"pictograms",s.Pictograms},{"dpad_directions",s.Dpad},{"zr_legends",s.Text}};
+            {"pictograms",s.Pictograms},{"dpad_directions",s.Dpad},{"zr_legends",s.Text},
+             {"saturated_alpha",s.SaturatedAlpha}};
 }
 
 Mm3dSingleScreen::~Mm3dSingleScreen() = default;
