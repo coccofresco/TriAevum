@@ -2233,6 +2233,8 @@ ComputeOot3dPicaVisualDrawIdentity(const Oot3dPicaVulkanDrawPlan& plan) {
     HashValue(hash, temporal.Owner); HashValue(hash, temporal.Instance);
     HashValue(hash, temporal.Part); HashValue(hash, temporal.Slot); HashValue(hash, temporal.Lifetime);
     HashValue(hash, plan.Composition.IsolatedLighting);
+    if (plan.Composition.ExcludeFromPresentationFxaa)
+        HashValue(hash, uint64_t{0x465841415549U});
     HashValue(hash, plan.VertexShader.StateKey);
     HashValue(hash, plan.FragmentShader.StateKey);
     HashValue(hash, plan.Indexed);

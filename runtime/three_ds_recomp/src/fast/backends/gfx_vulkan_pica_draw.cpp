@@ -151,15 +151,16 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     // When an overlay (native UI, the isolated title logo) reaches the target
     // before its transfer, that surface is proven only by the scene
     // completion recorded at this boundary.
-    if (!mNativeFidelityProfile && (sceneEffects || mPresentationWorldSurface) &&
+    const bool fxaaBeforeUi = mSpatialAaMode == 1U && draw.Composition.ExcludeFromPresentationFxaa;
+    if (!mNativeFidelityProfile && (sceneEffects || mPresentationWorldSurface || fxaaBeforeUi) &&
         NativeSceneOverlayDraw(draw)) {
         const auto* beforeUi = mNativePicaCompositionSchedule.FindAnchorBeforeDraw(
             Extension::EffectStage::BeforeUi, reference.Target, draw.SubmissionId);
         if (beforeUi != nullptr) {
             GpuTextureCopySourceImport composed;
-            if (sceneEffects) {
+            if (sceneEffects || fxaaBeforeUi) {
                 std::string error;
-                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, composed, &error, beforeUi))
+                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, composed, &error, beforeUi, fxaaBeforeUi))
                     throw std::runtime_error(error);
             }
             if (composed.Image == VK_NULL_HANDLE || composed.Image == target.ColorImage) {
@@ -3003,7 +3004,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const bool retainSceneBeforeUi = overlayDraw &&
                 renderTarget.SceneBeforeUiSerial != 0U &&
                 renderTarget.SceneBeforeUiSerial == renderTarget.ContentWriteSerial;
+            const bool excludePresentationFxaa = overlayDraw &&
+                (draw.Composition.ExcludeFromPresentationFxaa ||
+                 (renderTarget.PresentationFxaaExcludedSerial != 0U &&
+                  renderTarget.PresentationFxaaExcludedSerial == renderTarget.ContentWriteSerial));
             renderTarget.ContentWriteSerial = ++mGpuTextureCopyWriteSerial;
+            if (excludePresentationFxaa)
+                renderTarget.PresentationFxaaExcludedSerial = renderTarget.ContentWriteSerial;
             if (retainResolvedScene)
                 renderTarget.SceneEffectsResolvedSerial = renderTarget.ContentWriteSerial;
             if (retainSceneBeforeUi)

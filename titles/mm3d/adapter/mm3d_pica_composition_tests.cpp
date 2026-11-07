@@ -81,9 +81,13 @@ void TestMm3dSceneLighting() {
     writeLight(0x08049000U, 0, 0, 127, 255, 255, 255);
 
     Map(memory, 0x00100000U, 0x00540000U);
+    Map(memory, 0x0067C000U, 0x1000U);
+    Map(memory, 0x00689000U, 0x1000U);
     for (const auto& hook : kMm3dLightingHookSites)
         for (uint32_t i = 0; i < 4U; ++i)
             Require(memory.Write32(hook.Pc + i * 4U, hook.Words[i]), "seed MM hook guard");
+    for (const auto [pc, word] : kMm3dCompositionOwnerGuards)
+        Require(memory.Write32(pc, word), "seed composition owner guard");
     Require(memory.Write8(kPlay + 0x13DU, 4U) && memory.Write32(kPlay + 0x4A8U, kPlay) &&
             memory.Write32(kPlay + 0x138U, 1U), "seed verified MM play owner");
     Mm3dNativePicaCompositionTracker tracker;

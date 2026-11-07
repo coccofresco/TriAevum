@@ -206,7 +206,8 @@ Json EncodeOot3dPicaRawDraw(const Oot3dPicaRawDraw& draw, const ResourceSink& re
           {"native_value", composition.NativeValue},
           {"projected_shadow", composition.NativeProjectedShadow},
           {"actor_geometry", composition.NativeActorGeometry},
-          {"isolated_lighting", composition.IsolatedLighting}}},
+          {"isolated_lighting", composition.IsolatedLighting},
+          {"exclude_presentation_fxaa", composition.ExcludeFromPresentationFxaa}}},
         {"default_attributes", EncodeWords(FloatBits(packet.DefaultAttributes))},
         {"vertex", EncodeShader(packet.VertexShader, resource)},
         {"geometry", EncodeShader(packet.GeometryShader, resource)},
@@ -242,6 +243,7 @@ bool DecodeOot3dPicaRawDraw(const Json& line, const std::map<std::string, std::s
         packet.Composition.NativeProjectedShadow = composition.at("projected_shadow").get<bool>();
         packet.Composition.NativeActorGeometry = composition.at("actor_geometry").get<bool>();
         packet.Composition.IsolatedLighting = composition.at("isolated_lighting").get<bool>();
+        packet.Composition.ExcludeFromPresentationFxaa = composition.value("exclude_presentation_fxaa", false);
         ReadFloatBits(line.at("default_attributes").get<std::string>(), packet.DefaultAttributes);
         DecodeShader(line.at("vertex"), resources, packet.VertexShader);
         DecodeShader(line.at("geometry"), resources, packet.GeometryShader);

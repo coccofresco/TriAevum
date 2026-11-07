@@ -299,6 +299,8 @@ public:
         {"scene_frames", stats.SceneFrames},
         {"read_failures", stats.ReadFailures},
         {"light_bindings", stats.LightBindings},
+        {"temporal_model_spans", stats.TemporalModelSpans},
+        {"lifecycle_invalidations", stats.LifecycleInvalidations},
         {"scene_directional_lights", stats.SceneDirectionalLights}};
   }
 
