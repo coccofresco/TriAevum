@@ -200,6 +200,24 @@ class InstalledRuntimeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "scene light catalog changed"):
             self.validate()
 
+    def test_title_program_pack_is_routed_and_integrity_checked(self):
+        pack = self.data / "title.spvpack"
+        pack.write_bytes(b"synthetic routing fixture, loader tested separately")
+        prepared = SimpleNamespace(directory=self.title, state={})
+        with (patch("forge.load_prepared_content", return_value=prepared),
+              patch("forge.ensure_runtime_config"),
+              patch("forge.query_product", return_value={
+                  "product": {}, "runtime_sha256": sha256_file(self.exe)})):
+            forge.publish_private_runtime(
+                self.title, plugin=self.plugin, runtime_plugin=self.plugin,
+                launch_profile=self.profile, data_root=self.data, title_program_pack=pack)
+        self.receipt = prepared.state["runtime"]
+        self.assertEqual(self.validate(), self.profile)
+        self.assertIn("--title-program-pack", load_json_object(self.profile)["arguments"])
+        pack.write_bytes(b"corrupt")
+        with self.assertRaisesRegex(ValueError, "title program pack changed"):
+            self.validate()
+
     def test_launcher_refuses_pending_activation_before_loading_title(self):
         atomic_write_json(journal_path(self.root), {})
         with (patch("forge_gui.installation_root", return_value=self.root),

@@ -8,6 +8,7 @@
 #include "fast/extension/pica_uber_fragment_binaries.h"
 #include "fast/renderer/builtin_pass_binaries.h"
 #include "fast/renderer/pass_shader_artifact.h"
+#include "fast/renderer/title_program_pack.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
 #include "oot3d_native_vertex_binaries.h"
@@ -62,6 +63,41 @@ bool Same(const SpirvPackEntry& a, const SpirvPackEntry& b) {
 }
 
 } // namespace
+
+TEST(SpirvPack, ExternalTitleProgramsOwnStorageAndRejectMalformedOrWrongStages) {
+    const auto path = std::filesystem::path(testing::TempDir()) / "triaevum-title-program-test.spvpack";
+    const auto save = [&](const std::vector<unsigned char>& bytes) {
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        ASSERT_TRUE(file.good());
+    };
+    SpirvPackEntry entry;
+    entry.Kind = SpirvPackKind::PicaVertex;
+    const auto artifact = Oot3dNativeGame::TitleVertexArtifacts().front();
+    entry.Identity = {artifact.Source.Id, artifact.Source.SecondaryHash, artifact.Source.Size};
+    entry.Spirv = artifact.Spirv;
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    const TitleProgramPack loaded(path);
+    ASSERT_EQ(loaded.Entries().size(), 1U);
+    EXPECT_TRUE(std::equal(loaded.Entries()[0].Spirv.begin(), loaded.Entries()[0].Spirv.end(),
+                           artifact.Spirv.begin(), artifact.Spirv.end()));
+    save({1, 2, 3, 4});
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    EXPECT_EQ(loaded.Entries()[0].Spirv[0], 0x07230203U) << "pack owns its bytes";
+    entry.Kind = SpirvPackKind::PicaFragment;
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    entry.Kind = SpirvPackKind::Pass;
+    entry.Stage = static_cast<uint32_t>(SpirvStage::Compute);
+    entry.Source = "void main() {}";
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    entry.Kind = SpirvPackKind::PicaVertex;
+    entry.Spirv = kModuleA; // truncated instruction, despite correct magic
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    std::filesystem::remove(path);
+}
 
 TEST(SpirvPack, RoundTripsEveryEntryAndStoresDuplicatesOnce) {
     const auto entries = SampleEntries();

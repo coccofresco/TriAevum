@@ -1000,6 +1000,7 @@ def publish_private_runtime(
     romfs_overlay: Path | None = None,
     package_root: Path | None = None,
     pica_shader_pack: Path | None = None,
+    title_program_pack: Path | None = None,
     renderer_cache_directory: Path | None = None,
 ) -> dict[str, Any]:
     """Publish verified files; multi-file activation is not yet transactional."""
@@ -1118,6 +1119,10 @@ def publish_private_runtime(
         if not pica_shader_pack.is_file():
             raise ForgeError("Prepared PICA shader pack is missing before activation")
         profile["arguments"].extend(("--pica-aot-shader-pack", str(pica_shader_pack.resolve())))
+    if title_program_pack is not None:
+        if not title_program_pack.is_file():
+            raise ForgeError("Title program pack is missing before activation")
+        profile["arguments"].extend(("--title-program-pack", str(title_program_pack.resolve())))
     if renderer_cache_directory is not None:
         profile["arguments"].extend(("--renderer-cache-directory", str(renderer_cache_directory.resolve())))
     path_options = {"--title-plugin", "--a32-process-manifest", "--resource-root",
@@ -1125,7 +1130,7 @@ def publish_private_runtime(
                     "--topscreen-texture-overrides", "--topscreen-link-animations",
                     "--topscreen-ui-atlas-hd", "--ui-texture-pack",
                     "--water-texture-catalog", "--scene-light-catalog", "--romfs-overlay",
-                    "--pica-aot-shader-pack", "--renderer-cache-directory"}
+                    "--pica-aot-shader-pack", "--title-program-pack", "--renderer-cache-directory"}
     scopes = {}
     for index, argument in enumerate(profile["arguments"][:-1]):
         if argument in path_options:
@@ -1198,6 +1203,11 @@ def publish_private_runtime(
         prepared.state["runtime"]["romfs_overlay"] = {
             "path": context.reference(romfs_overlay, prepared.directory),
             "sha256": sha256_file(romfs_overlay),
+        }
+    if title_program_pack is not None:
+        prepared.state["runtime"]["title_program_pack"] = {
+            "path": context.reference(title_program_pack, prepared.directory),
+            "sha256": sha256_file(title_program_pack),
         }
     if pica_shader_pack is not None:
         prepared.state["runtime"]["pica_shader_pack"] = {

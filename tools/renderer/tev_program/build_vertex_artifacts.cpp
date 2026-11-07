@@ -18,7 +18,7 @@ using namespace Oot3dNativeGame;
 static void Check(bool ok, const std::string& message) { if (!ok) throw std::runtime_error(message); }
 
 int main(int argc, char** argv) try {
-    Check(argc >= 3, "usage: build_vertex_artifacts oot3d_native_vertex.spvpack|--check input.shbin [...]");
+    Check(argc >= 3, "usage: build_vertex_artifacts output.spvpack|--check [--translate] input.shbin [...]");
     const bool check = std::string_view(argv[1]) == "--check";
     // Vertex programs first, then the pass programs, each in emission order.
     SpirvPackFile vertexPack, passPack;
@@ -74,7 +74,9 @@ int main(int argc, char** argv) try {
         std::cout << "vertex_source=" << id.Id << '\n';
         ++modules;
     };
+    bool translate = false;
     for (int arg = 2; arg < argc; ++arg) {
+        if (std::string_view(argv[arg]) == "--translate") { translate = true; continue; }
         std::ifstream file(argv[arg], std::ios::binary);
         Check(bool(file), "cannot open SHBIN");
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
@@ -135,7 +137,7 @@ int main(int argc, char** argv) try {
             packet->Registers[0x2ba] = state.ShaderInterface.VertexMainOffset;
             Oot3dPicaGeneratedVertexShader translated, reference;
             std::string error;
-            Check(GenerateOot3dPicaVertexShader(*packet,state,translated,&error,true), error);
+            Check(GenerateOot3dPicaVertexShader(*packet,state,translated,&error,!translate), error);
             Check(GenerateOot3dPicaVertexShader(*packet,state,reference,&error), error);
             Check(translated.Source == reference.Source, "offline/native vertex source mismatch");
             emitVertex(translated.Source);
