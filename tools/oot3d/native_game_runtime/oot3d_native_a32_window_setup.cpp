@@ -185,7 +185,16 @@ void NativeA32WindowSession::Setup() {
               << recipe->EntranceIndex << '\n';
   }
 
-  if (!launch.TopScreenTextureOverridePackPath.empty()) {
+  if (!launch.TitleRomFsLayerPath.empty()) {
+    if (titleAdapter != Oot3dNativeGame::TitleAdapter::Mm3d)
+      throw std::runtime_error("Prepared MM font cannot be mounted by another title");
+    const auto fontPath = launch.TitleRomFsLayerPath.parent_path() / "font_coverage.zip";
+    hdFontsLoaded = hdFonts.Load(fontPath, &error);
+    if (!hdFontsLoaded || hdFonts.NeedsBlitObserver())
+      throw std::runtime_error("Prepared MM GZFX font unavailable: " + error);
+  }
+  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
+      !launch.TopScreenTextureOverridePackPath.empty()) {
     const auto fontPath = launch.TopScreenTextureOverridePackPath.parent_path() / "font_coverage.zip";
     if (std::filesystem::is_regular_file(fontPath)) {
       hdFontsLoaded = hdFonts.Load(fontPath, &error);
@@ -287,13 +296,29 @@ void NativeA32WindowSession::Setup() {
               << (hostConfig.RomFsOverlay->ViewSize() - manifest->RomFsImageSize)
               << " appended bytes)\n";
   }
+  if (!launch.TitleRomFsLayerPath.empty()) {
+    if (titleAdapter != Oot3dNativeGame::TitleAdapter::Mm3d)
+      throw std::runtime_error("Prepared MM UI layer cannot be mounted by another title");
+    std::string layerError;
+    auto base = Oot3dNativeGame::OpenNativeA32HostFileRange(
+        manifest->RomFsImagePath, manifest->RomFsImageOffset, manifest->RomFsImageSize, &layerError);
+    if (base && hostConfig.RomFsOverlay)
+      base = Oot3dNativeGame::ComposeNativeA32RomFsOverlay(base, hostConfig.RomFsOverlay);
+    const std::array layers{launch.TitleRomFsLayerPath};
+    auto built = base ? Oot3dNativeGame::BuildNativeA32RomFsLayers(base, layers, &layerError) : std::nullopt;
+    if (!built) throw std::runtime_error("Prepared MM UI: " + layerError);
+    // The composite retains its O3RO reader; only one service view is mounted.
+    hostConfig.RomFsOverlay.reset();
+    hostConfig.RomFsLayers = built->File;
+    std::fprintf(stderr, "Prepared MM UI: %zu replaced, %zu added\n", built->ReplacedFiles, built->AddedFiles);
+  }
   if (const char *overlay = std::getenv("TRIAEVUM_ROMFS_OVERLAY")) {
     // Development: user-supplied RomFS files laid over the title's (a
     // directory per layer mirroring RomFS paths, ';'-separated, later
     // layers winning). Installed RomFS mods (Forge's overlay) are the
     // product path; the two never combine.
-    if (hostConfig.RomFsOverlay)
-      throw std::runtime_error("TRIAEVUM_ROMFS_OVERLAY cannot combine with installed RomFS mods");
+    if (hostConfig.RomFsOverlay || hostConfig.RomFsLayers)
+      throw std::runtime_error("TRIAEVUM_ROMFS_OVERLAY cannot combine with installed RomFS mods/title UI");
     std::vector<std::filesystem::path> layers;
     for (std::string_view rest = overlay; !rest.empty();) {
       const size_t separator = rest.find(';');
@@ -407,7 +432,7 @@ void NativeA32WindowSession::Setup() {
   gSwitchVisualInterpolation = frameRateContract.VisualInterpolationAllowed;
 #endif
   auto &frameRatePolicy = frameRatePolicyStorage.emplace(frameRateContract);
-  widescreenProjection.HdFonts = hdFontsLoaded ? &hdFonts : nullptr;
+  widescreenProjection.HdFonts = hdFontsLoaded && hdFonts.NeedsBlitObserver() ? &hdFonts : nullptr;
   widescreenProjection.FrameRatePolicy = &frameRatePolicy;
   widescreenProjection.SceneViewProbe = &sceneViewProbe;
   widescreenProjection.PlayerTimingProbe = &playerTimingProbe;
@@ -597,7 +622,7 @@ void NativeA32WindowSession::Setup() {
                            diagnosticHooks.end());
   }
   std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
-  if (hdFontsLoaded) blockEntryHooks.push_back(Oot3dNativeGame::kNativeQbfA4Blit);
+  if (hdFontsLoaded && hdFonts.NeedsBlitObserver()) blockEntryHooks.push_back(Oot3dNativeGame::kNativeQbfA4Blit);
   std::sort(blockEntryHooks.begin(), blockEntryHooks.end());
   blockEntryHooks.erase(
       std::unique(blockEntryHooks.begin(), blockEntryHooks.end()),

@@ -1,6 +1,7 @@
 #include "oot3d_native_hd_font_runtime.h"
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <zip.h>
@@ -15,7 +16,7 @@ std::vector<std::uint8_t> Font(std::uint8_t size, std::uint8_t value) {
     return bytes;
 }
 }
-int main() {
+int main(int argc, char** argv) {
     const auto path = std::filesystem::temp_directory_path() / "triaevum-hd-font-test.zip";
     try {
         const auto native = Font(16, 0xff), hd = Font(64, 0x88);
@@ -75,6 +76,43 @@ int main() {
         atlas.assign(128, 0xff);
         Check(memory.WriteBytes(0x4000, atlas), "restore memory");
         Check(resolve(720).ReplacementWidth == 0, "quickload requires renewed provenance");
+        // A static native atlas must not install an OoT blit observer.
+        zip = zip_open(path.string().c_str(), ZIP_CREATE | ZIP_TRUNCATE, nullptr);
+        Check(zip != nullptr, "create static fixture");
+        const std::string staticManifest = R"({"format":"triaevum_static_font_coverage_v1","sheets":[{"width":16,"height":16,"density":4,"native_file":"native.a4","coverage_file":"hd.a4"}]})";
+        const std::vector<std::uint8_t> staticHd(2048,0x99);
+        add("manifest.json",staticManifest.data(),staticManifest.size());
+        add("native.a4",atlas.data(),atlas.size());add("hd.a4",staticHd.data(),staticHd.size());
+        Check(zip_close(zip)==0 && runtime.Load(path,&error),"load static fixture");
+        Check(!runtime.NeedsBlitObserver(),"MM static atlas borrowed OoT PC");
+        Check(resolve(479).ReplacementWidth==0,"static threshold");
+        Check(resolve(480).ResolvedBytes()[0]==0x99,"static replacement");
+        runtime.Reset();Check(resolve(720).ReplacementWidth==64,"static source identity survives restore");
+        atlas[0]^=1;Check(resolve(720).ReplacementWidth==0,"static changed bytes inherited stale coverage");atlas[0]^=1;
+        texture.Format=10;Check(resolve(720).ReplacementWidth==0,"static wrong format accepted");texture.Format=11;
+        texture.MaxMipLevel=1;Check(resolve(720).ReplacementWidth==0,"static mipped atlas accepted");texture.MaxMipLevel=0;
+        if(argc==3) {
+            Check(runtime.Load(argv[1],&error),error.c_str());
+            Check(!runtime.NeedsBlitObserver(),"prepared MM pack requires OoT PC");
+            std::ifstream source(argv[2],std::ios::binary);
+            const std::vector<std::uint8_t> gzf((std::istreambuf_iterator<char>(source)),{});
+            const auto half=[&](size_t at){Check(at+2<=gzf.size(),"GZFX extent");return unsigned(gzf[at])|(unsigned(gzf[at+1])<<8);};
+            const auto word=[&](size_t at){return half(at)|(half(at+2)<<16);};
+            const auto pages=word(16),stride=half(10),header=half(8);
+            Check(pages==3,"unexpected EUR GZFX sheets");
+            for(size_t i=0;i<pages;++i) {
+                const auto at=header+i*stride;
+                const auto offset=word(at),width=half(at+4),height=half(at+6);
+                const size_t size=size_t(width)*height/2;Check(offset+size<=gzf.size(),"GZFX sheet bounds");
+                atlas.assign(gzf.begin()+offset,gzf.begin()+offset+size);texture.Width=width;texture.Height=height;
+                const auto enhanced=resolve(720);
+                Check(enhanced.ReplacementWidth==width*4 && enhanced.ReplacementHeight==height*4,"prepared GZFX sheet not replaced");
+                Check(enhanced.ContentHash==HashOot3dPicaSnapshot(enhanced.ResolvedBytes()),"prepared GZFX content identity");
+                Check(resolve(240).ReplacementWidth==0,"native resolution must remain unchanged");
+                atlas[0]^=1;Check(resolve(720).ReplacementWidth==0,"foreign GZFX sheet accepted");
+            }
+            std::cout<<"MM GZFX: three native sheets, HD threshold, byte guards, restore and format negatives passed\n";
+        }
         std::filesystem::remove(path);
         std::cout << "HD font runtime threshold, upload copy and invalidation checks passed\n";
         return 0;

@@ -91,7 +91,7 @@ pub fn validate_installed_runtime(
             return Err(ForgeError::new(
                 ErrorKind::IncompatibleTarget,
                 format!("Unsupported release target: {}", py_str(other)),
-            ))
+            ));
         }
     };
     if platform != host_platform()? {
@@ -167,6 +167,7 @@ pub fn validate_installed_runtime(
         ("water_textures", "--water-texture-catalog", "water texture catalog"),
         ("scene_lights", "--scene-light-catalog", "scene light catalog"),
         ("romfs_overlay", "--romfs-overlay", "RomFS mods"),
+        ("title_message_edits", "--title-message-edits", "prepared title messages"),
         ("pica_shader_pack", "--pica-aot-shader-pack", "PICA shader pack"),
     ] {
         let resource = get(runtime, field);
@@ -185,6 +186,23 @@ pub fn validate_installed_runtime(
         };
         if !intact {
             return Err(recovery(format!("Installed {label} changed or are missing; run Forge again")));
+        }
+    }
+    if runtime.contains_key("title_romfs_layer") != runtime.contains_key("title_message_edits") {
+        return Err(recovery("Installed MM layer/message pair is incomplete; run Forge again"));
+    }
+    if let Some(resource) = runtime.get("title_romfs_layer") {
+        let layer = resolve_reference(resource_path(resource, "title_romfs_layer")?, title)?;
+        let value = single_value(&arguments, "--title-romfs-layer")
+            .ok_or_else(|| recovery("Prepared title UI routing is missing or duplicated"))?;
+        let receipt = layer.with_extension("receipt.json");
+        let valid = matches!(value, Some(value) if routes_to(value, &layer)?)
+            && resource
+                .get("receipt_sha256")
+                .is_some_and(|hash| eq_str(hash, &file_sha256(&receipt).unwrap_or_default()))
+            && forge_assets::mm3d_ui::verify_layer(&layer, &forge_base::CancelToken::new()).is_ok();
+        if !valid {
+            return Err(recovery("Prepared title UI changed or is missing; run Forge again"));
         }
     }
     if let Some(resource) = runtime.get("ui_texture_pack") {

@@ -16,6 +16,7 @@ class NativeHdFontRuntime {
     bool Load(const std::filesystem::path& path, std::string* error);
     void ObserveBlit(const oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory);
     void Reset();
+    bool NeedsBlitObserver() const noexcept { return !mFonts.empty(); }
     void SetOutputHeight(std::uint32_t height) { mOutputHeight = height; }
     void Resolve(const Oot3dPicaPhysicalMemoryView& memory,
                  const Oot3dPicaTextureState& texture, Oot3dPicaResourceSnapshot& resource);
@@ -39,6 +40,13 @@ class NativeHdFontRuntime {
         std::uint64_t ContentHash = 0;
         bool Dirty = true;
     };
+    struct StaticAtlas {
+        std::uint32_t Width = 0, Height = 0, Density = 0;
+        std::vector<std::uint8_t> Native;
+        std::shared_ptr<const std::vector<std::uint8_t>> Coverage;
+        std::uint64_t Hash = 0;
+    };
+    std::vector<StaticAtlas> mStaticAtlases;
     std::vector<Font> mFonts;
     std::unordered_map<std::uint32_t, Surface> mSurfaces;
     std::uint32_t mOutputHeight = 0;

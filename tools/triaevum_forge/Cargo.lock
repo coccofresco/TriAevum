@@ -1301,6 +1301,7 @@ dependencies = [
 name = "forge-native"
 version = "0.1.0"
 dependencies = [
+ "forge-assets",
  "forge-base",
  "forge-catalog",
  "forge-prepare",

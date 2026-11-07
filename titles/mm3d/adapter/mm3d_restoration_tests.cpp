@@ -240,6 +240,7 @@ int main(int argc,char** argv) {
     TestCalc();
     TestReadMessageEdits();
     RestorationPortTests::All(argc>1?argv[1]:nullptr);
+    if(argc>2)RestorationPortTests::PreparedMessages(argv[2]);
     std::cout << "mm3d_restoration_tests: ok\n";
     return 0;
     } catch(const std::exception& e) {std::cerr<<"FAIL: "<<e.what()<<'\n';return 1;}

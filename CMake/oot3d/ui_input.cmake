@@ -45,6 +45,12 @@ add_executable(oot3d_native_font_coverage_tests EXCLUDE_FROM_ALL
 target_compile_features(oot3d_native_font_coverage_tests PRIVATE cxx_std_20)
 set_property(TARGET oot3d_native_font_coverage_tests PROPERTY FOLDER Tests)
 
+add_executable(oot3d_game_language_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/oot3d_game_language.cpp
+    tools/oot3d/native_game_runtime/oot3d_game_language_tests.cpp)
+target_link_libraries(oot3d_game_language_tests PRIVATE three_ds_recomp_runtime)
+oot3d_target_defaults(oot3d_game_language_tests FOLDER Tests)
+
 add_executable(oot3d_top_screen_mod_profile_tests EXCLUDE_FROM_ALL
     tools/oot3d/ui_topscreen/oot3d_top_screen_mod_profile_tests.cpp
     tools/oot3d/ui_topscreen/oot3d_top_screen_item_dispatch_tests.cpp
