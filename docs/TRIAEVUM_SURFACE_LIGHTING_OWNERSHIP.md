@@ -452,6 +452,12 @@ group), `triaevum_f1_settings_smoke` (the marks on the actual widgets).
 
 ### Identity-proved native Local points
 
+Historical first-increment description below. Current group Off/zero ownership
+is specified in [Scene point-light settings](TRIAEVUM_SCENE_POINT_LIGHT_SETTINGS.md):
+proved native direct/specular is suppressed, not restored. Native ambient stays
+independent. Later native-reference/GGX work also supersedes the approximation
+and GGX limitation recorded below.
+
 `PicaScenePointLight::ReplacesNativeLocal` is an explicit title proof, off
 by default. `BuildPicaNativePointReplacement` admits these sources by exact
 captured hardware-slot identity. Matching Unknown, Scene, unavailable or

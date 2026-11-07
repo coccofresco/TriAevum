@@ -49,8 +49,9 @@ struct PicaNativePointReplacement {
         if (point.ReplacesNativeLocal == point.IndependentEmission || !point.SourceIdentity ||
             point.Group >= environment.PointLights.size()) continue;
         const auto& setting = environment.PointLights[point.Group];
-        // Off keeps native; it is not the native-local-gain slider.
-        if (!setting.Enabled || !(setting.Intensity > 0) || !(setting.RadiusScale > 0) ||
+        // Validate ownership even while Off: just as with vertex-native
+        // sources, the group owns its native direct/specular term too.
+        if (setting.Intensity < 0 || !(setting.RadiusScale > 0) ||
             !std::isfinite(setting.Intensity) || !std::isfinite(setting.RadiusScale) ||
             !(point.Radius > 0) || !std::isfinite(point.Radius)) continue;
         bool valid = true;
@@ -72,6 +73,13 @@ struct PicaNativePointReplacement {
         // A matching Unknown/Scene/ambiguous slot is not an unmatched new
         // source: omit the renderer light on this draw and keep native.
         if (!valid || (point.IndependentEmission && match)) continue;
+        if (!setting.Enabled || setting.Intensity == 0) {
+            result.ReplacedSlots |= match;
+            for (uint32_t i = 0; i < binding.Sources.size(); ++i)
+                if (match & (1U << i)) result.Balance.Gains[i] = {0, 0, 1, 0};
+            // No supplemental row or shadow work; native ambient is independent.
+            continue;
+        }
         result.Points.Lights[result.Points.Count++] = point;
         result.ReplacedSlots |= match;
         for (uint32_t i = 0; i < binding.Sources.size(); ++i)
@@ -84,7 +92,7 @@ struct PicaNativePointReplacement {
                 result.Balance.Gains[i] = {setting.Intensity, setting.RadiusScale, 1,
                     float(4U + result.Points.Count - 1U)};
     }
-    if (!result.Points.Count) return std::nullopt;
+    if (!result.Points.Count && !result.ReplacedSlots) return std::nullopt;
     result.Balance.Control[3] |= 2U; // proved replacement/independent point term before native clamp
     return result;
 }

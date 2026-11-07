@@ -126,10 +126,10 @@ void TestLocalSourceGuards() {
 }
 
 void TestEachProvenSourcePublication() {
-    for (const auto& source : kMm3dLocalLightSources) {
+    for (const auto& source : kMm3dLocalLightSources) for (uint16_t params : {0U,1U,5U}) {
         Fixture f; Mm3dNativeA32LightingProbe probe;
         f.W16(f.Actor,source.Actor); f.W8(f.Actor+2,source.Category);
-        f.W16(f.Actor+0x1C,1);
+        f.W16(f.Actor+0x1C,params);
         f.W32(f.Actor+0x140,source.Update); f.W32(f.Actor+0x13C,source.Destroy);
         for (const auto& guard : source.Guards) f.W32(guard[0],guard[1]);
         f.W32(f.Play+0x20C0+source.Category*12,1);
@@ -140,6 +140,8 @@ void TestEachProvenSourcePublication() {
         const auto binding=probe.CaptureRenderer(0,f.Memory);
         Require(binding.ScenePoints && binding.ScenePoints->Count==1,"proved source not selected exactly once");
         const auto& light=binding.ScenePoints->Lights[0];
+        Require(light.Group==(source.Actor==0x10 ? (params==0 ? 0U : 1U) : 2U),
+                "companion/fairy/non-fairy settings ownership crossed");
         Require(light.SourceIdentity==f.Actor+source.Info+4 && light.ReplacesNativeLocal && light.Radius==250,
                 "source publication changed native identity/radius");
         const float gain=source.Actor==0x10?1.0F:0.15F;

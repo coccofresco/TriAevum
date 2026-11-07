@@ -85,6 +85,8 @@ public:
   // The shared renderer's native fragment lighting operand and lit shadow
   // receivers, which this title's shaders need.
   [[nodiscard]] virtual bool NativeFragmentLighting() const { return false; }
+  // Display name of point group zero, not a separate settings owner.
+  [[nodiscard]] virtual std::string_view CompanionLightName() const { return "Navi"; }
   // The actor profiles (the title's own ids) whose rigid geometry may be
   // cached in static shadow layers. None by default: every actor is dynamic.
   [[nodiscard]] virtual StaticShadowActorPolicy StaticShadowActors() const { return {}; }
