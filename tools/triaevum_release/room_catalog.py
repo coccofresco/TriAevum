@@ -23,6 +23,13 @@ def compact(value):
 
 
 def prepare(data_root: Path, recipe: dict, romfs: Path, report=lambda *_: None) -> Path:
+    try:
+        return _prepare(data_root, recipe, romfs, report)
+    except (KeyError, TypeError, AttributeError, OverflowError) as error:
+        raise ValueError("Malformed publisher room analysis") from error
+
+
+def _prepare(data_root: Path, recipe: dict, romfs: Path, report) -> Path:
     def require(ok):
         if not ok:
             raise ValueError("Invalid or uncovered room analysis; regenerate with this title's publisher tools")
@@ -45,7 +52,9 @@ def prepare(data_root: Path, recipe: dict, romfs: Path, report=lambda *_: None) 
             catalog["version"] == 1 and catalog["title"] == title and catalog["rejected"] == [])
     rows = catalog["rooms"]
     require(isinstance(rows, list) and 0 < len(rows) <= 4096)
-    room_name = lambda name: re.fullmatch(re.escape(directory) + r"/.+_[0-9]+_info\.zsi", name) is not None
+    suffix, separator = profile["filename_suffix"], profile["index_separator"]
+    require(all(isinstance(s, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", s) for s in (suffix, separator)))
+    room_name = lambda name: re.fullmatch(re.escape(directory) + r"/.+" + re.escape(separator) + r"[0-9]+" + re.escape(suffix), name) is not None
     expected, keys, emitters = {}, set(), 0
     for row in rows:
         path, digest = row["source"], row["sourceSha256"]

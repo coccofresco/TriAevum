@@ -14,15 +14,19 @@ use crate::{catalog_cache, model_catalog, romfs, Report};
 fn bad() -> ForgeError { ForgeError::new(ErrorKind::ArtifactIntegrity, "Invalid or uncovered room analysis; regenerate with this title's publisher tools") }
 fn hex16(v: &Value) -> bool { v.as_str().is_some_and(|s| s.len() == 16 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))) }
 fn triple(v: &Value, colour: bool) -> bool { v.as_array().is_some_and(|a| a.len() == 3 && a.iter().all(|n| n.as_f64().is_some_and(|n| n.is_finite() && (!colour || (0.0..=4.0).contains(&n))))) }
-fn room_name(path: &str, directory: &str) -> bool {
-    path.strip_prefix(&format!("{directory}/")).and_then(|s| s.strip_suffix("_info.zsi"))
-        .and_then(|s| s.rsplit_once('_')).is_some_and(|(stem, n)| !stem.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+fn indexed_name(path: &str, directory: &str, suffix: &str, separator: &str) -> bool {
+    path.strip_prefix(&format!("{directory}/")).and_then(|s| s.strip_suffix(suffix))
+        .and_then(|s| s.rsplit_once(separator)).is_some_and(|(stem, n)| !stem.is_empty() && !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
 pub fn prepare(data_root: &Path, recipe: &Value, romfs_path: &Path, report: Report<'_>, cancel: &CancelToken) -> Result<PathBuf> {
     let profile = &recipe["room_catalog"];
     let title = profile["title"].as_str().filter(|s| !s.is_empty() && s.len() <= 32 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')).ok_or_else(bad)?;
     let directory = profile["directory"].as_str().filter(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')).ok_or_else(bad)?;
+    let token = |key: &str| profile[key].as_str().filter(|s| !s.is_empty() && s.len() <= 64 && s.bytes().all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))).ok_or_else(bad);
+    let suffix = token("filename_suffix")?;
+    let separator = token("index_separator")?;
+    let room_name = |path: &str, directory: &str| indexed_name(path, directory, suffix, separator);
     let source = recipe["inputs"]["romfs"]["sha256"].as_str().filter(|s| is_sha256_hex(s)).ok_or_else(bad)?;
     let generator = profile["generator_sha256"].as_str().filter(|s| is_sha256_hex(s)).ok_or_else(bad)?;
     // Preserve the publisher's decimal spelling (CPython and Rust may choose

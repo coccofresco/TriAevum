@@ -25,10 +25,24 @@ class RoomCatalogTests(unittest.TestCase):
                   "gain": 1, "colour": [1.0, 0.5, 0.1], "surfaces": ["1234567890abcdef"], "independentEmission": True}]}]}
         self.recipe = {"inputs": {"romfs": {"sha256": hashlib.sha256(self.romfs.read_bytes()).hexdigest()}},
                        "room_catalog": {"version": 1, "title": "fixture", "directory": "rooms",
+                                        "filename_suffix": "_info.zsi", "index_separator": "_",
                                         "generator_sha256": "a" * 64, "catalog_json": compact(catalog).decode()}}
 
     def run_prepare(self):
         return prepare_scene_lights(data_root=self.root / "data", recipe=self.recipe, romfs=self.romfs)
+
+    def test_malformed_profile_shapes_fail_as_validation_errors(self):
+        for profile in (None, [], "foreign", {}, {"version": 1}):
+            self.recipe["room_catalog"] = profile
+            with self.assertRaises(ValueError): self.run_prepare()
+
+    def test_filename_convention_is_recipe_owned(self):
+        catalog = json.loads(self.recipe["room_catalog"]["catalog_json"])
+        catalog["rooms"][0]["source"] = "rooms/test-room0.bin"
+        self.recipe["room_catalog"].update(filename_suffix=".bin", index_separator="-room", catalog_json=compact(catalog).decode())
+        self.romfs.write_bytes(level3_romfs({"rooms": {"test-room0.bin": self.room}}))
+        self.recipe["inputs"]["romfs"]["sha256"] = hashlib.sha256(self.romfs.read_bytes()).hexdigest()
+        self.run_prepare()
 
     def test_install_entrypoint_preserves_bytes_reuses_and_repairs(self):
         p = self.run_prepare()
