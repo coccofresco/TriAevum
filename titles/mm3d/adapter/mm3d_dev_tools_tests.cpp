@@ -93,8 +93,8 @@ public:
     Put(P + 0x408 + 0x5C, std::array<float, 3>{0, 0, 0});
     for (auto [pc, w] : CameraGuard)
       Put(pc, w);
-    Put(0x15F4FC, uint32_t{0xE92D4FF0});
-    Put(0x176AFC, uint32_t{0xE92D4FF0});
+    for (const auto& site : {kMm3dPlayUpdateSite, kMm3dTransitionSite})
+      for (uint32_t i = 0; i < site.Words.size(); ++i) Put(site.Pc + 4 * i, site.Words[i]);
     Put(0x18E5BC, EntranceTable);
     std::map<unsigned, std::vector<const DevWarpEntrance *>> groups;
     for (const auto &e : kMm3dDevEntrances)
@@ -126,6 +126,17 @@ const DevWarpEntrance &Entrance(uint16_t value) {
 int main() {
   using namespace Mm3dDevAbi;
   Mm3dDevTools abi({true, true, false});
+  for (const auto& site : {kMm3dPlayUpdateSite, kMm3dTransitionSite}) {
+    for (uint32_t i = 0; i < site.Words.size(); ++i) {
+      Fake g;
+      Check(CodeMatches(g), "complete guard accepted");
+      g.Put(site.Pc + 4 * i, site.Words[i] ^ 1U);
+      Check(!CodeMatches(g), "each corrupt guard fails closed");
+      g.Put(site.Pc + 4 * i, site.Words[i]);
+      g.bytes.erase(site.Pc + 4 * i);
+      Check(!CodeMatches(g), "each unmapped guard fails closed");
+    }
+  }
   {
     Fake g;
     DevWarpObservation o;

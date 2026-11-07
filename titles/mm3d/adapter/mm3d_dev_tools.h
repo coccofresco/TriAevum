@@ -1,6 +1,7 @@
 #pragma once
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "oot3d_dev_free_camera.h"
+#include "mm3d_hook_sites.h"
 #include "oot3d_dev_warp.h"
 #include <algorithm>
 #include <array>
@@ -89,8 +90,10 @@ inline bool CodeMatches(DevWarpGuest &g) {
   for (const auto &[pc, expected] : CameraGuard)
     if (!Read(g, pc, w) || w != expected)
       return false;
-  return Read(g, 0x15F4FC, w) && w == 0xE92D4FF0 && Read(g, 0x176AFC, w) && w == 0xE92D4FF0 && Read(g, 0x18E5BC, w) &&
-         w == EntranceTable;
+  const auto read = [&](uint32_t pc, uint32_t& word) { return Read(g, pc, word); };
+  return Mm3dHookSiteMatches(kMm3dPlayUpdateSite, read) &&
+         Mm3dHookSiteMatches(kMm3dTransitionSite, read) &&
+         Read(g, 0x18E5BC, w) && w == EntranceTable;
 }
 // Save fields of Common (Project Restoration's SaveData at Common+8; MM3D
 // Play_Init 0x12A7AC reads time, isNight, nextDayTime the N64 way).
