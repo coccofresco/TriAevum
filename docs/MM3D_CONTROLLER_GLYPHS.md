@@ -7,8 +7,10 @@ owners. No game art, colored glyph atlas, shader or environment-profile changes.
 **Experimental / incomplete qualification — not yet merge-ready.** Sustained HUD,
 notebook badge, inventory text, dialogue advance, scripted device switching and
 settings now have scoped live evidence. Physical devices, Android/native-HUD touch
-integration, exhaustive forms/fades/aspects and current-code product/regression
-gates must not be inferred from those successes.
+integration and exhaustive forms/fades/aspects must not be inferred from those
+successes. Current-code OoT identity and a developer-OFF MM smoke pass; one
+environment regression suite fails. Inline chord readability and mapped inline
+controls inside NPC speech (distinct from the advance indicator) remain gaps.
 
 ## Controls
 
@@ -104,7 +106,11 @@ The failure test exposed a shared menu bug: an idle desktop pointer swallowed
 modal keyboard/controller input. A failing regression reproduces it; the fix
 consumes only active pointer presses/releases while preserving modal protection.
 Headless real F1-widget tests additionally cover failed save/revert and fresh-owner
-reload; they are not substitutes for all live error paths.
+reload. `f1-save-error-visible` exercises actual F1 save failure and recovery;
+its live preview survives the failed save and the saved file changes only after
+unlock. F1 placement now keeps its status footer inside the viewport. The hovered
+Save-path tooltip partly covers the error text in the failure screenshot; this
+is not a clean full-message readability capture.
 
 ## Tests and boundaries
 
@@ -122,10 +128,23 @@ Use `oot3d_mm3d_single_screen_tests --block-boundaries` and
 an older shared registry. The inline renderer entry already existed in the
 private registry used by this campaign.
 
-Historical `alpha-hud`, `context-hud` and `pass-live` failures predate submission
-ownership and do not qualify newer code. The earlier OoT O2 pass at `db04ccff`
-also cannot qualify later shared changes. Consult external `OVERLAY/RESULTS.md`
-for the current gate identities and remaining gaps.
+At implementation `0fdf5f18`, thirteen current-source regression suites were run:
+twelve pass (including159 overlay checks and real F1 persistence); the environment
+suite fails `group night live reload`. A filesystem-timestamp collision is only
+a hypothesis, not a demonstrated cause. No unrelated profile/lighting fix or blind
+rerun was made; the failed gate remains open.
+
+`current-oot-o2` runs the current public OoT build for400 presentation frames:
+all100/200/300 BMPs exactly match `retuned/cap-p13.sha256`. `current-mm-public`
+cold-boots2800 frames with developer tools OFF and reviews HUD, notebook badge,
+Items inline controls, Masks and return. The developer driver emits no receipts.
+This MM build uses embedded blocks, not a certified installed whole-AOT plugin
+package. The inline I/II chords are visibly small in the public Items capture;
+substitution/native prose preservation is qualified, general readability is not.
+
+Historical failed runs remain failures and older successes retain their original
+source identities. Consult external `OVERLAY/RESULTS.md` for exact gate identities
+and remaining gaps.
 
 The developer-only acceptance driver never forces prompt preferences, guest state
 or widget return values. SDL/OS/platform-boundary actions remain synthetic.
