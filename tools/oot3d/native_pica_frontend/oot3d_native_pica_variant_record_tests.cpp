@@ -49,6 +49,12 @@ PicaShaderPipelineRequest Request() {
     request.ReflectionProfile->Reflectivity = 0.375F;
     request.ReflectionProfile->Roughness = 0.1F;
     request.SurfaceLightingAvailable = true;
+    request.FragmentLightingOperand = true;
+    request.FragmentLightingBalance = true;
+    request.NativeFragmentLitShadows = true;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    request.ShadowProbe = true;
+#endif
     request.Pbr.TextureSlot = 2;
     request.Pbr.SeamSoftening = true;
     request.ReliefTexture = 1;
@@ -77,6 +83,12 @@ void RequestRoundTrip() {
                 decoded.SettingsRevision == 17,
             "request header");
     Require(decoded.Witness == witness, "witness round trip");
+    Require(decoded.HasFragmentContext && decoded.Request.FragmentLightingOperand &&
+                decoded.Request.FragmentLightingBalance && decoded.Request.NativeFragmentLitShadows,
+            "fragment context round trip");
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    Require(decoded.Request.ShadowProbe, "probe context round trip");
+#endif
     Require(decoded.Request.ReflectionProfile.has_value() &&
                 decoded.Request.ReflectionProfile->Roughness == 0.1F,
             "reflection profile bits");
@@ -86,6 +98,24 @@ void RequestRoundTrip() {
     Json broken = encoded;
     broken["vertex_key"] = "not hex";
     Require(!DecodePicaVariantRequest(broken, decoded), "invalid key rejected");
+    broken = encoded;
+    broken["fragment_context"].erase("balance");
+    Require(!DecodePicaVariantRequest(broken, decoded), "partial context rejected");
+    broken = encoded;
+    broken.erase("fragment_context");
+    Require(DecodePicaVariantRequest(broken, decoded) && !decoded.HasFragmentContext &&
+                !decoded.Request.FragmentLightingOperand && !decoded.Request.FragmentLightingBalance &&
+                !decoded.Request.NativeFragmentLitShadows, "legacy context explicitly absent");
+    for (unsigned bits = 0; bits < 8; ++bits) {
+        auto varied = request;
+        varied.FragmentLightingOperand = (bits & 1) != 0;
+        varied.FragmentLightingBalance = (bits & 2) != 0;
+        varied.NativeFragmentLitShadows = (bits & 4) != 0;
+        const auto row = EncodePicaVariantRequest(1, 1, 1, varied, witness);
+        Require(DecodePicaVariantRequest(row, decoded) &&
+                    EncodePicaVariantRequest(1, 1, 1, decoded.Request, decoded.Witness) == row,
+                "all fragment context combinations round trip");
+    }
 }
 
 void EffectsRoundTrip() {
@@ -123,11 +153,21 @@ void RecorderDeduplicates(const std::filesystem::path& directory) {
         recorder.Observe(2, request, effects, {}, 1, result);
         recorder.Observe(2, request, effects, {}, 2, result);
         Require(recorder.RequestCount() == 3, "distinct requests counted once");
+        // Even when two requests produce the same source, their context is
+        // distinct and must survive for regeneration by a future generator.
+        for (unsigned bits = 0; bits < 8; ++bits) {
+            auto varied = request;
+            varied.FragmentLightingOperand = (bits & 1) != 0;
+            varied.FragmentLightingBalance = (bits & 2) != 0;
+            varied.NativeFragmentLitShadows = (bits & 4) != 0;
+            recorder.Observe(2, varied, effects, {}, 2, result);
+        }
+        Require(recorder.RequestCount() == 10, "context participates in deduplication");
     }
     PicaVariantRequestSession session;
     std::string error;
     Require(LoadPicaVariantRequests(path, session, &error), "session loads");
-    Require(session.Requests.size() == 3 && session.Effects.size() == 1, "session contents");
+    Require(session.Requests.size() == 10 && session.Effects.size() == 1, "session contents");
     Require(session.Effects.begin()->second.SurfaceLighting == SurfaceLightingMode::Native, "session effects");
     Require(session.Requests.back().SettingsRevision == 2, "revision recorded");
 }

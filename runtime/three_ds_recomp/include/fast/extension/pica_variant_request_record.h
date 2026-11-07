@@ -60,6 +60,9 @@ struct PicaVariantRequestRecord {
     uint64_t SettingsRevision = 0;
     PicaShaderPipelineRequest Request;
     PicaVariantRequestWitness Witness;
+    // Older v1 recordings omitted these inputs. Never confuse absent context
+    // with a proved all-false context when migrating a retained recording.
+    bool HasFragmentContext = false;
 };
 
 struct PicaVariantRequestSession {
