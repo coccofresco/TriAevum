@@ -5,8 +5,17 @@ Publisher tooling can generate an additional SPVK pack from local native title
 SHBINs using `build_vertex_artifacts OUTPUT --translate INPUT...`. Translation
 is publisher-time only. Ship neither the SHBINs nor the extracted RomFS. The
 pack contains portable vertex SPIR-V, canonical shader identities and derived
-vertex passes; no driver cache. Unsupported non-vertex DVLEs fail generation.
-Do not silently publish partial output as all-title coverage.
+vertex passes; no driver cache. Non-vertex DVLEs fail generation by default.
+For a mixed-stage SHBIN, explicit `--vertex-only` generates just the vertex
+scope and reports each untranslated geometry DVLE and the final stage counts.
+Unknown stages and an empty vertex family still fail. This does **not** lower
+geometry shaders or prove all-title coverage. Preserve the full input/stage
+census and the unresolved geometry gap with the artifact.
+
+To check that scoped output, set `TRIAEVUM_TITLE_PROGRAM_PACK=OUTPUT` and run
+`build_vertex_artifacts --check --translate --vertex-only INPUT...`. This checks
+against that explicit pack, not an embedded-first fallback, and requires exact
+vertex/pass coverage counts. Unscoped `--check` retains the existing behavior.
 
 `--title-program-pack PATH` selects the optional runtime pack. Entries are
 appended **after** the legacy embedded vertex/pass artifacts, preserving OoT
