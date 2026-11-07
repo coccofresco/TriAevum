@@ -1233,7 +1233,7 @@ void NativeA32WindowSession::Setup() {
           launch.UiProfile ==
                   Oot3dNativeGame::Oot3dUiProfile::TopScreen
               ? topScreenConfigRuntime
-              : nullptr));
+              : nullptr, titleSession && titleSession->HasButtonOverlay()));
   if (launch.UiProfile ==
       Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
     applicationSettingsTabs.push_back(

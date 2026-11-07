@@ -803,6 +803,18 @@ bool NativeA32WindowSession::RunFrame() {
       }
     });
   }
+  if (titleSession && titleSession->HasButtonOverlay()) {
+    const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
+        std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 1280.f / 3.f, 240.f);
+    auto primitives = titleSession->ButtonOverlay(float(canvas.Height) / 240.f);
+    auto prepared = n64UiRenderer.PrepareTextures(primitives);
+    renderStream.Submit([&, primitives = std::move(primitives), prepared = std::move(prepared), uiRegion]() mutable {
+      if (rendererFrameSkipped) { n64UiRenderer.Stage(std::move(prepared)); return; }
+      if (!n64UiRenderer.Render(primitives, uiRegion, oot3d::ui::N64UiCanvasMode::Widescreen16x9,
+                                std::move(prepared), &renderError))
+        throw std::runtime_error("native button overlay failed: " + renderError);
+    });
+  }
   // The game draws every anchored control in every scene, so a control never
   // switches between the overlay's art and the game's; the overlay draws its
   // own only while the game does not (touch layout off, layout editing).
@@ -1567,6 +1579,8 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
 
 // Runs the guest until it waits and drains the PICA work it submitted during the refresh.
 void NativeA32WindowSession::RunGuestRefresh() {
+  if (titleSession && controlConfigRuntime)
+    titleSession->ConfigureButtonOverlay(controlConfigRuntime->Snapshot().Config, controlConfigRuntime->ActivePromptSet());
   auto &hostServices = *hostServicesStorage;
   auto &process = *processStorage;
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
@@ -2102,7 +2116,10 @@ void NativeA32WindowSession::RunGuestRefresh() {
   picaStats.RefreshesWithNativeDraws += refreshHadNativeDraws ? 1U : 0U;
   // The native letters of this update (the state its draws are built from),
   // kept for the frame that presents them.
-  if (refreshHadNativeDraws) RecordNativeButtonLabels();
+  if (refreshHadNativeDraws) {
+    RecordNativeButtonLabels();
+    if (titleSession) titleSession->RecordButtonOverlay(lastSubmittedDrawId);
+  }
   phaseTiming.PicaSubmitSeconds += SecondsSince(picaSubmitStart);
 }
 
@@ -2260,6 +2277,8 @@ void NativeA32WindowSession::PresentVisualFrame(
                   presentedNativeLabels->ItemsLabels.clear();
               }
             }
+            if (titleSession) titleSession->SelectButtonOverlay(
+                finished->Draws.empty() ? 0 : finished->Draws.back().SubmissionId);
             frameActors = titleSession
                 ? titleSession->ActorInteractions(process.Memory(), finished->Sequence)
                 : Oot3dNativeGame::CollectNativeActorInteractions(

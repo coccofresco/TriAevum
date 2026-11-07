@@ -9,6 +9,7 @@
 // Which title sessions a build contains is TRIAEVUM_TITLES.
 
 #include "native_scene_environment_state.h"
+#include "native_button_overlay.h"
 #include "oot3d_environment_time.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
@@ -102,6 +103,13 @@ public:
     (void)memory; (void)sourceFrame;
     return {};
   }
+
+  // Native-layout controller labels; absent adapters leave OoT3D untouched.
+  virtual bool HasButtonOverlay() const { return false; }
+  virtual void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet) {}
+  virtual void RecordButtonOverlay(uint64_t) {}
+  virtual void SelectButtonOverlay(uint64_t) {}
+  virtual std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float) const { return {}; }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }
