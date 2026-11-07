@@ -319,14 +319,19 @@ constexpr std::string_view kPbrBalancedNativeLoopEnd = R"glsl(
             pbr_direct += (diffuse + specular + rim) * converted;
             pbr_gi_native += diffuse * converted * pica_surface.gi_sources.z;
         } else {
-            pbr_direct += (diffuse * gains.x + specular * gains.y + rim * gains.x) *
+            // A proved Scene secondary factor is already in the TEV albedo;
+            // it is not an extra native GGX source when Scene direct is muted.
+            float specular_gain = (pica_surface.balance_control.z & 1u) != 0u && gains.w > 0.0
+                ? gains.x : gains.y;
+            pbr_direct += (diffuse * gains.x + specular * specular_gain + rim * gains.x) *
                 radiance * attenuation * pica_surface_shadow(int(i));
             pbr_gi_native += diffuse * gains.x * radiance * attenuation * pica_surface_shadow(int(i)) *
                 ((flags & 1u) != 0u ? pica_surface.gi_sources.x : pica_surface.gi_sources.z);
         }
         pbr_ambient += fragment_uniforms.lighting_ambient[i].rgb * attenuation * gains.z;
     }
-    pbr_ambient += fragment_uniforms.lighting_global_ambient.rgb * pica_surface.balance_parameters.x;
+    pbr_ambient += fragment_uniforms.lighting_global_ambient.rgb * pica_surface.balance_parameters.x +
+        pica_surface.environment_ambient.rgb;
     pica_balance_ambient = pbr_ambient;
 )glsl";
 constexpr std::string_view kPbrSurfaceLoop = R"glsl(
@@ -619,6 +624,21 @@ std::optional<PicaPbrShader> BuildPicaPbrShader(
     result.UnlitInputs = kPbrUnlitPrimary;
     if (options.NativeFragmentLighting) {
         result.UnlitInputs += kPbrNativeUnlit;
+        if (options.NativeBalance) result.UnlitInputs += R"glsl(
+    if ((pica_surface.balance_control.z & 1u) != 0u) {
+        // Native TEV uses secondary as a material multiplier. Preserve its
+        // captured Scene LUT response; Local terms still follow their controls.
+        vec3 material_secondary = vec3(0.0);
+        for (uint slot = 0u; slot < lp.control.x; ++slot) {
+            uint i = lp.lights[slot].x;
+            vec4 gains = pica_surface.balance_gains[i];
+            vec3 factor = gains.w >= 4.0 ? pica_native_point_factor(i) :
+                vec3(gains.y) * (gains.w == 0.0 ? pica_surface_shadow(int(i)) : vec3(1.0));
+            material_secondary += balance_specular[slot] * factor;
+        }
+        secondary_fragment_color.rgb = clamp(material_secondary, vec3(0.0), vec3(1.0));
+    }
+)glsl";
     }
     const std::string nativeCoordinate = "pica_texcoord" + coordinate;
     result.UnlitInputs += "\n    vec2 pbr_native_coordinate = " + nativeCoordinate + ";\n"

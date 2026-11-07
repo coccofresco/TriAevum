@@ -2467,6 +2467,9 @@ TEST(PicaNativePointReplacement, InstalledGgxAndUnlitAppearanceHaveSeparateProgr
     options.NativeBalance=true;const auto balanced=BuildPicaPbrShader(hooks,options);ASSERT_TRUE(balanced);
     EXPECT_EQ(legacy->ShadingBody.find("balance_gains"),std::string::npos);
     EXPECT_NE(balanced->ShadingBody.find("balance_gains[i]"),std::string::npos);
+    EXPECT_NE(balanced->UnlitInputs.find("material_secondary += balance_specular[slot] * factor"),std::string::npos);
+    EXPECT_EQ(legacy->UnlitInputs.find("material_secondary"),std::string::npos);
+    EXPECT_NE(balanced->ShadingBody.find("pica_surface.environment_ambient.rgb"),std::string::npos);
     EXPECT_NE(balanced->ShadingBody.find("float pbr_native_scale = 1.0;"),std::string::npos);
     EXPECT_NE(balanced->ShadingBody.find("pica_surface_scene_point(int(slot)"),std::string::npos);
     options.NativeFragmentLighting=false;options.NativeBalance=false;options.PreserveNativeUnlit=true;

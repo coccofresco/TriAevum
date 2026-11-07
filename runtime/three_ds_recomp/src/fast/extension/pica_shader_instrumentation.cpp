@@ -705,12 +705,13 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_FRAGMENT_IRRADIANCE_V1");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
         }
-        if (fragmentBalance && !pbrBalance) {
+        if (fragmentBalance) {
             const auto& sites=result.Hooks.NativeLightingCapture;
             insertions.push_back({sites.Begin, std::string(Renderer3ds::kPicaFragmentBalanceCaptureBegin)});
             insertions.push_back({sites.Diffuse, std::string(Renderer3ds::kPicaFragmentBalanceCaptureDiffuse)});
             insertions.push_back({sites.Specular, std::string(Renderer3ds::kPicaFragmentBalanceCaptureSpecular)});
-            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V4_PROFILE_NATIVE_POINTS_FACTOR");
+            if (!pbrBalance)
+                result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V4_PROFILE_NATIVE_POINTS_FACTOR");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
         }
         if (nativeFragmentShadows) {
@@ -718,7 +719,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::NativeFragmentLitShadows;
         }
         if (fragmentBalance && pbrBalance) {
-            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_GGX_NATIVE_BALANCE_V2_NATIVE_POINT_RESPONSE");
+            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_GGX_NATIVE_BALANCE_V3_PROFILE_NATIVE_POINTS_FACTOR");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
         }
         if (pbr) {

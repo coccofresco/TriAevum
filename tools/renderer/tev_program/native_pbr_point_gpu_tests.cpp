@@ -92,7 +92,8 @@ bool pbr_valid_frame=false;vec4 combiner_output=vec4(.5,.5,.5,.37);
         if(i==3){s.Control[1]=0;b.Gains[0]={1,1,1,0};}
         if(i==4){s.MaterialDiffuse={};c.Diffuse={};}
         if(i==5){b.Gains[0]={1,1,1,0};c.Diffuse={.1F,.1F,.1F,0};}
-        if(i==8){s.EnvironmentParameters={0,.6F,0,1};b.Parameters[0]=.6F;}
+        if(i==8){s.EnvironmentParameters={0,.6F,0,1};b.Parameters[0]=.6F;
+            s.EnvironmentAmbient={.1F,.1F,.1F,0};}
         if(i==10)b.Gains[0][1]=2;
         if(i==11)b.Gains[0][1]=.5F;
         FoldPicaSurfaceMaterialForPbr(s,true);
@@ -103,7 +104,7 @@ bool pbr_valid_frame=false;vec4 combiner_output=vec4(.5,.5,.5,.37);
         if(i==5)irradiance*=window; // unmatched supplemental point still uses its own falloff
         if(i==5)irradiance+=.1F;
         if(i>=9)irradiance*=std::max(0.F,1.F-.55F/b.Gains[0][1]);
-        const float ambient=.02F*(i>=9?.45F:1.F)+.04F*b.Parameters[0];
+        const float ambient=.02F*(i>=9?.45F:1.F)+.04F*b.Parameters[0]+(i==8?.08F:0.F);
         for(size_t k=0;k<3;++k)expected[i][k]=brdf*irradiance+ambient*albedo*(1-metal)+parameters.EmissiveFactor[k];
         expected[i][3]=.37F;
     }

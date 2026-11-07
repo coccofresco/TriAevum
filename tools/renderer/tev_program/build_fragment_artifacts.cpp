@@ -156,7 +156,8 @@ static int CheckBalanceFamily() {
     unsigned modules=0;
     for (const auto lighting : kOot3dPicaParametricLightings) {
         if (lighting == kOot3dPicaParametricLightings[0]) continue; // No native lighting to capture.
-        for (bool integerTexture : {false,true}) {
+        for (bool integerTexture : {false,true}) for (bool ggx : {false,true}) {
+            if (integerTexture && ggx) continue; // Installed maps require float sampling.
             Oot3dPicaGeneratedFragmentShader shader;
             std::string error;
             Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture, shader, &error), error);
@@ -165,7 +166,16 @@ static int CheckBalanceFamily() {
             request.RequestedFeatures=PicaShaderInstrumentationFeature::NativePerPixelLighting |
                 PicaShaderInstrumentationFeature::FragmentLightingOperand |
                 PicaShaderInstrumentationFeature::FragmentLightingBalance;
+            if (ggx) {
+                request.RequestedFeatures |= PicaShaderInstrumentationFeature::PbrMaterial;
+                request.Pbr.TextureSlot=0;
+                request.Pbr.NativeFragmentLighting=true;
+                request.Pbr.NativeBalance=true;
+                request.Pbr.NativeAttenuationLuts=true;
+            }
             const auto balanced=BuildPicaFragmentInstrumentationVariant(request);
+            if (ggx) Check(HasPicaShaderInstrumentationFeature(balanced.AppliedFeatures,
+                PicaShaderInstrumentationFeature::PbrMaterial), "GGX balance not composed");
             Check(HasPicaShaderInstrumentationFeature(balanced.AppliedFeatures,
                 PicaShaderInstrumentationFeature::FragmentLightingBalance), "balance capture not composed");
             const auto nri=Fast::Extension::BuildPicaNriFragmentShaderVariant(balanced.Source);
@@ -175,7 +185,7 @@ static int CheckBalanceFamily() {
             ++modules;
         }
     }
-    Check(modules==4,"unexpected balance family size");
+    Check(modules==6,"unexpected balance family size");
     std::cout << "balance_fragment_checks=" << modules << '\n';
     return 0;
 }
