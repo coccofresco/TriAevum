@@ -852,6 +852,8 @@ nlohmann::json FrameToJson(const Oot3dVulkanFrameDiagnostics& frame) {
         { "grass_motion_blade_count", frame.GrassMotionBladeCount },
         { "normal_guide_draw_count", frame.NormalGuideDrawCount },
         { "typed_normal_guide_draw_count", frame.TypedNormalGuideDrawCount },
+        { "native_fragment_normal_guide_draw_count", frame.NativeFragmentNormalGuideDrawCount },
+        { "pbr_normal_guide_draw_count", frame.PbrNormalGuideDrawCount },
         { "ao_relief_candidate_draw_count", frame.AoReliefCandidateDrawCount },
         { "ao_relief_texture_draw_count", frame.AoReliefTextureDrawCount },
         { "ao_relief_applied_draw_count", frame.AoReliefAppliedDrawCount },
@@ -2103,10 +2105,13 @@ void Oot3dVulkanDiagnostics::RecordTemporalDraw(
     mActiveFrame->RepeatedIdentityMotionDrawCount += repeatedIdentity ? 1U : 0U;
 }
 
-void Oot3dVulkanDiagnostics::RecordNormalGuideDraw(bool typedNormal, bool relief) {
+void Oot3dVulkanDiagnostics::RecordNormalGuideDraw(bool typedNormal, bool relief,
+                                                bool nativeFragmentNormal, bool pbrNormal) {
     if (!mActiveFrame.has_value()) return;
     ++mActiveFrame->NormalGuideDrawCount;
     mActiveFrame->TypedNormalGuideDrawCount += typedNormal ? 1U : 0U;
+    mActiveFrame->NativeFragmentNormalGuideDrawCount += nativeFragmentNormal ? 1U : 0U;
+    mActiveFrame->PbrNormalGuideDrawCount += pbrNormal ? 1U : 0U;
     mActiveFrame->AoReliefAppliedDrawCount += relief ? 1U : 0U;
 }
 

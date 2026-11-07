@@ -827,9 +827,16 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
         declarations +=
             "layout(location=1) out vec4 pica_normal_guide;\n";
         const bool typedNormal = !surfaceLighting && !materialNormal && request.SurfaceNormalInput;
+        // Native fragment lighting already decoded the Gzw quaternion/bump
+        // normal in view space. Surface relighting must not replace that guide
+        // with a vertex-lit reconstruction (which may have no authored input).
+        const bool nativeNormal = materialNormal && (fragmentOperand || nativeFragmentShadows);
+        if (nativeNormal)
+            result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_NORMAL_GUIDE_V1");
         decisions.Set(Decision::NormalGuide);
         decisions.NormalAt = writer;
         decisions.Normal = pbr ? Decision::NormalPath::Pbr
+            : nativeNormal ? Decision::NormalPath::Material
             : surfaceLighting ? Decision::NormalPath::Surface
             : materialNormal ? Decision::NormalPath::Material
             : typedNormal ? Decision::NormalPath::Typed
@@ -837,7 +844,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             : Decision::NormalPath::NativeRotate;
         if (pbr) {
             epilogue += "    pica_normal_guide = vec4(pbr_normal * 0.5 + 0.5, 1.0);\n";
-        } else if (surfaceLighting) {
+        } else if (surfaceLighting && !nativeNormal) {
             epilogue +=
                 "    pica_normal_guide = vec4(pica_surface_unit(pica_surface_normal) * 0.5 + 0.5, 1.0);\n";
         } else if (materialNormal) {

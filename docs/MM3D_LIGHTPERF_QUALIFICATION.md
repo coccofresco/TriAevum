@@ -81,3 +81,12 @@ Local reproducibility/evidence directory:
 records commits. Recipes, binary/config/input receipts, counter JSONL, tests,
 image hashes and reduced previews are retained there. Raw captures/diagnostics
 were reduced; no copyrighted corpus is committed.
+
+## Wave 2 (partial, separate evidence)
+
+See [the title-owned wave-2 note](../titles/mm3d/docs/LIGHTPERF_WAVE2.md).
+Native-fragment guide selection and cheap writer attribution were added; legacy
+packs and OoT O2 remain identical. The MM targeted attempt failed before loading
+because of a stale OoT-only build selection and was not retried. G09 is partial;
+G10/G13 remain open, with new offline EUR allocator/camera evidence. This does
+not replace the successful first-wave results above or imply a wave-2 MM speedup.

@@ -194,8 +194,77 @@ static int CheckBalanceFamily() {
     return 0;
 }
 
+// Exercise native decoded-normal ownership and installed normal-map writers.
+static int CheckNormalGuides() {
+    using namespace Fast::Extension;
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
+    unsigned cases = 0;
+    for (unsigned lighting = 1; lighting <= 2; ++lighting)
+    for (unsigned mode = 0; mode < 4; ++mode) {
+        auto packet = std::make_unique<Oot3dPicaDrawPacket>();
+        Oot3dPicaDecodedDrawState state{};
+        packet->Registers[0x8f] = 1;
+        if (lighting == 2) packet->Registers[0x1c4] = 0xFF7BFF00U;
+        packet->Registers[0x80] = 1;
+        packet->Registers[0xc0] = 0x00030003U; // native texture 0 RGB/alpha TEV operands
+        state.Textures[0].Enabled = true;
+        Oot3dPicaGeneratedFragmentShader shader;
+        std::string error;
+        Check(GenerateOot3dPicaFragmentShader(*packet, state, shader, &error,
+            Oot3dPicaShaderBuildPurpose::OfflineSource, Oot3dPicaTevMode::Specialized), error);
+        Check(shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal),
+              "native frontend did not publish its decoded normal");
+        PicaFragmentInstrumentationRequest request;
+        request.Source = shader.Source;
+        request.Hooks = &shader.Hooks;
+        request.RequestedFeatures = PicaShaderInstrumentationFeature::NormalGuide;
+        if (mode != 0) request.RequestedFeatures |= PicaShaderInstrumentationFeature::NativePerPixelLighting;
+        if (mode == 1) request.RequestedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
+        if (mode == 2) request.RequestedFeatures |= PicaShaderInstrumentationFeature::NativeFragmentLitShadows;
+        if (mode == 3) {
+            request.RequestedFeatures |= PicaShaderInstrumentationFeature::PbrMaterial;
+            request.Pbr.TextureSlot = 0;
+            request.Pbr.NativeFragmentLighting = true;
+            request.Pbr.NativeAttenuationLuts = lighting == 1;
+        }
+        const auto guide = BuildPicaFragmentInstrumentationVariant(request);
+        Check(HasPicaShaderInstrumentationFeature(guide.AppliedFeatures,
+              PicaShaderInstrumentationFeature::NormalGuide), "normal guide was not emitted");
+        Check(guide.Decisions.Normal == (mode == 3 ? PicaEffectDecisions::NormalPath::Pbr
+                                                 : PicaEffectDecisions::NormalPath::Material),
+              "normal guide selected the wrong writer: lighting=" + std::to_string(lighting) +
+                  " mode=" + std::to_string(mode) + " actual=" + std::to_string(unsigned(guide.Decisions.Normal)));
+        const auto compiled = compiler.CompileGlslToSpv(guide.Source, shaderc_fragment_shader,
+                                                       "native_normal_guide", options);
+        Check(compiled.GetCompilationStatus() == shaderc_compilation_status_success, compiled.GetErrorMessage());
+        ++cases;
+        if (mode == 1 || mode == 2) {
+            // A textual identifier is not sufficient: an unproved frontend
+            // contract retains the prior surface path and a different key.
+            auto unknown = shader.Hooks;
+            using Semantic = ::Oot3d::Renderer::PicaShaderSemantic;
+            unknown.Semantics = static_cast<Semantic>(static_cast<uint32_t>(unknown.Semantics) &
+                ~static_cast<uint32_t>(Semantic::MaterialNormal));
+            request.Hooks = &unknown;
+            const auto fallback = BuildPicaFragmentInstrumentationVariant(request);
+            Check(fallback.Decisions.Normal == PicaEffectDecisions::NormalPath::Surface &&
+                  fallback.FragmentKey != guide.FragmentKey, "unproved normal did not retain an isolated fallback");
+            const auto fallbackBinary = compiler.CompileGlslToSpv(fallback.Source, shaderc_fragment_shader,
+                                                                 "unknown_native_normal", options);
+            Check(fallbackBinary.GetCompilationStatus() == shaderc_compilation_status_success,
+                  fallbackBinary.GetErrorMessage());
+            ++cases;
+        }
+    }
+    std::cout << "native_normal_guide_compile_cases=" << cases << '\n';
+    return 0;
+}
+
 int main(int argc, char** argv) try {
     if (argc == 2 && std::string_view(argv[1]) == "--balance-check") return CheckBalanceFamily();
+    if (argc == 2 && std::string_view(argv[1]) == "--normal-guide-check") return CheckNormalGuides();
     if (argc > 1 && std::string_view(argv[1]) == "--uber") return BuildUberFamily(argc - 1, argv + 1);
     if (argc > 1 && std::string_view(argv[1]) == "--casters") return BuildCasterFamily(argc - 1, argv + 1);
     const bool temporal = argc > 1 && std::string_view(argv[1]) == "--temporal";
