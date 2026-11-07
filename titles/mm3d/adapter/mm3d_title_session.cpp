@@ -15,6 +15,7 @@
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
 #include "../gameplay/mm3d_rumble_events.h"
+#include "../gameplay/mm3d_light_arena.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
@@ -82,6 +83,7 @@ public:
   bool OwnsSceneProjection() const override { return true; }
   void SetPresentation(const TitlePresentationSettings& settings) override {
     ApplyMm3dPresentationSettings(settings);
+    mLightArena.SetEnabled(settings.ExtendedDrawDistance);
   }
   std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
       oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
@@ -196,6 +198,9 @@ public:
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #endif
     }
+    mHostMemory = &process.Memory();
+    if (!mLightArena.Verify(process.Memory()))
+      std::fprintf(stderr, "MM3D light overflow disabled: EUR arena contract mismatch\n");
     mRumble.Verify(process.Memory());
     if (!mRumble.Verified()) std::fprintf(stderr, "MM3D rumble disabled: EUR guard mismatch\n");
     mActorInteractionGuards = Mm3dActorInteractionGuardsHold(process.Memory());
@@ -205,6 +210,15 @@ public:
   }
 
   void ObserveBlockEntry(TitleBlockEntry &entry) override {
+    // Same allocator PC, one dispatch: relocate BEFORE lighting invalidates the
+    // destination owner. Never duplicate the existing lighting hook registration.
+    if (entry.Pc == kMm3dLightAllocatorSite.Pc && mHostMemory) {
+      const auto result = mLightArena.BeforeAllocation(entry.Memory, entry.State.r[1],
+          [this](bool create) { return EnsureLightOverflow(create); });
+      using R = Mm3dLightArena::Result;
+      if (result == R::Unavailable || result == R::Exhausted)
+        throw std::runtime_error("MM3D light arena: cannot allocate a distinct overflow record");
+    }
     if (mComposition.ObserveBlockEntry(entry.Pc, entry.State, entry.Memory) !=
             Mm3dNativePicaCompositionTracker::Event::OpaqueWorldBegins ||
         entry.SceneView == nullptr)
@@ -334,6 +348,14 @@ public:
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
     return nlohmann::json{
+        {"light_arena", {{"verified", mLightArena.Verified()},
+                         {"native_allocations", mLightArena.Stats().NativeAllocations},
+                         {"banks_seen", mLightArena.Stats().BanksSeen},
+                         {"overflow_allocations", mLightArena.Stats().OverflowAllocations},
+                         {"relocations", mLightArena.Stats().Relocations},
+                         {"invalid", mLightArena.Stats().Invalid},
+                         {"unavailable", mLightArena.Stats().Unavailable},
+                         {"exhausted", mLightArena.Stats().Exhausted}}},
         {"scope_entries", stats.ScopeEntries},
         {"scope_exits", stats.ScopeExits},
         {"recorded_spans", stats.RecordedSpans},
@@ -371,6 +393,28 @@ public:
   }
 
 private:
+  bool EnsureLightOverflow(bool create) {
+    using A = Mm3dLightArena;
+    auto& memory = *mHostMemory;
+    if (!memory.IsMapped(A::MappingBase, A::MappingSize)) {
+      // MapRegion rejects ANY overlap, including partial mappings. Do not unmap
+      // or appropriate another subsystem's range on failure.
+      if (!create || !memory.MapRegion({"mm3d_light_overflow", A::MappingBase,
+                                        A::MappingSize, true, false, {}})) return false;
+      if (!memory.Write32(A::MappingBase, A::Magic0) ||
+          !memory.Write32(A::MappingBase + 4, A::Magic1)) return false;
+    }
+    // Revalidate after savestate restore; host-side booleans are not ownership.
+    bool exact = false;
+    for (const auto& region : memory.RegionInfos())
+      if (region.BaseAddress == A::MappingBase && region.Size == A::MappingSize &&
+          region.Writable && !region.Executable) exact = true;
+    uint32_t magic0=0, magic1=0;
+    return exact && memory.Read32(A::MappingBase,&magic0) && magic0==A::Magic0 &&
+           memory.Read32(A::MappingBase+4,&magic1) && magic1==A::Magic1;
+  }
+  NativeA32Memory* mHostMemory = nullptr;
+  Mm3dLightArena mLightArena;
   Mm3dNativePicaCompositionTracker mComposition;
   // MM3D's single-screen mode: its settings and the typed replacements of
   // guest instructions that read them.
