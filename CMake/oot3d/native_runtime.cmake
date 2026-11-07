@@ -672,6 +672,16 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
 endif()
 set_property(TARGET oot3d_native_a32_process PROPERTY FOLDER Tools)
 
+# Optional offline MM native effect ABI proof; takes the user's local code.bin.
+# No GPU/device/game-loop launch, and no ROM fixture is embedded in this target.
+if (TARGET oot3d_native_a32_aot)
+    add_executable(mm3d_native_effect_tests EXCLUDE_FROM_ALL
+        titles/mm3d/audio/native_effect_tests.cpp)
+    target_link_libraries(mm3d_native_effect_tests PRIVATE
+        oot3d_native_a32_process oot3d_native_a32_aot)
+    oot3d_target_defaults(mm3d_native_effect_tests FOLDER Tests)
+endif()
+
 # The mass-AOT tests compile against the generated A32 AOT header, so they exist
 # only in a tree configured with those generated inputs.
 if (TARGET oot3d_native_a32_aot)
