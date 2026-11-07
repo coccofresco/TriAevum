@@ -1,5 +1,6 @@
 #include "mm3d_single_screen.h"
 #include "mm3d_button_overlay.h"
+#include "../dekui/button_glyph_emission.h"
 
 #include "core.h"
 #include "settings.h"
@@ -98,7 +99,8 @@ std::map<std::string, uint64_t> Mm3dSingleScreen::ButtonOverlaySummary() const {
              {"candidates",s.Candidates},{"tint_rejected",s.TintRejected},{"pose_rejected",s.PoseRejected},
               {"unbound_candidates",s.UnboundCandidates},{"ring_geometry_rejected",s.RingGeometryRejected},
               {"capacity_rejected",s.CapacityRejected},{"duplicate_candidates",s.DuplicateCandidates},
-              {"pending_labels",mButtonOverlay->PendingLabels()},{"pending_panes",mButtonOverlay->PendingPanes()}};
+              {"pending_labels",mButtonOverlay->PendingLabels()},{"pending_panes",mButtonOverlay->PendingPanes()},
+              {"inline_glyphs",s.InlineGlyphs}};
 }
 
 Mm3dSingleScreen::~Mm3dSingleScreen() = default;
@@ -139,6 +141,24 @@ std::vector<std::uint32_t> Mm3dSingleScreen::CandidatePcs() {
 }
 
 void Mm3dSingleScreen::Register(Mm3dGuestPatches& patches) {
+    Mm3dGuestPatchSite glyph;
+    glyph.Pc=Mm3dDekui::ButtonGlyphEmission::Pc;
+    glyph.Name="overlay_inline_glyph";
+    glyph.Guard.assign(Mm3dDekui::ButtonGlyphEmission::Guards.begin(),Mm3dDekui::ButtonGlyphEmission::Guards.end());
+    glyph.Handler=[this](a32::GuestState& state,a32::MemoryBus& bus)->std::optional<uint32_t> {
+        const auto caller=state.r[14];
+        if(caller!=Mm3dDekui::ButtonGlyphEmission::MainReturn && caller!=Mm3dDekui::ButtonGlyphEmission::ShadowReturn)return {};
+        const auto pass=mCore->ButtonEmissionPass();
+        if(pass>3 && pass!=~0u)return {};
+        BusMemory memory(bus,mRestoration);
+        const bool shadow=caller==Mm3dDekui::ButtonGlyphEmission::ShadowReturn;
+        if(!mButtonOverlay->CaptureInline(memory,state.r[2],state.r[3],shadow))return {};
+        // No native commands appended. Preserve flags, SP, LR, VFP and every
+        // other register; ordinary prose/unknown records execute unchanged.
+        state.r[0]=state.r[1];
+        return caller;
+    };
+    patches.Add(std::move(glyph));
     // Where dekui's handlers branch into the middle of guest functions
     // (titles/mm3d/dekui: inventory navigation, item present, dungeon map,
     // death penalties, menu memory and page switch, prices, Bomber approach,

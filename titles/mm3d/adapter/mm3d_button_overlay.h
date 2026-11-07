@@ -17,7 +17,7 @@ namespace Oot3dNativeGame {
 // identity is the live registry entry, not pixels, a scene or a texture hash.
 class Mm3dButtonOverlay {
 public:
-  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0, StandaloneLabels=0, EmptyRecords=0, PassRejected=0, GuardRejected=0, Candidates=0, TintRejected=0, PoseRejected=0, UnboundCandidates=0, RingGeometryRejected=0, CapacityRejected=0, DuplicateCandidates=0; };
+  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0, StandaloneLabels=0, EmptyRecords=0, PassRejected=0, GuardRejected=0, Candidates=0, TintRejected=0, PoseRejected=0, UnboundCandidates=0, RingGeometryRejected=0, CapacityRejected=0, DuplicateCandidates=0, InlineGlyphs=0; };
   const Counters& Stats() const { return mStats; }
   size_t PendingLabels() const { size_t n=0;for(const auto& pane:mPending)n+=pane.Slots.size();return n; }
   size_t PendingPanes() const { return mSeen.size(); }
@@ -86,6 +86,50 @@ public:
     const bool replaced=Pane(memory, layout, root, resources.Parts(memory));
     if(pass==~0u)mStats.StandaloneLabels+=mStats.Labels-before;
     return replaced;
+  }
+  // Individual native text records may use the parts atlas inside prose.
+  // Observe at the glyph renderer, not by suppressing the whole text pane.
+  template<class M> bool CaptureInline(M& m,uint32_t node,uint32_t record,bool shadow) {
+    using namespace Mm3dDekui::NativeInventory;
+    if(!mActive || !Pointer(node,0x140) || !Pointer(record,60))return false;
+    Mm3dDekui::OcarinaPrompt::Hook resources;const auto parts=resources.Parts(m);
+    const auto descriptor=parts?m.Read(parts+0x4c):std::optional<uint32_t>{};
+    const auto pixels=descriptor && Pointer(*descriptor,0x24)?m.Read(*descriptor+0x20):std::optional<uint32_t>{};
+    if(!pixels || !*pixels || m.Read(record)!=pixels || m.Read(record+0xc)!=std::optional<uint32_t>(256) ||
+        m.Read(record+0x10)!=std::optional<uint32_t>(128) || m.Read(record+0x38)!=std::optional<uint32_t>(~0u))return false;
+    const auto u=Float(m,record+0x28),v=Float(m,record+0x2c),uw=Float(m,record+0x30),vh=Float(m,record+0x34),
+        ux=Float(m,node+0x110),uy=Float(m,node+0x114),ut=Float(m,node+0x118),
+        vx=Float(m,node+0x11c),vy=Float(m,node+0x120),vt=Float(m,node+0x124);
+    if(!u||!v||!uw||!vh||!ux||!uy||!ut||!vx||!vy||!vt||*uy!=0||*vx!=0||*ux<=0||*vy<=0)return false;
+    const float left=*ux**u+*ut,top=*vy**v+*vt,width=*ux**uw,height=*vy**vh;
+    auto action=PartsButton(left,top,width,height),modifier=NativeControlAction::Count;
+    if(top==32.f/128 && width==16.f/256 && height==16.f/128) {
+      if(left==160.f/256 || left==176.f/256)action=NativeControlAction::X;
+      if(left==192.f/256 || left==208.f/256)action=NativeControlAction::Y;
+      if(left==160.f/256 || left==208.f/256)modifier=NativeControlAction::Zr;
+    }
+    if(action==NativeControlAction::Count || !NativeButtonOverlayGlyph(action,mPrompts,mControls) ||
+        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls)))return false;
+    const auto x=Float(m,record+0x14),y=Float(m,record+0x18),w=Float(m,record+0x20),h=Float(m,record+0x24),
+        xx=Float(m,node+0xe0),xy=Float(m,node+0xe4),yx=Float(m,node+0xf0),yy=Float(m,node+0xf4),
+        tx=Float(m,node+0xec),ty=Float(m,node+0xfc),r=Float(m,node+0x128),g=Float(m,node+0x12c),
+        b=Float(m,node+0x130),a=Float(m,node+0x134);
+    if(!x||!y||!w||!h||!xx||!xy||!yx||!yy||!tx||!ty||!r||!g||!b||!a||*a<=0||*w<=0||*h<=0)return false;
+    NativeButtonOverlaySlot slot;slot.Action=action;slot.Modifier=modifier;
+    const float cx=*x+*w*.5f,cy=*y+*h*.5f;
+    slot.X=*tx+*xx*cx+*xy*cy+40.f/3.f;slot.Y=*ty+*yx*cx+*yy*cy;
+    slot.Width=std::hypot(*xx,*yx)**w;slot.Height=std::max(slot.Width,std::hypot(*xy,*yy)**h);
+    slot.Color={*r,*g,*b,std::min(*a,1.f)};
+    if(!std::isfinite(slot.X)||!std::isfinite(slot.Y)||slot.Height<=0||slot.Height>128||
+        std::abs(slot.X)>1024||std::abs(slot.Y)>1024||std::max({*r,*g,*b})<=0)return false;
+    const auto cursor=m.Read(CommandCursorAddress);
+    if(!cursor || !Pointer(*cursor,8) || (*cursor&7) || PendingLabels()>=1020 || mPending.size()>=1020)return false;
+    if(shadow)return true; // omit only this proven control glyph's native shadow
+    const Key key{*cursor,record,slot.X,slot.Y};
+    if(mSeen.insert(key).second) {
+      mPending.push_back({*cursor,key,{slot},mStyle});++mStats.Labels;++mStats.InlineGlyphs;
+    }
+    return true;
   }
   static NativeControlAction PartsButton(float u, float v, float w, float h) {
     if (v != 0.f || w != 16.f/256 || h != 16.f/128) return NativeControlAction::Count;

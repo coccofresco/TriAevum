@@ -1,4 +1,5 @@
 #include "mm3d_button_overlay.h"
+#include "../dekui/button_glyph_emission.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <iostream>
@@ -189,6 +190,37 @@ void TestSubmissionOwnership(){
  m.words.erase(Mm3dButtonOverlay::CommandCursorAddress);
  Check(!overlay.Capture(m,layout,node,3),"missing command destination leaves native art intact");
 }
+void TestInlineAndChordBounds(){
+ auto m=Fixture();constexpr U32 groups=0x10060000,entries=groups+0x100,resource=groups+0x200,
+     descriptor=groups+0x400,pixels=0x11000000,record=groups+0x500;
+ m.words[NotebookPrompt::RegistryLiteral]=NotebookPrompt::Registry;
+ m.words[NotebookPrompt::Registry+0x28]=groups;m.words[NotebookPrompt::Registry+0x2c]=entries;
+ m.words[groups]=12;m.words[entries+44]=resource;m.words[resource+4]=11<<16;
+ m.words[resource+12+0x4c]=descriptor;m.words[descriptor+0x20]=pixels;
+ m.words[record]=pixels;m.words[record+0xc]=256;m.words[record+0x10]=128;m.words[record+0x38]=~0u;
+ m.F(record+0x14,0);m.F(record+0x18,0);m.F(record+0x20,16);m.F(record+0x24,16);
+ m.F(record+0x28,144.f/256);m.F(record+0x2c,0);m.F(record+0x30,16.f/256);m.F(record+0x34,16.f/128);
+ const auto original=m.words;Mm3dButtonOverlay overlay;
+ overlay.Configure(NativeControlDefaults(),NativePromptSet::Keyboard);
+ Check(overlay.CaptureInline(m,node,record,true)&&overlay.PendingLabels()==0,"proven inline shadow omitted without duplicate host glyph");
+ Check(overlay.CaptureInline(m,node,record,false)&&overlay.PendingLabels()==1,"inline X record replaced independently of prose");
+ Check(m.words==original,"inline capture writes no guest bytes");
+ overlay.SubmitCommandList(0x14001000,0x100);overlay.ObserveDraw(1);const uint64_t draw=1;overlay.Select(std::span(&draw,1));
+ Check(!overlay.Compose(3).empty(),"inline glyph uses exact native submitted draw");
+ m.words[record]=pixels+8;Check(!overlay.CaptureInline(m,node,record,false),"unrelated font pixels never recognized by UV alone");
+ m.words[record]=pixels;m.F(record+0x28,0);Check(!overlay.CaptureInline(m,node,record,false),"ordinary atlas art stays native");
+ m.F(record+0x28,160.f/256);m.F(record+0x2c,32.f/128);
+ Check(overlay.CaptureInline(m,node,record,false),"inline Restoration I cell recognized");
+ auto config=NativeControlDefaults();config.Bindings[size_t(NativeControlAction::Zr)]={};overlay.Configure(config,NativePromptSet::Keyboard);
+ Check(!overlay.CaptureInline(m,node,record,false),"unbound inline modifier preserves native glyph");
+ NativeButtonOverlaySlot slot;slot.Action=NativeControlAction::X;slot.Modifier=NativeControlAction::Zr;
+ slot.X=8;slot.Y=8;slot.Height=16;slot.Width=16;
+ std::vector<oot3d::ui::UiPrimitive> primitives;
+ AppendNativeButtonOverlay(primitives,{slot},NativePromptSet::Keyboard,NativeControlDefaults(),3);
+ Check(!primitives.empty(),"left-edge chord rendered");
+ for(const auto& p:primitives)Check(p.destination.x>=-.01f && p.destination.x+p.destination.width<=16.01f,
+     "whole chord, including modifier, fits native cell at left screen edge");
+}
 void TestSettings(){
  auto config=NativeControlDefaults();std::string text,error;NativeControlConfig parsed;
  Check(SerializeNativeControlConfigText(config,&text,&error),"default serialize");
@@ -208,8 +240,9 @@ void TestSettings(){
 }
 }
 int main(int argc,char** argv){try{
- TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSubmissionOwnership();TestSettings();
+ TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSubmissionOwnership();TestInlineAndChordBounds();TestSettings();
  if(argc==2){std::ifstream in(argv[1],std::ios::binary);Check(bool(in),"code image opens");
-  for(auto [pc,word]:ButtonEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR emission guard agrees");}}
+  for(auto [pc,word]:ButtonEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR emission guard agrees");}
+  for(auto [pc,word]:ButtonGlyphEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR glyph renderer guard agrees");}}
  std::cout<<checks<<" overlay checks passed\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

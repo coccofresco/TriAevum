@@ -43,8 +43,11 @@ inline void AppendNativeButtonOverlay(std::vector<oot3d::ui::UiPrimitive>& outpu
     Menu::ButtonGlyphColors colors;
     const float light = std::clamp(std::min({slot.Color.red, slot.Color.green, slot.Color.blue}), 0.f, 1.f);
     colors.Body = {light, light, light, 1};
-    const float height = slot.Width > 0 ? std::min(slot.Height,slot.Width / Menu::ButtonGlyphWidth(*glyph,1.f)) : slot.Height;
-    Menu::AppendButtonGlyph(output, *glyph, slot.X, slot.Y, height, slot.Color.alpha, 30,
+    const float unitWidth=Menu::ButtonGlyphWidth(*glyph,1.f)+
+        (modifier?Menu::ButtonGlyphWidth(*modifier,1.f)+.6f:0.f);
+    const float height = slot.Width > 0 ? std::min(slot.Height,slot.Width / unitWidth) : slot.Height;
+    const float mainX=slot.X+(modifier?(Menu::ButtonGlyphWidth(*modifier,height)+.6f*height)*.5f:0.f);
+    Menu::AppendButtonGlyph(output, *glyph, mainX, slot.Y, height, slot.Color.alpha, 30,
         Menu::ButtonGlyphCellForPixels(height * pixelsPerUnit), colors);
     if (slot.SuffixPlus) {
       Menu::TextStyle text;
@@ -54,15 +57,15 @@ inline void AppendNativeButtonOverlay(std::vector<oot3d::ui::UiPrimitive>& outpu
     }
     if (modifier) {
       const float mainWidth = Menu::ButtonGlyphWidth(*glyph, height);
-      const float modWidth = Menu::ButtonGlyphWidth(*modifier, slot.Height);
-      const float plusX = slot.X - mainWidth * .5f - slot.Height * .3f;
-      Menu::AppendButtonGlyph(output, *modifier, plusX - slot.Height * .3f - modWidth * .5f,
-          slot.Y, slot.Height, slot.Color.alpha, 30,
-          Menu::ButtonGlyphCellForPixels(slot.Height * pixelsPerUnit), colors);
+      const float modWidth = Menu::ButtonGlyphWidth(*modifier, height);
+      const float plusX = mainX - mainWidth * .5f - height * .3f;
+      Menu::AppendButtonGlyph(output, *modifier, plusX - height * .3f - modWidth * .5f,
+          slot.Y, height, slot.Color.alpha, 30,
+          Menu::ButtonGlyphCellForPixels(height * pixelsPerUnit), colors);
       Menu::TextStyle text;
-      text.Size = slot.Height; text.Align = Menu::TextAlign::Center; text.Layer = 30;
+      text.Size = height; text.Align = Menu::TextAlign::Center; text.Layer = 30;
       text.Color = {1, 1, 1, slot.Color.alpha};
-      Menu::AppendText(output, text, plusX, slot.Y + slot.Height * .3f, "+");
+      Menu::AppendText(output, text, plusX, slot.Y + height * .3f, "+");
     }
   }
 }

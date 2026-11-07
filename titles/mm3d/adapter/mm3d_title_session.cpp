@@ -13,6 +13,7 @@
 #include "mm3d_scene_environment_profile.h"
 #include "mm3d_single_screen.h"
 #include "../dekui/button_emission.h"
+#include "../dekui/button_glyph_emission.h"
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
 #include "oot3d_dev_warp.h"
@@ -153,7 +154,8 @@ public:
       }
       if (mSingleScreen) {
         const auto& registry=Oot3dNativeA32Registry();
-        for (const auto pc:{Mm3dDekui::ButtonEmission::Pc,Mm3dDekui::ButtonEmission::Pc+4})
+        for (const auto pc:{Mm3dDekui::ButtonEmission::Pc,Mm3dDekui::ButtonEmission::Pc+4,
+                            Mm3dDekui::ButtonGlyphEmission::Pc})
           if (!oot3d::recomp::a32::FindBlock(registry,pc))
             throw std::runtime_error("MM3D glyph emission: missing A32 hook/continuation boundary; regenerate from --block-boundaries");
       }
