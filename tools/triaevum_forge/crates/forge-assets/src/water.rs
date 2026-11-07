@@ -16,6 +16,8 @@
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use forge_base::hashing::sha256_hex;
+use forge_base::legacy_json::{dumps, Options, Style};
 use forge_base::{CancelToken, ForgeError, Result};
 use serde_json::{json, Map, Value};
 
@@ -317,6 +319,31 @@ pub fn build_catalog(romfs: &Path, cancel: &CancelToken) -> Result<(Vec<u8>, Val
     Ok((text.into_bytes(), summary))
 }
 
+/// A recipe-supplied title profile opts into the bounded model reader. Legacy
+/// recipes keep the original walker, rules, output and cache identity.
+pub fn build_catalog_with_profile(romfs: &Path, value: &Value, cancel: &CancelToken) -> Result<(Vec<u8>, Value)> {
+    let profile = crate::model_catalog::Profile::parse(value)?;
+    let mut roles: BTreeMap<(u64, u16, u16), u8> = BTreeMap::new();
+    let (mut textures, mut models) = (0u64, 0u64);
+    profile.files(romfs, cancel, &mut |path, packed| {
+        models += 1;
+        let data = crate::model_catalog::unpack_lzs(packed)?;
+        for (name, width, height, base) in profile.textures(path, &data)? {
+            textures += 1;
+            let role = profile.water_role(&name);
+            if role != 0 {
+                *roles.entry((content_hash(base), width, height)).or_insert(0) |= role;
+            }
+        }
+        Ok(())
+    })?;
+    let mut text = format!("{CATALOG_HEADER}\n");
+    for ((hash, width, height), role) in &roles {
+        text.push_str(&format!("{hash:016x} {width} {height} {role}\n"));
+    }
+    Ok((text.into_bytes(), json!({"model_files": models, "textures": textures, "water_textures": roles.len()})))
+}
+
 /// `prepare_water_textures`: the catalog for this RomFS, generated once and
 /// reused while its receipt matches; `None` when the recipe names no RomFS.
 pub fn prepare_water_textures(
@@ -330,9 +357,18 @@ pub fn prepare_water_textures(
     let mut identity = Map::new();
     identity.insert("catalog_version".into(), json!(CATALOG_VERSION));
     identity.insert("romfs_sha256".into(), source.clone());
+    let profile = recipe.get("water_catalog").filter(|v| !v.is_null());
+    if let Some(profile) = profile {
+        crate::model_catalog::Profile::parse(profile)?;
+        let canonical = dumps(profile, Options { style: Style::Compact, sort_keys: true, ensure_ascii: true });
+        identity.insert("profile_sha256".into(), json!(sha256_hex(canonical.as_bytes())));
+    }
     catalog_cache::prepare(data_root, "water", "water_textures.txt", identity, || {
         report("water", "Cataloguing water textures...");
-        build_catalog(romfs, cancel)
+        match profile {
+            Some(profile) => build_catalog_with_profile(romfs, profile, cancel),
+            None => build_catalog(romfs, cancel),
+        }
     })
     .map(Some)
 }

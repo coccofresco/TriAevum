@@ -35,6 +35,28 @@ if romfs.is_file():
                       romfs=romfs, output=out / "font_coverage.zip")
 "#;
 
+#[test]
+#[ignore = "needs local RomFS and a title profile (TRIAEVUM_FORGE_WATER_PROFILE)"]
+fn profiled_water_matches_python() {
+    let romfs = PathBuf::from(std::env::var("TRIAEVUM_FORGE_REAL_ROMFS").expect("local RomFS"));
+    let profile_path = PathBuf::from(std::env::var("TRIAEVUM_FORGE_WATER_PROFILE").expect("title profile"));
+    let profile: serde_json::Value = serde_json::from_slice(&std::fs::read(&profile_path).unwrap()).unwrap();
+    let (actual, summary) = water::build_catalog_with_profile(&romfs, &profile, &CancelToken::new()).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let expected = directory.path().join("water.txt");
+    let status = Command::new(std::env::var("TRIAEVUM_FORGE_PYTHON").expect("Python oracle"))
+        .arg(repository().join("tools/triaevum_release/water_textures.py"))
+        .arg(&romfs)
+        .arg(&expected)
+        .arg("--profile")
+        .arg(&profile_path)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    assert_eq!(actual, std::fs::read(expected).unwrap());
+    println!("profiled water: {summary}; bytes={}; sha256={}", actual.len(), sha256_hex(&actual));
+}
+
 fn repository() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..")
 }

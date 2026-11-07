@@ -189,6 +189,28 @@ def water_cases():
                   "files": tree_files(data)})
 
 
+    # Explicit recipe profile: bounded CMB layout, GAR v2 and LzS, independently
+    # generated synthetic bytes (no title assets or hardcoded title fallback).
+    import test_model_catalog as model_fixtures
+    profile = model_fixtures.PROFILE
+    model_files = {f"{directory}/{name}": data for directory, entries in model_fixtures.fixture_files().items()
+                   for name, data in entries.items()}
+    directory = write_tree("fixtures/profile-water/romfs", model_files)
+    image = romfs_image(model_files)
+    for label, source in (("directory", directory),
+                          ("level3", write("fixtures/profile-water/level3.bin", image)),
+                          ("ivfc", write("fixtures/profile-water/ivfc.bin", b"IVFC" + bytes(0xFFC) + image))):
+        payload, summary = water_textures.build_catalog(source, profile)
+        CASES.append({"kind": "water_catalog", "name": "profile-" + label, "profile": profile,
+                      "romfs": rel(source), "summary": summary,
+                      "expected": rel(write(f"expected/profile-water/{label}.txt", payload))})
+    data = OUTPUT / "expected/profile-water/prepared"
+    recipe = {"inputs": {"romfs": {"sha256": "b" * 64}}, "water_catalog": profile}
+    water_textures.prepare_water_textures(data_root=data, recipe=recipe, romfs=directory)
+    CASES.append({"kind": "prepare_water", "name": "profile", "romfs": rel(directory),
+                  "recipe": recipe, "files": tree_files(data)})
+
+
 # --- scene lights -------------------------------------------------------------------------------------------
 
 def cmb(materials, textures, shapes, bones=((0, -1, (1, 1, 1), (0, 0, 0), (0, 0, 0)),)):

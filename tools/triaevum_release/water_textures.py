@@ -17,6 +17,7 @@ roles has several bits; the renderer decides by the draw's shape.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import struct
 from pathlib import Path
@@ -193,14 +194,22 @@ def romfs_model_files(romfs: Path) -> Iterator[tuple[str, bytes]]:
             yield relative, data
 
 
-def build_catalog(romfs: Path) -> tuple[bytes, dict]:
+def build_catalog(romfs: Path, profile: dict | None = None) -> tuple[bytes, dict]:
+    # No profile retains the legacy walker, rules and output byte for byte.
+    try:
+        from . import model_catalog
+    except ImportError:
+        import model_catalog
     roles: dict[tuple[int, int, int], int] = {}
     textures = models = 0
-    for path, data in romfs_model_files(romfs):
+    files = romfs_model_files(romfs) if profile is None else model_catalog.model_files(romfs, profile)
+    for path, data in files:
         models += 1
-        for name, width, height, base in (zsi_textures(data) if path.endswith(".zsi") else zar_textures(data)):
+        found = (zsi_textures(data) if path.endswith(".zsi") else zar_textures(data)) if profile is None \
+            else model_catalog.model_textures(path, data, profile)
+        for name, width, height, base in found:
             textures += 1
-            role = water_role(name)
+            role = water_role(name) if profile is None else model_catalog.water_role(name, profile)
             if role:
                 key = (content_hash(base), width, height)
                 roles[key] = roles.get(key, 0) | role
@@ -217,6 +226,10 @@ def prepare_water_textures(*, data_root: Path, recipe: dict, romfs: Path,
     if not source:
         return None
     identity = {"catalog_version": CATALOG_VERSION, "romfs_sha256": source}
+    profile = recipe.get("water_catalog")
+    if profile is not None:
+        identity["profile_sha256"] = hashlib.sha256(json.dumps(
+            profile, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()
     key = hashlib.sha256(repr(sorted(identity.items())).encode("ascii")).hexdigest()
     directory = data_root / "cache" / "water" / key
     catalog = directory / "water_textures.txt"
@@ -227,7 +240,7 @@ def prepare_water_textures(*, data_root: Path, recipe: dict, romfs: Path,
                 receipt.get("catalog_sha256") == hashlib.sha256(catalog.read_bytes()).hexdigest():
             return catalog
     report("water", "Cataloguing water textures...")
-    payload, summary = build_catalog(romfs)
+    payload, summary = build_catalog(romfs) if profile is None else build_catalog(romfs, profile)
     directory.mkdir(parents=True, exist_ok=True)
     atomic_write_bytes(catalog, payload)
     atomic_write_json(receipt_path, {"source": identity, "summary": summary,
@@ -236,7 +249,12 @@ def prepare_water_textures(*, data_root: Path, recipe: dict, romfs: Path,
 
 
 if __name__ == "__main__":
-    import sys
-    payload, summary = build_catalog(Path(sys.argv[1]))
-    Path(sys.argv[2]).write_bytes(payload)
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("romfs", type=Path)
+    parser.add_argument("output", type=Path)
+    parser.add_argument("--profile", type=Path, help="title-owned model layout and semantic role rules")
+    args = parser.parse_args()
+    payload, summary = build_catalog(args.romfs, load_json_object(args.profile) if args.profile else None)
+    args.output.write_bytes(payload)
     print(summary)
