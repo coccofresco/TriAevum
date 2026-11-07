@@ -3515,6 +3515,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             // composed colour is what a display-encoded native target holds.
             copyOutput->Encoding = Extension::NativePicaSceneColorEncoding();
             copyOutput->SceneEffectsResolved = true;
+            if (applyBoundaryFxaa)
+                mDiagnostics.RecordBeforeUiAntiAliasing(true, false);
             mDiagnostics.RecordDisplayEffectGraphExecution(
                 effectExecution.Summary());
             restoreEffectPassGuides();
@@ -3852,7 +3854,12 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 mSwapchainFormat == VK_FORMAT_B8G8R8A8_SRGB ||
                     mSwapchainFormat == VK_FORMAT_R8G8B8A8_SRGB,
                 presentationSettings.Effects,
-                presentationPerspective};
+                presentationPerspective,
+                Extension::PicaGuideDiagnosticMode() != 0 &&
+                    scanoutPass->ReadsResource(Extension::EffectResource::NativeDepth) &&
+                    scanoutPass->ReadsResource(Extension::EffectResource::NormalGuide) &&
+                    (Extension::PicaGuideDiagnosticMode() < 4 ||
+                     scanoutPass->ReadsResource(Extension::EffectResource::OutlineGeometryGuide))};
         if (!Extension::ValidatePicaScanoutPolicyInput(scanoutPolicy)) {
             throw std::runtime_error(
                 "PICA scanout color policy is invalid");
@@ -4037,7 +4044,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
         }
         mDiagnostics.RecordDisplayTransfer(
-            true, smaaForDisplay ? 2U : mSpatialAaMode,
+            true, smaaForDisplay ? 2U : display.PresentationFxaaExcluded ? 0U : mSpatialAaMode,
             static_cast<uint32_t>(mNativePicaSampleCount));
         return true;
 }

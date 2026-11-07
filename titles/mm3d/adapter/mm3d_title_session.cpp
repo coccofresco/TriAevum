@@ -300,6 +300,8 @@ public:
         {"read_failures", stats.ReadFailures},
         {"light_bindings", stats.LightBindings},
         {"temporal_model_spans", stats.TemporalModelSpans},
+        {"isolated_model_spans", stats.IsolatedModelSpans},
+        {"atmosphere_model_spans", stats.AtmosphereModelSpans},
         {"lifecycle_invalidations", stats.LifecycleInvalidations},
         {"scene_directional_lights", stats.SceneDirectionalLights}};
   }

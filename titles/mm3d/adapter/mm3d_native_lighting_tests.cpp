@@ -73,11 +73,18 @@ void TestCompositionTemporalLifetimes() {
         f.W32(f.Play + 0x138U, frame++);
         s.r[0] = f.Play; observe(0x15E9ECU);
     };
-    const auto enqueue = [&](uint16_t id = 0, uint32_t callback = 0x1F8E28U) {
+    const auto enqueue = [&](uint16_t id = 0, uint32_t callback = 0x1F8E28U, bool overlay = false, bool wrongReturn = false) {
         f.W16(f.Actor, id); f.W32(f.Actor + 0x144U, callback);
         s.r[0] = f.Actor; s.r[2] = callback; observe(0x182C44U);
         f.W32(f.Queue + 4U, 0);
-        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        if (overlay) {
+            f.W32(f.Play + 8U, f.Queue);
+            s.r[0] = f.Play; s.r[1] = f.Model; s.r[14] = 0x39F100U;
+            observe(0x11F000U);
+        }
+        s.r[0] = f.Queue; s.r[1] = f.Model;
+        s.r[14] = overlay ? (wrongReturn ? 0x39F104U : 0x39F100U) : 0x20A8F8U;
+        observe(0x224104U);
         f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
         observe(0x182C48U);
     };
@@ -139,6 +146,18 @@ void TestCompositionTemporalLifetimes() {
             !worldLogo.TemporalIdentity.Available(), "world-queued logo acquired scene temporal history");
     beginFrame(); enqueue(0x41, 0x4C03F4U);
     Require(consume().Layer == Oot3dPicaCompositionLayer::Atmosphere, "kankyo model became relightable world");
+    // Non-CMB renderables retain callback-proved semantics, but never gain
+    // a temporal contract for an unknown model ABI.
+    f.W32(f.Model, 0U);
+    beginFrame(); enqueue(0x41, 0x4C03F4U);
+    const auto effect = consume();
+    Require(effect.Layer == Oot3dPicaCompositionLayer::Atmosphere && !effect.TemporalIdentity.Available(),
+            "non-CMB kankyo renderable lost atmosphere ownership");
+    beginFrame(); enqueue(0x87, 0x39F068U, true);
+    Require(consume(0x11EFD4U).IsolatedLighting, "native 2D helper lost logo isolation");
+    beginFrame(); enqueue(0x87, 0x39F068U, true, true);
+    Require(!consume(0x11EFD4U).IsolatedLighting, "unmatched 2D helper return acquired logo ownership");
+    f.W32(f.Model, 0x63BED4U);
     beginFrame(); enqueue(0x41, 0x1F8E28U);
     Require(consume().Layer == Oot3dPicaCompositionLayer::OpaqueWorld, "actor id alone classified atmosphere");
     beginFrame(); enqueue(); f.W32(f.Model, 0U);

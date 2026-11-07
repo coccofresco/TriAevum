@@ -15,6 +15,7 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x0011EFA4U, {0xE8BD8038U, 0x0061FD84U, 0xE92D4038U, 0xE1A04000U}},
     Mm3dLightingHookSite{0x0011EFD4U, {0xE59F1020U, 0xE5940008U, 0xE3A02000U, 0xE58D1000U}},
     Mm3dLightingHookSite{0x0011EFF4U, {0xE8BD8038U, 0x0061FD58U, 0x0061FD84U, 0xE92D4030U}},
+    Mm3dLightingHookSite{0x0011F000U, {0xE92D4030U, 0xE24DD00CU, 0xE1A04001U, 0xE1A05000U}},
     Mm3dLightingHookSite{0x00126294U, {0xE92D4070U, 0xE1A05000U, 0xE59F6038U, 0xE3A00000U}},
     Mm3dLightingHookSite{0x001262E0U, {0xE92D4010U, 0xE5902C3CU, 0xE59F4020U, 0xE3520000U}},
     Mm3dLightingHookSite{0x00126998U, {0xE1A0000DU, 0xE320F000U, 0xEB000078U, 0xE5951008U}},
@@ -55,6 +56,9 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x005EF0D0U, {0xE5940004U, 0xE2855004U, 0xE0840100U, 0xE2800008U}},
 };
 inline constexpr std::array kMm3dCompositionOwnerGuards{
+    std::pair{0x0011F034U, 0xE5950008U}, std::pair{0x0011F038U, 0xE28DD00CU},
+    std::pair{0x0011F03CU, 0xE1A01004U}, std::pair{0x0011F040U, 0xE8BD4030U},
+    std::pair{0x0011F044U, 0xEA04142EU},
     std::pair{0x0039F068U, 0xE92D4070U}, std::pair{0x0039F06CU, 0xE1A04000U},
     std::pair{0x004C03F4U, 0xE92D4FF0U}, std::pair{0x004C03F8U, 0xE3A09000U},
     std::pair{0x0063BED4U, 0x005EC220U},
