@@ -63,3 +63,19 @@ Synthetic tests do **not** establish complete live dialogue, every menu,
 fade/transition or hardware hot-plug coverage. The lane's external
 `analysis/parity/OVERLAY/RESULTS.md` records actual runs and any remaining
 qualification gaps; do not infer full parity from this implementation inventory.
+
+### Initial live qualification
+
+The two cold boots at `db04ccff` show native gameplay HUD and generated notebook
+legends in keyboard and PlayStation families. **Full parity is not qualified.**
+The small A badge under the notebook portrait remains native. Its Pictogram is
+bound to an external `disp_a_icon_n` anchor; scanning the final layout tree does
+not establish coverage of every separately emitted/attached Pictogram.
+The capture route entered Notebook, not inventory pause, and did not exercise
+inline dialogue. Those paths need further guarded emission ownership work and
+explicit acceptance captures. Hardware hot-plug, live F1 interaction and all
+transition/occlusion cases also remain unqualified.
+
+The separate own OoT-only build passes the deterministic O2 Kokiri gate: all
+three BMP hashes match `cap-p13`. No shader or environment-profile changes were
+made for this overlay.
