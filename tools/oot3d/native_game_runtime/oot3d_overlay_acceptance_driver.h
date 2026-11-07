@@ -11,6 +11,7 @@
 #include <set>
 #ifdef _WIN32
 #include <windows.h>
+#include <SDL_syswm.h>
 #endif
 namespace Oot3dNativeGame {
 inline uint64_t OverlayAcceptanceFrame=0;
@@ -47,7 +48,7 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
             auto* window=SDL_GetKeyboardFocus();if(!window)window=SDL_GetWindowFromID(1);
             const auto wid=window?SDL_GetWindowID(window):0;
             const auto op=step.at("op").get<std::string>();int result=0;
-            if(op=="key") {
+            if(op=="key" || op=="key_event") {
                 SDL_Event e{};e.type=step.value("down",true)?SDL_KEYDOWN:SDL_KEYUP;
                 e.key.windowID=wid;e.key.state=e.type==SDL_KEYDOWN?SDL_PRESSED:SDL_RELEASED;
                 e.key.keysym.scancode=SDL_GetScancodeFromName(step.at("key").get<std::string>().c_str());
@@ -68,10 +69,19 @@ inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& c
                 else if(e.key.keysym.sym==SDLK_RIGHT)vk=VK_RIGHT;
                 else if(e.key.keysym.sym>0&&e.key.keysym.sym<128)vk=LOBYTE(VkKeyScanW(wchar_t(e.key.keysym.sym)));
                 if(!vk)throw std::runtime_error("unsupported OS acceptance key");
-                SDL_SetWindowInputFocus(window);
-                INPUT input{};input.type=INPUT_KEYBOARD;input.ki.wVk=vk;
-                if(e.type==SDL_KEYUP)input.ki.dwFlags=KEYEVENTF_KEYUP;
-                result=int(SendInput(1,&input,sizeof(input)));
+                if(op=="key_event")result=SDL_PushEvent(&e);
+                else {
+                    SDL_SysWMinfo info{};SDL_VERSION(&info.version);
+                    if(!window||!SDL_GetWindowWMInfo(window,&info))throw std::runtime_error("no acceptance window");
+                    SetForegroundWindow(info.info.win.window);
+                    if(GetForegroundWindow()!=info.info.win.window)throw std::runtime_error("acceptance window is not foreground; refusing global keyboard injection");
+                    INPUT input{};input.type=INPUT_KEYBOARD;
+                    input.ki.wScan=WORD(MapVirtualKeyW(vk,MAPVK_VK_TO_VSC));
+                    input.ki.dwFlags=KEYEVENTF_SCANCODE;
+                    if(vk==VK_LEFT||vk==VK_RIGHT||vk==VK_UP||vk==VK_DOWN)input.ki.dwFlags|=KEYEVENTF_EXTENDEDKEY;
+                    if(e.type==SDL_KEYUP)input.ki.dwFlags|=KEYEVENTF_KEYUP;
+                    result=int(SendInput(1,&input,sizeof(input)));
+                }
 #else
                 result=SDL_PushEvent(&e);
 #endif
