@@ -621,7 +621,8 @@ void NativeA32WindowSession::Setup() {
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
         .DevToolsTitle = &devToolsTitle,
 #endif
-        .FreeCamera = nativeCandidateDispatch.DevFreeCamera};
+        .FreeCamera = nativeCandidateDispatch.DevFreeCamera,
+        .MessageEditsPath = launch.TitleMessageEditsPath};
     titleSession->InstallHooks(titleHooks);
     widescreenProjection.Title = titleSession.get();
   }

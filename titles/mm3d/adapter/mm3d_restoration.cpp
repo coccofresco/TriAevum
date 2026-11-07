@@ -39,14 +39,42 @@ std::optional<std::vector<MessageEdit>> Mm3dRestorationPort::ReadMessageEdits(st
         if (document.at("format").get<std::string>() != "triaevum_mm3d_message_edits_v1") {
             throw std::runtime_error("unsupported message edits format");
         }
+        const auto number = [](const nlohmann::json& value, u64 maximum) -> u64 {
+            if (!value.is_number_integer() ||
+                (value.is_number_integer() && !value.is_number_unsigned() && value.get<std::int64_t>() < 0) ||
+                value.get<u64>() > maximum)
+                throw std::runtime_error("message integer outside range");
+            return value.get<u64>();
+        };
+        const auto hash = [](const nlohmann::json& value) -> u64 {
+            const auto text = value.get<std::string>();
+            if (text.size() != 16 || text.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+                throw std::runtime_error("message hash must contain exactly 16 hexadecimal digits");
+            return std::stoull(text, nullptr, 16);
+        };
+        const auto& rows = document.at("edits");
+        if (!rows.is_array() || rows.size() > 20000)
+            throw std::runtime_error("invalid message edit table");
         std::vector<MessageEdit> edits;
-        for (const auto& entry : document.at("edits")) {
+        size_t totalBytes = 0;
+        for (const auto& entry : rows) {
             MessageEdit edit;
-            edit.id = entry.at("id").get<u16>();
-            edit.language = entry.at("language").get<u8>();
+            edit.id = static_cast<u16>(number(entry.at("id"), 65535));
+            edit.language = static_cast<u8>(number(entry.at("language"), 13));
             edit.price = entry.value("price", false);
-            edit.original_hash = std::stoull(entry.at("original_hash").get<std::string>(), nullptr, 16);
-            edit.edited_hash = std::stoull(entry.at("edited_hash").get<std::string>(), nullptr, 16);
+            edit.original_hash = hash(entry.at("original_hash"));
+            edit.edited_hash = hash(entry.at("edited_hash"));
+            if (entry.contains("original_metadata") != entry.contains("edited_metadata"))
+                throw std::runtime_error("message metadata requires both original and edited values");
+            if (entry.contains("original_metadata")) {
+                edit.original_metadata = static_cast<u32>(number(entry.at("original_metadata"), 0xffffffffULL));
+                edit.edited_metadata = static_cast<u32>(number(entry.at("edited_metadata"), 0xffffffffULL));
+            }
+            const auto& original = entry.at("original").get_ref<const std::string&>();
+            const auto& edited = entry.at("edited").get_ref<const std::string&>();
+            if (original.empty() || original.size() != edited.size() || original.size() > 0x2000000 ||
+                (totalBytes += original.size()) > 0x2000000)
+                throw std::runtime_error("message byte extent exceeds preparation limit");
             if (!bytes(entry.at("original").get<std::string>(), &edit.original) ||
                 !bytes(entry.at("edited").get<std::string>(), &edit.edited)) {
                 throw std::runtime_error("message bytes are not hexadecimal");

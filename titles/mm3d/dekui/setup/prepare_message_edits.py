@@ -25,7 +25,8 @@ from prepare_romfs_layer import RomFs
 
 HERE = Path(__file__).resolve().parent
 # Commands present in the reviewed messages. Unknown commands fail closed.
-ARGS = {0: 0, 1: 0, 2: 0, 0x25: 1, 0x27: 0, 0x28: 0, 0x29: 1, 0x2b: 1, 0x31: 1, 0x3a: 1}
+ARGS = {0: 0, 1: 0, 2: 0, 0x1e: 0, 0x25: 1, 0x27: 0, 0x28: 0,
+        0x29: 1, 0x2b: 1, 0x2c: 0, 0x2f: 1, 0x31: 1, 0x34: 0, 0x3a: 1}
 ICONS = {'A': 1, 'B': 2, 'X': 3, 'Y': 4, 'L': 5, 'R': 6, 'Dpad': 0x0a, 'Stick': 0x11}
 
 
@@ -40,14 +41,46 @@ def decode(raw):
             continue
         i += 1
         if i & 1:
-            if raw[i] != 0:
+            if i >= len(raw) or raw[i] != 0:
                 raise ValueError('Bad control alignment')
             i += 1
+        if i + 2 > len(raw):
+            raise ValueError('Truncated control')
         command = struct.unpack_from('<H', raw, i)[0]
         i += 2
+        if command == 0x20:
+            if i + 2 > len(raw):
+                raise ValueError('Truncated plural control')
+            argument = struct.unpack_from('<H', raw, i)[0]
+            i += 2
+            forms = []
+            for _ in range(2):
+                end = raw.find(b'\0', i)
+                if end < 0:
+                    raise ValueError('Truncated plural string')
+                forms.append(raw[i:end])
+                i = end + 1
+            if i & 1:
+                if i >= len(raw) or raw[i] != 0:
+                    raise ValueError('Bad plural alignment')
+                i += 1
+            result.append((command, argument, *forms))
+            continue
+        if command == 0x32:
+            if i != 4:
+                if raw[i:i + 2] != b'\0\0':
+                    raise ValueError('Bad extended control alignment')
+                i += 2
+            if i + 4 > len(raw):
+                raise ValueError('Truncated extended control')
+            result.append((command, struct.unpack_from('<I', raw, i)[0]))
+            i += 4
+            continue
         if command not in ARGS:
             raise ValueError(f'Unsupported command {command:x}')
         n = ARGS[command]
+        if i + 2 * n > len(raw):
+            raise ValueError('Truncated control argument')
         values = struct.unpack_from('<' + 'H' * n, raw, i)
         i += 2 * n
         result.append((command, *values))
@@ -69,7 +102,17 @@ def encode(tokens):
         result.append(127)
         if len(result) & 1:
             result.append(0)
-        result.extend(struct.pack('<' + 'H' * len(token), *token))
+        result.extend(struct.pack('<H', token[0]))
+        if token[0] == 0x20:
+            result.extend(struct.pack('<H', token[1]) + token[2] + b'\0' + token[3] + b'\0')
+            if len(result) & 1:
+                result.append(0)
+        elif token[0] == 0x32:
+            if len(result) != 4:
+                result.extend(b'\0\0')
+            result.extend(struct.pack('<I', token[1]))
+        else:
+            result.extend(struct.pack('<' + 'H' * (len(token) - 1), *token[1:]))
     return bytes(result)
 
 
@@ -98,19 +141,25 @@ def fnv(data):
 
 def messages(data):
     """{id: bytes} of a single-language GMSG, and its language bit."""
-    if data[:8] != b'GMSG\x01\0\0\0':
+    if len(data) < 16 or len(data) > 0x1000000 or data[:8] != b'GMSG\x01\0\0\0':
         raise ValueError('Unsupported GMSG')
     count, languages = struct.unpack_from('<II', data, 8)
-    if count > 20000 or languages == 0 or languages & (languages - 1):
+    if not 0 < count <= 20000 or 16 + 20 * count > len(data) or languages == 0 or languages & (languages - 1) or languages >= (1 << 14):
         raise ValueError('Expected a single-language GMSG')
-    result = {}
+    result, extents = {}, []
+    previous_id = -1
     for i in range(count):
         at = 16 + 20 * i
         mid = struct.unpack_from('<H', data, at)[0]
         offset, size = struct.unpack_from('<II', data, at + 12)
-        if offset < 16 + 20 * count or offset + size > len(data) or offset & 1 or mid in result:
+        if offset < 16 + 20 * count or not size or offset + size > len(data) or offset & 1 or mid <= previous_id:
             raise ValueError('Invalid entry')
+        previous_id = mid
+        extents.append((offset, offset + size))
         result[mid] = data[offset:offset + size]
+    ordered = sorted(extents)
+    if any(left[1] > right[0] for left, right in zip(ordered, ordered[1:])):
+        raise ValueError('Overlapping message allocations')
     return result, languages.bit_length() - 1
 
 
@@ -120,6 +169,8 @@ def compile_message(raw, edits):
     for edit in edits:
         matches = [i for i, t in enumerate(tokens) if isinstance(t, str) and edit['start'] in t]
         occurrence = edit.get('occurrence', 0)
+        if type(occurrence) is not int or occurrence < 0:
+            raise ValueError('Invalid occurrence')
         if len(matches) <= occurrence:
             raise ValueError(f'text not found: {edit["start"]!r}')
         start = matches[occurrence]
@@ -141,6 +192,10 @@ def compile_message(raw, edits):
 
 def prepare(data, spec):
     originals, language = messages(data)
+    # Historical specification is English, never silently apply it to DE/IT.
+    allowed = spec.get('language_masks', [0x2, 0x10])
+    if (1 << language) not in allowed:
+        raise ValueError('Specification does not own this archive language')
     grouped = {}
     for edit in spec['edits']:
         grouped.setdefault(int(edit['id'], 16), []).append(edit)

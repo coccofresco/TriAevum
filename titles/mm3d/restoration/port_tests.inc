@@ -80,6 +80,19 @@ inline void Messages() {
     Check(g.Read32(out+Layout::Message::texts+2*Layout::MessageText::Size+4)==base+48,"language bitmask pointer");Check(g.Read32(base+48)==0x08070605&&g.Read32(base+44)==0x09090909,"only selected language edited");Check(f.calls.size()==14,"all language readers called");
     Mm3dDekui::SingleScreenText::enabled=false;f.Run(f.e.MessageGet(self,0x195e,out));Check(g.Read32(base+48)==0x04030201,"disabled setting restores original");
     g.Write8(base+48,99);Mm3dDekui::SingleScreenText::enabled=true;f.Run(f.e.MessageGet(self,0x195e,out));Check(g.Read8(base+48)==99,"mismatched message left intact");
+    // Prepared prices change and restore BOTH text and native choice metadata.
+    // A stale or foreign metadata word must prevent all writes.
+    edit.price=true; edit.original_metadata=0xffffffff; edit.edited_metadata=0xfff00014;
+    f.session.message_edits={edit}; g.Write32(base+48,0x04030201);
+    g.Write32(base+20,0x12345678); Mm3dDekui::Prices::enabled=true;
+    f.Run(f.e.MessageGet(self,0x195e,out));
+    Check(g.Read32(base+48)==0x04030201&&g.Read32(base+20)==0x12345678,"foreign price metadata unchanged");
+    g.Write32(base+20,*edit.original_metadata); f.Run(f.e.MessageGet(self,0x195e,out));
+    Check(g.Read32(base+48)==0x08070605&&g.Read32(base+20)==*edit.edited_metadata,"price bytes and metadata applied");
+    f.Run(f.e.MessageGet(self,0x195e,out));
+    Check(g.Read32(base+48)==0x08070605,"price application idempotent");
+    Mm3dDekui::Prices::enabled=false; f.Run(f.e.MessageGet(self,0x195e,out));
+    Check(g.Read32(base+48)==0x04030201&&g.Read32(base+20)==*edit.original_metadata,"price bytes and metadata restored");
     g.Write32(self+16,20);Check(f.Run(f.e.MessageGet(self,0x195e,out))==0,"bad language stride rejected");
     Mm3dDekui::SingleScreenText::enabled=false;
 }

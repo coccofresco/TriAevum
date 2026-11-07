@@ -124,16 +124,27 @@ public:
       mRestoration.emplace(mGuestCalls);
       mRestoration->Register(mGuestPatches);
       mSingleScreen->BindRestoration(*mRestoration);
-      if (const char *edits = std::getenv("TRIAEVUM_MM3D_MESSAGE_EDITS")) {
-        // Development: dekui's single-screen wording compiled against the
-        // user's own messages (titles/mm3d/dekui/setup/prepare_message_edits.py),
-        // until the launcher prepares and owns them.
-        std::ifstream stream(std::filesystem::u8path(edits), std::ios::binary);
-        const std::string text((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
+      auto edits = setup.MessageEditsPath;
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+      if (edits.empty()) {
+        if (const char *legacy = std::getenv("TRIAEVUM_MM3D_MESSAGE_EDITS"))
+          edits = std::filesystem::u8path(legacy);
+      }
+#endif
+      if (!edits.empty()) {
+        // Launcher-owned, user-derived data. Explicit arguments win over the
+        // legacy developer override; state restore never changes this choice.
+        const auto size = std::filesystem::file_size(edits);
+        if (size > 64U * 1024U * 1024U)
+          throw std::runtime_error("MM3D message edits exceed the preparation limit");
+        std::ifstream stream(edits, std::ios::binary);
+        std::string text(static_cast<size_t>(size), '\0');
+        stream.read(text.data(), static_cast<std::streamsize>(text.size()));
+        const bool complete = stream && stream.peek() == std::char_traits<char>::eof();
         std::string error;
         const auto parsed = Mm3dRestorationPort::ReadMessageEdits(text, &error);
-        if (!stream || !parsed.has_value() || !mRestoration->SetMessageEdits(*parsed)) {
-          throw std::runtime_error(std::string("MM3D message edits: ") + edits + " is invalid " + error);
+        if (!complete || !parsed.has_value() || !mRestoration->SetMessageEdits(*parsed)) {
+          throw std::runtime_error(std::string("MM3D message edits: ") + edits.string() + " is invalid " + error);
         }
         std::fprintf(stderr, "MM3D message edits: %zu message(s)\n", parsed->size());
       }
