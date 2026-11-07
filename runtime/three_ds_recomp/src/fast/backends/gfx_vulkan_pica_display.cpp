@@ -3603,6 +3603,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 mTemporalAaPass.Width(), mTemporalAaPass.Height(),
                 mTaaOutputEncodingThisFrame);
         }
+        std::optional<Extension::NativeUiOverlayGrid> nativeUiGrid;
         if (fsrForDisplay || dlssForDisplay || nisForDisplay) {
             uint32_t outputWidth = fsrForDisplay
                 ? fsrOutputWidth
@@ -3625,9 +3626,19 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                     Extension::PresentationPicture{0U, 0U, mSwapchainExtent.width, mSwapchainExtent.height};
                 const auto fit = FitNativePicaPresentation(picture.Width, picture.Height,
                     static_cast<float>(display.Height), static_cast<float>(display.Width));
-                const auto overlayExtent = Extension::ResolveNativeUiOverlayExtent(
-                    display.PreserveNativeUiSampling && fit.X == std::floor(fit.X) && fit.Y == std::floor(fit.Y),
-                    outputWidth, outputHeight, fit.Height, fit.Width);
+                const auto grid = Extension::ResolveNativeUiOverlayGrid(
+                    display.PreserveNativeUiSampling, outputWidth, outputHeight,
+                    fit.X, fit.Y, fit.Width, fit.Height,
+                    Extension::PicaSurfaceCoordinates::FromTransferFlags(transfer.Flags).FlipY);
+                if (const char* audit = std::getenv("TRIAEVUM_NATIVE_UI_GRID_AUDIT"); audit && *audit == '1') {
+                    static uint32_t auditCount = 0;
+                    if (auditCount < 8U) {
+                        ++auditCount;
+                        std::fprintf(stderr, "TRIAEVUM_NATIVE_UI_GRID direct=%u fit=%.6f,%.6f,%.6f,%.6f output=%u,%u source=%u,%u\n",
+                            grid.Direct ? 1U : 0U, fit.X, fit.Y, fit.Width, fit.Height,
+                            grid.Extent[0], grid.Extent[1], outputWidth, outputHeight);
+                    }
+                }
                 // The upscaler reconstructed the scene before native UI: lay
                 // the display's UI over it (once per frame, reused with it).
                 bool overlaid = canReuseUpscaler && mNativeUiOverlayExecutedThisFrame;
@@ -3651,7 +3662,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                          upscaledImage, VK_FORMAT_R16G16B16A16_SFLOAT,
                          outputWidth, outputHeight,
                          Extension::SceneColorIsLinear(mUpscalerOutputEncodingThisFrame),
-                          overlayExtent[0], overlayExtent[1]});
+                          grid.Extent[0], grid.Extent[1], grid.Direct,
+                          grid.SourceExtent[0], grid.SourceExtent[1], grid.SourceOffset[0], grid.SourceOffset[1]});
                     mGpuProfiler.EndScope(
                         mCurrentFrame, Extension::GpuProfileScope::Upscaler, command);
                     if (!overlaid) {
@@ -3664,8 +3676,9 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                     mNativeUiOverlayExecutedThisFrame = true;
                     mDiagnostics.RecordNativeUiOverlay();
                 }
-                outputWidth = overlayExtent[0];
-                outputHeight = overlayExtent[1];
+                outputWidth = grid.Extent[0];
+                outputHeight = grid.Extent[1];
+                if (grid.Direct) nativeUiGrid = grid;
                 upscaledImage = mNativeUiOverlayPass.OutputImage();
                 upscaledView = mNativeUiOverlayPass.OutputView();
             }
@@ -3831,6 +3844,10 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             picture.Width, picture.Height,
             static_cast<float>(display.Height),
             static_cast<float>(display.Width));
+        if (nativeUiGrid) {
+            const auto& rect = nativeUiGrid->Viewport;
+            presentation = {rect[0], rect[1], rect[2], rect[3]};
+        }
         presentation.X += static_cast<float>(picture.X);
         presentation.Y += static_cast<float>(picture.Y);
         const VkViewport viewport{

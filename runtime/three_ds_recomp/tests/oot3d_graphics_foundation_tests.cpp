@@ -3348,11 +3348,11 @@ TEST(Oot3dUpscalerGuides, ResampleShaderCompiles) {
 TEST(Oot3dNativeUiOverlay, PresentationGridIsExplicitAndAvoidsASecondUiFilter) {
     using namespace Fast::Extension;
     const std::array<uint32_t, 2> intermediate{360U, 600U}, presentation{720U, 1200U};
-    EXPECT_EQ(ResolveNativeUiOverlayExtent(false, 360, 600, 720, 1200), intermediate);
-    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, 720, 1200), presentation);
-    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, 719.5F, 1200), intermediate);
-    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, 0, 1200), intermediate);
-    EXPECT_EQ(ResolveNativeUiOverlayExtent(true, 360, 600, INFINITY, 1200), intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(false, 360, 600, 0, 0, 1200, 720, false).Extent, intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, 0, 1200, 720, false).Extent, presentation);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, .25F, 1200, 719.5F, false).Extent, presentation);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, 0, 1200, 0, false).Extent, intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, 0, 1200, INFINITY, false).Extent, intermediate);
     const auto sample = [](const auto& values, uint32_t pixel, uint32_t extent) {
         const auto tap = ResolveNativeUiOverlayTap(pixel, extent, uint32_t(values.size()));
         const auto at = [&](int32_t index) { return values[size_t(std::clamp(index, 0, int32_t(values.size()) - 1))]; };
@@ -3370,6 +3370,28 @@ TEST(Oot3dNativeUiOverlay, PresentationGridIsExplicitAndAvoidsASecondUiFilter) {
         oldPathDiffers |= std::abs(sample(oldOverlay, x, directOverlay.size()) - reference) > 0.01F;
     }
     EXPECT_TRUE(oldPathDiffers);
+}
+
+TEST(Oot3dNativeUiOverlay, FractionalViewportKeepsOriginalSamplePhaseAndFlip) {
+    using namespace Fast::Extension;
+    const std::array<std::array<float, 4>, 4> cases{{
+        {0, 0, 1280, 720}, {0, .281F, 1280, 719.438F},
+        {.5F, .5F, 1200, 720}, {.3F, .2F, 1199.4F, 719.6F}}};
+    for (const auto& v : cases) for (bool flip : {false, true}) {
+        const auto grid = ResolveNativeUiOverlayGrid(true, 360, 640, v[0], v[1], v[2], v[3], flip);
+        ASSERT_TRUE(grid.Direct);
+        for (uint32_t x : {0U, grid.Extent[1] / 2, grid.Extent[1] - 1})
+            for (uint32_t y : {0U, grid.Extent[0] / 2, grid.Extent[0] - 1}) {
+                const float px = float(grid.Extent[0] - 1 - y);
+                const float py = float(flip ? grid.Extent[1] - 1 - x : x);
+                const float u = (px + .5F + grid.SourceOffset[0]) / grid.SourceExtent[0];
+                const float w = (py + .5F + grid.SourceOffset[1]) / grid.SourceExtent[1];
+                const float expectedU = 1 - (grid.Viewport[1] + float(y) + .5F - v[1]) / v[3];
+                const float expectedV = (grid.Viewport[0] + float(x) + .5F - v[0]) / v[2];
+                EXPECT_NEAR(u, expectedU, 1e-6F);
+                EXPECT_NEAR(w, flip ? 1 - expectedV : expectedV, 1e-6F);
+            }
+    }
 }
 
 TEST(Oot3dNativeUiOverlay, MapsTheUpscaledTexelOntoItsDisplayFootprint) {

@@ -13,15 +13,25 @@ NativeUiOverlayTap ResolveNativeUiOverlayTap(
     return {int32_t(first), position - first};
 }
 
-std::array<uint32_t, 2> ResolveNativeUiOverlayExtent(
+NativeUiOverlayGrid ResolveNativeUiOverlayGrid(
     bool preserveSampling, uint32_t upscaledWidth, uint32_t upscaledHeight,
-    float presentationWidth, float presentationHeight) noexcept {
-    if (!preserveSampling || !std::isfinite(presentationWidth) || !std::isfinite(presentationHeight) ||
-        presentationWidth < 1.0F || presentationHeight < 1.0F ||
-        presentationWidth > 65536.0F || presentationHeight > 65536.0F ||
-        presentationWidth != std::floor(presentationWidth) || presentationHeight != std::floor(presentationHeight))
-        return {upscaledWidth, upscaledHeight};
-    return {uint32_t(presentationWidth), uint32_t(presentationHeight)};
+    float x, float y, float width, float height, bool flipY) noexcept {
+    NativeUiOverlayGrid grid;
+    grid.Extent = {upscaledWidth, upscaledHeight}; grid.Viewport = {x, y, width, height};
+    if (!preserveSampling || !std::isfinite(x) || !std::isfinite(y) ||
+        !std::isfinite(width) || !std::isfinite(height) || width < 1 || height < 1 ||
+        std::abs(x) > 65536 || std::abs(y) > 65536 || width > 65536 || height > 65536)
+        return grid;
+    // Vulkan's top-left rule includes a centre on the leading edge and
+    // excludes one on the trailing edge. Preserve precisely those pixels.
+    const float left = std::ceil(x - 0.5F), top = std::ceil(y - 0.5F);
+    const float right = std::ceil(x + width - 0.5F), bottom = std::ceil(y + height - 0.5F);
+    grid.Direct = true;
+    grid.Viewport = {left, top, right - left, bottom - top};
+    grid.Extent = {uint32_t(bottom - top), uint32_t(right - left)};
+    grid.SourceExtent = {height, width};
+    grid.SourceOffset = {y + height - bottom, flipY ? x + width - right : left - x};
+    return grid;
 }
 
 std::string BuildNativeUiOverlayShader() {
@@ -37,8 +47,8 @@ layout(push_constant) uniform OverlayState {
     uvec2 display_extent;
     uint linear_output;
     uint resample_upscaled;
-    uint reserved1;
-    uint reserved2;
+    vec2 source_extent;
+    vec2 source_offset;
 } pc;
 
 vec3 oot3d_srgb_to_linear(vec3 value) {
@@ -55,7 +65,7 @@ void main(){
     vec4 color;
     if(pc.resample_upscaled!=0u){
         ivec2 size=textureSize(sampler2D(upscaled,point_sampler),0);
-        vec2 source=(vec2(pixel)+0.5)*vec2(size)/vec2(pc.extent)-0.5;
+        vec2 source=(vec2(pixel)+0.5+pc.source_offset)*vec2(size)/pc.source_extent-0.5;
         ivec2 first=ivec2(floor(source));
         vec2 weight=fract(source);
         color=vec4(0.0);
@@ -69,7 +79,9 @@ void main(){
     }
     // The bilinear footprint of this texel in the display
     // (ResolveNativeUiOverlayTap): its texels the UI changed carry the UI.
-    vec2 position=(vec2(pixel)+0.5)*vec2(pc.display_extent)/vec2(pc.extent)-0.5;
+    vec2 position=pc.resample_upscaled!=0u
+        ? (vec2(pixel)+0.5+pc.source_offset)*vec2(pc.display_extent)/pc.source_extent-0.5
+        : (vec2(pixel)+0.5)*vec2(pc.display_extent)/vec2(pc.extent)-0.5;
     vec2 first=floor(position);
     vec2 fraction=position-first;
     ivec2 limit=ivec2(pc.display_extent)-1;

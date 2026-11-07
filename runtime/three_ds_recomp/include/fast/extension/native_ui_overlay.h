@@ -25,11 +25,18 @@ struct NativeUiOverlayTap {
 [[nodiscard]] NativeUiOverlayTap ResolveNativeUiOverlayTap(
     uint32_t pixel, uint32_t extent, uint32_t displayExtent) noexcept;
 
-// Opt-in presentation-grid composition. Fractional grids retain the legacy
-// path rather than promising a one-to-one final sample that cannot be proved.
-[[nodiscard]] std::array<uint32_t, 2> ResolveNativeUiOverlayExtent(
+// The exact covered pixel centres of a (possibly fractional) viewport.
+// SourceOffset/Extent retain its original sampling phase; the final scanout
+// uses Viewport, so the UI is sampled once rather than filtered again.
+struct NativeUiOverlayGrid {
+    bool Direct = false;
+    std::array<uint32_t, 2> Extent{}; // rotated physical image dimensions
+    std::array<float, 4> Viewport{}; // upright x, y, width, height
+    std::array<float, 2> SourceExtent{}, SourceOffset{};
+};
+[[nodiscard]] NativeUiOverlayGrid ResolveNativeUiOverlayGrid(
     bool preserveSampling, uint32_t upscaledWidth, uint32_t upscaledHeight,
-    float presentationWidth, float presentationHeight) noexcept;
+    float x, float y, float width, float height, bool flipY) noexcept;
 
 // Push constants of the overlay shader.
 struct NativeUiOverlayConstants {
@@ -40,9 +47,10 @@ struct NativeUiOverlayConstants {
     // The upscaled colour is linear: the display's UI is decoded from sRGB.
     uint32_t LinearOutput = 0U;
     uint32_t ResampleUpscaled = 0U;
-    uint32_t Reserved[2] = {};
+    float SourceExtent[2] = {};
+    float SourceOffset[2] = {};
 };
-static_assert(sizeof(NativeUiOverlayConstants) == 32);
+static_assert(sizeof(NativeUiOverlayConstants) == 40);
 
 // Bindings: 0 display with UI, 1 display before UI, 2 upscaled colour
 // (sampled); 3 RGBA16F composed colour (storage); 4 sampler.

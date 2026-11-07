@@ -149,6 +149,9 @@ bool NativeUiOverlayPass::Execute(uint32_t frameSlot, uint64_t frameId, const In
 #else
     const uint32_t outputWidth = inputs.OutputWidth ? inputs.OutputWidth : inputs.Width;
     const uint32_t outputHeight = inputs.OutputHeight ? inputs.OutputHeight : inputs.Height;
+    if ((inputs.PresentationGrid && (!(inputs.SourceWidth > 0.0F) || !(inputs.SourceHeight > 0.0F))) ||
+        (!inputs.PresentationGrid && (outputWidth != inputs.Width || outputHeight != inputs.Height)))
+        return false;
     if (mImpl->Width != outputWidth || mImpl->Height != outputHeight) {
         // Recorded frames may still read the previous image.
         if (mImpl->Width != 0U && !mImpl->Interop->CompleteRecordedWork())
@@ -208,7 +211,9 @@ bool NativeUiOverlayPass::Execute(uint32_t frameSlot, uint64_t frameId, const In
     NativeUiOverlayConstants push{};
     push.Width = outputWidth;
     push.Height = outputHeight;
-    push.ResampleUpscaled = outputWidth != inputs.Width || outputHeight != inputs.Height;
+    push.ResampleUpscaled = inputs.PresentationGrid;
+    push.SourceExtent[0] = inputs.SourceWidth; push.SourceExtent[1] = inputs.SourceHeight;
+    push.SourceOffset[0] = inputs.SourceOffsetX; push.SourceOffset[1] = inputs.SourceOffsetY;
     push.DisplayWidth = inputs.DisplayWidth;
     push.DisplayHeight = inputs.DisplayHeight;
     push.LinearOutput = inputs.LinearOutput ? 1U : 0U;
