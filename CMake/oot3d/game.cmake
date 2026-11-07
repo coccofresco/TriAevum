@@ -54,6 +54,11 @@ target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_
 oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)
 
 if(TRIAEVUM_TITLE_MM3D)
+    add_executable(mm3d_rumble_events_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_rumble_events_tests.cpp)
+    target_include_directories(mm3d_rumble_events_tests PRIVATE tools/three_ds/input)
+    oot3d_target_defaults(mm3d_rumble_events_tests FOLDER Tests)
+
     # MM3D adapter read/lifetime guards; no process, renderer or ROM needed.
     add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
         titles/mm3d/adapter/mm3d_scene_environment_tests.cpp)

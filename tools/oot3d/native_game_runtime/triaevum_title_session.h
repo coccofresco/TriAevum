@@ -13,6 +13,7 @@
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
 #include "fast/extension/grass_types.h"
+#include "gameplay_rumble.h"
 
 #include <nlohmann/json.hpp>
 
@@ -100,6 +101,14 @@ public:
   [[nodiscard]] virtual std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
       oot3d::recomp::a32::MemoryBus& memory, uint64_t sourceFrame) const {
     (void)memory; (void)sourceFrame;
+    return {};
+  }
+
+  // Input owns admission/strength/playback. Disabled must reset history without
+  // reading guest memory; absent producers return no events.
+  [[nodiscard]] virtual std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) {
+    (void)memory; (void)enabled;
     return {};
   }
 

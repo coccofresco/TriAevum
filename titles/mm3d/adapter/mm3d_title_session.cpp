@@ -14,6 +14,7 @@
 #include "mm3d_single_screen.h"
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
+#include "../gameplay/mm3d_rumble_events.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
@@ -57,6 +58,11 @@ public:
     }
 #endif
     return contacts;
+  }
+
+  std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
+    return mRumble.Poll(memory, enabled);
   }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {
@@ -158,6 +164,8 @@ public:
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #endif
     }
+    mRumble.Verify(process.Memory());
+    if (!mRumble.Verified()) std::fprintf(stderr, "MM3D rumble disabled: EUR guard mismatch\n");
     mActorInteractionGuards = Mm3dActorInteractionGuardsHold(process.Memory());
     if (!mActorInteractionGuards)
       std::fprintf(stderr, "MM3D actor interactions disabled: EUR collider guard words do not match\n");
@@ -283,7 +291,7 @@ public:
   }
 #endif
 
-  void Reset() override { mComposition.Reset(); }
+  void Reset() override { mComposition.Reset(); mRumble.Reset(); }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
@@ -330,6 +338,7 @@ private:
   Mm3dGuestCalls mGuestCalls;
   std::optional<Mm3dRestorationPort> mRestoration;
   Mm3dGuestPatches mGuestPatches;
+  Mm3dRumble::Source mRumble;
   bool mImageMounted = false;
   bool mActorInteractionGuards = false;
 };
