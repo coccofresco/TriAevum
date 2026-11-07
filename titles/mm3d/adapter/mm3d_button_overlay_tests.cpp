@@ -191,6 +191,11 @@ void TestSubmissionOwnership(){
  Check(!overlay.Capture(m,layout,node,3),"missing command destination leaves native art intact");
 }
 void TestInlineAndChordBounds(){
+ auto hotbar=Fixture();hotbar.Name(0x10020200,"disp_1_pane");hotbar.F(node+0xec,-12);
+ const auto hotbarGlyphs=Capture(hotbar,NativeControlDefaults(),NativePromptSet::Keyboard);
+ Check(!hotbarGlyphs.empty(),"left-edge hotbar chord exists");
+ float tallest=0;for(const auto& p:hotbarGlyphs){Check(p.destination.x>=-.01f,"hotbar modifier stays on canvas");tallest=std::max(tallest,p.destination.height);}
+ Check(tallest>=16,"hotbar chord retains readable native height instead of shrinking to a single letter cell");
  auto m=Fixture();constexpr U32 groups=0x10060000,entries=groups+0x100,resource=groups+0x200,
      descriptor=groups+0x400,pixels=0x11000000,record=groups+0x500;
  m.words[NotebookPrompt::RegistryLiteral]=NotebookPrompt::Registry;
