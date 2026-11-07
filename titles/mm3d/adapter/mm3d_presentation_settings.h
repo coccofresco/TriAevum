@@ -18,8 +18,10 @@ inline void ApplyMm3dPresentationSettings(const TitlePresentationSettings& s) {
   Mm3dDekui::Widescreen::camera_zoom_out.store(1.f);
   Mm3dDekui::Widescreen::supported_layout.store(true);
   Mm3dDekui::Widescreen::enabled.store(Camera::Expansion(s.HorizontalExpansion)>1.f);
-  // The bounded dekui modules support 1..3x; these categories do not overlap.
-  // This does not claim wider frustum admission or an object-bank extension.
+  // Actor_DrawAll's guarded result policy owns the common distance argument.
+  // Dekui keeps its complementary per-prop/grass thresholds, plus the legacy
+  // category-limited argument fallback if the product result contract fails.
+  // All use the same 3x renderer EDD owner; no object-bank extension.
   const float distance=s.ExtendedDrawDistance?3.f:1.f;
   Mm3dDekui::ActorDrawDistance::multiplier.store(distance);
   Mm3dDekui::PropDrawDistance::multiplier.store(distance);

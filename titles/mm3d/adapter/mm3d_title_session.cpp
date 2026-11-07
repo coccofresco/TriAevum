@@ -16,6 +16,8 @@
 #include "../gameplay/mm3d_actor_interactions.h"
 #include "../gameplay/mm3d_rumble_events.h"
 #include "../gameplay/mm3d_light_arena.h"
+#include "../gameplay/mm3d_actor_visibility.h"
+#include "../gameplay/mm3d_foliage_distance.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
@@ -71,6 +73,8 @@ public:
   void SetPresentation(const TitlePresentationSettings& settings) override {
     ApplyMm3dPresentationSettings(settings);
     mLightArena.SetEnabled(settings.ExtendedDrawDistance);
+    mVisibility.SetExtended(settings.ExtendedDrawDistance);
+    mFoliage.SetExtended(settings.ExtendedDrawDistance);
   }
   std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
       oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
@@ -83,6 +87,8 @@ public:
     // scene camera, so they are not published as the scene view.
     auto &blockEntryHooks = setup.BlockEntryHooks;
     blockEntryHooks.push_back(kMm3dMtx44Frustum);
+    for (const auto& site : Mm3dVisibility::Sites) blockEntryHooks.push_back(site.Pc);
+    for (const auto& site : Mm3dFoliage::Sites) blockEntryHooks.push_back(site.Pc);
     const auto compositionHooks = Mm3dNativePicaCompositionHookPcs();
     blockEntryHooks.insert(blockEntryHooks.end(), compositionHooks.begin(),
                            compositionHooks.end());
@@ -174,6 +180,14 @@ public:
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #endif
     }
+    const bool visibility = mVisibility.Verify(process.Memory(), [](uint32_t pc) {
+      return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+    });
+    Mm3dDekui::ActorDrawDistance::result_policy_owned.store(visibility);
+    if (!visibility) std::fprintf(stderr, "MM3D actor visibility disabled: guard or registry block mismatch\n");
+    if (!mFoliage.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D foliage distance disabled: guard or registry block mismatch\n");
     mHostMemory = &process.Memory();
     if (!mLightArena.Verify(process.Memory()))
       std::fprintf(stderr, "MM3D light overflow disabled: EUR arena contract mismatch\n");
@@ -186,6 +200,8 @@ public:
   }
 
   void ObserveBlockEntry(TitleBlockEntry &entry) override {
+    mVisibility.Observe(entry.Pc, entry.State, entry.Memory, mLightArena.Verified());
+    mFoliage.Observe(entry.Pc, entry.State, entry.Memory);
     // Same allocator PC, one dispatch: relocate BEFORE lighting invalidates the
     // destination owner. Never duplicate the existing lighting hook registration.
     if (entry.Pc == kMm3dLightAllocatorSite.Pc && mHostMemory) {
@@ -315,11 +331,31 @@ public:
     GuestByteAccess guest(memory);
     return mPhotoCamera.OwnsInput(guest);
   }
-  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); }
+  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); mVisibility.Reset(); }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
     return nlohmann::json{
+        {"foliage_distance", {{"verified", mFoliage.Verified()},
+             {"table_changes", mFoliage.Stats.TableChanges},
+             {"radius_changes", mFoliage.Stats.RadiusChanges},
+             {"pressure_native", mFoliage.Stats.PressureNative},
+             {"invalid", mFoliage.Stats.Invalid}}},
+        {"actor_visibility", {{"verified", mVisibility.Verified()},
+             {"calls", mVisibility.mStats.Calls}, {"results", mVisibility.mStats.Results},
+             {"native_inside", mVisibility.mStats.NativeInside},
+             {"native_mode_results", mVisibility.mStats.NativeModeResults},
+             {"extended_mode_results", mVisibility.mStats.ExtendedModeResults},
+             {"max_horizontal", mVisibility.mStats.MaxHorizontal},
+             {"max_vertical", mVisibility.mStats.MaxVertical},
+             {"actor_grants", mVisibility.mStats.ActorGrants},
+             {"grass_grants", mVisibility.mStats.GrassGrants},
+             {"wood_grants", mVisibility.mStats.WoodGrants},
+             {"restored", mVisibility.mStats.Restored},
+             {"invalid", mVisibility.mStats.Invalid},
+             {"native_mismatch", mVisibility.mStats.NativeMismatch},
+             {"unknown_callers", mVisibility.mStats.UnknownCallers},
+             {"identity_changes", mVisibility.mStats.IdentityChanges}}},
         {"light_arena", {{"verified", mLightArena.Verified()},
                          {"native_allocations", mLightArena.Stats().NativeAllocations},
                          {"banks_seen", mLightArena.Stats().BanksSeen},
@@ -385,6 +421,8 @@ private:
   }
   NativeA32Memory* mHostMemory = nullptr;
   Mm3dLightArena mLightArena;
+  Mm3dVisibility::Source mVisibility;
+  Mm3dFoliage::Source mFoliage;
   Mm3dNativePicaCompositionTracker mComposition;
   // MM3D's single-screen mode: its settings and the typed replacements of
   // guest instructions that read them.

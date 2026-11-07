@@ -12,9 +12,12 @@
 namespace Mm3dDekui::ActorDrawDistance {
 using U32=std::uint32_t;
 inline std::atomic<float> multiplier{1.f};
+// Product result policy owns Actor_DrawAll's range once its guards/blocks pass.
+// Standalone dekui keeps its original argument module.
+inline std::atomic<bool> result_policy_owned{false};
 constexpr U32 PC=0x1754d8,OriginalPC=PC,Word=0xeeb00a48,SVC=0xfffe73;
 // Actor_DrawAll passes projected position F0, distance100, extent104,
-// downward extent108 and projected W FC to native visibility test190EA4.
+// downward extent108 and projected W FC to native visibility test190D48.
 // Change only its distance argument (S0), keeping native frustum checks,
 // fade counters, room/lens rules, actor initialization and draw callbacks.
 // USA Rev1 and Restoration v110 bodies are byte-identical at this offset.
@@ -46,7 +49,7 @@ inline U32 Distance(U32 original,unsigned category,float factor) {
     return category==4||category==5?ScaleDistance(original,factor):original;
 }
 template<class M> U32 Apply(M& m,U32 actor,U32 original,float factor) {
-    if(Clamp(factor)==1.f||actor<0x100000||actor>0x3ffffe00)return original;
+    if(result_policy_owned.load()||Clamp(factor)==1.f||actor<0x100000||actor>0x3ffffe00)return original;
     const auto header=m.Read(actor);
     return header?Distance(original,(*header>>16)&255,factor):original;
 }
