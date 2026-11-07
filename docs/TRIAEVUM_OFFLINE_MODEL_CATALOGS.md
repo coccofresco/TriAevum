@@ -54,8 +54,8 @@ scene-light preparation/activation step to hash-bound publisher analysis. No
 Python or model analysis runs on the player's machine. The shared Rust/Python
 implementation knows no MM scene IDs or material eligibility rules.
 
-Version 1 fields: `title`, `directory`, `generator_sha256`, `catalog_json`, and
-optional `excluded_rooms`. `catalog_json` is compact ASCII JSON containing the
+Version 1 fields: `title`, `directory`, `filename_suffix`, `index_separator`,
+`generator_sha256`, `catalog_json`, and optional `excluded_rooms`. `catalog_json` is compact ASCII JSON containing the
 existing `triaevum.scene-lights` v1 schema, plus each room's logical `source`
 and SHA-256 of its **decompressed complete file**. Keeping this as a string
 preserves publisher decimal spellings exactly across language implementations.
@@ -63,7 +63,9 @@ The catalog must have no rejected rooms. The recipe binds the whole RomFS SHA;
 installation checks it against the actual image, including on cache reuse.
 Directory-form developer inputs instead verify every room individually.
 
-Every matching `_info.zsi`/`_info.zsi.lzs` file must be represented exactly once.
+Every indexed filename matching the recipe's suffix/separator must be
+represented exactly once. MM declares `_info.zsi` and `_`; file contents may
+have an LzS wrapper. Those filename facts are not hardcoded in shared Forge.
 Publisher-derived exclusions contain `source`, `sourceSha256`, `reason`; they
 are still hash/coverage checked, not a skip pattern. MM's producer derives them
 from absence in its guarded native scene table, never a manual scene list.

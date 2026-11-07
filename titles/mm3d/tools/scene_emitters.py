@@ -232,6 +232,7 @@ def forge_profile(catalog: dict, generator_sha256: str) -> dict:
     if catalog.get("title") != "mm3d" or catalog.get("rejected") or not catalog.get("rooms"):
         raise ValueError("cannot publish incomplete MM3D room analysis")
     return {"version": 1, "title": "mm3d", "directory": "scenes",
+            "filename_suffix": "_info.zsi", "index_separator": "_",
             "generator_sha256": generator_sha256,
             "catalog_json": json.dumps(catalog, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False),
             "excluded_rooms": catalog.get("unreferencedRooms", [])}

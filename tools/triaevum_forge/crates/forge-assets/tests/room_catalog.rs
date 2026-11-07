@@ -9,6 +9,7 @@ fn fixture(root: &Path) -> Value {
     std::fs::write(root.join("rooms/sample_0_info.zsi"), bytes).unwrap();
     let mut value = json!({"inputs": {"romfs": {"sha256": "a".repeat(64)}}, "room_catalog": {
         "version": 1, "title": "test-title", "directory": "rooms", "generator_sha256": "b".repeat(64),
+        "filename_suffix": "_info.zsi", "index_separator": "_",
         "catalog": {"schema": "triaevum.scene-lights", "version": 1, "title": "test-title", "rejected": [], "rooms": [
             {"scene": 2, "room": 0, "source": "rooms/sample_0_info.zsi", "sourceSha256": sha256_hex(bytes),
              "fingerprint": "1234567890abcdef", "emitters": [{"category": "lamp", "position": [0, 1, 2],
@@ -63,10 +64,24 @@ fn exclusions_are_hash_bound_and_still_require_complete_coverage() {
 }
 
 #[test]
+fn filename_convention_is_recipe_owned() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut recipe = fixture(tmp.path());
+    std::fs::rename(tmp.path().join("rooms/sample_0_info.zsi"), tmp.path().join("rooms/sample-room0.bin")).unwrap();
+    recipe["room_catalog"]["filename_suffix"] = json!(".bin");
+    recipe["room_catalog"]["index_separator"] = json!("-room");
+    let mut catalog: Value = serde_json::from_str(recipe["room_catalog"]["catalog_json"].as_str().unwrap()).unwrap();
+    catalog["rooms"][0]["source"] = json!("rooms/sample-room0.bin");
+    recipe["room_catalog"]["catalog_json"] = json!(catalog.to_string());
+    prepare_scene_lights(tmp.path(), &recipe, tmp.path(), None, &mut |_, _| {}, &CancelToken::new()).unwrap();
+}
+
+#[test]
 fn invalid_table_is_never_an_empty_success() {
     let tmp = tempfile::tempdir().unwrap();
     let recipe = fixture(tmp.path());
     for pointer in ["/room_catalog/title", "/room_catalog/version", "/room_catalog/generator_sha256",
+        "/room_catalog/filename_suffix", "/room_catalog/index_separator",
         "/room_catalog/catalog/rooms/0/fingerprint", "/room_catalog/catalog/rooms/0/scene",
         "/room_catalog/catalog/rooms/0/emitters/0/independentEmission",
         "/room_catalog/catalog/rooms/0/emitters/0/radius",
