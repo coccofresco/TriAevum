@@ -1811,7 +1811,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             mDiagnostics.RecordNormalGuideDraw(
                 shaderVariant.TypedNormalGuide,
                 Extension::HasPicaShaderInstrumentationFeature(
-                    shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NormalGuideTextureRelief));
+                    shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NormalGuideTextureRelief),
+                draw.FragmentFeatures.FragmentLightingEnabled &&
+                    shaderVariant.Decisions.Normal == Extension::PicaEffectDecisions::NormalPath::Material,
+                shaderVariant.Decisions.Normal == Extension::PicaEffectDecisions::NormalPath::Pbr);
         if (shaderVariant.AmbientGuideEligibility ==
                 Extension::PicaAmbientOcclusionGuideEligibility::
                     AppliedExact ||

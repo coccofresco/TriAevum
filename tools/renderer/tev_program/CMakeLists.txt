@@ -287,6 +287,7 @@ foreach(_pack renderer3ds/pica_native_fragment extension/pica_temporal_fragment 
         "${runtime}/src/fast/${_pack}.spvpack")
 endforeach()
 add_test(NAME pica_fragment_artifacts COMMAND build_fragment_artifacts --check)
+add_test(NAME pica_native_normal_guides COMMAND build_fragment_artifacts --normal-guide-check)
 add_test(NAME pica_temporal_fragment_artifacts COMMAND build_fragment_artifacts --temporal --check)
 add_test(NAME pica_toon_fragment_artifacts COMMAND build_fragment_artifacts --toon --check)
 add_test(NAME pica_uber_fragment_artifacts COMMAND build_fragment_artifacts --uber --check)

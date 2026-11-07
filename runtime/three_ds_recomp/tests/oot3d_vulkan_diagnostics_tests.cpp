@@ -41,6 +41,7 @@ TEST(Oot3dVulkanDiagnostics, DisabledConfigurationIsNoOp) {
     Fast::Oot3dVulkanDiagnostics diagnostics;
     diagnostics.BeginFrame(7);
     diagnostics.RecordDisplayTransfer(false);
+    diagnostics.RecordNormalGuideDraw(false, false, true, true);
     diagnostics.EndFrame();
     EXPECT_TRUE(diagnostics.Frames().empty());
 }
@@ -384,6 +385,9 @@ TEST(Oot3dVulkanDiagnostics, WritesBoundedAuthenticFrameTrace) {
     diagnostics.RecordAmbientOcclusionPass(true, true);
     diagnostics.RecordAmbientOcclusionAmbientGuideDraw(true);
     diagnostics.RecordAmbientOcclusionAmbientGuideDraw(false);
+    diagnostics.RecordNormalGuideDraw(false, false, true, false);
+    diagnostics.RecordNormalGuideDraw(false, true, false, true);
+    diagnostics.RecordNormalGuideDraw(true, false);
     diagnostics.RecordAmbientOcclusionAmbientComposite();
     diagnostics.RecordToonDraw(true);
     Fast::Extension::RendererValidationSnapshot validation;
@@ -994,6 +998,10 @@ TEST(Oot3dVulkanDiagnostics, WritesBoundedAuthenticFrameTrace) {
     EXPECT_TRUE(frame.at("scene_composite_barriers_nri_owned").get<bool>());
     EXPECT_TRUE(frame.at("ambient_occlusion_output_nri_owned").get<bool>());
     EXPECT_EQ(frame.at("ambient_occlusion_normal_guide_pass_count"), 1U);
+    EXPECT_EQ(frame.at("normal_guide_draw_count"), 3U);
+    EXPECT_EQ(frame.at("typed_normal_guide_draw_count"), 1U);
+    EXPECT_EQ(frame.at("native_fragment_normal_guide_draw_count"), 1U);
+    EXPECT_EQ(frame.at("pbr_normal_guide_draw_count"), 1U);
     EXPECT_EQ(frame.at("ambient_occlusion_ambient_guide_draw_count"), 2U);
     EXPECT_EQ(frame.at("ambient_occlusion_ambient_rgb_guide_draw_count"), 1U);
     EXPECT_EQ(frame.at("ambient_occlusion_ambient_fallback_guide_draw_count"), 1U);
