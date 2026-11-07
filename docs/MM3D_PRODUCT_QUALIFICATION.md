@@ -71,6 +71,27 @@ qualification, and run games only through the coordinated safe/watch scripts.
 The historical product `bad_alloc` remains unexplained; later successful execution
 means **not reproduced**, not fixed.
 
+## Coordinator-approved fixed cut (OVERLAY excluded)
+
+The approved input refs for this cut are HOOKS `88495d24`, COMPOSITION
+`b053e8be`, LANGAUDIO `187f815e`, and CATALOGS `eff80eb6`. These are fixed
+committed inputs, not a promise to chase subsequent producer changes. The
+CATALOGS native-lighting/GGX family checkpoint is included as requested; its
+unfinished startup/Forge/publication work remains explicitly unqualified.
+
+Both earlier OVERLAY merges and the dependent replacement-label HUD bridge are
+reverted for this cut. Their ancestry is retained for audit, not runtime inclusion.
+Native MM HUD, HOOKS HUD classification and COMPOSITION FXAA ownership remain;
+the replacement-label/emission hooks, preferences and acceptance driver do not.
+OVERLAY requires a separately approved later cut. The unmodified v10 generated
+registry is sufficient for the included hooks; no OVERLAY continuation is required.
+
+The combined MM batch and product smoke must use the same final tools-OFF
+executable/modules after all offline builds. Product camera framing comes from
+the supplied states, without developer-only freecam overrides. State/settings
+and graphics-schedule CLI actions remain available in that binary. OoT O2 uses
+its separately built OoT-only binary from the same frozen runtime source.
+
 ## Evidence
 
 External private receipts: `W/analysis/parity/INTEG/final-product/`, with integration
