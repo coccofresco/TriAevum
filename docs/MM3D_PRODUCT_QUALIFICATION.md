@@ -3,6 +3,9 @@
 This is a qualification ledger, not a supported-product declaration. MM remains
 private/local; do not publish inputs, captures, prepared assets or packages.
 
+The latest continuation is under **Recovery continuation** below. The fixed-cut
+execution section is historical; its O2 pass does not qualify the newer runtime.
+
 ## Installed product (FULL audit F07)
 
 | Platform | MM installed/Forge status | Evidence boundary |
@@ -124,9 +127,9 @@ OoT-only O2 executable SHA-256
   Only disposable output is written. A mismatched RomFS size is rejected without
   damaging the live handle. This is filesystem proof, not a game save/load cycle.
 
-F07 and F15 remain **OPEN**. Beyond the absent approved MM recipe/module, Forge's
-`forge-core/src/backup.rs` still declares `GAME = "oot3d"`; its existing backup
-receipts cannot be described as title-isolated MM installed recovery. Do not
+At this fixed cut, F07 and F15 remained **OPEN**. Beyond the absent approved MM
+recipe/module, Forge's backup identity was hardcoded to `oot3d`; those historical
+backup receipts cannot be described as title-isolated MM installed recovery. Do not
 relabel MM bytes as an OoT backup or relax supported-recipe/restore checks.
 Required follow-up is a title-bound Forge backup contract together with the
 qualified MM installation, native game save/restart and supported-platform
@@ -138,6 +141,51 @@ No additional game acceptance is implied by this document. The reserved seven
 executions were consumed: six succeeded, one smoke failed. Full button OVERLAY,
 newer producer tips, full shader corpus, physical devices/platforms and complete
 rendering parity are not qualified by this cut.
+
+## Recovery continuation (2026-11-07)
+
+From handoff `6cdd4d9e`, `94dded39` implements the title-bound backup contract in
+[TRIAEVUM_BACKUP_TITLE_IDENTITY.md](TRIAEVUM_BACKUP_TITLE_IDENTITY.md). Both foreign
+restore directions and relabeled wrong-revision archives fail before writes;
+non-OoT round-trip and interrupted rollback preserve disposable save bytes.
+61 core tests and one CLI test pass. The optional real-save fixture remains
+opaque storage proof, not native gameplay or an approved MM installation.
+The backup identity implementation subgap is closed; installed recovery is not.
+
+OOT3DPREP `e490e335` / `38a4b57a` are merged by `d86e49ee`. Both tools-OFF builds
+succeed with the private patched NRI; MM remains dual-title/registry v10. The
+five affected offline suites, private NRI gate and OoT vertex provenance check
+pass. All shared renderer pack bytes remain unchanged from `3a1fb05f`.
+
+Exactly two separately requested guarded OoT tests ran, once each:
+
+| Acceptance | Actual result |
+|---|---|
+| Seeded O2 identity | **FAIL**: exit 0, frame 300 matches `cap-p13.sha256`, frames 100/200 differ. Startup 0.659 s. |
+| Empty-application-cache startup | **PASS**: exit 0, startup 0.860 s, initial pipeline-cache bytes 0; all three frame hashes match. Driver cache retained. |
+
+Both report 55 parts, zero preparation failures and zero unavailable uber
+categories. The cold acceptance is **not** an O2 retry or replacement pass.
+Lossless comparison to its matching captures isolates seven differing pixels
+in each failed seeded frame, red-channel delta 8 (one RGB5 quantization step).
+Prolonged uber use correlates with shader-cache write latency: seeded 29.139 s
+versus cold 0.130 s, uber draws 26019 versus 3569. The causal shader/site and
+fix remain unproved. No cache-policy workaround, runtime edit, reference hash
+change or extra confirmation run was made. O2 remains an open regression.
+
+All five platform rows above remain **not yet qualified**, not supported or
+proven intrinsically unsupported. The approved MM recipe/whole-AOT module and
+`ImageMounted` patch-dispatch contract remain unresolved. Native game
+save/restart, installed import/export and repair/update preservation, and the
+full lifecycle reset matrix remain open. No MM game was launched in this
+continuation. Neither historical O2 nor producer-lane evidence replaces the
+failed post-merge seeded INTEG acceptance. Complete parity is not met.
+
+Private continuation receipts are in
+`W/analysis/parity/INTEG/recovery-continuation/`, particularly
+`acceptance-summary.json`, `offline-gates.json`, both `*-inputs.json` receipts,
+`shared-inputs.json` and `seeded-vs-matching-cold.json`. Captured runtime source
+is `d86e49eebf60b2788878c218272190d921bb947c`; later documentation does not change it.
 
 ## Evidence
 
