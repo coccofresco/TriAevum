@@ -71,6 +71,7 @@ public:
   }
   bool OwnsSceneProjection() const override { return true; }
   void SetPresentation(const TitlePresentationSettings& settings) override {
+    mPresentationSettings=settings;
     ApplyMm3dPresentationSettings(settings);
     mLightArena.SetEnabled(settings.ExtendedDrawDistance);
     mVisibility.SetExtended(settings.ExtendedDrawDistance);
@@ -247,6 +248,9 @@ public:
       }
       const auto presented = DecodeSymmetricPerspective(view[0], projectionY, view[1], view[2]);
       if (read && presented) {
+        uint32_t nativeFov=0;
+        if(memory.Read32(base+0x18,&nativeFov))
+          mProjectionHistory.Record(mPresentationSettings,entry.HostFrame,std::bit_cast<float>(nativeFov),*presented);
         const float top = presented->Top;
         const float right = presented->Right;
         if (currentView != 0U) {
@@ -331,11 +335,21 @@ public:
     GuestByteAccess guest(memory);
     return mPhotoCamera.OwnsInput(guest);
   }
-  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); mVisibility.Reset(); }
+  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); mVisibility.Reset(); mProjectionHistory.Reset(); }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
+    auto projections=nlohmann::json::array();
+    for(unsigned i=0;i<mProjectionHistory.Count();++i) {
+      const auto& s=mProjectionHistory.Segments()[i];
+      projections.push_back({{"first_frame",s.FirstFrame},{"last_frame",s.LastFrame},{"samples",s.Samples},
+          {"native_fov",s.NativeFov},{"presented_fov",s.PresentedFov},{"aspect",s.Aspect},
+          {"fov_multiplier",s.Settings.FovMultiplier},{"horizontal_expansion",s.Settings.HorizontalExpansion},
+          {"vertical_expansion",s.Settings.VerticalExpansion},{"edd",s.Settings.ExtendedDrawDistance}});
+    }
     return nlohmann::json{
+        {"scene_projections",std::move(projections)},
+        {"scene_projection_segments_discarded",mProjectionHistory.DiscardedSegments()},
         {"foliage_distance", {{"verified", mFoliage.Verified()},
              {"table_changes", mFoliage.Stats.TableChanges},
              {"radius_changes", mFoliage.Stats.RadiusChanges},
@@ -423,6 +437,8 @@ private:
   Mm3dLightArena mLightArena;
   Mm3dVisibility::Source mVisibility;
   Mm3dFoliage::Source mFoliage;
+  TitlePresentationSettings mPresentationSettings;
+  PresentedProjectionHistory mProjectionHistory;
   Mm3dNativePicaCompositionTracker mComposition;
   // MM3D's single-screen mode: its settings and the typed replacements of
   // guest instructions that read them.
