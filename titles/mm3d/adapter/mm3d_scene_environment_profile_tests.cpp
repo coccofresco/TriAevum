@@ -150,10 +150,15 @@ int main() try {
   const auto release=std::filesystem::path(__FILE__).parent_path().parent_path().parent_path().parent_path() /
       "runtime/triaevum_resources/environments/mm3d";
   SceneEnvironmentRuntime shipped(directory, [&](const auto& v) { published=v; }, release, Mm3dFallback());
+  R::PicaEnvironmentLighting ootPublished;
+  SceneEnvironmentRuntime ootShipped(directory / "oot3d", [&](const auto& v) { ootPublished=v; },
+                                     release.parent_path());
   uint64_t world=10;
   std::optional<R::PicaEnvironmentLighting> calibratedIndoor;
   for (Group group : {Group::Indoor, Group::FixedTime, Group::TimeAtEntry, Group::TimeFlows}) {
+    ootShipped.ObserveScene(0x6F, at(group, world, true));
     shipped.ObserveScene(0x6F, at(group, world++, true));
+    Check(published.PointLights==ootPublished.PointLights, "day point defaults differ from OoT3D");
     const auto snapshot=shipped.Snapshot();
     Check(snapshot.Error.empty(), "shipped profile invalid");
     Check(snapshot.Sources[0]==SceneEnvironmentSource::DefaultGroup, "shipped group did not beat fallback");
@@ -172,12 +177,15 @@ int main() try {
       if (group==Group::Indoor) calibratedIndoor=published;
     }
     Check(shipped.SetForcedNightWeight(1), "night force failed");
+    Check(ootShipped.SetForcedNightWeight(1), "OoT night force failed");
+    Check(published.PointLights==ootPublished.PointLights, "night point defaults differ from OoT3D");
     if (group==Group::TimeFlows || group==Group::TimeAtEntry) {
       Check(shipped.Snapshot().Sources[1]==SceneEnvironmentSource::DefaultGroup, "night group missing");
       Check(shipped.Snapshot().NightProfileExists, "night endpoint not loaded");
       Check(published.AmbientColor[2]>published.AmbientColor[0], "night palette not loaded");
     }
     shipped.SetForcedNightWeight(std::nullopt);
+    ootShipped.SetForcedNightWeight(std::nullopt);
   }
   // Scene-lit ambient regression: the active order can put Local points
   // before the proved Scene directionals, independently of hardware slots.
@@ -213,6 +221,39 @@ int main() try {
         "local-only room acquired a key or lost ambient");
   // The release never writes a user profile just by loading its defaults.
   Check(std::filesystem::is_empty(directory), "loading release defaults wrote user files");
+  // Independent title user files, scene/day/night and group standard use
+  // the same codec. No new Graphics-preset copy of these controls exists.
+  const auto user = directory / "mm3d";
+  SceneEnvironmentRuntime edited(user, [&](const auto& v) { published=v; }, release, Mm3dFallback());
+  edited.ObserveScene(0x6F, at(Group::TimeFlows,100,true));
+  auto day = edited.Snapshot().Profile;
+  day.Enabled = false;
+  for (size_t i=0;i<4;++i) {
+    day.PointLights[i].Enabled = i<2;
+    day.PointLights[i].Intensity = .5F+float(i);
+    day.PointLights[i].RadiusScale = 1+float(i);
+    day.PointLights[i].ColorTint = {.25F,.5F,.75F};
+  }
+  Check(edited.Preview(day) && edited.Save(), "point day save failed");
+  Check(edited.SaveAsGroupStandard(), "point group save failed");
+  Check(edited.SelectTab(true) && edited.CopyDayToNight(), "point night draft failed");
+  auto night = edited.Snapshot().Profile;
+  for (auto& p : night.PointLights) p.Enabled = !p.Enabled;
+  Check(edited.Preview(night) && edited.Save(), "point night save failed");
+  Check(edited.Reload() && edited.Snapshot().Profile.PointLights==night.PointLights,
+        "night point settings did not persist");
+  Check(edited.SelectTab(false) && edited.Reload() && edited.Snapshot().Profile.PointLights==day.PointLights,
+        "day point settings did not persist");
+  Check(edited.SetForcedNightWeight(0) &&
+        published.PointLights==BlendSceneEnvironmentProfiles(day,night,0).PointLights && !published.Enabled,
+        "disabled profile lost independent point settings");
+  Check(edited.SetForcedNightWeight(1) &&
+        published.PointLights==BlendSceneEnvironmentProfiles(day,night,1).PointLights,
+        "night point settings did not publish");
+  edited.ObserveScene(0x2D,at(Group::TimeFlows,101,true));
+  Check(edited.Snapshot().Sources[0]==SceneEnvironmentSource::Group &&
+        edited.Snapshot().Profile.PointLights==day.PointLights,"point group fallback lost");
+  Check(!std::filesystem::exists(directory/"oot3d"),"MM settings wrote OoT user files");
   std::printf("mm3d scene environment profile tests passed: %d checks\n", gChecks);
   return 0;
 } catch (const std::exception &error) {

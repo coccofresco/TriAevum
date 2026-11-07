@@ -42,6 +42,7 @@ public:
   const char *GameName() const override { return "Majora's Mask 3D"; }
   Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
   bool NativeFragmentLighting() const override { return true; }
+  std::string_view CompanionLightName() const override { return "Tatl"; }
   std::string_view GrassRuleNamespace() const override { return "mm3d"; }
   std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
       oot3d::recomp::a32::MemoryBus& memory, uint64_t sourceFrame) const override {
