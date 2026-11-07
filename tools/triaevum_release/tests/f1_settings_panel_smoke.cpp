@@ -1,4 +1,5 @@
 #include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/settings_window_bounds.h"
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/title_grass_rules_file.h"
@@ -1880,6 +1881,14 @@ void CheckDevToolsPanel() {
 #endif
 
 int main(int argc, char** argv) try {
+    Check(FitSettingsWindowPosition({60, 60}, {560, 704}, {0, 0}, {1280, 720}) == std::array<float, 2>{60, 8},
+          "F1 footer overflows 720p despite valid size constraints");
+    Check(FitSettingsWindowPosition({200, 100}, {560, 400}, {0, 0}, {1280, 720}) == std::array<float, 2>{200, 100},
+          "valid F1 placement was changed");
+    Check(FitSettingsWindowPosition({-100, 2000}, {300, 200}, {100, 50}, {640, 480}) == std::array<float, 2>{108, 322},
+          "F1 placement ignores work-area origin");
+    Check(FitSettingsWindowPosition({60, 60}, {464, 304}, {0, 0}, {480, 320}) == std::array<float, 2>{8, 8},
+          "compact F1 work-area placement overflows");
     PresentationSettingsTransaction delayedConfirmation(500);
     PresentationSettingsValue previousDisplay;
     auto nextDisplay = previousDisplay;
