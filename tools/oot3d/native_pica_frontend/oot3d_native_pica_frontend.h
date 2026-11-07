@@ -166,6 +166,10 @@ struct Oot3dPicaCompositionAttribution {
     // copying packets. Only inherited jump ownership may supply Part/Slot;
     // the transient parent command-list destination is never an identity.
     bool TemporalCommandBufferIdentity = false;
+    // Explicit primitive ranges may be in a called source buffer, not the
+    // submitted arena. Only the draw's own span can opt in; never inherited.
+    // Transient, cleared before publication just like the packet begin address.
+    bool TemporalPacketSourceRelative = false;
     // Title-proven overlay that must not pass through presentation FXAA.
     // Default false preserves existing producers' scanout behavior.
     bool ExcludeFromPresentationFxaa = false;

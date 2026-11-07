@@ -692,8 +692,11 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                         composition.TemporalIdentity = {};
                     }
                 } else if (composition.TemporalIdentity.Available()) {
-                    const uint64_t address = uint64_t{commandListAddress} + uint64_t{offsetWords} * 4U;
-                    if (metadata == nullptr || composition.TemporalPacketBeginAddress == 0 ||
+                    const uint64_t address = uint64_t{composition.TemporalPacketSourceRelative
+                        ? bufferAddress : commandListAddress} + uint64_t{offsetWords} * 4U;
+                    if (metadata == nullptr ||
+                        (composition.TemporalPacketSourceRelative && spanAt(address) != metadata) ||
+                        composition.TemporalPacketBeginAddress == 0 ||
                         address < composition.TemporalPacketBeginAddress || address >= metadata->EndAddress)
                         composition.TemporalIdentity = {};
                     else
@@ -701,6 +704,7 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                 }
                 composition.TemporalPacketBeginAddress = 0;
                 composition.TemporalCommandBufferIdentity = false;
+                composition.TemporalPacketSourceRelative = false;
                 auto domain = mCommandListCompositionDomain;
                 switch (composition.Layer) {
                     case Oot3dPicaCompositionLayer::OpaqueWorld:

@@ -172,6 +172,99 @@ void TestCompositionTemporalLifetimes() {
     }
 }
 
+void TestPrimitiveOwnership() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "primitive hook guards");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    const auto run = [&](bool validRenderer, uint32_t index, uint32_t size) {
+        tracker.Reset();
+        s.r[0] = f.Play; observe(0x15E9ECU);
+        s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U);
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 4U, 1); f.W32(f.Queue + 8U, f.Model); observe(0x182C48U);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = 0x11EF3CU; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+        f.W32(f.Renderer + 0x14U, f.Owner); f.W32(f.Owner, f.Owner + 0x100U);
+        f.W32(f.Owner + 0x108U, 0x15000000U);
+        f.W32(f.Nodes + 8U, 2); f.W16(f.Nodes + 0x1CU, 12);
+        s.r[0] = f.Owner; s.r[2] = 12; s.r[4] = validRenderer ? f.Renderer : 0U;
+        s.r[7] = f.Nodes; s.r[5] = index; s.r[14] = 0x5E32F8U;
+        observe(0x1565ACU);
+        f.W32(f.Owner + 0x108U, 0x15000000U + size); observe(0x1565BCU);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000040U);
+        s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        return spans;
+    };
+    auto spans = run(true, 1U, 0x80U);
+    Require(spans.size() == 2 && spans.back().BeginAddress == 0x15000000U,
+            "builder-owned primitive buffer lost to closing coarse scope");
+    const auto& a = spans.back().Attribution;
+    Require(a.NativeActorGeometry && a.TemporalPacketSourceRelative &&
+            !a.TemporalCommandBufferIdentity && a.TemporalIdentity.Part == f.Nodes &&
+            a.TemporalIdentity.Instance == f.Model && a.TemporalIdentity.Owner == f.Actor &&
+            a.TemporalIdentity.Slot == ((uint64_t{0x11EF3CU} << 32U) | (2U << 16U)),
+            "primitive did not use guarded native group/record identity");
+    const auto lifetime = a.TemporalIdentity.Lifetime;
+    spans = run(true, 1U, 0x80U);
+    Require(spans.back().Attribution.TemporalIdentity.Lifetime != lifetime, "restore reused primitive epoch");
+    for (bool renderer : {false, true}) {
+        spans = run(renderer, renderer ? 3U : 1U, 0x80U);
+        Require(spans.back().Attribution.NativeActorGeometry &&
+                !spans.back().Attribution.TemporalIdentity.Available(),
+                "unproved renderer/index acquired temporal primitive identity");
+    }
+    spans = run(true, 1U, 3U);
+    Require(spans.size() == 1 && tracker.Stats().InvalidPrimitives == 1,
+            "invalid primitive cursor range was published");
+}
+
+void TestQuadEntryOwnership() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "quad hook guards");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    constexpr uint32_t manager = f.Actor + 0x8000U;
+    constexpr std::array returns{0x110B7CU, 0x110BACU, 0x110C8CU, 0x110CB0U, 0x110D88U, 0x110DB8U};
+    for (uint32_t q = 0; q < returns.size(); ++q) {
+        tracker.Reset(); s.r[0] = f.Play; observe(0x15E9ECU);
+        f.W32(manager + 0x14U + q * 4U, 0);
+        s.r[14] = 0x15EF58U; observe(0x171B40U);
+        s.r[0] = manager; s.r[1] = q; s.r[2] = f.Model; observe(0x179930U);
+        const uint32_t slot = manager + 0x578U + q * 0x600U;
+        f.W32(slot, f.Model); f.W32(manager + 0x14U + q * 4U, 1);
+        observe(0x15EF58U);
+        // Same model handle, different native slot/producer. Never transfer
+        // the atmosphere role by a per-model lookup.
+        s.r[0] = manager; s.r[1] = q; s.r[2] = f.Model; observe(0x179930U);
+        f.W32(slot + 4U, f.Model); f.W32(manager + 0x14U + q * 4U, 2);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = manager; s.r[1] = q; s.r[14] = returns[q]; observe(kMm3dQuadQueueDrawEntry);
+        s.r[6] = manager + q * 0x600U;
+        for (uint32_t index = 0; index < 2; ++index) {
+            s.r[4] = index; observe(0x12C71CU);
+            f.W32(kMm3dCommandListCursorAddress, 0x14000000U + (index + 1) * 0x20U);
+            observe(0x12C730U);
+        }
+        observe(returns[q]);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 2 && spans[0].Attribution.Layer == Oot3dPicaCompositionLayer::Atmosphere &&
+                !spans[0].Attribution.ExcludeFromPresentationFxaa && !spans[0].Attribution.TemporalIdentity.Available(),
+                "environment quad lost exact producer ownership");
+        Require(spans[1].Attribution.Layer == (q >= 4 ? Oot3dPicaCompositionLayer::Ui : Oot3dPicaCompositionLayer::Unknown),
+                "queue occurrence fabricated a role for a different producer");
+        Require(tracker.Stats().AtmosphereQuadSpans == 1 && tracker.Stats().InvalidQuadOwners == 0,
+                "quad entry scope imbalance");
+    }
+}
+
 void TestAcceptedAndSelectedSources() {
     Fixture f; Mm3dNativeA32LightingProbe probe;
     auto& s=f.State;
@@ -597,7 +690,7 @@ void TestLightFunctionsAndGroup() {
 }
 } // namespace
 int main() {
-    TestCompositionTemporalLifetimes();
+    TestCompositionTemporalLifetimes(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();

@@ -283,7 +283,11 @@ public:
   }
 #endif
 
-  void Reset() override { mComposition.Reset(); }
+  void Reset() override {
+    if (const char* audit = std::getenv("TRIAEVUM_MM3D_COMPOSITION_AUDIT"); audit && std::string_view(audit) == "1")
+      std::fprintf(stderr, "TRIAEVUM_MM3D_COMPOSITION_RESET %s\n", CompositionSummary().dump().c_str());
+    mComposition.Reset();
+  }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
@@ -299,6 +303,15 @@ public:
         {"scene_frames", stats.SceneFrames},
         {"read_failures", stats.ReadFailures},
         {"light_bindings", stats.LightBindings},
+        {"atmosphere_quad_spans", stats.AtmosphereQuadSpans},
+        {"ui_quad_spans", stats.UiQuadSpans},
+        {"unknown_quad_spans", stats.UnknownQuadSpans},
+        {"invalid_quad_owners", stats.InvalidQuadOwners},
+        {"primitive_entries", stats.PrimitiveEntries},
+        {"primitive_spans", stats.PrimitiveSpans},
+        {"temporal_primitive_spans", stats.TemporalPrimitiveSpans},
+        {"unowned_primitives", stats.UnownedPrimitives},
+        {"invalid_primitives", stats.InvalidPrimitives},
         {"temporal_model_spans", stats.TemporalModelSpans},
         {"isolated_model_spans", stats.IsolatedModelSpans},
         {"atmosphere_model_spans", stats.AtmosphereModelSpans},

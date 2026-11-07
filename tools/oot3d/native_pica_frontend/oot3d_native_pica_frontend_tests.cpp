@@ -1262,6 +1262,30 @@ int main(int argc, char** argv) {
     Require(!frontend.PendingDrawPackets()[directFirst + 1U].Composition.TemporalIdentity.Available(),
             "a transient direct command destination became a persistent part");
 
+    // A title-proved native primitive owns an exact range in the called
+    // buffer. Its group/record identity survives; the arena address does not.
+    auto primitiveSpans = callSpans;
+    primitiveSpans[0].BeginAddress = 0x14294600U;
+    primitiveSpans[0].EndAddress = 0x14294608U;
+    auto& primitive = primitiveSpans[0].Attribution;
+    primitive.TemporalIdentity = {7U, 11U, 23U, 2ULL << 16U, 13U};
+    primitive.TemporalPacketBeginAddress = 0x14294600U;
+    primitive.TemporalPacketSourceRelative = true;
+    const size_t primitiveFirst = frontend.PendingDrawPackets().size();
+    Require(frontend.SetNextCommandListCompositionSpans(callSubmit.Parameters[0], callSubmit.Parameters[1],
+                primitiveSpans, &error) && frontend.SubmitGspCommand(callSubmit, callerList, &error), error);
+    Require(frontend.PendingDrawPackets()[primitiveFirst].Composition.TemporalIdentity == primitive.TemporalIdentity &&
+                !frontend.PendingDrawPackets()[primitiveFirst].Composition.TemporalPacketSourceRelative &&
+                !frontend.PendingDrawPackets()[primitiveFirst + 1U].Composition.TemporalIdentity.Available(),
+            "source-relative primitive identity lost or leaked into returned arena");
+    primitiveSpans[0].BeginAddress = 0x14000B14U;
+    primitiveSpans[0].EndAddress = 0x14000B18U;
+    const size_t inheritedFirst = frontend.PendingDrawPackets().size();
+    Require(frontend.SetNextCommandListCompositionSpans(callSubmit.Parameters[0], callSubmit.Parameters[1],
+                primitiveSpans, &error) && frontend.SubmitGspCommand(callSubmit, callerList, &error), error);
+    Require(!frontend.PendingDrawPackets()[inheritedFirst].Composition.TemporalIdentity.Available(),
+            "source-relative primitive contract was inherited without its own range");
+
     frontend.SetCommandBufferReader({});
     Require(!frontend.SubmitGspCommand(jumpSubmit, jumpCommandList, &error),
             "PICA command buffer jump without a reader was accepted");

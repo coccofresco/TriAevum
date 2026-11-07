@@ -96,6 +96,7 @@ void TestMm3dSceneLighting() {
     const auto pass = [&](uint32_t entry, uint32_t returnPc, uint32_t begin, uint32_t end) {
         Require(memory.Write32(kMm3dCommandListCursorAddress, begin), "could not seed the cursor");
         state.r[14] = returnPc;
+        if (entry == kMm3dQuadQueueDrawEntry) state.r[1] = returnPc == 0x00110D88U ? 4U : 5U;
         const auto event = tracker.ObserveBlockEntry(entry, state, memory);
         Require(memory.Write32(kMm3dCommandListCursorAddress, end), "could not advance the cursor");
         (void)tracker.ObserveBlockEntry(returnPc, state, memory);

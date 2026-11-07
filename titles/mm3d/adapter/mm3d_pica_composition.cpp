@@ -23,6 +23,16 @@ struct ScopeDescriptor {
 };
 
 constexpr std::array kScopes{
+    // Every quad queue is observed, but only exact producers establish a
+    // semantic layer in queues 0-3. Order alone is not ownership.
+    ScopeDescriptor{kMm3dQuadQueueDrawEntry, 0x00110B7CU,
+                    Oot3dPicaCompositionLayer::Unknown, Oot3dPicaCompositionProvenance::NativeControlFlow},
+    ScopeDescriptor{kMm3dQuadQueueDrawEntry, 0x00110BACU,
+                    Oot3dPicaCompositionLayer::Unknown, Oot3dPicaCompositionProvenance::NativeControlFlow},
+    ScopeDescriptor{kMm3dQuadQueueDrawEntry, 0x00110C8CU,
+                    Oot3dPicaCompositionLayer::Unknown, Oot3dPicaCompositionProvenance::NativeControlFlow},
+    ScopeDescriptor{kMm3dQuadQueueDrawEntry, 0x00110CB0U,
+                    Oot3dPicaCompositionLayer::Unknown, Oot3dPicaCompositionProvenance::NativeControlFlow},
     // 0x0011EF14: the scene's opaque, then translucent render list.
     ScopeDescriptor{kMm3dRenderListVisitEntry, 0x0011EF3CU,
                     Oot3dPicaCompositionLayer::OpaqueWorld,
@@ -146,8 +156,12 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         ++mQueueGeneration;
         mQueueOwners.clear(); mActorDrawStack.clear(); mModelSubmit.reset(); mModelScope.reset();
         mOverlaySubmit.reset();
+        mPrimitiveScope.reset(); mPendingPrimitives.clear();
+        mEnvironmentProducers.clear(); mQuadOwners.clear(); mQuadScope.reset();
         mActive.reset(); mFineSuppressed = false;
     }
+    if (ObserveQuads(pc, state, memory)) return Event::None;
+    if (ObservePrimitive(pc, state, memory)) return Event::None;
     if (pc == 0x00182C44U) {
         // Exact main callback BLX, before the separate native shadow callback.
         uint16_t id = 0;
@@ -198,7 +212,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             QueueOwner owner{state.r[1], mQueueGeneration,
                 !producer || shadow || mActorDrawStack.empty() ? 0U : mActorDrawStack.back(), shadow, state.r[0]};
             const auto actor = mActorLifetimes.find(uint32_t(owner.Actor));
-            uint32_t vtable = 0, callback = 0;
+            uint32_t vtable = 0, callback = 0, primary = 0, secondary = 0;
             const bool liveActor = owner.Actor && actor != mActorLifetimes.end() && actor->second.Identity == owner.Actor;
             // Room/background models use the proved Play/scene owner rather
             // than masquerading as actors. Their model destructor and scene
@@ -212,11 +226,15 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                 owner.Isolated = (owner.Actor >> 32U) == 0x87U && callback == 0x0039F068U;
                 owner.Atmosphere = (owner.Actor >> 32U) == 0x41U && callback == 0x004C03F4U;
             }
+            if (producer && !shadow && !mEnvironmentProducers.empty()) owner.Atmosphere = true;
             if (producer && !shadow && temporalOwner &&
-                memory.Read32(state.r[1], &vtable) && vtable == 0x0063BED4U) {
+                state.r[1] <= UINT32_MAX - 0xA4U &&
+                memory.Read32(state.r[1], &vtable) && vtable == 0x0063BED4U &&
+                memory.Read32(state.r[1] + 0xA0U, &primary) && memory.Read32(state.r[1] + 0xA4U, &secondary)) {
                 auto& model = mModelLifetimes[state.r[1]];
-                if (model.Owner != temporalOwner || model.OwnerEpoch != ownerEpoch || !model.Lifetime)
-                    model = {temporalOwner, ownerEpoch, NextLifetime()};
+                if (model.Owner != temporalOwner || model.OwnerEpoch != ownerEpoch || !model.Lifetime ||
+                    model.Primary != primary || model.Secondary != secondary)
+                    model = {temporalOwner, ownerEpoch, NextLifetime(), primary, secondary};
                 owner.Lifetime = model.Lifetime;
             }
             mQueueOwners[slot] = owner;
@@ -227,6 +245,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (mActive) {
             // No proved nested-pass contract: drop the unclosed outer range.
             ++mStats.NestedScopeEntries; mModelScope.reset(); mActive.reset();
+            mPrimitiveScope.reset(); mPendingPrimitives.clear();
             mFineSuppressed = true;
             return Event::None;
         }
@@ -276,14 +295,16 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             if (end >= model.Begin && end - model.Begin <= 0x00400000U && !(end & 7U) && !(model.Begin & 7U)) {
                 if (end != model.Begin) Record(model.Begin, end, model.Attribution, model.Lighting);
                 else ++mStats.EmptyScopes;
+                FlushPrimitives();
                 mActive->BeginAddress = end;
             } else {
                 ++mStats.InvalidRanges; mActive.reset(); mFineSuppressed = true;
+                mPrimitiveScope.reset(); mPendingPrimitives.clear();
             }
         } else {
             ++mStats.InvalidRanges;
             // Never back-fill a failed child with possibly stale actor/light ownership.
-            mActive.reset();
+            mActive.reset(); mPrimitiveScope.reset(); mPendingPrimitives.clear();
         }
         return Event::None;
     }
@@ -293,6 +314,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (mModelScope) {
             ++mStats.NestedScopeEntries;
             mModelScope.reset(); mFineSuppressed = true;
+            mPrimitiveScope.reset(); mPendingPrimitives.clear();
             // Parent coarse metadata covers the unproved nested portion.
             return Event::None;
         }
@@ -307,6 +329,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         }
         if (begin > mActive->BeginAddress)
             Record(mActive->BeginAddress, begin, mActive->Attribution, mActive->LightBinding);
+        FlushPrimitives();
         ModelScope child;
         child.Begin = begin; child.Slot = uint32_t(slot);
         child.ReturnPc = pc + 4U; child.Attribution = mActive->Attribution;
@@ -350,6 +373,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     }
 
     if (mActive.has_value() && pc == mActive->ReturnPc) {
+        mQuadScope.reset();
         mModelScope.reset(); // An unclosed child cannot survive its parent.
         const ActiveScope scope = *mActive;
         mActive.reset();
@@ -357,6 +381,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         uint32_t end = 0;
         if (!memory.Read32(kMm3dCommandListCursorAddress, &end)) {
             ++mStats.ReadFailures;
+            mPrimitiveScope.reset(); mPendingPrimitives.clear();
             return Event::None;
         }
         if (end == scope.BeginAddress) {
@@ -369,6 +394,10 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         } else {
             Record(scope.BeginAddress, end, scope.Attribution, scope.LightBinding);
         }
+        if (end >= scope.BeginAddress && end - scope.BeginAddress <= 0x00400000U &&
+            !(end & 7U) && !(scope.BeginAddress & 7U)) FlushPrimitives();
+        else mPendingPrimitives.clear();
+        mPrimitiveScope.reset();
         return Event::None;
     }
     const auto scope = std::find_if(
@@ -377,6 +406,13 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         });
     if (scope == kScopes.end()) {
         return Event::None;
+    }
+    if (pc == kMm3dQuadQueueDrawEntry) {
+        constexpr std::array returns{0x00110B7CU, 0x00110BACU, 0x00110C8CU,
+                                    0x00110CB0U, 0x00110D88U, 0x00110DB8U};
+        if (state.r[1] >= returns.size() || returns[state.r[1]] != state.r[14]) {
+            ++mStats.InvalidQuadOwners; return Event::None;
+        }
     }
     if (mActive.has_value()) {
         ++mStats.NestedScopeEntries;
@@ -399,6 +435,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                               ? mSceneLighting
                               : Fast::Renderer3ds::PicaNativeLightBinding{}};
     mActive->Attribution.ExcludeFromPresentationFxaa = scope->Layer == Oot3dPicaCompositionLayer::Ui;
+    if (pc == kMm3dQuadQueueDrawEntry) mQuadQueue = state.r[1];
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         ++mStats.SceneFrames;
         const uint64_t frame = mStats.SceneFrames;
@@ -411,6 +448,178 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         return Event::OpaqueWorldBegins;
     }
     return Event::None;
+}
+
+bool Mm3dNativePicaCompositionTracker::ObserveQuads(
+    uint32_t pc, const oot3d::recomp::a32::GuestState& state,
+    oot3d::recomp::a32::MemoryBus& memory) {
+    constexpr std::array environments{
+        EnvironmentProducer{0x00172D18U, 0x0015ED08U},
+        EnvironmentProducer{0x0016FD3CU, 0x0015F0B4U},
+        EnvironmentProducer{0x00171BE0U, 0x0015EF7CU},
+        EnvironmentProducer{0x00171B40U, 0x0015EF58U},
+        EnvironmentProducer{0x00171B40U, 0x0015F070U},
+        EnvironmentProducer{0x00171B40U, 0x0015F098U},
+        EnvironmentProducer{0x00171B40U, 0x0015F0DCU}};
+    if (!mEnvironmentProducers.empty() && pc == mEnvironmentProducers.back().Return)
+        mEnvironmentProducers.pop_back();
+    for (const auto& producer : environments)
+        if (pc == producer.Entry && state.r[14] == producer.Return) {
+            if (mEnvironmentProducers.size() < 8) mEnvironmentProducers.push_back(producer);
+            else { mEnvironmentProducers.clear(); ++mStats.InvalidQuadOwners; }
+            return true;
+        }
+    if (pc == 0x00179930U || pc == 0x00179AD8U) {
+        const uint32_t manager = state.r[pc == 0x00179930U ? 0 : 6];
+        const uint32_t queue = state.r[pc == 0x00179930U ? 1 : 9];
+        const uint32_t model = state.r[pc == 0x00179930U ? 2 : 4];
+        uint32_t count = 0;
+        if (!model || !manager || queue > 6 || uint64_t{manager} + 0x3000U > UINT32_MAX ||
+            !memory.Read32(manager + 0x14U + queue * 4U, &count) || count >= 0x180U) return true;
+        QuadOwner owner;
+        owner.Model = model; owner.Generation = mQueueGeneration;
+        owner.Attribution = {queue >= 4 ? Oot3dPicaCompositionLayer::Ui : Oot3dPicaCompositionLayer::Unknown,
+            Oot3dPicaCompositionProvenance::NativeControlFlow, pc, queue};
+        if (!mEnvironmentProducers.empty()) {
+            owner.Attribution.Layer = Oot3dPicaCompositionLayer::Atmosphere;
+            owner.Attribution.SourcePc = mEnvironmentProducers.back().Entry;
+        } else if (!mActorDrawStack.empty()) {
+            const uint64_t actor = mActorDrawStack.back();
+            uint32_t callback = 0;
+            if ((actor >> 32U) == 0x41U && uint32_t(actor) <= UINT32_MAX - 0x144U &&
+                memory.Read32(uint32_t(actor) + 0x144U, &callback) && callback == 0x004C03F4U)
+                owner.Attribution.Layer = Oot3dPicaCompositionLayer::Atmosphere;
+        }
+        owner.Attribution.ExcludeFromPresentationFxaa = owner.Attribution.Layer == Oot3dPicaCompositionLayer::Ui;
+        mQuadOwners[manager + 0x578U + queue * 0x600U + count * 4U] = owner;
+        return true;
+    }
+    if (pc == 0x0012C730U && mQuadScope) {
+        const auto child = *mQuadScope;
+        mQuadScope.reset();
+        const uint64_t slot = uint64_t{state.r[6]} + 0x578U + uint64_t{state.r[4]} * 4U;
+        uint32_t end = 0;
+        if (!mActive || slot != child.Slot || !memory.Read32(kMm3dCommandListCursorAddress, &end) ||
+            end < child.Begin || end - child.Begin > 0x400000U || (end & 7U) || (child.Begin & 7U)) {
+            ++mStats.InvalidQuadOwners; mPendingPrimitives.clear(); mActive.reset(); return true;
+        }
+        Record(child.Begin, end, child.Attribution, child.Lighting);
+        FlushPrimitives(); mActive->BeginAddress = end;
+        if (end > child.Begin) {
+            if (child.Attribution.Layer == Oot3dPicaCompositionLayer::Atmosphere) ++mStats.AtmosphereQuadSpans;
+            else if (child.Attribution.Layer == Oot3dPicaCompositionLayer::Ui) ++mStats.UiQuadSpans;
+            else if (mQuadQueue < mStats.UnknownQuadSpans.size()) ++mStats.UnknownQuadSpans[mQuadQueue];
+        }
+        return true;
+    }
+    if (pc != 0x0012C71CU || !mActive || mActive->Attribution.SourcePc != kMm3dQuadQueueDrawEntry)
+        return false;
+    if (mQuadScope) { ++mStats.InvalidQuadOwners; mQuadScope.reset(); mActive.reset(); return true; }
+    const uint64_t slot = uint64_t{state.r[6]} + 0x578U + uint64_t{state.r[4]} * 4U;
+    uint32_t model = 0, begin = 0;
+    if (state.r[4] >= 0x180U || slot > UINT32_MAX - 4U ||
+        !memory.Read32(uint32_t(slot), &model) || !memory.Read32(kMm3dCommandListCursorAddress, &begin) ||
+        begin < mActive->BeginAddress || begin - mActive->BeginAddress > 0x400000U ||
+        (begin & 7U) || (mActive->BeginAddress & 7U)) {
+        ++mStats.InvalidQuadOwners; return true;
+    }
+    Record(mActive->BeginAddress, begin, mActive->Attribution, mActive->LightBinding);
+    FlushPrimitives();
+    ModelScope child;
+    child.Slot = uint32_t(slot); child.Begin = begin; child.Attribution = mActive->Attribution;
+    child.Attribution.Layer = Oot3dPicaCompositionLayer::Unknown;
+    child.Attribution.ExcludeFromPresentationFxaa = false;
+    const auto owner = mQuadOwners.find(uint32_t(slot));
+    if (owner != mQuadOwners.end() && owner->second.Model == model && owner->second.Generation == mQueueGeneration)
+        child.Attribution = owner->second.Attribution;
+    // Atmosphere is excluded from scene relighting, but guide-space transforms
+    // still belong to this view. No actor/temporal identity is invented for quads.
+    if (child.Attribution.Layer == Oot3dPicaCompositionLayer::Atmosphere)
+        child.Lighting.WorldToView = mSceneLighting.WorldToView;
+    mQuadScope = std::move(child);
+    return true;
+}
+
+bool Mm3dNativePicaCompositionTracker::ObservePrimitive(
+    uint32_t pc, const oot3d::recomp::a32::GuestState& state,
+    oot3d::recomp::a32::MemoryBus& memory) {
+    if (pc == 0x001565BCU) {
+        if (!mPrimitiveScope) return true;
+        const auto primitive = *mPrimitiveScope;
+        mPrimitiveScope.reset();
+        uint32_t end = 0;
+        if (!memory.Read32(primitive.Context + 8U, &end) || end <= primitive.Begin ||
+            end - primitive.Begin >= 0x10000U || (end & 7U) || (primitive.Begin & 7U)) {
+            ++mStats.InvalidPrimitives;
+            return true;
+        }
+        mPendingPrimitives.push_back({primitive.Begin, end, primitive.Attribution, primitive.Lighting});
+        ++mStats.PrimitiveSpans;
+        if (primitive.Attribution.TemporalIdentity.Available()) ++mStats.TemporalPrimitiveSpans;
+        return true;
+    }
+    if (pc != 0x001565ACU) return false;
+    ++mStats.PrimitiveEntries;
+    if (mPrimitiveScope) {
+        mPrimitiveScope.reset(); ++mStats.InvalidPrimitives;
+        return true;
+    }
+    constexpr std::array returns{0x001323F8U, 0x001413C0U, 0x005E320CU, 0x005E32F8U,
+                                0x005E4218U, 0x005E9124U, 0x005E9210U, 0x005EA1CCU};
+    if (std::find(returns.begin(), returns.end(), state.r[14]) == returns.end() ||
+        mFineSuppressed || !mActive) {
+        ++mStats.UnownedPrimitives; return true;
+    }
+    PrimitiveScope primitive;
+    primitive.OuterReturn = state.r[14];
+    if (!state.r[0] || !memory.Read32(state.r[0], &primitive.Context) ||
+        !primitive.Context || primitive.Context > UINT32_MAX - 8U ||
+        !memory.Read32(primitive.Context + 8U, &primitive.Begin)) {
+        ++mStats.InvalidPrimitives; return true;
+    }
+    primitive.Attribution = mQuadScope ? mQuadScope->Attribution :
+        mModelScope ? mModelScope->Attribution : mActive->Attribution;
+    primitive.Lighting = mQuadScope ? mQuadScope->Lighting :
+        mModelScope ? mModelScope->Lighting : mActive->LightBinding;
+    const auto ownerIdentity = primitive.Attribution.TemporalIdentity;
+    primitive.Attribution.TemporalIdentity = {};
+    primitive.Attribution.TemporalCommandBufferIdentity = false;
+    primitive.Attribution.TemporalPacketBeginAddress = 0;
+    primitive.Attribution.SourcePc = pc;
+    primitive.Attribution.NativeValue = state.r[14];
+    // Native group/record ABI in the six model-renderer callers. An effect
+    // builder outside a proved model/renderer association gets composition,
+    // never an identity fabricated from the builder or destination address.
+    const bool mixed = state.r[14] == 0x005E320CU || state.r[14] == 0x005E9124U;
+    const uint32_t group = state.r[mixed ? 8 : 7], index = state.r[mixed ? 6 : 5];
+    uint32_t model = 0, primary = 0, secondary = 0, builder = 0, count = 0;
+    uint16_t vertices = 0;
+    if (mModelScope && ownerIdentity.Available() && WorldLayer(primitive.Attribution.Layer) &&
+        state.r[14] >= 0x005E0000U && group && index < 0xFFFFU &&
+        uint64_t{group} + 0x16U + uint64_t{index} * 8U <= UINT32_MAX &&
+        memory.Read32(group + 8U, &count) && count <= 0xFFFFU && index < count &&
+        memory.Read16(group + 0x14U + index * 8U, &vertices) && vertices == state.r[2] &&
+        memory.Read32(mModelScope->Slot, &model) && model <= UINT32_MAX - 0xA4U &&
+        memory.Read32(model + 0xA0U, &primary) && memory.Read32(model + 0xA4U, &secondary) &&
+        state.r[4] && (state.r[4] == primary || state.r[4] == secondary) &&
+        state.r[4] <= UINT32_MAX - 0x14U && memory.Read32(state.r[4] + 0x14U, &builder) &&
+        builder == state.r[0]) {
+        primitive.Attribution.TemporalIdentity = ownerIdentity;
+        primitive.Attribution.TemporalIdentity.Part = group;
+        primitive.Attribution.TemporalIdentity.Slot = (ownerIdentity.Slot & 0xFFFFFFFF00000000ULL) |
+            ((uint64_t{index} + 1U) << 16U);
+        primitive.Attribution.TemporalPacketBeginAddress = primitive.Begin;
+        primitive.Attribution.TemporalPacketSourceRelative = true;
+    }
+    mPrimitiveScope = std::move(primitive);
+    return true;
+}
+
+void Mm3dNativePicaCompositionTracker::FlushPrimitives() {
+    // A coarse closing scope must not overwrite its already-observed children.
+    for (const auto& span : mPendingPrimitives)
+        Record(span.BeginAddress, span.EndAddress, span.Attribution, span.LightBinding);
+    mPendingPrimitives.clear();
 }
 
 void Mm3dNativePicaCompositionTracker::CaptureSceneLighting(
@@ -484,6 +693,8 @@ void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     mLighting.Reset();
     mActorDrawStack.clear(); mQueueOwners.clear(); mModelSubmit.reset(); mModelScope.reset();
     mOverlaySubmit.reset();
+    mPrimitiveScope.reset(); mPendingPrimitives.clear();
+    mEnvironmentProducers.clear(); mQuadOwners.clear(); mQuadScope.reset();
     mFineSuppressed = false;
     ++mQueueGeneration;
     mStats = {};
