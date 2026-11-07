@@ -139,7 +139,8 @@ class Mm3dNativePicaCompositionTracker final
     struct ActorLifetime { uint64_t Identity = 0, Lifetime = 0; };
     struct ModelLifetime {
         uint64_t Owner = 0, OwnerEpoch = 0, Lifetime = 0;
-        uint32_t Primary = 0, Secondary = 0;
+        // Handles released by the guarded CMB model destructor, +90..+A8.
+        std::array<uint32_t, 7> Resources{};
     };
     struct ModelSubmit { uint32_t Model = 0, ReturnPc = 0; bool Shadow = false; };
     struct OverlaySubmit { uint32_t Model = 0, List = 0, ReturnPc = 0; };
@@ -165,7 +166,9 @@ class Mm3dNativePicaCompositionTracker final
     void CaptureSceneLighting(oot3d::recomp::a32::MemoryBus& memory);
     bool ObservePrimitive(uint32_t pc, const oot3d::recomp::a32::GuestState& state,
                           oot3d::recomp::a32::MemoryBus& memory);
-    void FlushPrimitives();
+    void FlushPrimitives(oot3d::recomp::a32::MemoryBus& memory);
+    void ValidateTemporalAttribution(Oot3dPicaCompositionAttribution& attribution,
+                                    oot3d::recomp::a32::MemoryBus& memory);
     bool ObserveQuads(uint32_t pc, const oot3d::recomp::a32::GuestState& state,
                       oot3d::recomp::a32::MemoryBus& memory);
 

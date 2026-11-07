@@ -93,6 +93,16 @@ constexpr auto kHookPcs = BuildHookPcs();
 // one guest frame after it is built.
 constexpr uint64_t kSpanLifetimeSceneFrames = 2U;
 
+bool ReadModelResources(uint32_t model, oot3d::recomp::a32::MemoryBus& memory,
+                        std::array<uint32_t, 7>& resources) {
+    uint32_t vtable = 0;
+    if (!model || (model & 3U) || model > UINT32_MAX - 0xABU ||
+        !memory.Read32(model, &vtable) || vtable != 0x0063BED4U) return false;
+    for (uint32_t i = 0; i < resources.size(); ++i)
+        if (!memory.Read32(model + 0x90U + i * 4U, &resources[i])) return false;
+    return true;
+}
+
 bool WorldLayer(Oot3dPicaCompositionLayer layer) {
     return layer == Oot3dPicaCompositionLayer::OpaqueWorld ||
            layer == Oot3dPicaCompositionLayer::TransparentWorld;
@@ -214,7 +224,8 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             QueueOwner owner{state.r[1], mQueueGeneration,
                 !producer || shadow || mActorDrawStack.empty() ? 0U : mActorDrawStack.back(), shadow, state.r[0]};
             const auto actor = mActorLifetimes.find(uint32_t(owner.Actor));
-            uint32_t vtable = 0, callback = 0, primary = 0, secondary = 0;
+            uint32_t callback = 0;
+            std::array<uint32_t, 7> resources{};
             const bool liveActor = owner.Actor && actor != mActorLifetimes.end() && actor->second.Identity == owner.Actor;
             // Room/background models use the proved Play/scene owner rather
             // than masquerading as actors. Their model destructor and scene
@@ -229,15 +240,18 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                 owner.Atmosphere = (owner.Actor >> 32U) == 0x41U && callback == 0x004C03F4U;
             }
             if (producer && !shadow && !mEnvironmentProducers.empty()) owner.Atmosphere = true;
-            if (producer && !shadow && temporalOwner &&
-                state.r[1] <= UINT32_MAX - 0xA4U &&
-                memory.Read32(state.r[1], &vtable) && vtable == 0x0063BED4U &&
-                memory.Read32(state.r[1] + 0xA0U, &primary) && memory.Read32(state.r[1] + 0xA4U, &secondary)) {
-                auto& model = mModelLifetimes[state.r[1]];
-                if (model.Owner != temporalOwner || model.OwnerEpoch != ownerEpoch || !model.Lifetime ||
-                    model.Primary != primary || model.Secondary != secondary)
-                    model = {temporalOwner, ownerEpoch, NextLifetime(), primary, secondary};
-                owner.Lifetime = model.Lifetime;
+            if (producer && !shadow && temporalOwner) {
+                if (ReadModelResources(state.r[1], memory, resources)) {
+                    auto& model = mModelLifetimes[state.r[1]];
+                    if (model.Owner != temporalOwner || model.OwnerEpoch != ownerEpoch || !model.Lifetime ||
+                        model.Resources != resources)
+                        model = {temporalOwner, ownerEpoch, NextLifetime(), resources};
+                    owner.Lifetime = model.Lifetime;
+                } else {
+                    // An observed unreadable/foreign binding breaks continuity,
+                    // even if the original handles return at the next enqueue.
+                    mModelLifetimes.erase(state.r[1]);
+                }
             }
             mQueueOwners[slot] = owner;
         }
@@ -289,7 +303,8 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             mQueueOwners[list + 8U + i * 4U] = after[i];
     }
     if (mModelScope && pc == mModelScope->ReturnPc) {
-        const auto model = *mModelScope;
+        auto model = *mModelScope;
+        ValidateTemporalAttribution(model.Attribution, memory);
         mModelScope.reset();
         const uint64_t slot = pc == 0x005EF0D0U ? uint64_t{state.r[5]} : uint64_t{state.r[4]} + 8U + 4ULL * state.r[5];
         uint32_t end = 0;
@@ -297,7 +312,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             if (end >= model.Begin && end - model.Begin <= 0x00400000U && !(end & 7U) && !(model.Begin & 7U)) {
                 if (end != model.Begin) Record(model.Begin, end, model.Attribution, model.Lighting);
                 else ++mStats.EmptyScopes;
-                FlushPrimitives();
+                FlushPrimitives(memory);
                 mActive->BeginAddress = end;
             } else {
                 ++mStats.InvalidRanges; mActive.reset(); mFineSuppressed = true;
@@ -331,7 +346,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         }
         if (begin > mActive->BeginAddress)
             Record(mActive->BeginAddress, begin, mActive->Attribution, mActive->LightBinding);
-        FlushPrimitives();
+        FlushPrimitives(memory);
         ModelScope child;
         child.Begin = begin; child.Slot = uint32_t(slot);
         child.ReturnPc = pc + 4U; child.Attribution = mActive->Attribution;
@@ -356,7 +371,8 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                 child.Attribution.TemporalIdentity = {lifetime->second.Owner, model, 1U,
                     uint64_t{mActive->ReturnPc} << 32U, owner->second.Lifetime};
                 child.Attribution.TemporalCommandBufferIdentity = true;
-                ++mStats.TemporalModelSpans;
+                ValidateTemporalAttribution(child.Attribution, memory);
+                if (child.Attribution.TemporalIdentity.Available()) ++mStats.TemporalModelSpans;
             }
         }
         // Proven model factory/vtable ABI. +90 is a resource/preparation object.
@@ -398,7 +414,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             Record(scope.BeginAddress, end, scope.Attribution, scope.LightBinding);
         }
         if (end >= scope.BeginAddress && end - scope.BeginAddress <= 0x00400000U &&
-            !(end & 7U) && !(scope.BeginAddress & 7U)) FlushPrimitives();
+            !(end & 7U) && !(scope.BeginAddress & 7U)) FlushPrimitives(memory);
         else mPendingPrimitives.clear();
         mPrimitiveScope.reset();
         return Event::None;
@@ -542,7 +558,7 @@ bool Mm3dNativePicaCompositionTracker::ObserveQuads(
             ++mStats.InvalidQuadOwners; mPendingPrimitives.clear(); mActive.reset(); return true;
         }
         Record(child.Begin, end, child.Attribution, child.Lighting);
-        FlushPrimitives(); mActive->BeginAddress = end;
+        FlushPrimitives(memory); mActive->BeginAddress = end;
         if (end > child.Begin) {
             if (child.Attribution.Layer == Oot3dPicaCompositionLayer::Atmosphere) ++mStats.AtmosphereQuadSpans;
             else if (child.Attribution.Layer == Oot3dPicaCompositionLayer::Ui) ++mStats.UiQuadSpans;
@@ -562,7 +578,7 @@ bool Mm3dNativePicaCompositionTracker::ObserveQuads(
         ++mStats.InvalidQuadOwners; return true;
     }
     Record(mActive->BeginAddress, begin, mActive->Attribution, mActive->LightBinding);
-    FlushPrimitives();
+    FlushPrimitives(memory);
     ModelScope child;
     child.Slot = uint32_t(slot); child.Begin = begin; child.Attribution = mActive->Attribution;
     child.Attribution.Layer = Oot3dPicaCompositionLayer::Unknown;
@@ -584,7 +600,8 @@ bool Mm3dNativePicaCompositionTracker::ObservePrimitive(
     oot3d::recomp::a32::MemoryBus& memory) {
     if (pc == 0x001565BCU) {
         if (!mPrimitiveScope) return true;
-        const auto primitive = *mPrimitiveScope;
+        auto primitive = *mPrimitiveScope;
+        ValidateTemporalAttribution(primitive.Attribution, memory);
         mPrimitiveScope.reset();
         uint32_t end = 0;
         if (!memory.Read32(primitive.Context + 8U, &end) || end <= primitive.Begin ||
@@ -621,6 +638,7 @@ bool Mm3dNativePicaCompositionTracker::ObservePrimitive(
         mModelScope ? mModelScope->Attribution : mActive->Attribution;
     primitive.Lighting = mQuadScope ? mQuadScope->Lighting :
         mModelScope ? mModelScope->Lighting : mActive->LightBinding;
+    ValidateTemporalAttribution(primitive.Attribution, memory);
     const auto ownerIdentity = primitive.Attribution.TemporalIdentity;
     primitive.Attribution.TemporalIdentity = {};
     primitive.Attribution.TemporalCommandBufferIdentity = false;
@@ -639,7 +657,7 @@ bool Mm3dNativePicaCompositionTracker::ObservePrimitive(
         uint64_t{group} + 0x16U + uint64_t{index} * 8U <= UINT32_MAX &&
         memory.Read32(group + 8U, &count) && count <= 0xFFFFU && index < count &&
         memory.Read16(group + 0x14U + index * 8U, &vertices) && vertices == state.r[2] &&
-        memory.Read32(mModelScope->Slot, &model) && model <= UINT32_MAX - 0xA4U &&
+        memory.Read32(mModelScope->Slot, &model) && model == ownerIdentity.Instance && model <= UINT32_MAX - 0xA4U &&
         memory.Read32(model + 0xA0U, &primary) && memory.Read32(model + 0xA4U, &secondary) &&
         state.r[4] && (state.r[4] == primary || state.r[4] == secondary) &&
         state.r[4] <= UINT32_MAX - 0x14U && memory.Read32(state.r[4] + 0x14U, &builder) &&
@@ -689,10 +707,34 @@ void Mm3dNativePicaCompositionTracker::CommitQuadQueueMoves(
     for (const auto& move : moves) if (move.NativeUi) ++mStats.NativeUiQuadMoves;
 }
 
-void Mm3dNativePicaCompositionTracker::FlushPrimitives() {
+void Mm3dNativePicaCompositionTracker::ValidateTemporalAttribution(
+    Oot3dPicaCompositionAttribution& attribution, oot3d::recomp::a32::MemoryBus& memory) {
+    const auto& identity = attribution.TemporalIdentity;
+    if (!identity.Available()) return;
+    const auto found = mModelLifetimes.find(uint32_t(identity.Instance));
+    if (found != mModelLifetimes.end() && found->second.Lifetime == identity.Lifetime &&
+        found->second.Owner == identity.Owner) {
+        std::array<uint32_t, 7> resources{};
+        if (ReadModelResources(uint32_t(identity.Instance), memory, resources) &&
+            resources == found->second.Resources) return;
+        // Retire the observed epoch: an A -> B -> A binding must not revive A.
+        mModelLifetimes.erase(found);
+        ++mStats.LifecycleInvalidations;
+    }
+    attribution.TemporalIdentity = {};
+    attribution.TemporalCommandBufferIdentity = false;
+    attribution.TemporalPacketSourceRelative = false;
+    attribution.TemporalPacketBeginAddress = 0;
+}
+
+void Mm3dNativePicaCompositionTracker::FlushPrimitives(oot3d::recomp::a32::MemoryBus& memory) {
     // A coarse closing scope must not overwrite its already-observed children.
-    for (const auto& span : mPendingPrimitives)
+    // Pending packets are not immutable publication yet: a destruction/rebind
+    // after the builder returns must still revoke their temporal claim.
+    for (auto& span : mPendingPrimitives) {
+        ValidateTemporalAttribution(span.Attribution, memory);
         Record(span.BeginAddress, span.EndAddress, span.Attribution, span.LightBinding);
+    }
     mPendingPrimitives.clear();
 }
 

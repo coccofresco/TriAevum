@@ -13,6 +13,31 @@ code. `mm3d_lighting_hook_sites.h` guards every observed block and requires its
 registry entry. Additional data/code guards bind semantic actor owners to this
 image. A failed guard disables the observer, not native rendering.
 
+## Deferred resource-lifetime validation
+
+The CMB model's destructor at `5EC220` releases seven binding handles at
+`+90..+A8`, including both renderers. These loads and release calls are guarded.
+Temporal lifetime now snapshots all seven handles, rather than only the two
+renderers, and revalidates the model ABI/handles at deferred consumption and
+publication (model start/end, primitive start/end, pending primitive flush).
+A changed or unreadable binding revokes temporal metadata only: native commands,
+actor attribution and appearance remain intact. The observed old epoch is retired
+so a later A→B→A handle sequence cannot revive history. Actor/model destruction
+also revokes an open scope or pending primitive at publication. Already published
+samples are immutable.
+
+The regression fails on the preceding implementation when the primary renderer
+changes between enqueue and consumption. It covers all seven handles plus the
+vtable, changes during drawing, resource-only enqueue changes, continuity, observed
+ABA, model/actor destruction, and primitive/pending publication. Two read-only
+savestate scans corroborate readable CMB-owned handles in Clock Town and Woodfall;
+they are not evidence of a live rebind. Unobserved in-place resource recycling at
+the same addresses still needs its own native lifetime proof. No texture hash,
+scene whitelist, new hook PC or guessed geometry identity is introduced.
+
+Evidence: `COMPOSITION/LIFETIME/`. F03/F18 remain open beyond this bounded defect;
+provider/UI acceptance results are recorded in the external lane reports.
+
 ## Temporal models
 
 - The three actor-init dispatches (`1749C4`, `174EBC`, `191200`) and actor destroy

@@ -172,14 +172,81 @@ void TestCompositionTemporalLifetimes() {
     }
 }
 
+void TestDeferredModelResourceLifetime() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "resource lifetime guards");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    uint32_t frame = 1;
+    const auto enqueue = [&] {
+        f.W32(f.Play + 0x138U, frame++); s.r[0] = f.Play; observe(0x15E9ECU);
+        s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U);
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 4U, 1); f.W32(f.Queue + 8U, f.Model); observe(0x182C48U);
+    };
+    const auto begin = [&] {
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = 0x11EF3CU; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+    };
+    const auto finish = [&] {
+        f.W32(kMm3dCommandListCursorAddress, 0x14000020U);
+        s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 1, "resource lifetime keeps native model range");
+        return spans.front().Attribution;
+    };
+    enqueue(); begin(); const auto original = finish();
+    Require(original.TemporalIdentity.Available(), "resource fixture baseline identity");
+    // Primary renderer first: this already belongs to the admitted ABI.
+    // The remaining handles are owned/released by the same guarded destructor.
+    for (uint32_t offset : {0xA0U, 0xA4U, 0x90U, 0x94U, 0x98U, 0x9CU, 0xA8U, 0U}) {
+        uint32_t saved = 0; Require(f.Memory.Read32(f.Model + offset, &saved), "read original handle");
+        for (bool duringDraw : {false, true}) {
+            enqueue();
+            if (duringDraw) begin();
+            f.W32(f.Model + offset, saved ^ 0x100U);
+            if (!duringDraw) begin();
+            const auto rebound = finish();
+            Require(!rebound.TemporalIdentity.Available() && !rebound.TemporalCommandBufferIdentity,
+                    "deferred rebind retained stale temporal identity");
+            Require(rebound.NativeActorGeometry && rebound.NativeActorIdentity == f.Actor,
+                    "resource rejection erased independent native actor ownership");
+            f.W32(f.Model + offset, saved);
+            enqueue(); begin(); const auto restored = finish();
+            Require(restored.TemporalIdentity.Available() &&
+                    restored.TemporalIdentity.Lifetime != original.TemporalIdentity.Lifetime,
+                    "observed resource ABA revived old epoch");
+        }
+    }
+    // Rebind before enqueue also rotates the epoch, even with stable renderers.
+    enqueue(); begin(); const auto before = finish();
+    f.W32(f.Model + 0x90U, f.Owner);
+    enqueue(); begin(); const auto after = finish();
+    Require(after.TemporalIdentity.Available() && after.TemporalIdentity.Lifetime != before.TemporalIdentity.Lifetime,
+            "resource-only rebind at enqueue retained old epoch");
+    enqueue(); begin(); Require(finish().TemporalIdentity == after.TemporalIdentity,
+                               "unchanged resources churned temporal identity");
+    // Destruction while a scope is open revokes unsubmitted history as well.
+    for (uint32_t pc : {0x5EC220U, 0x191238U}) {
+        enqueue(); begin(); s.r[0] = pc == 0x5EC220U ? f.Model : f.Actor; observe(pc);
+        Require(!finish().TemporalIdentity.Available(), "active scope survived native destruction");
+    }
+    Require(original.TemporalIdentity.Available(), "immutable historical attribution was mutated");
+}
+
 void TestPrimitiveOwnership() {
     Fixture f;
     Mm3dNativePicaCompositionTracker tracker;
     auto& s = f.State;
     Require(tracker.VerifyHooks(f.Memory), "primitive hook guards");
     const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
-    const auto run = [&](bool validRenderer, uint32_t index, uint32_t size) {
+    const auto run = [&](bool validRenderer, uint32_t index, uint32_t size, uint32_t rebindPhase = 0U) {
         tracker.Reset();
+        f.W32(f.Model + 0x90U, f.Context);
         s.r[0] = f.Play; observe(0x15E9ECU);
         s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U);
         f.W32(f.Queue + 4U, 0);
@@ -193,8 +260,12 @@ void TestPrimitiveOwnership() {
         f.W32(f.Nodes + 8U, 2); f.W16(f.Nodes + 0x1CU, 12);
         s.r[0] = f.Owner; s.r[2] = 12; s.r[4] = validRenderer ? f.Renderer : 0U;
         s.r[7] = f.Nodes; s.r[5] = index; s.r[14] = 0x5E32F8U;
+        if (rebindPhase == 1U) f.W32(f.Model + 0x90U, f.Context + 0x100U);
         observe(0x1565ACU);
+        if (rebindPhase == 2U) f.W32(f.Model + 0x90U, f.Context + 0x100U);
         f.W32(f.Owner + 0x108U, 0x15000000U + size); observe(0x1565BCU);
+        if (rebindPhase == 3U) f.W32(f.Model + 0x90U, f.Context + 0x100U);
+        if (rebindPhase == 4U) { s.r[0] = f.Model; observe(0x5EC220U); }
         f.W32(kMm3dCommandListCursorAddress, 0x14000040U);
         s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
         std::vector<Oot3dPicaCommandListCompositionSpan> spans;
@@ -218,6 +289,16 @@ void TestPrimitiveOwnership() {
         Require(spans.back().Attribution.NativeActorGeometry &&
                 !spans.back().Attribution.TemporalIdentity.Available(),
                 "unproved renderer/index acquired temporal primitive identity");
+    }
+    for (uint32_t phase = 1; phase <= 4; ++phase) {
+        spans = run(true, 1U, 0x80U, phase);
+        Require(spans.size() == 2, "rebind discarded native primitive coverage");
+        for (const auto& span : spans)
+            Require(!span.Attribution.TemporalIdentity.Available() &&
+                    !span.Attribution.TemporalCommandBufferIdentity &&
+                    !span.Attribution.TemporalPacketSourceRelative &&
+                    span.Attribution.TemporalPacketBeginAddress == 0,
+                    "primitive/pending/model span survived resource invalidation");
     }
     spans = run(true, 1U, 3U);
     Require(spans.size() == 1 && tracker.Stats().InvalidPrimitives == 1,
@@ -728,7 +809,7 @@ void TestLightFunctionsAndGroup() {
 }
 } // namespace
 int main() {
-    TestCompositionTemporalLifetimes(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
+    TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();

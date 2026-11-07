@@ -81,6 +81,18 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x005EF0D0U, {0xE5940004U, 0xE2855004U, 0xE0840100U, 0xE2800008U}},
 };
 inline constexpr std::array kMm3dCompositionOwnerGuards{
+    // CMB vtable destructor owns +90/+94/+98, frees +9C, destroys
+    // +A0/+A4 renderers and releases the ref-counted +A8 resource.
+    // These are binding handles, not animated matrices/material contents.
+    std::pair{0x005EC230U, 0xE5940090U}, std::pair{0x005EC23CU, 0xE12FFF31U},
+    std::pair{0x005EC240U, 0xE5940094U}, std::pair{0x005EC24CU, 0xE12FFF31U},
+    std::pair{0x005EC250U, 0xE5940098U}, std::pair{0x005EC25CU, 0xE12FFF31U},
+    std::pair{0x005EC260U, 0xE594009CU}, std::pair{0x005EC264U, 0xEBEEA2F6U},
+    std::pair{0x005EC268U, 0xE59400A0U}, std::pair{0x005EC274U, 0xE12FFF31U},
+    std::pair{0x005EC278U, 0xE59400A4U}, std::pair{0x005EC28CU, 0xE12FFF31U},
+    std::pair{0x005EC2A8U, 0xE59400A8U}, std::pair{0x005EC2B4U, 0xE5D014F5U},
+    std::pair{0x005EC2BCU, 0xE5C014F5U}, std::pair{0x005EC2D8U, 0xE59410A8U},
+    std::pair{0x005EC2E0U, 0xE12FFF32U},
     // Native stable insertion's exact source/destination movement.
     std::pair{0x001615ACU, 0xE92D07F0U}, std::pair{0x001615B0U, 0xE0812081U},
     std::pair{0x001615B4U, 0xE0806101U}, std::pair{0x001615B8U, 0xE0801482U},
