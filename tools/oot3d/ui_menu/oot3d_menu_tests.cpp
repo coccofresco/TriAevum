@@ -671,6 +671,8 @@ void TestHelpTabAndSession() {
     menu.SetModal(SaveFailure("disk full", [&] { ++retries; }));
     menu.Update(Input{}, 0.016);
     Expect(menu.CurrentModal()->ConfirmLabel == "Retry", "a failed save offers Retry");
+    Expect(menu.CurrentModal()->Lines.front() == "The change was not written. Retry to save it.",
+           "save failure must not claim an atomic controls change was applied for the session");
     Tap(menu, &Input::Confirm);
     Expect(retries == 1, "Retry asks the owner again");
     Expect(std::string(kStatusSaved) == "Saved" && std::string(kStatusSessionOnly) == "Session only" &&

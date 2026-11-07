@@ -77,7 +77,7 @@ Modal QuitConfirmation(std::function<void()> quit) {
 Modal SaveFailure(std::string detail, std::function<void()> retry) {
     Modal modal;
     modal.Title = "Could not save";
-    modal.Lines = {"The change applies for now but was not written.", std::move(detail)};
+    modal.Lines = {"The change was not written. Retry to save it.", std::move(detail)};
     modal.ConfirmLabel = "Retry";
     modal.CancelLabel = "Not now";
     modal.OnConfirm = std::move(retry);
