@@ -13,6 +13,35 @@ namespace Oot3dNativeGame {
 class Mm3dPhotoCamera {
   mutable uint32_t mLastPlay=0,mLastFrame=0;
   mutable int16_t mLastScene=-1;
+  mutable bool mRebaseAfterReset=false, mHasNative=false;
+  struct Pose {
+    std::array<float,3> At{}, Eye{}, Up{}, EyeNext{}, ViewEye{}, ViewAt{}, ViewUp{};
+    std::array<int16_t,3> InputDirection{}, CameraDirection{};
+  };
+  mutable Pose mNative;
+  mutable std::array<float,3> mPlayerOrigin{};
+  struct Receipt {
+    uint64_t Calls=0, ActiveCalls=0, InactiveCalls=0, Rejected=0, Applied=0;
+    uint64_t Restored=0, Rebased=0, Resets=0, WriteFailures=0;
+    float MaxEyeDistance=0, MaxPlayerDistance=0;
+    std::array<float,3> LastEye{}, LastNativeEye{};
+  };
+  mutable Receipt mReceipt;
+  template<class G> static bool ReadPose(G& g,uint32_t p,uint32_t c,Pose& pose) {
+    return ReadGuestValue(g,c+0x50,pose.At)&&ReadGuestValue(g,c+0x5C,pose.Eye)&&
+      ReadGuestValue(g,c+0x68,pose.Up)&&ReadGuestValue(g,c+0x74,pose.EyeNext)&&
+      ReadGuestValue(g,p+0x220,pose.ViewEye)&&ReadGuestValue(g,p+0x22C,pose.ViewAt)&&
+      ReadGuestValue(g,p+0x238,pose.ViewUp)&&ReadGuestValue(g,c+0x148,pose.InputDirection)&&
+      ReadGuestValue(g,c+0x14E,pose.CameraDirection);
+  }
+  template<class G> static bool AddPose(GuestWriteTransaction<G>& tx,uint32_t p,uint32_t c,const Pose& pose) {
+    return tx.Add(c+0x50,pose.At)&&tx.Add(c+0x5C,pose.Eye)&&tx.Add(c+0x68,pose.Up)&&
+      tx.Add(c+0x74,pose.EyeNext)&&tx.Add(p+0x220,pose.ViewEye)&&tx.Add(p+0x22C,pose.ViewAt)&&
+      tx.Add(p+0x238,pose.ViewUp)&&tx.Add(c+0x148,pose.InputDirection)&&tx.Add(c+0x14E,pose.CameraDirection);
+  }
+  static float Distance(const std::array<float,3>& a,const std::array<float,3>& b) {
+    float d=0;for(unsigned i=0;i<3;++i)d+=(a[i]-b[i])*(a[i]-b[i]);return std::sqrt(d);
+  }
   static bool Pointer(uint32_t p,uint32_t size) {
     return p>=0x08000000 && !(p&3U) && p<0x40000000 && size<=0x40000000-p;
   }
@@ -53,15 +82,36 @@ class Mm3dPhotoCamera {
       ReadGuestValue(g,slot+0x156,setting)&&setting!=9&&setting!=10;
   }
   template<class G> bool Apply(G& g,DevFreeCamera& free,uint32_t out,uint32_t camera) const {
-    if(!free.Active()||!OwnsInput(g))return false;
+    ++mReceipt.Calls;
+    const bool active=free.Active();
+    if(active)++mReceipt.ActiveCalls;else ++mReceipt.InactiveCalls;
+    if(!active&&!mHasNative)return false; // optional-off performs no guest reads or writes
+    if(!OwnsInput(g)){++mReceipt.Rejected;mHasNative=false;mRebaseAfterReset=true;return false;}
     const uint32_t p=Play(g);
-    if(camera!=p+0x408||!Pointer(out,6))return false;
+    if(camera!=p+0x408||!Pointer(out,6)){++mReceipt.Rejected;return false;}
     uint32_t frame=0; int16_t scene=-1;
     if(!ReadGuestValue(g,p+0x138,frame)||!ReadGuestValue(g,p+0x148,scene))return false;
-    if(mLastPlay&&(p!=mLastPlay||scene!=mLastScene||frame<mLastFrame))free.ResetToGame();
-    std::array<float,3> eye{},at{};
-    if(!ReadGuestValue(g,camera+0x5C,eye)||!ReadGuestValue(g,camera+0x50,at)||!Finite(eye)||!Finite(at))return false;
-    const auto view=free.ResolveView(eye,at,false);
+    if(mLastPlay&&(p!=mLastPlay||scene!=mLastScene||frame<mLastFrame)) {
+      mHasNative=false;mRebaseAfterReset=true;
+    }
+    // Never replay a pre-restore/previous-scene pose into the new camera.
+    if(mRebaseAfterReset){free.ResetToGame();mRebaseAfterReset=false;++mReceipt.Rebased;}
+    if(!active) {
+      if(mHasNative) {
+        GuestWriteTransaction<G> tx(g);
+        if(!AddPose(tx,p,camera,mNative)||!tx.Commit()){++mReceipt.WriteFailures;return false;}
+        ++mReceipt.Restored;mHasNative=false;
+      }
+      return false; // restored native inputs; execute the original Camera_Update
+    }
+    Pose native{};
+    uint32_t player=0;std::array<float,3> playerPosition{};
+    if(!ReadPose(g,p,camera,native)||!Finite(native.Eye)||!Finite(native.At)||
+       !ReadGuestValue(g,p+0x20DC,player)||!ReadGuestValue(g,player+0x24,playerPosition)||!Finite(playerPosition))return false;
+    // ResetToGame from F1/Esc must seed from the retained native view, not the
+    // photo view written by our last callback. It does not move the player.
+    const Pose& seed=mHasNative?mNative:native;
+    const auto view=free.ResolveView(seed.Eye,seed.At,false);
     if(!view||!Finite(view->Eye)||!Finite(view->At))return false;
     GuestWriteTransaction<G> tx(g);
     const std::array<float,3> up{0,1,0};
@@ -69,9 +119,17 @@ class Mm3dPhotoCamera {
     if(!tx.Add(camera+0x50,view->At)||!tx.Add(camera+0x5C,view->Eye)||!tx.Add(camera+0x68,up)||
        !tx.Add(camera+0x74,view->Eye)||!tx.Add(p+0x220,view->Eye)||!tx.Add(p+0x22C,view->At)||
        !tx.Add(p+0x238,up)||!tx.Add(camera+0x148,direction)||!tx.Add(camera+0x14E,direction)||
-       !tx.Add(out,direction)||!tx.Commit())return false;
+       !tx.Add(out,direction)||!tx.Commit()){++mReceipt.WriteFailures;return false;}
+    if(!mHasNative){mNative=native;mPlayerOrigin=playerPosition;mHasNative=true;}
+    ++mReceipt.Applied;
+    mReceipt.LastEye=view->Eye;mReceipt.LastNativeEye=mNative.Eye;
+    mReceipt.MaxEyeDistance=std::max(mReceipt.MaxEyeDistance,Distance(view->Eye,mNative.Eye));
+    mReceipt.MaxPlayerDistance=std::max(mReceipt.MaxPlayerDistance,Distance(playerPosition,mPlayerOrigin));
     free.MarkApplied(*view); mLastPlay=p; mLastScene=scene; mLastFrame=frame; return true;
   }
-  void Reset() {mLastPlay=0;mLastFrame=0;mLastScene=-1;}
+  const auto& Stats() const {return mReceipt;}
+  void Reset() {
+    mLastPlay=0;mLastFrame=0;mLastScene=-1;mHasNative=false;mRebaseAfterReset=true;++mReceipt.Resets;
+  }
 };
 } // namespace Oot3dNativeGame

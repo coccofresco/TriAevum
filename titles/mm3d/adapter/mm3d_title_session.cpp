@@ -339,6 +339,7 @@ public:
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
+    const auto &photo = mPhotoCamera.Stats();
     auto projections=nlohmann::json::array();
     for(unsigned i=0;i<mProjectionHistory.Count();++i) {
       const auto& s=mProjectionHistory.Segments()[i];
@@ -348,6 +349,12 @@ public:
           {"vertical_expansion",s.Settings.VerticalExpansion},{"edd",s.Settings.ExtendedDrawDistance}});
     }
     return nlohmann::json{
+        {"photo_camera", {{"calls",photo.Calls},{"active_calls",photo.ActiveCalls},
+            {"inactive_calls",photo.InactiveCalls},{"rejected",photo.Rejected},{"applied",photo.Applied},
+            {"restored",photo.Restored},{"rebased",photo.Rebased},{"resets",photo.Resets},
+            {"write_failures",photo.WriteFailures},{"max_eye_distance",photo.MaxEyeDistance},
+            {"max_player_distance",photo.MaxPlayerDistance},{"last_eye",photo.LastEye},
+            {"last_native_eye",photo.LastNativeEye}}},
         {"scene_projections",std::move(projections)},
         {"scene_projection_segments_discarded",mProjectionHistory.DiscardedSegments()},
         {"foliage_distance", {{"verified", mFoliage.Verified()},
