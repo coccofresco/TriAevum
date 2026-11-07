@@ -48,9 +48,11 @@ public:
 struct HostFacts {
     std::function<std::int64_t()> global_time_us;
     std::function<bool()> widescreen_active;
-    // Final draw-time tree, after all temporary dekui layout transforms.
-    // Host consumes values only, before the scratch tree is restored.
-    std::function<void(Memory&, U32 layout, U32 root, U32 pass)> layout_draw;
+    // Final native widget emission, after effective visibility and all dekui
+    // transforms. Includes attached Pictograms outside the parent layout tree.
+    // Host consumes values only, before scratch restoration. True replaces
+    // this geometry with a host glyph; children still emit normally.
+    std::function<bool(Memory&, U32 layout, U32 node, U32 pass)> layout_draw;
 };
 
 // Diagnostic-only donor LOG_INFO sink. Arguments remain type checked and

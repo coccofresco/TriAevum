@@ -1,14 +1,20 @@
 # MM3D native controller glyphs
 
 MM3D uses **mm3d-dekui + Project Restoration**, not the OoT TopScreen
-owner table. The title session observes the guarded native layout draw hook
-**after** dekui has installed its temporary transforms and scratch prompt trees.
-It copies label bounds, color and alpha to host records; it does not change
-native text, textures, input hit targets, or guest memory.
+owner table. The title session observes guarded native widget emission at
+EUR v1.1 `0x00134de4`, after native visibility/alpha/pass checks and dekui's
+temporary transforms. This includes attached Pictograms outside layout trees.
+It copies bounds/color/alpha without guest-memory or input-hit-target writes.
+Recognized pure glyph geometry takes the native null-geometry path; children
+still emit. Mixed A/B ring art remains native.
+
+**Experimental / NOT DONE:** the continuation cold run initially shows the
+replacement HUD, but later F1-open frames lose it with unchanged settings.
+Do not treat this implementation as merge-ready or complete parity.
 
 ## Controls
 
-F1 → Controls → Devices:
+F1 → Controls → Devices, or Esc → Controls:
 
 - **Button prompts** selects Automatic or an explicit family. Automatic shares
   the existing last-active-device tracking with the application menu.
@@ -31,22 +37,27 @@ colored button-letter atlas or game assets are shipped.
 - A/B letter crops on their native action-button rings;
 - A/B/X/Y/L/R/START crops on the registry-owned `parts` resource, including
   native Pictogram panes and dekui-generated menu legends;
+- four individually bound directions within `HudDpad.pane_dpad`;
 - the visible `MessageWindow` advance indicator;
 - the exact native font records for dekui's `ZR +` menu legend.
 
 Restoration's I/II inputs are **ZR+X / ZR+Y**, not OoT's direct triggers.
 Unknown atlas crops, ordinary text, unsupported pointers/code, hidden panes,
 invalid transforms and lower-screen passes do not produce replacements.
-The walker follows embedded layouts and selected groups with bounded depth,
-node count, cycle detection and a 256-label cap. Black shadow copies are not
-independent labels. Coordinates come from final native affine matrices,
+The observer consumes individual emitted panes, with bounded layout context,
+deduplication and a label cap. Standalone emissions without a LayoutBase pass
+use the native renderer's own visibility/pass validation. Black shadow copies
+are not independent host labels. Coordinates come from final native affine matrices,
 including the configured dekui poses; the only canvas conversion is MM's
 centered 400×240 origin into its 16:9 presentation canvas.
 
 The host stores complete snapshots, including empty ones, keyed by submitted
 PICA draw IDs. Presentation selects the previous materialization, matching
 native command-list submission timing. Reset and backwards IDs clear history.
-Slots contain values, not guest pointers to temporary scratch data.
+Snapshots also retain binding/family settings, so a switch cannot remove a
+replacement before its corresponding native frame changes. Slots contain
+values, not guest pointers to temporary scratch data. Wide labels fit their
+native cells, and recognized `ZR +` legends retain their plus.
 The title-neutral default methods are no-ops for OoT; its existing overlay is
 unchanged. Rendering uses the existing UI texture provider and glyph renderer.
 
@@ -56,9 +67,14 @@ unchanged. Rendering uses the existing UI texture provider and glyph renderer.
 finite poses, no guest writes, Restoration chords and font legends, all prompt
 families, remapping, Original/Touch, persistence and frame-history clearing.
 Pass the owner's EUR v1.1 `code.bin` as an optional argument to verify the
-four native draw-hook words against the real image.
+ten native emission/null-geometry guard words against the real image.
+The generated A32 registry must include BOTH `0x00134de4` and `0x00134de8`.
+Regenerate using `oot3d_mm3d_single_screen_tests --block-boundaries` and
+`titles/mm3d/a32/guest_patch_entries.py`; the title preflight rejects an old
+registry missing either entry.
 
-This is a host overpaint overlay: native mixed ring art remains underneath.
+Pure native geometry suppression and mixed-ring overpaint are different paths.
+Their exhaustive live fidelity is not qualified.
 Synthetic tests do **not** establish complete live dialogue, every menu,
 fade/transition or hardware hot-plug coverage. The lane's external
 `analysis/parity/OVERLAY/RESULTS.md` records actual runs and any remaining
@@ -76,6 +92,27 @@ inline dialogue. Those paths need further guarded emission ownership work and
 explicit acceptance captures. Hardware hot-plug, live F1 interaction and all
 transition/occlusion cases also remain unqualified.
 
-The separate own OoT-only build passes the deterministic O2 Kokiri gate: all
-three BMP hashes match `cap-p13`. No shader or environment-profile changes were
-made for this overlay.
+The earlier own OoT-only build at `db04ccff` passed the deterministic O2 gate:
+all three BMP hashes matched `cap-p13`. That result does not qualify later code.
+No shader or environment-profile sources were changed.
+
+### F04 continuation
+
+- 76 overlay checks, ten shared/title suites and the single-screen adapter suite
+  pass. Actual EUR guards and missing/corrupt guard cases are included.
+- The coverage attempt faulted at the missing `0x00134de8` continuation before
+  capturing notebook/inventory/dialogue. A private regenerated registry fixes
+  startup; the failed acceptance case was not rerun.
+- A separate device run records live virtual-Xbox/keyboard prompt transitions,
+  but remained in the intro. SDL finger injection did not reach the platform
+  touch-control API. Neither result qualifies gameplay touch/hardware coverage.
+- The widget run cold-boots gameplay and opens F1. Controls/save/reload/restart
+  interactions were not established. Later frames lose replacement HUD glyphs
+  despite the receipt retaining Keyboard and enabled native labels.
+- Notebook badge, pause/dialogue, gameplay switching, touch, persistence,
+  transition/occlusion and current-tip O2 acceptance remain open.
+
+The developer-only `TRIAEVUM_OVERLAY_ACCEPTANCE` driver produces input and
+observation receipts. Injected SDL/OS events are not physical-device evidence;
+it never sets a prompt family or a widget result. See the external
+`OVERLAY/continuation/` evidence and `OVERLAY/RESULTS.md` for exact run boundaries.

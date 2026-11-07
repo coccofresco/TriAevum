@@ -1,5 +1,6 @@
 // Host input polling of the A32 window and the TopScreen pause transitions it drives.
 #include "oot3d_native_a32_window_shared.h"
+#include "oot3d_overlay_acceptance_driver.h"
 
 #include <spdlog/spdlog.h>
 
@@ -207,6 +208,9 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   using ThreeDsRecomp::Input::VirtualPad;
   auto touchControls = ThreeDsRecomp::Input::TouchOverlayPad().Read(guestRefreshWillConsume || hostGuiVisible);
   if (hostGuiVisible) touchControls = {};
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  Oot3dNativeGame::ObserveOverlayAcceptanceTouch(touchControls.Held,touchControls.Pressed,hostGuiVisible);
+#endif
 
   for (size_t index = 0; index < kNativeControlActionCount; ++index) {
     if (hostGuiVisible) pollingState.PendingPressedActions[index] = false;

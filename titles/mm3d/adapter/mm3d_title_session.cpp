@@ -12,6 +12,7 @@
 #include "mm3d_scene_environment.h"
 #include "mm3d_scene_environment_profile.h"
 #include "mm3d_single_screen.h"
+#include "../dekui/button_emission.h"
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
 #include "../gameplay/mm3d_rumble_events.h"
@@ -181,6 +182,12 @@ public:
       // patches first, then every site's check.
       if (mRestoration.has_value()) {
         mRestoration->ApplyDataPatches(process.Memory());
+      }
+      if (mSingleScreen) {
+        const auto& registry=Oot3dNativeA32Registry();
+        for (const auto pc:{Mm3dDekui::ButtonEmission::Pc,Mm3dDekui::ButtonEmission::Pc+4})
+          if (!oot3d::recomp::a32::FindBlock(registry,pc))
+            throw std::runtime_error("MM3D glyph emission: missing A32 hook/continuation boundary; regenerate from --block-boundaries");
       }
       mGuestPatches.Verify(process.Memory(), &Oot3dNativeA32Registry());
       if (!mComposition.VerifyHooks(process.Memory(), &Oot3dNativeA32Registry()))
