@@ -167,6 +167,10 @@ static int CheckBalanceFamily() {
                 PicaShaderInstrumentationFeature::FragmentLightingOperand |
                 PicaShaderInstrumentationFeature::FragmentLightingBalance;
             if (ggx) {
+                // Parametric TEV normally leaves sampling runtime-selected.
+                // Bind a synthetic typed slot for this installed-map compile fixture.
+                shader.Hooks.SampledTextureMask=1;
+                shader.Hooks.TextureSamples[0]={0,Fast::Renderer3ds::PicaTextureCoordinateOperation::NativeVFlip};
                 request.RequestedFeatures |= PicaShaderInstrumentationFeature::PbrMaterial;
                 request.Pbr.TextureSlot=0;
                 request.Pbr.NativeFragmentLighting=true;

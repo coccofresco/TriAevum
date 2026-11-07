@@ -71,11 +71,11 @@ float pica_point_shadow(float slot, vec3 direction, float radius) { return 1.0; 
 )glsl";
     // Typed capture sites belong to the canonical emitter, not text searches.
     result += source.substr(decl, capture.Begin - decl);
-    result += kPicaFragmentBalanceCaptureBegin;
+    if (surfaceLighting) result += kPicaFragmentBalanceCaptureBegin;
     result += source.substr(capture.Begin, capture.Diffuse - capture.Begin);
-    result += kPicaFragmentBalanceCaptureDiffuse;
+    if (surfaceLighting) result += kPicaFragmentBalanceCaptureDiffuse;
     result += source.substr(capture.Diffuse, capture.Specular - capture.Diffuse);
-    result += kPicaFragmentBalanceCaptureSpecular;
+    if (surfaceLighting) result += kPicaFragmentBalanceCaptureSpecular;
     result += source.substr(capture.Specular, lighting - capture.Specular);
     result += R"glsl(
     vec4 grass_native_fragment = primary_fragment_color;
