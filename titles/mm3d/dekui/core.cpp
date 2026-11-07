@@ -200,7 +200,8 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
     auto& r=cpu.Regs();
     if(swi==ButtonEmission::Svc) {
         const bool replaced=host.layout_draw && host.layout_draw(memory,
-            overlay_layouts.empty()?memory.Read(r[4]+4).value_or(0):overlay_layouts.back(),r[4],inventory_hook.pass);
+            overlay_layouts.empty()?memory.Read(r[4]+4).value_or(0):overlay_layouts.back().first,r[4],
+            overlay_layouts.empty()?~0u:overlay_layouts.back().second);
         // Native null-geometry path skips only this pane, not its children.
         // Otherwise replay the displaced LDR exactly. Flags/VFP/SP unchanged.
         r[0]=replaced?0:memory.Read(r[4]+0x28).value_or(0);
@@ -501,7 +502,7 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                 regs[2]=file_select_prompt_hook.Root(guest,file_select_hook,options_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive());
                 if(overlay_layouts.size()==64)overlay_layouts.clear();
-                overlay_layouts.push_back(regs[4]);
+                overlay_layouts.emplace_back(regs[4],inventory_hook.pass);
                 if(regs[2]!=regs[4]+8)regs[13]=regs[2];
                 break;
             case 3:

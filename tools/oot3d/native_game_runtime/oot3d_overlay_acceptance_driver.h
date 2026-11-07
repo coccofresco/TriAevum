@@ -21,6 +21,15 @@ inline void ObserveOverlayAcceptanceTouch(uint32_t held,uint32_t pressed,bool gu
     static uint32_t previous=~0u;
     if(held!=previous||pressed){out<<nlohmann::json{{"frame",OverlayAcceptanceFrame},{"held",held},{"pressed",pressed},{"host_gui",gui}}.dump()<<'\n';out.flush();previous=held;}
 }
+inline void ObserveOverlayAcceptanceNative(size_t primitives,const nlohmann::json& summary) {
+    const char* path=std::getenv("TRIAEVUM_OVERLAY_ACCEPTANCE");if(!path||!*path)return;
+    static std::ofstream out(std::string(path)+".overlay.jsonl");
+    static size_t previous=~size_t{0};
+    if(primitives!=previous || OverlayAcceptanceFrame%100==0) {
+        out<<nlohmann::json{{"frame",OverlayAcceptanceFrame},{"primitives",primitives},{"summary",summary}}.dump()<<'\n';out.flush();
+        previous=primitives;
+    }
+}
 inline void DriveOverlayAcceptance(uint64_t frame, NativeControlConfigRuntime& controls) {
     OverlayAcceptanceFrame=frame;
     static const char* path=std::getenv("TRIAEVUM_OVERLAY_ACCEPTANCE");

@@ -811,6 +811,10 @@ bool NativeA32WindowSession::RunFrame() {
     const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
         std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 1280.f / 3.f, 240.f);
     auto primitives = titleSession->ButtonOverlay(float(canvas.Height) / 240.f);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+    if(std::getenv("TRIAEVUM_OVERLAY_ACCEPTANCE"))
+      Oot3dNativeGame::ObserveOverlayAcceptanceNative(primitives.size(),titleSession->CompositionSummary());
+#endif
     auto prepared = n64UiRenderer.PrepareTextures(primitives);
     renderStream.Submit([&, primitives = std::move(primitives), prepared = std::move(prepared), uiRegion]() mutable {
       if (rendererFrameSkipped) { n64UiRenderer.Stage(std::move(prepared)); return; }

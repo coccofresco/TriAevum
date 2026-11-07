@@ -75,7 +75,9 @@ private:
         return host.widescreen_active ? host.widescreen_active() : Widescreen::Active();
     }
 
-    std::vector<U32> overlay_layouts;
+    // Layout and pass belong together; the manager's last pass is not a
+    // valid owner for a later standalone widget emission.
+    std::vector<std::pair<U32,U32>> overlay_layouts;
     Mm3dDekui::FormCamera::Hook form_camera;
     Mm3dDekui::FormCamera::ArrivalLens arrival_lens;
     Mm3dDekui::FormCamera::OcarinaReturnLens ocarina_return_lens;

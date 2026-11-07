@@ -14,7 +14,7 @@ namespace Oot3dNativeGame {
 // identity is the live registry entry, not pixels, a scene or a texture hash.
 class Mm3dButtonOverlay {
 public:
-  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0; };
+  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0, StandaloneLabels=0, EmptyRecords=0, PassRejected=0, GuardRejected=0, Candidates=0, TintRejected=0, PoseRejected=0; };
   const Counters& Stats() const { return mStats; }
   void Configure(const NativeControlConfig& controls, NativePromptSet prompts) {
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
@@ -23,6 +23,7 @@ public:
   void Reset() { mPending.clear(); mSeen.clear(); mFrames.Reset(); }
   void Record(uint64_t draw) {
     ++mStats.Frames;
+    if(mPending.empty())++mStats.EmptyRecords;
     mFrames.Record(draw, std::move(mPending),mPrompts,mControls); mPending.clear(); mSeen.clear();
   }
   void Select(uint64_t draw) { mFrames.Select(draw, true); mStats.Presented += mFrames.Presented().size(); }
@@ -33,13 +34,18 @@ public:
   }
   // True suppresses only this native geometry, never the widget's children.
   template<class M> bool Capture(M& memory, uint32_t layout, uint32_t root, uint32_t pass) {
-    if (!mActive || (pass > 3 && pass != ~0u) || !Mm3dDekui::ButtonEmission::CodeMatches(memory) ||
-        !Mm3dDekui::NativeInventory::Pointer(root,0x140)) return false;
+    if(!mActive)return false;
+    if(pass>3 && pass!=~0u){++mStats.PassRejected;return false;}
+    if(!Mm3dDekui::ButtonEmission::CodeMatches(memory) ||
+        !Mm3dDekui::NativeInventory::Pointer(root,0x140)){++mStats.GuardRejected;return false;}
     const auto flags=memory.Read(root+0xd4);
     if (!flags || !(*flags&1)) return false;
     ++mStats.Layouts;
     Mm3dDekui::OcarinaPrompt::Hook resources;
-    return Pane(memory, layout, root, resources.Parts(memory));
+    const auto before=mStats.Labels;
+    const bool replaced=Pane(memory, layout, root, resources.Parts(memory));
+    if(pass==~0u)mStats.StandaloneLabels+=mStats.Labels-before;
+    return replaced;
   }
   static NativeControlAction PartsButton(float u, float v, float w, float h) {
     if (v != 0.f || w != 16.f/256 || h != 16.f/128) return NativeControlAction::Count;
@@ -108,6 +114,7 @@ private:
     if (owner && LayoutNamed(m,*owner,"BActionIcon") && Named(m,node,"a_button_base_pane")) {
       action=NativeControlAction::B;ring=true;
     }
+    if(action!=NativeControlAction::Count)++mStats.Candidates;
     if (action==NativeControlAction::Count || (!dpad && !NativeButtonOverlayGlyph(action,mPrompts,mControls)) ||
         (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls))) return false;
     auto x=Float(m,*geo+0x14),y=Float(m,*geo+0x18),w=Float(m,*geo+0x20),h=Float(m,*geo+0x24);
@@ -116,7 +123,8 @@ private:
         tx=Float(m,node+0xec),ty=Float(m,node+0xfc),r=Float(m,node+0x128),g=Float(m,node+0x12c),
         b=Float(m,node+0x130),a=Float(m,node+0x134);
     if (!x||!y||!w||!h||!xx||!xy||!yx||!yy||!tx||!ty||!r||!g||!b||!a ||
-        *a<=0 || std::max({*r,*g,*b})<=0 || *w<=0 || *h<=0) return false;
+        *a<=0 || *w<=0 || *h<=0) {++mStats.PoseRejected;return false;}
+    if(std::max({*r,*g,*b})<=0){++mStats.TintRejected;return false;}
     // A/B letters occupy the top of the 38x38 native ring. The crop is a
     // title asset fact (HUD atlas A:24..32,0..10; B:64..72,0..10).
     if (ring) { if (*w!=38 || *h!=38) return false; *x+=16; *w=8; *h=10; }
@@ -135,7 +143,7 @@ private:
     // back to its placeholder art instead of following that conversion.
     if(*a>1)++mStats.SaturatedAlpha;
     slot.Color={*r,*g,*b,std::min(*a,1.f)};
-    if (slot.Height<=0 || slot.Height>128 || std::abs(slot.X)>1024 || std::abs(slot.Y)>1024) return false;
+    if (slot.Height<=0 || slot.Height>128 || std::abs(slot.X)>1024 || std::abs(slot.Y)>1024) {++mStats.PoseRejected;return false;}
     if(mPending.size()>=252)return false;
     bool suppress=!ring;
     // A shared embedded tree may be visited by its parent and by its own draw.
