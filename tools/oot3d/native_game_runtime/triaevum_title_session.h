@@ -119,7 +119,7 @@ public:
   virtual void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet) {}
   virtual void RecordButtonOverlay(uint64_t) {}
   virtual void SelectButtonOverlay(uint64_t) {}
-  virtual std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float) const { return {}; }
+  virtual std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float, bool /*gameplayHudVisible*/ = true) const { return {}; }
   // Whether the title has prepared shaders: a vertex-program family and
   // fragment-family packs built in, and a scenario corpus and Forge
   // preparation behind the persistent pipeline cache

@@ -32,13 +32,17 @@ MemoryFixture Fixture(){
  m.F(geo+0x20,16);m.F(geo+0x24,16);
  return m;
 }
-std::vector<oot3d::ui::UiPrimitive> Capture(MemoryFixture& m,NativeControlConfig config=NativeControlDefaults(),NativePromptSet set=NativePromptSet::Xbox,U32 pass=3){
+std::vector<oot3d::ui::UiPrimitive> Capture(MemoryFixture& m,NativeControlConfig config=NativeControlDefaults(),NativePromptSet set=NativePromptSet::Xbox,U32 pass=3,bool gameplayHudVisible=true){
  Mm3dButtonOverlay overlay;overlay.Configure(config,set);overlay.Capture(m,layout,node,pass);
- overlay.Record(10);overlay.Record(20);overlay.Select(20);return overlay.Compose(3);
+ overlay.Record(10);overlay.Record(20);overlay.Select(20);return overlay.Compose(3,gameplayHudVisible);
 }
 void TestCapture(){
  auto m=Fixture();const auto original=m.words;auto glyphs=Capture(m);
  Check(!glyphs.empty(),"native named HUD label captured");Check(m.words==original,"no guest writes");
+ Check(Capture(m,NativeControlDefaults(),NativePromptSet::Xbox,3,false).empty(),"proved HUD replacement follows HUD hide");
+ Check(m.words==original,"HUD hide does not write guest state");
+ auto message=Fixture();message.Name(0x10020100,"MessageWindow");message.Name(0x10020200,"e_waitIcon");
+ Check(!Capture(message,NativeControlDefaults(),NativePromptSet::Xbox,3,false).empty(),"HUD hide preserves dialogue advance label");
  Check(Capture(m,NativeControlDefaults(),NativePromptSet::Touch).empty(),"touch keeps native letters");
  auto config=NativeControlDefaults();config.NativeButtonLabels=false;m.reads=0;
  Check(Capture(m,config).empty()&&m.reads==0,"Original performs no reads");
@@ -70,13 +74,16 @@ void TestText(){
  }
  const auto original=m.words;Check(!Capture(m).empty(),"Restoration ZR legend font records recognized");
  Check(m.words==original,"legend recognition read-only");
+ Check(!Capture(m,NativeControlDefaults(),NativePromptSet::Xbox,3,false).empty(),"HUD hide preserves pause-menu legend");
  m.words[records+40]^=1;Check(Capture(m).empty(),"unrelated glyph records remain native");
 }
 void TestFrames(){
- NativeButtonOverlayFrames frames;NativeButtonOverlaySlot a;a.X=1;NativeButtonOverlaySlot b;b.X=2;
+ NativeButtonOverlayFrames frames;NativeButtonOverlaySlot a;a.X=1;a.GameplayHud=true;NativeButtonOverlaySlot b;b.X=2;
  frames.Record(10,{a});frames.Select(10,true);Check(frames.Presented().empty(),"no invented predecessor");
  frames.Record(20,{b});frames.Select(20,true);Check(frames.Presented().at(0).X==1,"presented frame uses its materialization");
+ Check(frames.Presented().at(0).GameplayHud,"HUD ownership follows the presented snapshot");
  frames.Record(30,{});frames.Select(30,true);Check(frames.Presented().at(0).X==2,"next materialization paired");
+ Check(!frames.Presented().at(0).GameplayHud,"unknown label does not inherit prior HUD ownership");
  frames.Record(40,{});frames.Select(40,true);Check(frames.Presented().empty(),"hidden label never retained");
  frames.Record(1,{a});frames.Select(1,true);Check(frames.Presented().empty(),"save restore clears history");
  frames.Reset();frames.Select(100,true);Check(frames.Presented().empty(),"reset clears presented labels");

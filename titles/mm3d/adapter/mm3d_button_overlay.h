@@ -3,6 +3,7 @@
 #pragma once
 
 #include "native_button_overlay.h"
+#include "mm3d_ui_subsystems.h"
 #include "../dekui/ocarina_prompt.h"
 #include <set>
 #include <tuple>
@@ -26,9 +27,9 @@ public:
     mFrames.Record(draw, std::move(mPending)); mPending.clear(); mSeen.clear();
   }
   void Select(uint64_t draw) { mFrames.Select(draw, true); mStats.Presented += mFrames.Presented().size(); }
-  std::vector<oot3d::ui::UiPrimitive> Compose(float pixelsPerUnit) const {
+  std::vector<oot3d::ui::UiPrimitive> Compose(float pixelsPerUnit, bool gameplayHudVisible = true) const {
     std::vector<oot3d::ui::UiPrimitive> result;
-    if (mActive) AppendNativeButtonOverlay(result, mFrames.Presented(), mPrompts, mControls, pixelsPerUnit);
+    if (mActive) AppendNativeButtonOverlay(result, mFrames.Presented(), mPrompts, mControls, pixelsPerUnit, gameplayHudVisible);
     return result;
   }
   template<class M> void Capture(M& memory, uint32_t layout, uint32_t root, uint32_t pass) {
@@ -118,6 +119,8 @@ private:
     const float cx=*x+*w*.5f, cy=*y+*h*.5f;
     NativeButtonOverlaySlot slot;
     slot.Action=action;slot.Modifier=modifier;
+    for (const auto* name : kMm3dGameplayHudLayouts)
+      if (LayoutNamed(m,layout,name)) { slot.GameplayHud=true; break; }
     // Same centered 400x240 -> 16:9 canvas as the MM3D adapter.
     slot.X=*tx+*xx*cx+*xy*cy+40.f/3.f; slot.Y=*ty+*yx*cx+*yy*cy;
     const float width=std::hypot(*xx,*yx)* *w, height=std::hypot(*xy,*yy)* *h;

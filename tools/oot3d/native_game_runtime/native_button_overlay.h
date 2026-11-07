@@ -14,6 +14,9 @@ struct NativeButtonOverlaySlot {
   float X = 0, Y = 0, Height = 0;
   oot3d::ui::UiColor Color{1, 1, 1, 1};
   NativeControlAction Modifier = NativeControlAction::Count;
+  // Title-proved HUD ownership, retained with the presented label snapshot.
+  // Unknown/dialogue/menu labels remain visible when gameplay HUD is hidden.
+  bool GameplayHud = false;
 };
 
 inline std::optional<Menu::ButtonGlyph> NativeButtonOverlayGlyph(
@@ -27,8 +30,9 @@ inline std::optional<Menu::ButtonGlyph> NativeButtonOverlayGlyph(
 
 inline void AppendNativeButtonOverlay(std::vector<oot3d::ui::UiPrimitive>& output,
     const std::vector<NativeButtonOverlaySlot>& slots, NativePromptSet prompts,
-    const NativeControlConfig& controls, float pixelsPerUnit) {
+    const NativeControlConfig& controls, float pixelsPerUnit, bool gameplayHudVisible = true) {
   for (const auto& slot : slots) {
+    if (slot.GameplayHud && !gameplayHudVisible) continue;
     const auto glyph = NativeButtonOverlayGlyph(slot.Action, prompts, controls);
     if (!glyph || !std::isfinite(slot.X) || !std::isfinite(slot.Y) ||
         !std::isfinite(slot.Height) || slot.Height <= 0 || slot.Height > 128 ||

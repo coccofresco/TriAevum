@@ -57,8 +57,8 @@ public:
   }
   void RecordButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->RecordButtonOverlay(draw); }
   void SelectButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->SelectButtonOverlay(draw); }
-  std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float scale) const override {
-    return mSingleScreen ? mSingleScreen->ButtonOverlay(scale) : std::vector<oot3d::ui::UiPrimitive>{};
+  std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float scale, bool gameplayHudVisible) const override {
+    return mSingleScreen ? mSingleScreen->ButtonOverlay(scale, gameplayHudVisible) : std::vector<oot3d::ui::UiPrimitive>{};
   }
   std::string_view GrassRuleNamespace() const override { return "mm3d"; }
   std::vector<Fast::Extension::GrassInteractor> ActorInteractions(

@@ -56,7 +56,7 @@ class Mm3dSingleScreen {
     void RecordButtonOverlay(uint64_t);
     void SelectButtonOverlay(uint64_t);
     void ResetButtonOverlay();
-    std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float) const;
+    std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float, bool gameplayHudVisible = true) const;
     std::map<std::string, uint64_t> ButtonOverlaySummary() const;
 
   private:

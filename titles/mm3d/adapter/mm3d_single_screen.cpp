@@ -86,7 +86,7 @@ void Mm3dSingleScreen::ConfigureButtonOverlay(const NativeControlConfig& config,
 void Mm3dSingleScreen::RecordButtonOverlay(uint64_t draw) { mButtonOverlay->Record(draw); }
 void Mm3dSingleScreen::SelectButtonOverlay(uint64_t draw) { mButtonOverlay->Select(draw); }
 void Mm3dSingleScreen::ResetButtonOverlay() { mButtonOverlay->Reset(); }
-std::vector<oot3d::ui::UiPrimitive> Mm3dSingleScreen::ButtonOverlay(float scale) const { return mButtonOverlay->Compose(scale); }
+std::vector<oot3d::ui::UiPrimitive> Mm3dSingleScreen::ButtonOverlay(float scale, bool gameplayHudVisible) const { return mButtonOverlay->Compose(scale, gameplayHudVisible); }
 std::map<std::string, uint64_t> Mm3dSingleScreen::ButtonOverlaySummary() const {
     const auto& s = mButtonOverlay->Stats();
     return {{"layouts",s.Layouts},{"labels",s.Labels},{"parts",s.Parts},{"hud",s.Hud},

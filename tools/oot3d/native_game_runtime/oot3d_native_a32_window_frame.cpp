@@ -806,7 +806,11 @@ bool NativeA32WindowSession::RunFrame() {
   if (titleSession && titleSession->HasButtonOverlay()) {
     const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
         std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 1280.f / 3.f, 240.f);
-    auto primitives = titleSession->ButtonOverlay(float(canvas.Height) / 240.f);
+    // The same presentation policy as native gameplay HUD spans. Do not
+    // blanket-hide dialogue/menu labels or change their native execution.
+    const bool gameplayHudVisible = !photoModeHudHidden &&
+        (!nativeCandidateDispatch.TopScreenUiProfile || activeTopScreenConfig.RenderHud);
+    auto primitives = titleSession->ButtonOverlay(float(canvas.Height) / 240.f, gameplayHudVisible);
     auto prepared = n64UiRenderer.PrepareTextures(primitives);
     renderStream.Submit([&, primitives = std::move(primitives), prepared = std::move(prepared), uiRegion]() mutable {
       if (rendererFrameSkipped) { n64UiRenderer.Stage(std::move(prepared)); return; }

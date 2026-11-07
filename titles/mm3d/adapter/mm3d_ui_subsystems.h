@@ -6,8 +6,11 @@ namespace Oot3dNativeGame {
 // MAP_5 G6.01: resource names, not translated UI text. Unknown owners and
 // mixed quad queues remain visible; never infer HUD from all queue-4 draws.
 enum class Mm3dUiSubsystem:uint32_t { Unknown,GameplayHud,Pause,Message,FileSelect,Notebook,Ocarina,Startup };
+inline constexpr std::array<const char*,4> kMm3dGameplayHudLayouts{
+    "Hud", "Hud2", "HudItemIconSet", "Telop"};
 inline Mm3dUiSubsystem ClassifyMm3dLayout(std::string_view name) {
-  if(name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop")return Mm3dUiSubsystem::GameplayHud;
+  for(auto key:kMm3dGameplayHudLayouts)
+    if(name==key)return Mm3dUiSubsystem::GameplayHud;
   if(name=="MessageWindow")return Mm3dUiSubsystem::Message;
   if(name=="FileSelect"||name=="FilePlate"||name=="PopupWindow"||name=="UpPlateDetail")return Mm3dUiSubsystem::FileSelect;
   if(name=="MenuSchedule"||name=="MenuQuestlist"||name=="UpSchedule"||name=="UpQuestlist"||name=="UpEventMap")return Mm3dUiSubsystem::Notebook;
