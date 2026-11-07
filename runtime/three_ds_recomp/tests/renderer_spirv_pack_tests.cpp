@@ -174,7 +174,7 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
     ExpectSpirvModules(Fast::Renderer3ds::NativeFragmentArtifacts(), 24U);
     ExpectSpirvModules(Fast::Extension::TemporalFragmentArtifacts(), 40U);
     ExpectSpirvModules(Fast::Extension::ToonFragmentArtifacts(), 348U); // build_fragment_artifacts --toon
-    ExpectSpirvModules(Fast::Extension::UberFragmentArtifacts(), 36U);
+    ExpectSpirvModules(Fast::Extension::UberFragmentArtifacts(), 140U); // legacy36 + native-lighting/GGX104
     ExpectSpirvModules(Fast::Extension::CasterFragmentArtifacts(), 6U);
     ExpectSpirvModules(BuiltinPassArtifacts(), 104U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5), 2 grass raster-depth fragments, 3 contact shadow lengths, 2 upscaler orientation turns, 4 GPU grass selection passes, the room shadow shell vertex shader, 5 grass card programs (vertex, 2 explicit-depth and 2 conservative-depth fragments), 2 whole-blade grass fragments without discard, the reflection upsample, the grass root lighting compute, 3 grass fragments without the geometry guide
 #ifdef ENABLE_OOT3D_IMMERSE

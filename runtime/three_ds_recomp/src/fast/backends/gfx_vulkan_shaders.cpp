@@ -446,17 +446,16 @@ GfxRenderingAPIVulkan::NativePicaShaderProgram* GfxRenderingAPIVulkan::ResolveUb
              ~static_cast<uint32_t>(Extension::PicaShaderInstrumentationFeature::TemporalVertex)) != 0U;
         // Effects compose as data in the superset program of the parametric
         // base: one program per structural configuration and vertex interface.
-        const Extension::PicaUberEffectProgramRequest supersetRequest{
+        const auto supersetRequest = Extension::WithPicaUberLightingPolicy({
             draw.UberFragmentShaderSource, draw.UberFragmentShaderHooks, variant.TemporalVertexApplied,
-            variant.SurfaceVertexApplied, variant.SurfaceVertexApplied && mPbrSeamsAvailable};
+            variant.SurfaceVertexApplied, variant.SurfaceVertexApplied && mPbrSeamsAvailable}, variant.Decisions);
         const bool superset = fragmentInstrumented &&
             Extension::PicaUberEffectSupports(variant.Decisions, supersetRequest);
         std::span<const uint32_t> fragment;
         bool nriApplied = false;
         if (superset) {
             const auto artifactKey = std::make_tuple(base.Id, base.SecondaryHash, base.Size,
-                static_cast<uint8_t>((supersetRequest.TemporalInputs ? 1U : 0U) |
-                    (supersetRequest.SurfaceInputs ? 2U : 0U) | (supersetRequest.PrimitiveIds ? 4U : 0U)));
+                Extension::PicaUberEffectVariantKey(supersetRequest));
             auto artifact = mUberSupersetArtifacts.find(artifactKey);
             if (artifact == mUberSupersetArtifacts.end()) {
                 const auto composed = Extension::BuildPicaNriFragmentShaderVariant(

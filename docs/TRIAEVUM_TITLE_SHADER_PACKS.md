@@ -23,6 +23,38 @@ machine. No MM supported-revision entry or qualified pack is implicitly added.
 Device pipeline preparation still needs its separately qualified manifest/AOT
 pack; this option does not assert whole-game or zero-runtime-compilation coverage.
 
+## Native-lighting always-available family
+
+`pica_native_lighting_uber.spvpack` is a separate maintained-equation family,
+not a ROM-derived title pack. Generate with `build_fragment_artifacts
+--native-lighting-uber OUTPUT`; `--check` verifies source coverage. Optional
+`--reuse-builtins` reuses exact source-identity matches from the generator's
+embedded artifacts (record that input pack/toolchain when used).
+
+Its 104 unique programs cover raw fragment operands/balance/native shadows
+(64), balanced native GGX (16), and native-unlit GGX (24), including temporal
+interfaces, integer texture zero and primitive-ID/no-primitive-ID variants.
+The original 36-program pack is unchanged; registration appends the new family.
+Both Forge startup preparation and the runtime see the combined 140 programs.
+
+The superset uses the same surface-lighting, capture and GGX ownership equations
+as specialized shaders. In particular, balanced GGX preserves Local per-slot
+energy instead of applying the scene native-direct gain again. No new title
+light classes, scene rules or renderer profile values are introduced.
+
+Selection requires exact policy equality, a valid surface interface and typed
+native capture sites where needed. Invalid mixed GGX/operand policies remain
+unsupported. Developer shadow probes remain outside the release family. All
+five policy flags and all three interface flags participate in the artifact
+cache key; replay uses the same selector/key as the renderer. Legacy programs
+cannot be selected for raw uniforms. New decision bookkeeping does not change
+the specialized source witness.
+
+Tests cover all 120 native policy/interface paths (some share identical shader
+source), incompatible-policy rejection, single native capture before alpha
+replay, GGX gain/unlit endpoints, embedded modules and startup stage linking.
+Source coverage does not substitute for live, cold/prewarm and publication gates.
+
 ## Exact replay context
 
 Variant-request v1 records now include a `fragment_context` object with four

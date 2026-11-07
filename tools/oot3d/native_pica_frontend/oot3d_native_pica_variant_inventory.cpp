@@ -209,17 +209,16 @@ class UberAvailability {
         const bool instrumented =
             (static_cast<uint32_t>(variant.AppliedFeatures) &
              ~static_cast<uint32_t>(Fast::Extension::PicaShaderInstrumentationFeature::TemporalVertex)) != 0U;
-        const Fast::Extension::PicaUberEffectProgramRequest superset{
+        const auto superset = Fast::Extension::WithPicaUberLightingPolicy({
             canonical.UberSource, canonical.UberHooks, variant.TemporalVertexApplied, variant.SurfaceVertexApplied,
-            variant.SurfaceVertexApplied};
+            variant.SurfaceVertexApplied}, variant.Decisions);
         if (instrumented && !Fast::Extension::PicaUberEffectSupports(variant.Decisions, superset))
             return "effect_not_covered";
         if (Fast::Renderer3ds::FindPicaVertexArtifact(TitleVertexArtifacts(), variant.VertexShaderSource).Spirv.empty())
             return "vertex_not_built_in";
         const auto key = std::make_tuple(canonical.UberIdentity.Id, canonical.UberIdentity.SecondaryHash,
                                          canonical.UberIdentity.Size,
-                                         instrumented ? 1U | (superset.TemporalInputs ? 2U : 0U) |
-                                                            (superset.SurfaceInputs ? 4U : 0U)
+                                         instrumented ? 256U | Fast::Extension::PicaUberEffectVariantKey(superset)
                                                       : 0U);
         auto found = mFragments.find(key);
         if (found == mFragments.end()) {

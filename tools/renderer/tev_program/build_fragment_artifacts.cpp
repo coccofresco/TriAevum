@@ -90,10 +90,13 @@ static int BuildCasterFamily(int argc, char** argv) {
     return 0;
 }
 
-static int BuildUberFamily(int argc, char** argv) {
+static int BuildUberFamily(int argc, char** argv, bool nativeLighting = false) {
+    const bool reuseBuiltins = argc > 1 && std::string_view(argv[1]) == "--reuse-builtins";
+    if (reuseBuiltins) { --argc; ++argv; }
     const bool verify = argc == 2 && std::string_view(argv[1]) == "--check";
     const bool countOnly = argc == 2 && std::string_view(argv[1]) == "--count";
-    Check(argc == 2, "usage: build_fragment_artifacts --uber pica_uber_fragment.spvpack | --check | --count");
+    Check(argc == 2, "usage: build_fragment_artifacts --uber|--native-lighting-uber output.spvpack | --check | --count");
+    std::unordered_set<std::string> emitted;
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
@@ -105,14 +108,22 @@ static int BuildUberFamily(int argc, char** argv) {
         Oot3dPicaGeneratedFragmentShader shader;
         std::string error;
         Check(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture != 0, shader, &error), error);
-        // Surface programs with and without fragment primitive IDs (PBR seams).
+        // Native policy bits: operand, balance, shadows, GGX balance, native-unlit.
+        // The original 36 programs remain byte-identical in their own pack.
+        const std::vector<unsigned> policies = nativeLighting ? std::vector<unsigned>{1, 3, 4, 5, 7, 10, 16}
+                                                             : std::vector<unsigned>{0};
+        for (unsigned policy : policies)
         for (unsigned temporal = 0; temporal < 2; ++temporal)
-        for (unsigned surface = 0; surface < 3; ++surface) {
+        for (unsigned surface = nativeLighting ? 1U : 0U; surface < 3; ++surface) {
+            if (nativeLighting && policy != 16 && !shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
             const auto uber = Fast::Extension::BuildPicaUberEffectProgram({shader.Source, shader.Hooks,
-                temporal != 0, surface != 0, surface == 2});
+                temporal != 0, surface != 0, surface == 2,
+                (policy & 1U) != 0, (policy & 2U) != 0, (policy & 4U) != 0,
+                (policy & 8U) != 0, (policy & 16U) != 0});
             Check(!uber.empty(), "uber effect composition rejected a parametric base");
             const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(uber);
             Check(nri.Applied, nri.Error);
+            if (!emitted.insert(nri.Source).second) continue;
             if (const char* dump = std::getenv("TRIAEVUM_UBER_SOURCES")) {
                 std::ofstream file(std::filesystem::path(dump) / ("uber" + std::to_string(modules) + ".frag"));
                 file << nri.Source;
@@ -125,6 +136,16 @@ static int BuildUberFamily(int argc, char** argv) {
                 ++modules;
                 continue;
             }
+            if (reuseBuiltins) {
+                const auto stored = FindPicaFragmentArtifact(Fast::Extension::UberFragmentArtifacts(), nri.Source, true);
+                if (!stored.empty()) {
+                    auto& entry = pack.Add(Fast::Renderer::SpirvPackKind::PicaFragment, {stored.begin(), stored.end()});
+                    entry.Flags = Fast::Renderer::kSpirvPackSeparateSamplers;
+                    entry.Identity = {id.Id, id.SecondaryHash, id.Size};
+                    ++modules;
+                    continue;
+                }
+            }
             const auto compiled = compiler.CompileGlslToSpv(nri.Source, shaderc_fragment_shader,
                                                            "uber_fragment", options);
             Check(compiled.GetCompilationStatus() == shaderc_compilation_status_success,
@@ -135,7 +156,7 @@ static int BuildUberFamily(int argc, char** argv) {
             ++modules;
         }
     }
-    Check(modules == 36U, "unexpected uber effect family size");
+    Check(modules == (nativeLighting ? 104U : 36U), "unexpected uber effect family size");
     if (countOnly || verify) {
         std::cout << "uber_fragment_artifacts=" << modules << '\n';
         return 0;
@@ -147,6 +168,7 @@ static int BuildUberFamily(int argc, char** argv) {
 
 int main(int argc, char** argv) try {
     if (argc > 1 && std::string_view(argv[1]) == "--uber") return BuildUberFamily(argc - 1, argv + 1);
+    if (argc > 1 && std::string_view(argv[1]) == "--native-lighting-uber") return BuildUberFamily(argc - 1, argv + 1, true);
     if (argc > 1 && std::string_view(argv[1]) == "--casters") return BuildCasterFamily(argc - 1, argv + 1);
     const bool temporal = argc > 1 && std::string_view(argv[1]) == "--temporal";
     const bool toon = argc > 1 && std::string_view(argv[1]) == "--toon";

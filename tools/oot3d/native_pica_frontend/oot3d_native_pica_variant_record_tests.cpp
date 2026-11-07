@@ -4,6 +4,12 @@
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/pica_variant_request_record.h"
 #include "oot3d_native_pica_raw_draw_record.h"
+#include "oot3d_native_pica_fragment_shader_gen.h"
+#include "fast/extension/pica_uber_effect_program.h"
+#include "fast/extension/pica_uber_fragment_binaries.h"
+#include "fast/extension/pica_nri_shader_contract.h"
+#include "fast/renderer3ds/pica_fragment_balance.h"
+#include <set>
 
 #include <algorithm>
 #include <filesystem>
@@ -241,6 +247,83 @@ void RawDrawRoundTrip(const std::filesystem::path& directory) {
     Require(session.ParametricTev && !session.UberFragments && session.Draws.size() == 2, "raw session header");
     Require(session.Draws[0].Packet.VertexShader.Program[2] == 0x88000000, "program resource restored");
 }
+void NativePbrFamily() {
+    using namespace Oot3dNativeGame;
+    size_t covered = 0;
+    for (auto lighting : kOot3dPicaParametricLightings)
+    for (bool integerTexture : {false, true}) {
+        Oot3dPicaGeneratedFragmentShader shader;
+        std::string error;
+        Require(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture, shader, &error), "GGX base");
+        std::set<uint8_t> keys;
+        for (bool balanced : {false, true}) {
+            if (balanced && !shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
+            for (bool temporal : {false, true})
+            for (bool primitives : {false, true}) {
+                PicaEffectDecisions d;
+                d.Set(PicaEffectDecisions::SurfaceLighting);
+                d.Set(PicaEffectDecisions::Pbr);
+                d.PbrNativeLighting = balanced;
+                d.PbrNativeBalance = d.FragmentLightingBalance = balanced;
+                d.PbrNativeUnlit = !balanced;
+                const auto r = WithPicaUberLightingPolicy({shader.Source, shader.Hooks, temporal, true, primitives}, d);
+                Require(keys.insert(PicaUberEffectVariantKey(r)).second, "distinct GGX structural keys");
+                Require(PicaUberEffectSupports(d, r), "GGX native policy supported");
+                const auto source = BuildPicaUberEffectProgram(r);
+                Require(source.find(std::string(Fast::Renderer3ds::kPicaFragmentBalanceCaptureDiffuse)) == std::string::npos,
+                        "GGX uses per-slot gain equations, not native TEV capture");
+                Require(source.find(balanced ? "float pbr_native_scale = 1.0;" :
+                    "pbr_direct = pbr_albedo; pbr_ambient = vec3(0.0);") != std::string::npos, "shared specialized GGX ownership equations");
+                const auto nri = BuildPicaNriFragmentShaderVariant(source);
+                Require(nri.Applied && !Fast::Renderer3ds::FindPicaFragmentArtifact(UberFragmentArtifacts(), nri.Source, true).empty(), "GGX program precompiled");
+                d.PbrNativeLighting = !balanced;
+                Require(!PicaUberEffectSupports(d, r), "incompatible GGX lighting rejected");
+                ++covered;
+            }
+        }
+    }
+    Require(covered == 40, "balanced/unlit GGX family coverage");
+}
+
+void NativeLightingFamily() {
+    using namespace Oot3dNativeGame;
+    for (auto lighting : kOot3dPicaParametricLightings)
+    for (bool integerTexture : {false, true}) {
+        Oot3dPicaGeneratedFragmentShader shader;
+        std::string error;
+        Require(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture, shader, &error), "parametric base");
+        if (!shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
+        std::set<uint8_t> keys;
+        for (bool temporal : {false, true})
+        for (bool primitives : {false, true})
+        for (unsigned policy : {1U, 3U, 4U, 5U, 7U}) {
+            PicaEffectDecisions decisions;
+            decisions.Set(PicaEffectDecisions::SurfaceLighting);
+            decisions.FragmentLightingOperand = (policy & 1) != 0;
+            decisions.FragmentLightingBalance = (policy & 2) != 0;
+            decisions.NativeFragmentLitShadows = (policy & 4) != 0;
+            PicaUberEffectProgramRequest legacy{shader.Source, shader.Hooks, temporal, true, primitives};
+            Require(!PicaUberEffectSupports(decisions, legacy), "legacy must reject native uniform policy");
+            const auto request = WithPicaUberLightingPolicy(legacy, decisions);
+            Require(keys.insert(PicaUberEffectVariantKey(request)).second, "all native cache policies distinct");
+            Require(PicaUberEffectSupports(decisions, request), "native family covers exact decisions");
+            const auto source = BuildPicaUberEffectProgram(request);
+            const auto capture = std::string(Fast::Renderer3ds::kPicaFragmentBalanceCaptureDiffuse);
+            Require((source.find(capture) != std::string::npos) == decisions.FragmentLightingBalance, "capture only in balanced programs");
+            if (decisions.FragmentLightingBalance)
+                Require(source.find(capture, source.find(capture) + capture.size()) == std::string::npos, "capture never duplicated by native alpha replay");
+            const auto nri = BuildPicaNriFragmentShaderVariant(source);
+            Require(nri.Applied && !Fast::Renderer3ds::FindPicaFragmentArtifact(UberFragmentArtifacts(), nri.Source, true).empty(), "native family is precompiled");
+            auto wrong = request;
+            wrong.NativeFragmentLitShadows = !wrong.NativeFragmentLitShadows;
+            Require(!PicaUberEffectSupports(decisions, wrong), "wrong policy rejected even when equations coincide");
+            wrong = request;
+            wrong.SurfaceInputs = false;
+            Require(!PicaUberEffectSupports(decisions, wrong) && BuildPicaUberEffectProgram(wrong).empty(), "native family requires surface interface");
+        }
+        Require(keys.size() == 20, "native interface/policy cache coverage");
+    }
+}
 } // namespace
 
 int main() {
@@ -248,6 +331,8 @@ int main() {
     try {
         std::filesystem::remove_all(directory);
         std::filesystem::create_directories(directory);
+        NativeLightingFamily();
+        NativePbrFamily();
         RequestRoundTrip();
         EffectsRoundTrip();
         RecorderDeduplicates(directory);

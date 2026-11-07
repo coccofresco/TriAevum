@@ -668,6 +668,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             PicaShaderInstrumentationFeature::NativeFragmentLitShadows);
     if (surfaceLighting) {
         decisions.FragmentLightingOperand = fragmentOperand;
+        decisions.FragmentLightingBalance = fragmentBalance;
         decisions.PbrNativeBalance = pbrBalance && fragmentBalance;
         decisions.NativeFragmentLitShadows = nativeFragmentShadows;
         decisions.Set(Decision::SurfaceLighting);

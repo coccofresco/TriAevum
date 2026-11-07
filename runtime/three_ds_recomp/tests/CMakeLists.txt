@@ -710,6 +710,8 @@ foreach(_pack renderer/builtin_pass renderer3ds/pica_native_fragment extension/p
               extension/pica_toon_fragment extension/pica_uber_fragment extension/pica_caster_fragment)
     triaevum_add_spirv_pack(renderer_spirv_pack_tests ../src/fast/${_pack}_binaries.cpp ../src/fast/${_pack}.spvpack)
 endforeach()
+triaevum_add_spirv_pack(renderer_spirv_pack_tests ../src/fast/extension/pica_uber_fragment_binaries.cpp
+    ../src/fast/extension/pica_native_lighting_uber.spvpack)
 # The iMMERSE module's pack, when the module is built (src/fast/immerse/LICENSE.md).
 if(THREE_DS_RECOMP_ENABLE_IMMERSE)
     triaevum_add_spirv_pack(renderer_spirv_pack_tests ../src/fast/immerse/mxao_pass_binaries.cpp
