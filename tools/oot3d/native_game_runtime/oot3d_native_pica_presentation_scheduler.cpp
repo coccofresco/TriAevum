@@ -203,6 +203,7 @@ bool Oot3dPicaPresentationScheduler::Execute(
                     mStaticShadowActors,
                     draw.Composition.NativeActorGeometry,
                     draw.Composition.NativeActorIdentity),
+            .ExcludeFromPresentationFxaa = draw.Composition.ExcludeFromPresentationFxaa,
         },
     });
   }
