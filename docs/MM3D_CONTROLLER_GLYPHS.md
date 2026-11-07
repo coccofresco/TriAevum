@@ -8,8 +8,9 @@ owners. No game art, colored glyph atlas, shader or environment-profile changes.
 notebook badge, inventory text, dialogue advance, scripted device switching and
 settings now have scoped live evidence. Physical devices, Android/native-HUD touch
 integration and exhaustive forms/fades/aspects must not be inferred from those
-successes. Current-code OoT identity and a developer-OFF MM smoke pass; one
-environment regression suite fails. Inline chord readability and mapped inline
+successes. The last desktop runtime has OoT identity and developer-OFF MM smoke
+passes. A later test-only fixture timestamp fix closes the environment regression;
+Android touch lifecycle improvements have JVM evidence only. Inline chord readability and mapped inline
 controls inside NPC speech (distinct from the advance indicator) remain gaps.
 
 ## Controls
@@ -130,9 +131,22 @@ private registry used by this campaign.
 
 At implementation `0fdf5f18`, thirteen current-source regression suites were run:
 twelve pass (including159 overlay checks and real F1 persistence); the environment
-suite fails `group night live reload`. A filesystem-timestamp collision is only
-a hypothesis, not a demonstrated cause. No unrelated profile/lighting fix or blind
-rerun was made; the failed gate remains open.
+suite failed `group night live reload`. Subsequent equal-size-write probing on the
+assigned scratch filesystem reproduced identical timestamps. Test-only commit
+`58219caf` explicitly advances fixture mtimes instead of relying on wall-clock
+resolution; the rebuilt environment suite passes 655582 checks. Production reload
+and authored profiles are unchanged. The original failure remains in its ledger;
+this is one targeted new test, not a fresh thirteen-suite campaign.
+
+Android controls now reset local pointer/visual ownership and cancel the sink on
+CANCEL, focus loss, detach, layout refresh/edit, activity pause and controller hide.
+Cancellation cannot synthesize HOME taps; late motion waits for a new DOWN. Single
+axis stick changes dispatch correctly and a second finger cannot steal an already
+held control. Seven Robolectric MotionEvent tests plus five adapter tests pass;
+app Kotlin/Java compile too. This does **not** close physical touch, JNI, Android
+rendering or MM native-HUD anchor integration. No new game run was used for these
+Android-only and fixture-only changes; the desktop captures below retain their
+original binary/source identities.
 
 `current-oot-o2` runs the current public OoT build for400 presentation frames:
 all100/200/300 BMPs exactly match `retuned/cap-p13.sha256`. `current-mm-public`

@@ -44,6 +44,7 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
 
     // Stores the ID of the pointer that interacted with the 3DS touchscreen.
     private var touchscreenPointerId = -1
+    private var gestureActive = false
 
     init {
         if (!preferences.getBoolean("OverlayInit", false)) {
@@ -88,12 +89,47 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
             performHapticFeedback(type)
     }
 
+    // Cancel the sink as a batch, not as synthetic button-up events: releasing
+    // HOME normally is a tap and must not open a menu on pause/focus loss.
+    fun cancelTouches() {
+        gestureActive = false
+        overlayButtons.forEach { it.cancelTouch() }
+        overlayDpads.forEach { it.cancelTouch() }
+        overlayJoysticks.forEach { it.cancelTouch() }
+        touchscreenPointerId = -1
+        buttonBeingConfigured = null
+        dpadBeingConfigured = null
+        joystickBeingConfigured = null
+        OverlayHost.releaseAll()
+        invalidate()
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (!hasWindowFocus) cancelTouches()
+    }
+
+    override fun onDetachedFromWindow() {
+        cancelTouches()
+        super.onDetachedFromWindow()
+    }
+
     override fun onTouch(v: View, event: MotionEvent): Boolean {
+        val motionEvent = event.actionMasked
+        if (motionEvent == MotionEvent.ACTION_CANCEL) {
+            cancelTouches()
+            return true
+        }
+        if (motionEvent == MotionEvent.ACTION_DOWN) {
+            if (gestureActive) cancelTouches()
+            gestureActive = true
+        }
+        // Discard trailing MOVE/UP events after cancellation or a layout edit.
+        if (!gestureActive) return false
+        if (motionEvent == MotionEvent.ACTION_UP) gestureActive = false
         if (isInEditMode) {
             return onTouchWhileEditing(event)
         }
-
-        val motionEvent = event.action and MotionEvent.ACTION_MASK
         val isActionDown =
             motionEvent == MotionEvent.ACTION_DOWN || motionEvent == MotionEvent.ACTION_POINTER_DOWN
         val isActionMove = motionEvent == MotionEvent.ACTION_MOVE
@@ -270,6 +306,7 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
 
                 if (!isDpadPressed && !isJoystickPressed) {
                     // TriAevum: a touch on no control belongs to the game surface below.
+                    if (motionEvent == MotionEvent.ACTION_DOWN) gestureActive = false
                     return false
                 }
             }
@@ -568,6 +605,7 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
     }
 
     fun refreshControls() {
+        cancelTouches()
         // Remove all the overlay buttons from the HashSet.
         overlayButtons.clear()
         overlayDpads.clear()
@@ -612,7 +650,10 @@ class InputOverlay(context: Context?, attrs: AttributeSet?) : SurfaceView(contex
     }
 
     fun setIsInEditMode(isInEditMode: Boolean) {
+        if (this.isInEditMode == isInEditMode) return
+        cancelTouches()
         this.isInEditMode = isInEditMode
+        if (!isInEditMode) publishControlBounds()
     }
 
     private fun defaultOverlay() {

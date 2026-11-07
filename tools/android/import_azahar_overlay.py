@@ -13,6 +13,8 @@ import re
 import subprocess
 import xml.etree.ElementTree as ET
 
+from azahar_touch_adaptation import adapt_touch
+
 ROOT = Path(__file__).resolve().parents[2]
 DEST = ROOT / "ports/android/controls"
 REVISION = "beb5681ee7f85586501b16b083a961b707092cd7"
@@ -27,8 +29,8 @@ OVERLAY_FILES = (
 
 
 def adapt_kotlin(source: str) -> str:
-    # Only ownership/import changes. Drawing, hit testing, preference keys,
-    # pointer tracking, dimensions and Android feedback stay donor-owned.
+    # Base namespace/ownership changes. Host and touch lifecycle adaptations
+    # are applied separately below; resources and preference keys stay intact.
     source = "// TriAevum adaptation, 2026-09-09: namespace and host boundary; see donor_manifest.json.\n" + source
     source = source.replace("package org.citra.citra_emu.overlay", f"package {PACKAGE}")
     source = source.replace("package org.citra.citra_emu.utils", f"package {PACKAGE}")
@@ -143,7 +145,9 @@ def main() -> None:
         source = read(JAVA + "overlay/" + name).decode("utf-8")
         all_kotlin += source
         adapted = adapt_kotlin(source)
-        emit(OUT_JAVA + name, adapt_input_overlay(adapted) if name == "InputOverlay.kt" else adapted)
+        if name == "InputOverlay.kt":
+            adapted = adapt_input_overlay(adapted)
+        emit(OUT_JAVA + name, adapt_touch(name, adapted))
     settings = read(JAVA + "utils/EmulationMenuSettings.kt").decode("utf-8")
     settings = adapt_kotlin(settings)
     settings = settings.replace("import androidx.drawerlayout.widget.DrawerLayout\n", "")
@@ -195,7 +199,8 @@ def main() -> None:
         "adaptations": ["namespace", "host_callbacks_and_application_context",
                         "remove_unused_activity_viewmodel", "exclude_activity_drawer_setting",
                         "extract_overlay_only_resources_and_button_constants", "blank_line_whitespace",
-                        "host_drawn_controls_and_game_surface_touches"],
+                        "host_drawn_controls_and_game_surface_touches",
+                        "touch_cancellation_pointer_ownership_and_single_axis_motion"],
         "sources": entries,
         "outputs": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(outputs.items())},
     }
