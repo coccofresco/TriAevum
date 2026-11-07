@@ -2,8 +2,9 @@
 
 Developer tool, not a replacement for the precompiled Forge installation flow.
 The water_catalog member of recipe-fragment.json is consumed by both Forge
-implementations' existing water preparation step. Scene emitters still require
-this offline title generator until native Forge gains the corresponding reader.
+implementations' existing water preparation step. The room_catalog member
+carries publisher-computed analysis; native Forge verifies the user's actual
+rooms and prepares/repairs the catalog without Python or a compiler.
 """
 from __future__ import annotations
 
@@ -66,6 +67,9 @@ def prepare(code: Path, romfs: Path, data_root: Path) -> dict:
                                    "emitters": sum(len(r["emitters"]) for r in value["rooms"])})
     output = data_root / "catalogs" / "mm3d"
     output.mkdir(parents=True, exist_ok=True)
+    recipe["room_catalog"] = scene_generator().forge_profile(
+        json.loads(catalog.read_text(encoding="utf-8")),
+        hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest())
     atomic_write_json(output / "recipe-fragment.json", recipe)
     result = {"schema": "triaevum.local-catalogs", "version": 1, "title": "mm3d",
               "inputs": {"code_sha256": inputs["code_sha256"], "romfs_sha256": inputs["romfs_sha256"]},

@@ -27,22 +27,25 @@ with the two runtime CLI arguments and `recipe-fragment.json`. Rejected rooms
 prevent publication of the manifest. No game boot, compiler, framebuffer or
 user configuration mutation is performed.
 
-Merge the `water_catalog` member of the fragment into the **verified local MM3D
-revision recipe** to use the existing Python/Rust Forge water preparation and
-activation. The fragment is NOT a supported-revision contract: it contains no
+Merge the `water_catalog` and `room_catalog` members of the fragment into the
+**verified local MM3D revision recipe** to use native Rust Forge preparation,
+repair and activation (with a matching Python oracle). The fragment is NOT a supported-revision contract: it contains no
 ExHeader/code contract, title module or publication signature. There is no
-qualified MM3D recipe in `supported_revisions.json` yet. Room-emitter generation
-is still a Python developer step, not a native Rust Forge install step.
+qualified MM3D recipe in `supported_revisions.json` yet. Room analysis remains a
+publisher-only Python step; the player-side Rust installer verifies the actual
+RomFS and all decompressed room hashes before installing the derived table.
+Three unused room files absent from the guarded native scene table are explicit
+hash-bound exclusions, not manual scene rules. Changed/unknown rooms fail closed.
 
 ## Ownership and remaining work
 
 | Family | Status at this slice |
 | --- | --- |
-| Room emitters / emission follow set | Existing DL generator + runtime consumer; this tool adds cached preparation. 310 rooms / 145 emitters, four populated categories; not a full material census. |
+| Room emitters / emission follow set | Existing DL analysis/consumer, now with native Forge publisher-table install/repair. 310 rooms / 145 emitters; 313 files verified including three native-table exclusions. Not a full material census. |
 | Water roles | New shared bounded readers, title rules, Forge recipe routing; 45 distinct local identities. |
 | Static shadow actors | PM0 per-title seam exists but MM uses empty default. OoT's referenced aggregation script is absent from the repo; MM needs stability evidence and all-variant semantic review before populating. |
 | PBR texture-hash packs / reflection rules | Existing shared authoring mechanisms. Material maps require owner-authored content; neither native fullbright nor a name creates a PBR emission map. |
-| Shader corpus / fragment families | MM has no qualified portable corpus or startup family. Reuse OoT's recording/replay/compiler/closure workflow; do not rename its pack. |
+| Shader corpus / fragment families | Optional portable title vertex/pass pack and exact-context replay are implemented. Observed Gzw/Layout coverage is not an all-title corpus; raw-irradiance uber coverage and release qualification remain open. See `docs/TRIAEVUM_TITLE_SHADER_PACKS.md`. |
 | Grass rules | GRASS lane; actual rule/mask authoring belongs to owner. |
 | Environment profiles | GP lane, values untouched here. |
 | Interior-sun masks | Requires an MM room-shell producer plus native Forge/runtime prebuild support. |

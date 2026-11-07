@@ -306,6 +306,9 @@ pub fn prepare_scene_lights(
     report: Report<'_>,
     cancel: &CancelToken,
 ) -> Result<Option<PathBuf>> {
+    if recipe.get("room_catalog").is_some() {
+        return crate::room_catalog::prepare(data_root, recipe, romfs, report, cancel).map(Some);
+    }
     let Some(source) = recipe_romfs_source(recipe) else { return Ok(None) };
     let mut identity = Map::new();
     identity.insert("catalog_version".into(), json!(CATALOG_VERSION));

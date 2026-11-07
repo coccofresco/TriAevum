@@ -24,6 +24,7 @@ pub mod interior_sun;
 pub mod precomputed_tables;
 pub mod qbf;
 pub mod scene_lights;
+pub mod room_catalog;
 pub mod texture_pack;
 pub mod topscreen;
 pub mod water;

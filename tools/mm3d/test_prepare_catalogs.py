@@ -32,8 +32,8 @@ class PrepareCatalogTests(unittest.TestCase):
             code.write_bytes(b"synthetic, generator is mocked")
             room = b"ZSI\x09" + bytes(12) + cmb([("water", 8, 8, bytes(64))], profile)
             romfs.write_bytes(level3_romfs({"scenes": {"room_info.zsi": lzs(room)}}))
-            generator = Mock()
-            generator.generate.return_value = {"rooms": [{"emitters": []}], "rejected": []}
+            generator = prepare.scene_generator()
+            generator.generate = Mock(return_value={"title": "mm3d", "rooms": [{"emitters": []}], "rejected": []})
             with patch.object(prepare, "scene_generator", return_value=generator):
                 one = prepare.prepare(code, romfs, root / "data")
                 two = prepare.prepare(code, romfs, root / "data")
