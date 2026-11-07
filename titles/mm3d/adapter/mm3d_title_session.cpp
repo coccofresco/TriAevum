@@ -25,6 +25,7 @@
 #include "oot3d_native_pica_draw_state.h"
 #include "mm3d_photo_camera_hook.h"
 #include "mm3d_presentation_settings.h"
+#include "mm3d_timing_observer.h"
 #include "mm3d_ui_subsystems.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "mm3d_dev_tools.h"
@@ -90,6 +91,7 @@ public:
     blockEntryHooks.push_back(kMm3dMtx44Frustum);
     for (const auto& site : Mm3dVisibility::Sites) blockEntryHooks.push_back(site.Pc);
     for (const auto& site : Mm3dFoliage::Sites) blockEntryHooks.push_back(site.Pc);
+    for (const auto& site : Mm3dTiming::Sites) blockEntryHooks.push_back(site.Pc);
     const auto compositionHooks = Mm3dNativePicaCompositionHookPcs();
     blockEntryHooks.insert(blockEntryHooks.end(), compositionHooks.begin(),
                            compositionHooks.end());
@@ -189,6 +191,9 @@ public:
     if (!mFoliage.Verify(process.Memory(), [](uint32_t pc) {
           return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
         })) std::fprintf(stderr, "MM3D foliage distance disabled: guard or registry block mismatch\n");
+    if (!mTiming.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D timing receipts disabled: guard or registry block mismatch\n");
     mHostMemory = &process.Memory();
     if (!mLightArena.Verify(process.Memory()))
       std::fprintf(stderr, "MM3D light overflow disabled: EUR arena contract mismatch\n");
@@ -201,6 +206,7 @@ public:
   }
 
   void ObserveBlockEntry(TitleBlockEntry &entry) override {
+    mTiming.Observe(entry.Pc, entry.State, entry.Memory);
     mVisibility.Observe(entry.Pc, entry.State, entry.Memory, mLightArena.Verified());
     mFoliage.Observe(entry.Pc, entry.State, entry.Memory);
     // Same allocator PC, one dispatch: relocate BEFORE lighting invalidates the
@@ -335,7 +341,7 @@ public:
     GuestByteAccess guest(memory);
     return mPhotoCamera.OwnsInput(guest);
   }
-  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); mVisibility.Reset(); mProjectionHistory.Reset(); }
+  void Reset() override { mComposition.Reset(); mRumble.Reset(); mPhotoCamera.Reset(); mVisibility.Reset(); mProjectionHistory.Reset(); mTiming.Reset(); }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
@@ -349,6 +355,25 @@ public:
           {"vertical_expansion",s.Settings.VerticalExpansion},{"edd",s.Settings.ExtendedDrawDistance}});
     }
     return nlohmann::json{
+        {"timing", {{"verified",mTiming.Verified()}, {"read_only",true},
+            {"game_calls",mTiming.GameCalls}, {"game_samples",mTiming.GameSamples},
+            {"player_calls",mTiming.PlayerCalls}, {"player_samples",mTiming.PlayerSamples},
+            {"limiter_calls",mTiming.LimiterCalls}, {"limiter_samples",mTiming.LimiterSamples},
+            {"commit_input_intervals",mTiming.CommitIntervals}, {"wait_decisions",mTiming.WaitDecisions},
+            {"non_native30_samples",mTiming.NonNative30Samples}, {"read_failures",mTiming.ReadFailures},
+            {"epoch_changes",mTiming.EpochChanges}, {"resets",mTiming.Resets},
+            {"game",{{"valid",mTiming.Game.Valid},{"state",mTiming.Game.State},
+                {"frame",mTiming.Game.Frame},{"main",mTiming.Game.Main},
+                {"vsync",mTiming.Game.Vsync},{"interval",mTiming.Game.Interval}}},
+            {"player",{{"valid",mTiming.Player.Valid},{"address",mTiming.Player.Player},
+                {"play",mTiming.Player.Play},{"frame",mTiming.Player.Frame},
+                {"form",mTiming.Player.Form},{"speed_xz",mTiming.Player.SpeedXZ},
+                {"flags",mTiming.Player.Flags},{"focus_actor",mTiming.Player.FocusActor},
+                {"ledge_type",mTiming.Player.Ledge&0xFF},{"ledge_timer",mTiming.Player.Ledge>>8}}},
+            {"limiter",{{"valid",mTiming.Limiter.Valid},{"state",mTiming.Limiter.State},
+                {"maximum",mTiming.Limiter.Maximum},{"interval",mTiming.Limiter.Interval},
+                {"deadline",mTiming.Limiter.Deadline},{"vsync",mTiming.Limiter.Vsync},
+                {"native_interval",mTiming.Limiter.Native}}}}},
         {"photo_camera", {{"calls",photo.Calls},{"active_calls",photo.ActiveCalls},
             {"inactive_calls",photo.InactiveCalls},{"rejected",photo.Rejected},{"applied",photo.Applied},
             {"restored",photo.Restored},{"rebased",photo.Rebased},{"resets",photo.Resets},
@@ -455,6 +480,7 @@ private:
   Mm3dGuestPatches mGuestPatches;
   Mm3dRumble::Source mRumble;
   Mm3dPhotoCamera mPhotoCamera;
+  Mm3dTiming::Observer mTiming;
   bool mImageMounted = false;
   bool mActorInteractionGuards = false;
 };

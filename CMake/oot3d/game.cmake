@@ -75,6 +75,10 @@ if(TRIAEVUM_TITLE_MM3D)
     target_include_directories(mm3d_actor_visibility_tests PRIVATE tools/oot3d/native_game_runtime)
     oot3d_target_defaults(mm3d_actor_visibility_tests FOLDER Tests)
 
+    add_executable(mm3d_timing_observer_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_timing_observer_tests.cpp)
+    oot3d_target_defaults(mm3d_timing_observer_tests FOLDER Tests)
+
     add_executable(mm3d_light_arena_tests EXCLUDE_FROM_ALL
         titles/mm3d/gameplay/mm3d_light_arena_tests.cpp)
     oot3d_target_defaults(mm3d_light_arena_tests FOLDER Tests)
