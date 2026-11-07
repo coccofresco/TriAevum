@@ -1176,6 +1176,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 (void)Renderer3ds::ExcludePicaSceneDirectionalsLitNatively(
                     *surfaceLighting, std::span(directions.data(), directionCount));
             }
+            if (surfaceLighting)
+                Renderer3ds::PreservePicaNativeFragmentSceneReference(
+                    *surfaceLighting, nativePointDraw, balanceWaterEligible && !waterSurface.ReachesWater);
             // Water in a mixed mesh (a room's water and banks in one draw),
             // or a whole water draw (on its own plane when it has no body).
             if (surfaceLighting && waterSurface.WorldBounds.Available && mSurfaceLightingView &&

@@ -202,3 +202,53 @@ intended cube shadow or a residual artifact is not isolated by these captures.
 **Contribution conservation is tested; complete visual resolution and appearance
 approval remain unclaimed.** The four-launch budget is exhausted. Further live
 isolation needs new authorization; all earlier product/full-parity gaps remain.
+
+## Wave 2: reference routing, loaded rooms, lifetime and census
+
+The additional authorized shadow-Off diagnostic did not remove most Woodfall
+Off/On darkening. Trace routing identified a separate reference error: local-only
+native-fragment draws with points Off retained two supplemental Scene directionals
+in the legacy vertex-colour fallback; converted On draws used native-fragment
+recomposition. Vertex colour is an authored TEV factor, not another scene-light
+receiver. The shared capability-gated uniform fix removes that supplemental Scene
+array for eligible native-fragment draws. Native vertex-lit titles, water's separate
+contract, explicit profile keys and native response conservation are unchanged.
+The numeric production GPU fixture includes the old erroneous .25→(.45,.35,.25)
+vertex-factor witness and corrected (.25,.25,.25) reference. This is not a profile
+brightness adjustment or proof of every remaining dark pixel.
+
+EUR room capture now reads current C260 and previous C2C4 (record stride64 hex,
+segment+10), independently re-found from request/copy/draw/unload code and ten
+instruction guards. Pending request C330 excludes the incompletely installed
+current record; previous remains eligible. Shared catalog capture deduplicates
+identical room records and rejects conflicting fingerprints. S14 removes strength
+history immediately on unfollow, rejects old in-flight observations on reload,
+and retains last strength for continuously followed but temporarily unseen surfaces.
+Scene/frame/day rollback resets MM continuity and follow lifetime. Regression
+fixtures cover coexistence, pending install, unload, every corrupt guard, duplicate
+and conflicting records, fade0/reload, never-seen1 and same-frame scene reuse.
+Three real offline saves have empty previous records: **no live room transition
+or actual two-loaded-room save was captured**. Synthetic coexistence is labelled.
+
+The title-owned `tools/emitter_census.py` inventories all used material slots and
+alternate headers without pixels or new light recipes. Stock EUR results:310 rooms,
+308 models,5247 materials,6721 slots;72 primary candidates,47 secondary candidates,
+232 explicitly excluded roles,6370 unknowns,0 parse rejects. Four categories remain
+populated in the145-source catalog. Zero magic/doorway name matches are not proof
+that these semantic classes are absent. All but one room have invariant setup mesh
+pointers; the variant has no admitted emitters. Header hashes still do not attest
+arbitrary modified payloads. Runtime mismatches/failed guards/conflicting records
+omit catalog lights; modified-content catalog validation remains CATALOGS-owned.
+
+`DL/wave2/ANALOGUES.md` explicitly disposes all26 OoT actor and8 material rows as
+proved equivalents or remaining unknowns (none silently declared absent). Unproved
+breath/particle/lantern variants and atlas/body/secondary/doorway roles stay native.
+G05 inventory enumeration is complete; universal source/material parity is not.
+
+A1025-sample offline full clock cycle exercises both horizons, wrapping clock,
+changing colour, caster elevation and continuity. Double-Time direction cut,
+Song-of-Time day rollback, frame rollback/save restore, fixed-time entry and scene
+reuse are covered. Day rollback now invalidates the snapshot even when the scene
+and clock match. This is adapter evidence, not a live song/transition capture or
+new GPU shadow-page/keyframe-budget measurement. G06/G08/G21 retain those limits.
+Final run receipts and precise qualification are in `DL/wave2/` and `DL/PROGRESS.md`.

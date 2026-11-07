@@ -35,6 +35,8 @@ struct Fixture {
         }
         for (const auto& hook : kMm3dLightingHookSites)
             for (uint32_t i = 0; i < 4; ++i) W32(hook.Pc + 4U * i, hook.Words[i]);
+        for (const auto& guard : kMm3dRoomEmitterGuards) W32(guard[0], guard[1]);
+        W8(Play + 0xC2C4U, 0xFF);
         W32(kMm3dCurrentViewPointer, Play + kMm3dPlayViewOffset);
         W8(Play + 0x13DU, 4); W32(Play + 0x4A8U, Play); W16(Play + 0x148U, 0x6F); W32(Play + 0x138U, 1);
         W8(Play + 0x87FFU, 0xFF); W32(Play + 0x8824U, std::bit_cast<uint32_t>(1.0F));
@@ -165,11 +167,29 @@ void TestRoomEmitterPublication() {
     f.W16(segment+26,1);f.W32(segment+28,0x09005678);
     const auto room=CaptureMm3dEmitterRoom(f.Play,f.Memory);
     Require(room && room->Fingerprint==*hash,"runtime relocation changed room identity");
+    f.W8(f.Play+0xC2C4,1); f.W32(f.Play+0xC2D4,segment);
+    Require(CaptureMm3dEmitterRooms(f.Play,f.Memory).size()==2,"coexisting previous room lost");
+    f.W32(f.Play+0xC330,1);
+    const auto pending=CaptureMm3dEmitterRooms(f.Play,f.Memory);
+    Require(pending.size()==1 && pending[0].Number==1,"pending current inherited old segment");
+    f.W32(f.Play+0xC330,0); f.W8(f.Play+0xC2C4,0xFF); f.W32(f.Play+0xC2D4,0);
+    for (const auto& guard : kMm3dRoomEmitterGuards) {
+        f.W32(guard[0],guard[1]^1U);
+        Require(CaptureMm3dEmitterRooms(f.Play,f.Memory).empty(),"corrupt room writer guard admitted");
+        f.W32(guard[0],guard[1]);
+    }
     char fingerprint[17];std::snprintf(fingerprint,sizeof(fingerprint),"%016llx",static_cast<unsigned long long>(*hash));
     const std::string json=std::string(R"({"schema":"triaevum.scene-lights","version":1,"title":"mm3d","rooms":[{"scene":111,"room":0,"fingerprint":")")+
         fingerprint+R"(","emitters":[{"position":[10,20,30],"colour":[1,0.8,0.5],"radius":500,"gain":0.45,"category":"window-lamp","independentEmission":true,"surfaces":["0000000000001234"]}]}]})";
     const auto catalog=PicaEmitterCatalog::Parse(json);
     Require(catalog && catalog->MatchesTitle("mm3d"),"MM catalog rejected");
+    std::vector<PicaScenePointLight> duplicateLights;
+    const std::array duplicateRooms{*room,*room};
+    CapturePicaRoomEmitters(*catalog,111,duplicateRooms,duplicateLights,nullptr);
+    Require(duplicateLights.size()==1,"duplicate current/previous room emitted twice");
+    auto conflicts=duplicateRooms; conflicts[1].Fingerprint^=1;
+    duplicateLights.clear();CapturePicaRoomEmitters(*catalog,111,conflicts,duplicateLights,nullptr);
+    Require(duplicateLights.empty(),"conflicting room identity admitted");
     probe.SetEmitterCatalog(catalog);probe.CaptureSceneLights(f.Play,f.Memory);
     auto binding=probe.CaptureRenderer(0,f.Memory);
     Require(binding.ScenePoints && binding.ScenePoints->Count==1 && binding.ScenePoints->Lights[0].Group==3 &&
@@ -181,6 +201,16 @@ void TestRoomEmitterPublication() {
     emission.Observe(0x1234,0);emission.BeginFrame();
     f.W32(f.Play+0x138,2);probe.CaptureSceneLights(f.Play,f.Memory);
     Require(!probe.CaptureRenderer(0,f.Memory).ScenePoints,"native-off fake-emissive surface still lit");
+    emission.Observe(0x1234,0); // in-flight observation from the old room
+    emission.Follow({}); emission.Follow(std::array<uint64_t,1>{0x1234});
+    Require(emission.Strength(0x1234)==1,"same-frame reload inherited old fade");
+    emission.BeginFrame();
+    Require(emission.Strength(0x1234)==1,"in-flight old observation survived reload");
+    emission.Observe(0x1234,.25F);emission.BeginFrame();emission.BeginFrame();
+    Require(emission.Strength(0x1234)==.25F,"temporarily unseen loaded surface lost strength");
+    // Same-frame scene reuse must invalidate the global follow history.
+    f.W16(f.Play+0x148,0x61);probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(emission.Strength(0x1234)==1,"scene change retained surface strength");
     f.W8(f.Play+0xC260,0xFF);
     Require(!CaptureMm3dEmitterRoom(f.Play,f.Memory),"unloaded room accepted");
     f.W8(f.Play+0xC260,0);f.W8(segment,'X');
@@ -342,6 +372,57 @@ void TestNestedAndInvalidConsumer() {
     }
 }
 
+void TestClockCutsAndDayReset() {
+    Fixture f; Mm3dNativeA32LightingProbe probe;
+    const uint32_t sun=f.Play+0x86D0,moon=f.Play+0x86E8;
+    f.W32(f.Play+0xA88,f.Nodes);f.Link(f.Nodes,sun,f.Nodes+12);f.Link(f.Nodes+12,moon,0);
+    f.W32(0x7751EC,3);
+    uint32_t frame=0;uint16_t clock=0;
+    const auto capture=[&](uint16_t time) {
+        clock=time; f.W16(0x7751F8,time);f.W32(f.Play+0x138,++frame);
+        const double angle=double(std::bit_cast<int16_t>(uint16_t(time-0x8000)))*6.283185307179586/65536.0;
+        const std::array<int,3> direction{int(-std::sin(angle)*120),int(std::cos(angle)*120),int(std::cos(angle)*20)};
+        f.Direction(sun,0,0,uint8_t(128+direction[1]));
+        f.Direction(moon,0,0,uint8_t(128-direction[1]));
+        for (unsigned a=0;a<3;++a) {
+            f.W8(sun+4+a,std::bit_cast<uint8_t>(int8_t(direction[a])));
+            f.W8(moon+4+a,std::bit_cast<uint8_t>(int8_t(-direction[a])));
+        }
+        probe.CaptureSceneLights(f.Play,f.Memory);
+        const auto lights=probe.CaptureRenderer(0,f.Memory).SceneDirectionals;
+        Require(lights && lights->Count==2,"clock fixture lost directionals");
+        Require(std::isfinite(lights->ShadowStrength) && lights->ShadowStrength>=0 && lights->ShadowStrength<=1,
+                "clock/horizon shadow strength invalid");
+        for (uint32_t i=0;i<lights->Count;++i)
+            for (float component:lights->Lights[i].Color)
+                Require(std::isfinite(component) && component>=0 && component<=1,"clock colour out of range");
+        const auto* caster=FindPicaSceneMainDirectional(*lights);
+        if (caster && caster->SkyLight && lights->ShadowStrength>0) {
+            const auto direction=PicaSceneDirectionalDirection(*caster);
+            Require(direction && PicaSceneElevationSine(*direction,lights->WorldUp)>0,
+                    "clock fixture casts below horizon");
+        }
+        return lights;
+    };
+    const auto start=capture(0);const auto epoch=start->ContinuityEpoch;
+    for (uint32_t tick=1;tick<=1024;++tick) {
+        const auto lights=capture(uint16_t(tick*64));
+        Require(lights->ContinuityEpoch==epoch && lights->Lights[0].SkyLight,
+                "ordinary clock wrap/horizon broke continuity");
+    }
+    const auto song=capture(0x8000);
+    Require(song->ContinuityEpoch>epoch,"Double Time direction cut did not start an epoch");
+    const auto beforeReset=song->ContinuityEpoch;
+    f.W32(0x7751EC,1);const auto reset=capture(clock);
+    Require(reset->ContinuityEpoch>beforeReset,"Song of Time day rollback inherited old epoch");
+    const auto beforeRestore=reset->ContinuityEpoch;frame=0;
+    Require(capture(clock)->ContinuityEpoch>beforeRestore,"save restore inherited old epoch");
+    f.W8(f.Play+0x8704,1);const auto fixed=capture(clock);
+    Require(!fixed->Lights[0].SkyLight,"fixed-time entry acquired clock sky ownership");
+    f.W16(f.Play+0x148,0x61);const auto scene=capture(clock);
+    Require(scene->ContinuityEpoch>fixed->ContinuityEpoch,"scene reuse inherited old epoch");
+}
+
 void TestWaterOperandEligibility() {
     Require(PicaNativeFragmentOperandWaterEligible(true,0U,false,false,false),"null/empty-water legacy route changed");
     Require(PicaNativeFragmentOperandWaterEligible(true,2U,true,false,false),"dry geometry in a water scene lost operand");
@@ -488,6 +569,6 @@ void TestLightFunctionsAndGroup() {
 int main() {
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
-    TestLightFunctionsAndGroup();
+    TestLightFunctionsAndGroup();TestClockCutsAndDayReset();
     std::cout << "mm3d_native_lighting_tests: ok\n";
 }

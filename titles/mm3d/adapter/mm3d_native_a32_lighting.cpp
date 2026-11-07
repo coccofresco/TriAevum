@@ -286,15 +286,17 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
     }
     const uint32_t frame = current.State->GuestFrame;
     if (mHaveSnapshot && mSnapshotPlay == play && mSnapshotFrame == frame &&
-        mSnapshotScene == current.State->SceneId) return;
+        mSnapshotScene == current.State->SceneId && mSnapshotDay == current.State->Day) return;
+    const bool dayReset = mSnapshotDay && current.State->Day && *current.State->Day < *mSnapshotDay;
     const bool discontinuity = !mHaveSnapshot || mSnapshotPlay != play ||
-        frame != mSnapshotFrame + 1U || mSnapshotScene != current.State->SceneId;
+        frame != mSnapshotFrame + 1U || mSnapshotScene != current.State->SceneId || dayReset;
     if (discontinuity) {
         mContinuityEnvironment.reset(); mShadowCaster.Reset();
         mPreviousDrawnActors.clear(); mDrawnActors.clear();
+        if (mEmitterCatalog) PicaSurfaceEmissionRegistry::Instance().Follow({});
     }
     mHaveSnapshot = true; mSnapshotPlay = play; mSnapshotFrame = frame;
-    mSnapshotScene = current.State->SceneId;
+    mSnapshotScene = current.State->SceneId; mSnapshotDay = current.State->Day;
     ++mSceneLightFrames;
     std::unordered_set<uint32_t> infos, nodes;
     mLightFunctions.clear();
@@ -405,8 +407,7 @@ void Mm3dNativeA32LightingProbe::CaptureSceneLights(uint32_t play, Memory& memor
         mEmitterCatalogResolved = true;
     }
     if (mEmitterCatalog) {
-        std::vector<PicaEmitterRoom> rooms;
-        if (const auto room = CaptureMm3dEmitterRoom(play, memory)) rooms.push_back(*room);
+        const auto rooms = CaptureMm3dEmitterRooms(play, memory);
         CapturePicaRoomEmitters(*mEmitterCatalog, current.State->SceneId, rooms, candidates,
                                &PicaSurfaceEmissionRegistry::Instance());
     }
@@ -480,7 +481,8 @@ Fast::Renderer3ds::PicaNativeLightBinding Mm3dNativeA32LightingProbe::CaptureRen
     result.WorldToView = CaptureWorldToView(memory);
     const auto current = CaptureMm3dSceneEnvironment(memory);
     const bool snapshotCurrent = mHaveSnapshot && current.State && current.Play == mSnapshotPlay &&
-        current.State->GuestFrame == mSnapshotFrame && current.State->SceneId == mSnapshotScene;
+        current.State->GuestFrame == mSnapshotFrame && current.State->SceneId == mSnapshotScene &&
+        current.State->Day == mSnapshotDay;
     // Each selected slot's function, from this frame's LightContext only; an
     // unproved owner (or a stale snapshot) stays Unknown and Local.
     for (auto& source : result.Sources) {
