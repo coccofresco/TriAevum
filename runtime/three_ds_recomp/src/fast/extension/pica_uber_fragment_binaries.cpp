@@ -24,6 +24,11 @@ alignas(16) const unsigned char kNativeLightingPack[] = {
 TRIAEVUM_SPIRV_PACK_EMBED_END
 } // namespace
 
+std::span<const Renderer3ds::PicaFragmentArtifact> LegacyUberFragmentArtifacts() {
+    static const auto artifacts = Renderer3ds::PicaFragmentArtifactsFromPack(Renderer::ReadSpirvPack(kPack));
+    return artifacts;
+}
+
 std::span<const Renderer3ds::PicaFragmentArtifact> UberFragmentArtifacts() {
     static const auto entries = [] {
         auto legacy = Renderer::ReadSpirvPack(kPack);
