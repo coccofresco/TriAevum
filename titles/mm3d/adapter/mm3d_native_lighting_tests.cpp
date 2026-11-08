@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <vector>
+#include <span>
 
 using namespace Oot3dNativeGame;
 using namespace Fast::Renderer3ds;
@@ -134,6 +136,69 @@ void TestCompositionTemporalLifetimes() {
     beginFrame(); enqueue(); const auto beforeScene = consume().TemporalIdentity;
     f.W16(f.Play + 0x148U, 0x61); beginFrame(); enqueue();
     Require(consume().TemporalIdentity.Lifetime != beforeScene.Lifetime, "scene change retained lifetime");
+    // Room change: scene-owned room model gets a new generation; a live
+    // actor's own lifetime is untouched (its destroy hooks own that boundary).
+    {
+        const auto bgEnqueue = [&] {
+            beginFrame(); f.W32(f.Queue + 4U, 0);
+            s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+            f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
+            return consume().TemporalIdentity;
+        };
+        const auto rooms = [&](uint8_t cur, uint8_t prev) { f.W8(f.Play + 0xC260U, cur); f.W8(f.Play + 0xC2C4U, prev); };
+        rooms(0, 0xFF);
+        const auto roomA = bgEnqueue();
+        Require(bgEnqueue().Lifetime == roomA.Lifetime, "room model lifetime unstable within a room");
+        beginFrame(); enqueue(); const auto actorA = consume().TemporalIdentity;
+        rooms(1, 0xFF);
+        beginFrame(); enqueue();
+        Require(consume().TemporalIdentity.Lifetime == actorA.Lifetime, "room change reset a live actor lifetime");
+        rooms(0, 0xFF); bgEnqueue(); const auto roomA2 = bgEnqueue();
+        rooms(1, 0xFF);
+        const auto roomB = bgEnqueue();
+        Require(roomB.Available() && roomB.Lifetime != roomA2.Lifetime, "room change kept room model lifetime");
+        rooms(0, 0xFF);
+        Require(bgEnqueue().Lifetime != roomA.Lifetime, "returning room reused stale lifetime");
+        // Two-room transition: room 0 stays loaded in prevRoom while room 1
+        // loads into curRoom; both are drawn, so history must survive.
+        const auto before = bgEnqueue();
+        rooms(1, 0);
+        Require(bgEnqueue().Lifetime == before.Lifetime, "two-room transition dropped loaded room history");
+        rooms(0, 1);
+        Require(bgEnqueue().Lifetime == before.Lifetime, "slot swap of loaded rooms dropped history");
+        // Transition end: room 1 leaves both slots.
+        rooms(0, 0xFF);
+        const auto afterUnload = bgEnqueue();
+        Require(afterUnload.Lifetime != before.Lifetime, "room unload kept room model lifetime");
+        // Invalid room number (>127, not the empty marker) is unknown.
+        rooms(0x80, 0xFF);
+        const auto invalid = bgEnqueue();
+        Require(invalid.Lifetime != afterUnload.Lifetime, "invalid room value kept room model lifetime");
+        rooms(0, 0x90);
+        Require(bgEnqueue().Lifetime == invalid.Lifetime, "unknown room state was not stable");
+        rooms(0, 0xFF);
+        const auto recovered = bgEnqueue();
+        Require(recovered.Lifetime != invalid.Lifetime, "recovery from invalid room reused unknown lifetime");
+        Require(bgEnqueue().Lifetime == recovered.Lifetime, "room lifetime unstable after recovery");
+        // A failed slot read is unknown, never a match.
+        // Leave a hole over the RoomContext page so the slot read fails.
+        std::vector<uint8_t> saved(0x20000U);
+        std::string error;
+        Require(f.Memory.ReadBytes(f.Play, saved), "save play");
+        const auto remap = [&](bool hole) {
+            Require(f.Memory.UnmapRegion(f.Play, hole ? 0x20000U : 0xC000U, &error) &&
+                    (hole || f.Memory.UnmapRegion(f.Play + 0xD000U, 0x13000U, &error)), "unmap play");
+            const auto map = [&](uint32_t offset, uint32_t size) {
+                Require(f.Memory.MapRegion({"mm3d-lighting-test", f.Play + offset, size, true, false, {}}, &error) &&
+                        f.Memory.WriteBytes(f.Play + offset, std::span<const uint8_t>(saved).subspan(offset, size)), "map play");
+            };
+            if (hole) { map(0, 0xC000U); map(0xD000U, 0x13000U); } else map(0, 0x20000U);
+        };
+        remap(true);
+        const auto unreadable = bgEnqueue();
+        remap(false);
+        Require(unreadable.Lifetime != recovered.Lifetime, "failed room read kept room model lifetime");
+    }
     const auto beforeRollback = consume().TemporalIdentity;
     frame = 1; beginFrame(); enqueue();
     Require(consume().TemporalIdentity.Lifetime != beforeRollback.Lifetime, "frame rollback retained lifetime");
@@ -172,6 +237,218 @@ void TestCompositionTemporalLifetimes() {
         Require(!tracker.VerifyHooks(f.Memory), "corrupt owner guard accepted");
         f.W32(pc, word);
     }
+}
+
+void TestDeferredModelResourceLifetime() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "resource lifetime guards");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    uint32_t frame = 1;
+    const auto enqueue = [&] {
+        f.W32(f.Play + 0x138U, frame++); s.r[0] = f.Play; observe(0x15E9ECU);
+        s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U);
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 4U, 1); f.W32(f.Queue + 8U, f.Model); observe(0x182C48U);
+    };
+    const auto begin = [&] {
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = 0x11EF3CU; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+    };
+    const auto finish = [&] {
+        f.W32(kMm3dCommandListCursorAddress, 0x14000020U);
+        s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 1, "resource lifetime keeps native model range");
+        return spans.front().Attribution;
+    };
+    enqueue(); begin(); const auto original = finish();
+    Require(original.TemporalIdentity.Available(), "resource fixture baseline identity");
+    // Primary renderer first: this already belongs to the admitted ABI.
+    // The remaining handles are owned/released by the same guarded destructor.
+    for (uint32_t offset : {0xA0U, 0xA4U, 0x90U, 0x94U, 0x98U, 0x9CU, 0xA8U, 0U}) {
+        uint32_t saved = 0; Require(f.Memory.Read32(f.Model + offset, &saved), "read original handle");
+        for (bool duringDraw : {false, true}) {
+            enqueue();
+            if (duringDraw) begin();
+            f.W32(f.Model + offset, saved ^ 0x100U);
+            if (!duringDraw) begin();
+            const auto rebound = finish();
+            Require(!rebound.TemporalIdentity.Available() && !rebound.TemporalCommandBufferIdentity,
+                    "deferred rebind retained stale temporal identity");
+            Require(rebound.NativeActorGeometry && rebound.NativeActorIdentity == f.Actor,
+                    "resource rejection erased independent native actor ownership");
+            f.W32(f.Model + offset, saved);
+            enqueue(); begin(); const auto restored = finish();
+            Require(restored.TemporalIdentity.Available() &&
+                    restored.TemporalIdentity.Lifetime != original.TemporalIdentity.Lifetime,
+                    "observed resource ABA revived old epoch");
+        }
+    }
+    // Rebind before enqueue also rotates the epoch, even with stable renderers.
+    enqueue(); begin(); const auto before = finish();
+    f.W32(f.Model + 0x90U, f.Owner);
+    enqueue(); begin(); const auto after = finish();
+    Require(after.TemporalIdentity.Available() && after.TemporalIdentity.Lifetime != before.TemporalIdentity.Lifetime,
+            "resource-only rebind at enqueue retained old epoch");
+    enqueue(); begin(); Require(finish().TemporalIdentity == after.TemporalIdentity,
+                               "unchanged resources churned temporal identity");
+    // Destruction while a scope is open revokes unsubmitted history as well.
+    for (uint32_t pc : {0x5EC220U, 0x191238U}) {
+        enqueue(); begin(); s.r[0] = pc == 0x5EC220U ? f.Model : f.Actor; observe(pc);
+        Require(!finish().TemporalIdentity.Available(), "active scope survived native destruction");
+    }
+    Require(original.TemporalIdentity.Available(), "immutable historical attribution was mutated");
+}
+
+void TestPrimitiveOwnership() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "primitive hook guards");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    const auto run = [&](bool validRenderer, uint32_t index, uint32_t size, uint32_t rebindPhase = 0U) {
+        tracker.Reset();
+        f.W32(f.Model + 0x90U, f.Context);
+        s.r[0] = f.Play; observe(0x15E9ECU);
+        s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U);
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 4U, 1); f.W32(f.Queue + 8U, f.Model); observe(0x182C48U);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = 0x11EF3CU; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+        f.W32(f.Renderer + 0x14U, f.Owner); f.W32(f.Owner, f.Owner + 0x100U);
+        f.W32(f.Owner + 0x108U, 0x15000000U);
+        f.W32(f.Nodes + 8U, 2); f.W16(f.Nodes + 0x1CU, 12);
+        s.r[0] = f.Owner; s.r[2] = 12; s.r[4] = validRenderer ? f.Renderer : 0U;
+        s.r[7] = f.Nodes; s.r[5] = index; s.r[14] = 0x5E32F8U;
+        if (rebindPhase == 1U) f.W32(f.Model + 0x90U, f.Context + 0x100U);
+        observe(0x1565ACU);
+        if (rebindPhase == 2U) f.W32(f.Model + 0x90U, f.Context + 0x100U);
+        f.W32(f.Owner + 0x108U, 0x15000000U + size); observe(0x1565BCU);
+        if (rebindPhase == 3U) f.W32(f.Model + 0x90U, f.Context + 0x100U);
+        if (rebindPhase == 4U) { s.r[0] = f.Model; observe(0x5EC220U); }
+        f.W32(kMm3dCommandListCursorAddress, 0x14000040U);
+        s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        return spans;
+    };
+    auto spans = run(true, 1U, 0x80U);
+    Require(spans.size() == 2 && spans.back().BeginAddress == 0x15000000U,
+            "builder-owned primitive buffer lost to closing coarse scope");
+    const auto& a = spans.back().Attribution;
+    Require(a.NativeActorGeometry && a.TemporalPacketSourceRelative &&
+            !a.TemporalCommandBufferIdentity && a.TemporalIdentity.Part == f.Nodes &&
+            a.TemporalIdentity.Instance == f.Model && a.TemporalIdentity.Owner == f.Actor &&
+            a.TemporalIdentity.Slot == ((uint64_t{0x11EF3CU} << 32U) | (2U << 16U)),
+            "primitive did not use guarded native group/record identity");
+    const auto lifetime = a.TemporalIdentity.Lifetime;
+    spans = run(true, 1U, 0x80U);
+    Require(spans.back().Attribution.TemporalIdentity.Lifetime != lifetime, "restore reused primitive epoch");
+    for (bool renderer : {false, true}) {
+        spans = run(renderer, renderer ? 3U : 1U, 0x80U);
+        Require(spans.back().Attribution.NativeActorGeometry &&
+                !spans.back().Attribution.TemporalIdentity.Available(),
+                "unproved renderer/index acquired temporal primitive identity");
+    }
+    for (uint32_t phase = 1; phase <= 4; ++phase) {
+        spans = run(true, 1U, 0x80U, phase);
+        Require(spans.size() == 2, "rebind discarded native primitive coverage");
+        for (const auto& span : spans)
+            Require(!span.Attribution.TemporalIdentity.Available() &&
+                    !span.Attribution.TemporalCommandBufferIdentity &&
+                    !span.Attribution.TemporalPacketSourceRelative &&
+                    span.Attribution.TemporalPacketBeginAddress == 0,
+                    "primitive/pending/model span survived resource invalidation");
+    }
+    spans = run(true, 1U, 3U);
+    Require(spans.size() == 1 && tracker.Stats().InvalidPrimitives == 1,
+            "invalid primitive cursor range was published");
+}
+
+void TestQuadEntryOwnership() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "quad hook guards");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    constexpr uint32_t manager = f.Actor + 0x8000U;
+    constexpr std::array returns{0x110B7CU, 0x110BACU, 0x110C8CU, 0x110CB0U, 0x110D88U, 0x110DB8U};
+    for (bool reordered : {false, true}) for (uint32_t q = 0; q < returns.size(); ++q) {
+        tracker.Reset(); s.r[0] = f.Play; observe(0x15E9ECU);
+        f.W32(manager + 0x14U + q * 4U, 0);
+        s.r[14] = 0x15EF58U; observe(0x171B40U);
+        s.r[0] = manager; s.r[1] = q; s.r[2] = f.Model; observe(0x179930U);
+        const uint32_t slot = manager + 0x578U + q * 0x600U;
+        f.W32(slot, f.Model); f.W32(manager + 0x14U + q * 4U, 1);
+        observe(0x15EF58U);
+        // Native UI update can enqueue before Play_Draw. That entry must
+        // survive the model/actor frame reset; the manager owns its lifetime.
+        s.r[0] = f.Play; observe(0x15E9ECU);
+        // Same model handle, different native slot/producer. Never transfer
+        // the atmosphere role by a per-model lookup. The textured quad pool
+        // has its own guarded producer, separate from the flat-color pool.
+        s.r[5] = manager; s.r[10] = q; s.r[4] = f.Model; observe(0x191CC8U);
+        f.W32(slot + 4U, f.Model); f.W32(manager + 0x14U + q * 4U, 2);
+        if (reordered) {
+            // Native insertion moves the final entry ahead of the first.
+            // Identical model handles must retain their different semantics.
+            s.r[0] = 2; s.r[1] = 0; s.r[2] = slot; s.r[6] = manager + q * 4U;
+            observe(0x16160CU); observe(0x161664U);
+        }
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = manager; s.r[1] = q; s.r[14] = returns[q]; observe(kMm3dQuadQueueDrawEntry);
+        s.r[6] = manager + q * 0x600U;
+        for (uint32_t index = 0; index < 2; ++index) {
+            s.r[4] = index; observe(0x12C71CU);
+            f.W32(kMm3dCommandListCursorAddress, 0x14000000U + (index + 1) * 0x20U);
+            observe(0x12C730U);
+        }
+        observe(returns[q]);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        const size_t atmosphere = reordered ? 1 : 0, other = reordered ? 0 : 1;
+        Require(spans.size() == 2 && spans[atmosphere].Attribution.Layer == Oot3dPicaCompositionLayer::Atmosphere &&
+                !spans[atmosphere].Attribution.ExcludeFromPresentationFxaa && !spans[atmosphere].Attribution.TemporalIdentity.Available(),
+                "environment quad lost exact producer ownership");
+        Require(spans[other].Attribution.Layer == (q >= 4 ? Oot3dPicaCompositionLayer::Ui : Oot3dPicaCompositionLayer::Unknown),
+                "queue occurrence fabricated a role for a different producer");
+        Require(tracker.Stats().AtmosphereQuadSpans == 1 && tracker.Stats().InvalidQuadOwners == 0,
+                "quad entry scope imbalance");
+    }
+    tracker.Reset();
+    const uint32_t source = manager + 0x578U + 6U * 0x600U;
+    const uint32_t destination = manager + 0x578U + 4U * 0x600U;
+    f.W32(destination, f.Model);
+    const std::array moves{Mm3dDekui::NativeQuadQueueMove{source, destination, f.Model, true}};
+    tracker.CommitQuadQueueMoves(moves, f.Memory);
+    const auto drawMoved = [&](uint32_t begin) {
+        f.W32(kMm3dCommandListCursorAddress, begin);
+        s.r[0] = manager; s.r[1] = 4; s.r[14] = returns[4]; observe(kMm3dQuadQueueDrawEntry);
+        s.r[6] = manager + 4U * 0x600U; s.r[4] = 0; observe(0x12C71CU);
+        f.W32(kMm3dCommandListCursorAddress, begin + 0x20U);
+        observe(0x12C730U); observe(returns[4]);
+    };
+    drawMoved(0x14000100U);
+    std::vector<Oot3dPicaCommandListCompositionSpan> moved;
+    tracker.TakeCommandListCompositionSpans(0, 0, moved);
+    Require(moved.size() == 1 && moved[0].Attribution.Layer == Oot3dPicaCompositionLayer::Ui &&
+            moved[0].Attribution.PreserveNativeUiSampling && tracker.Stats().NativeUiQuadMoves == 1,
+            "producer-proved minimap relocation lost UI ownership");
+    // A stale destination must invalidate the sidecar, not confer the role on
+    // the new object now occupying that native queue slot.
+    f.W32(destination, f.Model + 4U);
+    tracker.CommitQuadQueueMoves(moves, f.Memory);
+    drawMoved(0x14000200U);
+    tracker.TakeCommandListCompositionSpans(0, 0, moved);
+    Require(moved.back().Attribution.Layer == Oot3dPicaCompositionLayer::Unknown &&
+            tracker.Stats().InvalidQuadOwners == 1, "stale relocation granted UI ownership");
 }
 
 void TestAcceptedAndSelectedSources() {
@@ -680,7 +957,7 @@ void TestLightFunctionsAndGroup() {
 }
 } // namespace
 int main() {
-    TestCompositionTemporalLifetimes();
+    TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();TestClockCutsAndDayReset();

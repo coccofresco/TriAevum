@@ -107,7 +107,7 @@ bool NriPicaRenderTargetInitPass::Execute(
         colorUsage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     const VkImageUsageFlags depthUsage =
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
         VK_IMAGE_USAGE_SAMPLED_BIT;
     const bool instrumented = !desc.Attachments.NativeColorOnly();
     const uint32_t colorCount = desc.Attachments.ColorAttachmentCount();

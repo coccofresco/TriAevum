@@ -69,18 +69,25 @@ class PicaTemporalHistory {
     // refused before drawing (a streaming duplicate check cannot retract an
     // already rasterized first match): none of its draws is published, so they
     // all draw without history. Native-memory replays do not participate.
-    [[nodiscard]] bool PrepareSequence(const PicaCompositionSequenceView& sequence, uint64_t frame) {
-        if (frame != mFrame) {
-            mPrevious = frame == mFrame + 1U ? std::move(mCurrent) : decltype(mCurrent){};
-            mCurrent.clear();
-            mPublishedViews.clear();
-            mFrame = frame;
-            Reasons = {};
-        }
+    [[nodiscard]] bool PrepareSequence(const PicaCompositionSequenceView& sequence, uint64_t frame,
+                                       const PicaFrameTemporalSample* sample = nullptr) {
         mCounts.clear();
         mSubmissions.clear();
         mConsumed.clear();
+        // Dependency replays may occur on host refreshes with no presentation.
+        // They must neither advance nor seed presented object history.
         if (sequence.Purpose != PicaCompositionPurpose::Presentation) return true;
+        if (frame != mFrame) {
+            const bool consecutiveSource = frame > mFrame && sample != nullptr &&
+                ConsecutiveAuthoritativeSources(mLastPresentationSample, *sample);
+            mPrevious = frame == mFrame + 1U || consecutiveSource
+                ? std::move(mCurrent) : decltype(mCurrent){};
+            mCurrent.clear();
+            mPublishedViews.clear();
+            mFrame = frame;
+            mLastPresentationSample = sample != nullptr ? *sample : PicaFrameTemporalSample{};
+            Reasons = {};
+        }
         std::set<PicaCompositionTargetReference> views;
         for (const auto& draw : sequence.Draws) views.insert(draw.Target);
         for (const auto& view : views)
@@ -144,7 +151,27 @@ class PicaTemporalHistory {
     uint64_t DuplicateTargetSequences = 0;
 
   private:
+    // A host-frame gap alone is not continuity evidence. Only explicit,
+    // adjacent authoritative sources in the same epoch/rate may bridge it.
+    // Interpolated gaps, skipped sources and unpublished/invalid samples keep
+    // the conservative rejection; a published cull still clears the object.
+    static bool ConsecutiveAuthoritativeSources(const PicaFrameTemporalSample& old,
+                                                const PicaFrameTemporalSample& next) {
+        const auto authoritative = [](const PicaFrameTemporalSample& value) {
+            return value.Available() && !value.HistoryReset && !value.Synthetic &&
+                value.Interpolation == PicaVisualInterpolationMode::Disabled &&
+                value.Kind == PicaFrameTemporalSampleKind::Authoritative &&
+                value.PreviousSourceFrameId == value.CurrentSourceFrameId;
+        };
+        return authoritative(old) && authoritative(next) &&
+            old.ContinuityEpoch == next.ContinuityEpoch &&
+            old.NativeRateHz == next.NativeRateHz &&
+            old.TargetPresentationRateHz == next.TargetPresentationRateHz &&
+            next.CurrentSourceFrameId > old.CurrentSourceFrameId &&
+            next.CurrentSourceFrameId - old.CurrentSourceFrameId == 1U;
+    }
     uint64_t mFrame = 0;
+    PicaFrameTemporalSample mLastPresentationSample;
     std::map<PicaTemporalHistoryKey, PicaTemporalHistoryEntry> mPrevious, mCurrent;
     std::map<PicaTemporalHistoryKey, size_t> mCounts;
     std::map<uint64_t, PicaTemporalHistoryKey> mSubmissions;

@@ -8,7 +8,10 @@
 using namespace Fast::Renderer3ds;
 using Reason = PicaTemporalMatchReason;
 static void Require(bool value, const char* message) {
-    if (!value) throw std::runtime_error(message);
+    if (!value) {
+        std::cerr << message << std::endl;
+        throw std::runtime_error(message);
+    }
 }
 struct Fixture {
     PicaTemporalHistory History;
@@ -37,11 +40,12 @@ struct Fixture {
         draw.VertexCount = 4; draw.Indexed = true;
         return draw;
     }
-    void Begin(std::span<const PicaDrawView> draws, uint64_t step = 1) {
+    void Begin(std::span<const PicaDrawView> draws, uint64_t step = 1, bool sourceContinuity = false) {
         Frame += step;
         std::vector<PicaCompositionDrawReference> refs;
         for (const auto& draw : draws) refs.push_back(BuildPicaCompositionDrawReference(draw));
-        Require(History.PrepareSequence({kPicaCompositionSequenceSchemaVersion, Frame, refs}, Frame), "prepare failed");
+        Require(History.PrepareSequence({kPicaCompositionSequenceSchemaVersion, Frame, refs}, Frame,
+            sourceContinuity ? &Sample : nullptr), "prepare failed");
     }
     PicaTemporalMatch Track(const PicaDrawView& draw) {
         return History.Track(draw, Frame, Sample, {float(Frame)/100.0F,0});
@@ -101,6 +105,52 @@ int main() {
         Require(sample == 0 ? !history.Exact() :
             history.Exact() && history.Previous->Bytes[0] == (sample - 1) * 10,
             "alpha 0/0.5 or source transition advanced the wrong history");
+    }
+
+    // Original30 may submit on host frames 2,4,6: the intervening host
+    // refresh only repeats scanout. Explicit consecutive authoritative source
+    // samples prove continuity, not the wall-clock gap itself.
+    Fixture nativeCadence;
+    moving = nativeCadence.Draw(77);
+    nativeCadence.Sample.PreviousSourceFrameId = 1;
+    nativeCadence.Begin(std::array{moving}, 2, true); (void)nativeCadence.Track(moving);
+    nativeCadence.Uniforms[0] = 90;
+    nativeCadence.Sample.PreviousSourceFrameId = nativeCadence.Sample.CurrentSourceFrameId = 2;
+    nativeCadence.Begin(std::array{moving}, 2, true);
+    Require(nativeCadence.Track(moving).Exact(), "host-only repeat discarded consecutive native source history");
+    auto nativeRef = BuildPicaCompositionDrawReference(moving);
+    Require(nativeCadence.History.PrepareSequence({kPicaCompositionSequenceSchemaVersion,99,{&nativeRef,1},
+        PicaCompositionPurpose::NativeMemory}, nativeCadence.Frame + 1), "idle native-memory replay rejected");
+    nativeCadence.Sample.PreviousSourceFrameId = nativeCadence.Sample.CurrentSourceFrameId = 3;
+    nativeCadence.Begin(std::array{moving}, 2, true);
+    auto nativeMatch = nativeCadence.Track(moving);
+    Require(nativeMatch.Exact() && nativeMatch.Previous->Bytes[0] == 90,
+            "native-memory replay advanced presentation history on another host frame");
+    // A fully published intervening view that culls the object still retires it.
+    nativeCadence.Sample.PreviousSourceFrameId = nativeCadence.Sample.CurrentSourceFrameId = 4;
+    nativeCadence.Begin({}, 2, true);
+    nativeCadence.Sample.PreviousSourceFrameId = nativeCadence.Sample.CurrentSourceFrameId = 5;
+    nativeCadence.Begin(std::array{moving}, 2, true);
+    Require(!nativeCadence.Track(moving).Exact(), "source continuity revived a culled object");
+    for (unsigned invalid = 0; invalid < 9; ++invalid) {
+        Fixture gap; auto draw = gap.Draw(10);
+        gap.Sample.PreviousSourceFrameId = 1;
+        gap.Begin(std::array{draw}, 2, true); (void)gap.Track(draw);
+        gap.Sample.PreviousSourceFrameId = gap.Sample.CurrentSourceFrameId = 2;
+        switch (invalid) {
+        case 0: gap.Sample.CurrentSourceFrameId = gap.Sample.PreviousSourceFrameId = 3; break;
+        case 1: ++gap.Sample.ContinuityEpoch; break;
+        case 2: gap.Sample.HistoryReset = true; break;
+        case 3: gap.Sample.SchemaVersion = 0; break;
+        case 4: gap.Sample.Interpolation = PicaVisualInterpolationMode::Fixed2x;
+                gap.Sample.FixedSampleMultiplier = 2; break;
+        case 5: gap.Sample.Synthetic = true; break;
+        case 6: gap.Sample.NativeRateHz = 60; break;
+        case 7: gap.Sample.Kind = PicaFrameTemporalSampleKind::Resynchronized; break;
+        case 8: gap.Sample.PreviousSourceFrameId = 1; break;
+        }
+        gap.Begin(std::array{draw}, 2, true);
+        Require(!gap.Track(draw).Exact(), "unproved host gap retained stale history");
     }
 
     const auto rejects = [](auto mutate, Reason reason) {

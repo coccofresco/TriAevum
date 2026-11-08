@@ -155,6 +155,9 @@ public:
       // dekui animates with the emulated clock: here the deterministic
       // presentation clock (a 60 Hz frame each).
       mSingleScreen.emplace(setup.PresentationClock);
+      mSingleScreen->SetQuadQueueObserver([this](auto moves, auto& memory) {
+        mComposition.CommitQuadQueueMoves(moves, memory);
+      });
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
       RegisterMm3dPhotoCamera(mGuestPatches, mPhotoCamera, setup.FreeCamera);
@@ -393,6 +396,9 @@ public:
     return mPhotoCamera.OwnsInput(guest);
   }
   void Reset() override {
+    if (const char* audit = std::getenv("TRIAEVUM_MM3D_COMPOSITION_AUDIT"); audit && std::string_view(audit) == "1")
+      std::fprintf(stderr, "TRIAEVUM_MM3D_COMPOSITION_RESET %s
+", CompositionSummary().dump().c_str());
     mComposition.Reset();
     mRumble.Reset();
     mPhotoCamera.Reset();
@@ -497,6 +503,18 @@ public:
         {"scene_frames", stats.SceneFrames},
         {"read_failures", stats.ReadFailures},
         {"light_bindings", stats.LightBindings},
+        {"atmosphere_quad_spans", stats.AtmosphereQuadSpans},
+        {"ui_quad_spans", stats.UiQuadSpans},
+        {"quad_queue_moves", stats.QuadQueueMoves},
+        {"native_ui_quad_moves", stats.NativeUiQuadMoves},
+        {"unknown_quad_spans", stats.UnknownQuadSpans},
+        {"invalid_quad_owners", stats.InvalidQuadOwners},
+        {"primitive_caller_entries", stats.PrimitiveCallerEntries},
+        {"primitive_entries", stats.PrimitiveEntries},
+        {"primitive_spans", stats.PrimitiveSpans},
+        {"temporal_primitive_spans", stats.TemporalPrimitiveSpans},
+        {"unowned_primitives", stats.UnownedPrimitives},
+        {"invalid_primitives", stats.InvalidPrimitives},
         {"temporal_model_spans", stats.TemporalModelSpans},
         {"isolated_model_spans", stats.IsolatedModelSpans},
         {"atmosphere_model_spans", stats.AtmosphereModelSpans},

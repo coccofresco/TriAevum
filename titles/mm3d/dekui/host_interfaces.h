@@ -6,11 +6,18 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
 namespace Mm3dDekui {
 using U32 = std::uint32_t;
+
+// Exact producer-authored queue relocation, never an object-address search.
+struct NativeQuadQueueMove {
+    U32 SourceSlot = 0, DestinationSlot = 0, Model = 0;
+    bool NativeUi = false; // explicitly proved by the minimap/radar producer
+};
 
 // Little-endian guest words. Read returns nullopt for inaccessible memory.
 // Write has the same best-effort semantics as the donor's Write32 callback.
@@ -23,6 +30,7 @@ public:
     virtual bool RestorationMessagePort() const { return false; }
     virtual bool RestorationCameraPort() const { return false; }
     virtual U32 RestorationHeartWidget() const { return 0; }
+    virtual void NativeQuadQueueCommitted(std::span<const NativeQuadQueueMove>) {}
     virtual std::optional<U32> Read(U32 address) = 0;
     virtual void Write(U32 address, U32 value) = 0;
     std::optional<U32> Read32OrNullopt(U32 address) { return Read(address); }
