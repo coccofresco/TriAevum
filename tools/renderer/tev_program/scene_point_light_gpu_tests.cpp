@@ -204,6 +204,73 @@ void main() {
                     ++failures;
                 }
         std::cout << "Scene lighting: " << cases.size() << " GPU cases, " << failures << " failures\n";
+        // PerPixel conservation of an IndependentEmission source (e.g. a
+        // synthetic stray-fairy glow, identity 0x145): it lights the receiver
+        // exactly once. A native slot carrying the same identity loses its
+        // direct term whatever its colour (its LightContext ambient stays);
+        // a slot with another identity keeps it (the recorded negative: the
+        // comparison detects a doubled contribution).
+        {
+            enum : uint32_t { None, NativeSame, NativeOther };
+            const auto build = [&](bool point, uint32_t native_slot, float diffuse) {
+                PicaNativeLightBinding binding;
+                auto values = native;
+                values[93][1] = native_slot == None ? 0.0F : 1.0F;
+                values[80] = { 0, -1, 0, 1 };
+                values[81] = { diffuse, 0, 0, 0 };
+                if (native_slot != None) {
+                    auto& s = binding.Sources[0];
+                    s.Kind = PicaNativeLightSource::Type::Point;
+                    s.SourceIdentity = native_slot == NativeSame ? 0x145U : 0x146U;
+                    s.PositionWorld = { 0, 10, 0 };
+                    s.Radius = 20;
+                    s.UnattenuatedColor = s.ReferenceColor = { .5F, 0, 0 };
+                }
+                if (point) {
+                    auto points = std::make_shared<PicaScenePointLights>();
+                    points->Count = 1;
+                    points->Lights[0] = { 0x145, { 0, 10, 0 }, { 1, 0, 0 }, 20, 0 };
+                    points->Lights[0].CastsShadow = false;
+                    points->Lights[0].IndependentEmission = true;
+                    binding.ScenePoints = points;
+                }
+                PicaEnvironmentLighting settings;
+                settings.PreserveSceneBrightness = false;
+                const std::array<float, 16> camera{ 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+                const auto view = BuildPicaSurfaceLightingView(camera);
+                const auto lighting = BuildPicaSurfaceLightingUniforms(hooks, 1U << 9U,
+                    { reinterpret_cast<const uint8_t*>(values.data()), sizeof(values) }, binding, settings, &*view);
+                if (!view || !lighting) throw std::runtime_error("independent emission surface rejected");
+                Case c;
+                c.Lighting = *lighting;
+                return c;
+            };
+            std::array<Case, 5> emission{ build(false, NativeSame, 0), build(true, NativeSame, 0),
+                                          build(true, NativeSame, .5F), build(true, NativeOther, .5F),
+                                          build(true, NativeOther, 0) };
+            std::array<Vec4, 5> out{};
+            RunComputeTest(shader, std::as_bytes(std::span(emission)), std::as_writable_bytes(std::span(out)),
+                           emission.size());
+            unsigned emissionFailures = 0;
+            const float lit = out[1][0] - out[0][0];
+            if (!(lit > 1e-3F)) {
+                std::cerr << "PerPixel independent emitter does not illuminate receiver: " << lit << '\n';
+                ++emissionFailures;
+            }
+            for (size_t c = 0; c < 3; ++c)
+                if (std::abs(out[2][c] - out[1][c]) > 2e-5F) {
+                    std::cerr << "PerPixel independent emitter not exactly once channel=" << c
+                              << " actual=" << out[2][c] << " once=" << out[1][c] << '\n';
+                    ++emissionFailures;
+                }
+            if (!(out[3][0] - out[4][0] > 1e-3F)) {
+                std::cerr << "PerPixel negative check lost: another identity's native slot not visible\n";
+                ++emissionFailures;
+            }
+            std::cout << "PerPixel independent emission: " << emission.size() << " GPU cases, "
+                      << emissionFailures << " failures\n";
+            failures += emissionFailures;
+        }
         // Placed lights over the fragment at the origin (normal +Y): native
         // ambient 0.2, material diffuse 0.5, red light; each kind's term.
         {
