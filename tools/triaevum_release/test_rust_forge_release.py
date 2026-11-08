@@ -265,6 +265,31 @@ class RustForgeProfileTests(unittest.TestCase):
             self.assertFalse((root / "build/file_chooser.c").exists())
             self.assertEqual(json.loads((root / "build/flatpak-staging.json").read_text())["forge_profile"], "rust")
 
+    def test_mm3d_flatpak_uses_the_title_app_id_entry_wrapper_and_icons(self):
+        mm = "io.github.coccofresco.TriAevum.MM3D"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            write_rust_package(root / "package", target=LINUX.target)
+            oot = json.loads(stage_flatpak(root / "package", root / "oot").read_text())
+            manifest_path = stage_flatpak(root / "package", root / "build", title="mm3d")
+            self.assertEqual(manifest_path.name, f"{mm}.json")
+            manifest = json.loads(manifest_path.read_text())
+            self.assertEqual(manifest["app-id"], mm)
+            # The same build mechanism as OoT3D: only the app ID differs.
+            self.assertEqual(json.dumps(manifest).replace(mm, "io.github.coccofresco.TriAevum"), json.dumps(oot))
+            entry = (root / f"build/{mm}.desktop").read_text(encoding="utf-8")
+            self.assertIn("Name=TriAevum \u2014 Moonfall Curse", entry)
+            self.assertIn(f"Icon={mm}\n", entry)
+            self.assertIn('"$XDG_DATA_HOME/TriAevum-MM3D"', (root / "build/triaevum").read_text())
+            for name in (mm, f"{mm}.Forge"):
+                self.assertTrue((root / f"build/icons/hicolor/256x256/apps/{name}.png").is_file(), name)
+            self.assertFalse(list((root / "build/icons").rglob("io.github.coccofresco.TriAevum.png")))
+            state = json.loads((root / "build/flatpak-staging.json").read_text())
+            self.assertEqual((state["title"], state["app_id"]), ("mm3d", mm))
+            with self.assertRaisesRegex(ValueError, "Unknown title"):
+                stage_flatpak(root / "package", root / "x", title="zelda")
+            self.assertFalse((root / "x").exists())
+
     def test_appimage_audits_the_rust_forge_elfs(self):
         from tools.triaevum_release import appimage_package
         with tempfile.TemporaryDirectory() as directory:
