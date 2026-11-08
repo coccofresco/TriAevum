@@ -336,33 +336,31 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         const auto& counters = mNativePicaPreparationCounters;
         const auto bridge = mNriPicaPipelineBridge.PipelineStatistics();
         std::fprintf(stderr,
-            "TRIAEVUM_HYBRID_PREPARATION specialized_draws=%llu uber_draws=%llu completed_draws=%llu "
-            "complete_ms=%.3f max_complete_ms=%.3f program_tasks=%llu uber_programs=%llu "
-            "uber_unavailable=%llu/%llu/%llu/%llu/%llu/%llu pipeline_tasks=%llu pipeline_created=%llu "
-            "pipeline_completions=%llu pending=%zu uber_acquire_ms=%.3f max_uber_acquire_ms=%.3f "
-            "uber_effects=surface:%llu,pbr:%llu,relief:%llu,toon:%llu reproducible=%d\n",
-            static_cast<unsigned long long>(counters.SpecializedDraws),
-            static_cast<unsigned long long>(counters.UberDraws),
-            static_cast<unsigned long long>(counters.CompletedDraws),
-            counters.CompleteMilliseconds, counters.MaximumCompleteMilliseconds,
-            static_cast<unsigned long long>(counters.ProgramTasks),
-            static_cast<unsigned long long>(counters.UberPrograms),
-            static_cast<unsigned long long>(counters.UberUnavailable[0]),
-            static_cast<unsigned long long>(counters.UberUnavailable[1]),
-            static_cast<unsigned long long>(counters.UberUnavailable[2]),
-            static_cast<unsigned long long>(counters.UberUnavailable[3]),
-            static_cast<unsigned long long>(counters.UberUnavailable[4]),
-            static_cast<unsigned long long>(counters.UberUnavailable[5]),
-            static_cast<unsigned long long>(bridge.BackgroundRequests),
-            static_cast<unsigned long long>(bridge.BackgroundCreated),
-            static_cast<unsigned long long>(bridge.BackgroundCompletions),
-            mPreparationQueue->Pending(), counters.UberAcquireMilliseconds,
-            counters.MaximumUberAcquireMilliseconds,
-            static_cast<unsigned long long>(counters.UberSurfaceDraws),
-            static_cast<unsigned long long>(counters.UberPbrDraws),
-            static_cast<unsigned long long>(counters.UberReliefDraws),
-            static_cast<unsigned long long>(counters.UberToonDraws),
-            mFrameReproducibleProgramSelection ? 1 : 0);
+                     "TRIAEVUM_HYBRID_PREPARATION specialized_draws=%llu uber_draws=%llu completed_draws=%llu "
+                     "complete_ms=%.3f max_complete_ms=%.3f program_tasks=%llu uber_programs=%llu "
+                     "uber_unavailable=%llu/%llu/%llu/%llu/%llu/%llu pipeline_tasks=%llu pipeline_created=%llu "
+                     "pipeline_completions=%llu pending=%zu uber_acquire_ms=%.3f max_uber_acquire_ms=%.3f "
+                     "uber_effects=surface:%llu,pbr:%llu,relief:%llu,toon:%llu reproducible=%d\n",
+                     static_cast<unsigned long long>(counters.SpecializedDraws),
+                     static_cast<unsigned long long>(counters.UberDraws),
+                     static_cast<unsigned long long>(counters.CompletedDraws), counters.CompleteMilliseconds,
+                     counters.MaximumCompleteMilliseconds, static_cast<unsigned long long>(counters.ProgramTasks),
+                     static_cast<unsigned long long>(counters.UberPrograms),
+                     static_cast<unsigned long long>(counters.UberUnavailable[0]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[1]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[2]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[3]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[4]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[5]),
+                     static_cast<unsigned long long>(bridge.BackgroundRequests),
+                     static_cast<unsigned long long>(bridge.BackgroundCreated),
+                     static_cast<unsigned long long>(bridge.BackgroundCompletions), mPreparationQueue->Pending(),
+                     counters.UberAcquireMilliseconds, counters.MaximumUberAcquireMilliseconds,
+                     static_cast<unsigned long long>(counters.UberSurfaceDraws),
+                     static_cast<unsigned long long>(counters.UberPbrDraws),
+                     static_cast<unsigned long long>(counters.UberReliefDraws),
+                     static_cast<unsigned long long>(counters.UberToonDraws),
+                     mFrameReproducibleProgramSelection ? 1 : 0);
     }
 }
 

@@ -47,7 +47,7 @@ struct Args {
     // must not let compile timing choose a draw's program. A throughput
     // benchmark keeps the interactive (always-available) policy it measures.
     [[nodiscard]] bool FrameReproducible() const noexcept {
-        return FixedDeltaSeconds > 0.0 && !ThroughputBenchmark;
+      return FixedDeltaSeconds > 0.0 && !ThroughputBenchmark;
     }
 
     // A scripted session (captures, fixed steps, bounded or replayed runs,

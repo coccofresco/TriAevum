@@ -2216,9 +2216,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 backgroundAcquisition, &specializedPending);
             if (specializedPending) selectedPipeline = nullptr;
         }
-        if (selectedPipeline == nullptr &&
-            Renderer3ds::DrawsUseAlwaysAvailablePrograms(UsesAlwaysAvailablePrograms(),
-                                                         mFrameReproducibleProgramSelection)) {
+        if (selectedPipeline == nullptr && Renderer3ds::DrawsUseAlwaysAvailablePrograms(
+                                               UsesAlwaysAvailablePrograms(), mFrameReproducibleProgramSelection)) {
             auto unavailable = NativePicaUberUnavailable::NoParametricProgram;
             if (!draw.UberFragmentShaderSource.empty()) {
                 // The always-available program executes the specialized

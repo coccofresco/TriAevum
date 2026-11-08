@@ -55,7 +55,7 @@ struct TitleShaderPreparationPlan {
 // The always-available (parametric) program executes the same decisions from
 // uniforms; it is not bit-exact with the specialized program (a rounding at a
 // colour quantization step can differ by one step, observed as 7 pixels with a
-// red delta of 8 in OoT3D Kokiri frames 100/200). Which program renders such a
+// red delta of 8 in deterministic reference frames). Which program renders such a
 // draw then depends on compile and cache timing. A frame-reproducible session
 // (fixed simulation steps: captures, deterministic acceptance runs) completes
 // the specialized program instead, exactly as every draw did while the title
