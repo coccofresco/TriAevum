@@ -33,16 +33,23 @@ LEGACY_WINDOWS_RUNTIME = "TriAevum.exe"
 LEGACY_LAUNCH_PROFILE = "TriAevum.launch.json"
 
 
-def product_executable(title: str, titles_root: Path = TITLES_ROOT) -> str:
-    """The installed Windows game executable of `title`: the product name
-    (owner decision 2026-11-08), a title fact in titles/<title>/product.json."""
+def product_executable(title: str, titles_root: Path = TITLES_ROOT, *, os_name: str = "windows") -> str:
+    """The installed game executable of `title` on Windows or Linux: the
+    product name (owner decisions 2026-11-08), a title fact in
+    titles/<title>/product.json (windows_executable, linux_executable)."""
+    if os_name not in ("windows", "linux"):
+        raise ValueError(f"No product executable fact for {os_name}")
     facts = json.loads((titles_root / title / "product.json").read_text(encoding="utf-8"))
-    name = facts.get("windows_executable")
-    if facts.get("title") != title or not isinstance(name, str) or not name.endswith(".exe") or "/" in name:
+    name = facts.get(f"{os_name}_executable")
+    windows = os_name == "windows"
+    if (facts.get("title") != title or not isinstance(name, str) or not name or "/" in name or "\\" in name
+            or name.endswith(".exe") != windows or name.startswith(".")):
         raise ValueError(f"Invalid product facts for {title}")
     return name
 
 
+# The Linux package keeps the build output TriAevum at its root; installing
+# renames it in place to the product name ("Echoes_of_Time", for_title for MM3D).
 # The package keeps the build output runtime/TriAevum.exe; installing renames it
 # to the product name ("Echoes_of_Time.exe" for OoT3D, the Python Forge's title;
 # the MM3D Forge is the Rust one built with title-mm3d: for_title("mm3d")).
@@ -55,7 +62,7 @@ LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "TriAevumForge", "forge/oot3d_game_module.so",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
                         "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".tar.gz",
-                        "TriAevum")
+                        "Echoes_of_Time")
 # Catalog paths are relative to TriAevum.app/Contents/Resources. The signed
 # executables remain there; only user data is activated outside the bundle.
 MACOS = ReleasePlatform("aarch64-apple-darwin", "TriAevum",
@@ -73,11 +80,13 @@ ANDROID = ReleasePlatform("aarch64-linux-android", "lib/arm64-v8a/libTriAevum.so
 
 
 def for_title(title: str, value: ReleasePlatform = None) -> ReleasePlatform:
-    """The Windows platform of `title`'s product (its installed executable name)."""
+    """The Windows or Linux platform of `title`'s product (its installed executable name)."""
     value = WINDOWS if value is None else value
-    if value.target != WINDOWS.target:
-        return value
-    return replace(value, installed_runtime=product_executable(title))
+    if value.target == WINDOWS.target:
+        return replace(value, installed_runtime=product_executable(title))
+    if value.target == LINUX.target:
+        return replace(value, installed_runtime=product_executable(title, os_name="linux"))
+    return value
 
 
 def launch_profile_name(value: ReleasePlatform) -> str:
@@ -101,13 +110,20 @@ def _remove_shadowing_library(path: Path) -> None:
         os.replace(path, path.with_name(f".{path.name}.{os.getpid()}.stale"))
 
 
+def sealed_linux_payload(root: Path) -> bool:
+    """An AppImage (<AppDir>/usr/lib/triaevum) or Flatpak (/app/lib/triaevum)
+    payload: read-only, so like the macOS bundle it keeps the build output
+    TriAevum; only a portable Linux installation takes the product name."""
+    return Path(root).parts[-3:] == ("usr", "lib", "triaevum") or Path(root).as_posix() == "/app/lib/triaevum"
+
+
 def place_installed_runtime(root: Path, value: ReleasePlatform) -> Path:
     """Move a packaged runtime to the installation root, replacing the previous one.
 
     The Windows runtime finds its DLLs in runtime/, but its own folder is searched
     first: DLLs a previous package left in the root would shadow the new ones.
     """
-    if value == MACOS:
+    if value == MACOS or (value.target == LINUX.target and sealed_linux_payload(root)):
         return root / value.runtime
     for stale in root.glob(".*.stale"):
         try:

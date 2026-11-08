@@ -70,8 +70,17 @@ class ReleasePlatformTests(unittest.TestCase):
             self.assertEqual(installed_runtime_path(root, WINDOWS), root / "Echoes_of_Time.exe")
             self.assertEqual(place_installed_runtime(root, WINDOWS), root / "Echoes_of_Time.exe")
             (root / LINUX.runtime).write_bytes(b"linux runtime")
-            self.assertEqual(place_installed_runtime(root, LINUX), root / LINUX.runtime)
-            self.assertTrue((root / LINUX.runtime).is_file())
+            # Linux: the build output TriAevum at the root is renamed in place.
+            self.assertEqual(place_installed_runtime(root, LINUX), root / "Echoes_of_Time")
+            self.assertFalse((root / LINUX.runtime).exists())
+            self.assertEqual((root / "Echoes_of_Time").read_bytes(), b"linux runtime")
+            self.assertEqual(installed_runtime_path(root, LINUX), root / "Echoes_of_Time")
+            # Negative: an AppImage payload keeps the build output name.
+            payload = root / "AppDir/usr/lib/triaevum"
+            payload.mkdir(parents=True)
+            (payload / LINUX.runtime).write_bytes(b"sealed")
+            self.assertEqual(place_installed_runtime(payload, LINUX), payload / LINUX.runtime)
+            self.assertTrue((payload / LINUX.runtime).is_file())
 
     def test_a_loaded_root_library_is_renamed_aside(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -105,12 +114,21 @@ class ReleasePlatformTests(unittest.TestCase):
         self.assertEqual(product_executable("oot3d"), "Echoes_of_Time.exe")
         self.assertEqual(WINDOWS.installed_runtime, product_executable("oot3d"))
         self.assertEqual(launch_profile_name(WINDOWS), "Echoes_of_Time.launch.json")
-        self.assertEqual(launch_profile_name(LINUX), "TriAevum.launch.json")
+        self.assertEqual(launch_profile_name(LINUX), "Echoes_of_Time.launch.json")
+        self.assertEqual(product_executable("oot3d", os_name="linux"), "Echoes_of_Time")
+        self.assertEqual(LINUX.runtime, "TriAevum")
+        self.assertEqual(LINUX.forge, "TriAevumForge")
         mm3d = for_title("mm3d")
         self.assertEqual(mm3d.installed_runtime, "Moonfall_Curse.exe")
         self.assertEqual(mm3d.runtime, "runtime/TriAevum.exe")
         self.assertEqual(launch_profile_name(mm3d), "Moonfall_Curse.launch.json")
-        self.assertEqual(for_title("mm3d", LINUX), LINUX)
+        mm3d_linux = for_title("mm3d", LINUX)
+        self.assertEqual(mm3d_linux.installed_runtime, "Moonfall_Curse")
+        self.assertEqual(mm3d_linux.runtime, "TriAevum")
+        self.assertEqual(mm3d_linux.forge, "TriAevumForge")
+        self.assertEqual(launch_profile_name(mm3d_linux), "Moonfall_Curse.launch.json")
+        self.assertEqual(for_title("oot3d", LINUX), LINUX)
+        self.assertEqual(for_title("mm3d", MACOS), MACOS)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             (root / "runtime").mkdir()
@@ -123,6 +141,16 @@ class ReleasePlatformTests(unittest.TestCase):
             (root / "bad/product.json").write_text('{"title": "other", "windows_executable": "x.exe"}')
             with self.assertRaisesRegex(ValueError, "Invalid product facts for bad"):
                 product_executable("bad", root)
+            # Negatives: a Linux name with .exe, a missing Linux fact, an unknown OS.
+            (root / "lin").mkdir()
+            (root / "lin/product.json").write_text('{"title": "lin", "windows_executable": "x.exe", "linux_executable": "x.exe"}')
+            with self.assertRaisesRegex(ValueError, "Invalid product facts for lin"):
+                product_executable("lin", root, os_name="linux")
+            (root / "lin/product.json").write_text('{"title": "lin", "windows_executable": "x.exe"}')
+            with self.assertRaisesRegex(ValueError, "Invalid product facts for lin"):
+                product_executable("lin", root, os_name="linux")
+            with self.assertRaisesRegex(ValueError, "No product executable fact for macos"):
+                product_executable("lin", root, os_name="macos")
 
     def test_legacy_windows_and_explicit_linux(self):
         self.assertEqual(catalog_platform({}), WINDOWS)
@@ -132,7 +160,8 @@ class ReleasePlatformTests(unittest.TestCase):
 
     def test_linux_gui_paths(self):
         with patch("forge_gui.host_platform", return_value=LINUX), patch("forge.host_platform", return_value=LINUX):
-            self.assertEqual(forge_gui.runtime_path().name, "TriAevum")
+            # No packaged build output: the installed product name.
+            self.assertEqual(forge_gui.runtime_path().name, "Echoes_of_Time")
             self.assertEqual(forge.default_runtime_plugin_path().name, "triaevum_title_aot.so")
 
     def test_linux_catalog_and_cross_platform_rejection(self):

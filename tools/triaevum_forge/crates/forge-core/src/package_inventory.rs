@@ -458,10 +458,12 @@ pub fn preserved(path: &str) -> bool {
         || [
             forge_catalog::platform::LEGACY_WINDOWS_RUNTIME,
             forge_catalog::platform::WINDOWS_PRODUCT_EXECUTABLE,
+            forge_catalog::platform::LINUX_PRODUCT_EXECUTABLE,
             forge_catalog::platform::LEGACY_LAUNCH_PROFILE,
         ]
         .contains(&path)
         || forge_catalog::platform::launch_profile_name(crate::layout::WINDOWS.installed_runtime) == path
+        || forge_catalog::platform::launch_profile_name(crate::layout::LINUX.installed_runtime) == path
 }
 
 /// The live path of a member under `root`.
@@ -561,5 +563,11 @@ mod tests {
         assert!(preserved(product) && preserved(&product.replace(".exe", ".launch.json")));
         assert!(!preserved("Moonfall_Curse.exe") || !preserved("Echoes_of_Time.exe"));
         assert!(!preserved("runtime/TriAevum.exe"));
+        // Linux: the installed product binary and its profile, never the
+        // packaged build output TriAevum or the other title's name.
+        let linux = crate::layout::LINUX.installed_runtime;
+        assert!(preserved(linux) && preserved(&format!("{linux}.launch.json")));
+        assert!(!preserved("TriAevum") && !preserved("TriAevumForge"));
+        assert!(!preserved("Moonfall_Curse") || !preserved("Echoes_of_Time"));
     }
 }

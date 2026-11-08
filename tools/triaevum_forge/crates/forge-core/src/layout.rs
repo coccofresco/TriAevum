@@ -214,7 +214,8 @@ pub const LINUX: ReleasePlatform = ReleasePlatform {
     forge: "TriAevumForge",
     native_module: "forge/oot3d_game_module.so",
     title_module: "triaevum_title_aot.so",
-    installed_runtime: "TriAevum",
+    // The product name, a title fact (forge-catalog platform.rs).
+    installed_runtime: forge_catalog::platform::LINUX_PRODUCT_EXECUTABLE,
 };
 
 /// The APK: its libraries stay where Android installed them.
@@ -294,7 +295,7 @@ pub fn ensure_runtime_closed(root: &Path, platform: &ReleasePlatform) -> Result<
 /// later runs remove released `.stale` files. Read-only files are replaced,
 /// briefly locked ones retried, and a file still held names its holder.
 pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Result<PathBuf> {
-    if *platform == MACOS {
+    if *platform == MACOS || (*platform == LINUX && sealed_linux_payload(root)) {
         return Ok(root.join(platform.runtime));
     }
     if let Ok(entries) = std::fs::read_dir(root) {
@@ -327,6 +328,20 @@ pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Resul
         }
     }
     Ok(installed)
+}
+
+/// The read-only payload of an AppImage (`<AppDir>/usr/lib/triaevum`) or a
+/// Flatpak (`/app/lib/triaevum`): like the signed macOS bundle, it keeps the
+/// build output `TriAevum`; only a portable (writable) Linux installation
+/// renames it to the product name. The desktop entry names the product.
+pub fn sealed_linux_payload(root: &Path) -> bool {
+    let parts: Vec<_> = root.components().collect();
+    let tail = parts.len() >= APPIMAGE_PAYLOAD.len()
+        && parts[parts.len() - APPIMAGE_PAYLOAD.len()..]
+            .iter()
+            .zip(APPIMAGE_PAYLOAD)
+            .all(|(part, name)| part.as_os_str() == name);
+    tail || root == Path::new("/app/lib/triaevum")
 }
 
 /// A loaded library is renamed aside at once rather than waited for.
@@ -460,6 +475,27 @@ mod tests {
         let mut permissions = std::fs::metadata(path).unwrap().permissions();
         permissions.set_readonly(true);
         std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[test]
+    fn linux_installs_the_product_name_except_in_a_sealed_payload() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::write(root.join(LINUX.runtime), b"linux runtime").unwrap();
+        let installed = place_installed_runtime(root, &LINUX).unwrap();
+        assert_eq!(installed, root.join(forge_catalog::platform::LINUX_PRODUCT_EXECUTABLE));
+        assert_ne!(LINUX.installed_runtime, LINUX.runtime);
+        assert!(!root.join(LINUX.runtime).exists());
+        assert_eq!(std::fs::read(&installed).unwrap(), b"linux runtime");
+        assert_eq!(installed_runtime_path(root, &LINUX), installed);
+        // Negative: AppImage and Flatpak payloads keep the build output name.
+        let payload = root.join("AppDir/usr/lib/triaevum");
+        std::fs::create_dir_all(&payload).unwrap();
+        std::fs::write(payload.join(LINUX.runtime), b"sealed").unwrap();
+        assert_eq!(place_installed_runtime(&payload, &LINUX).unwrap(), payload.join(LINUX.runtime));
+        assert!(payload.join(LINUX.runtime).is_file());
+        assert!(sealed_linux_payload(Path::new("/app/lib/triaevum")));
+        assert!(!sealed_linux_payload(root));
     }
 
     #[test]

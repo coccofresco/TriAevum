@@ -22,6 +22,14 @@ use crate::pyjson::py_str;
 pub const WINDOWS_PRODUCT_EXECUTABLE: &str = "Echoes_of_Time.exe";
 #[cfg(feature = "title-mm3d")]
 pub const WINDOWS_PRODUCT_EXECUTABLE: &str = "Moonfall_Curse.exe";
+/// The installed Linux game binary takes the product name too (owner
+/// decision 2026-11-08, Linux names): `linux_executable` of
+/// `titles/<title>/product.json`. The Linux package keeps the build output
+/// `TriAevum` at its root; Forge's install step renames it in place.
+#[cfg(not(feature = "title-mm3d"))]
+pub const LINUX_PRODUCT_EXECUTABLE: &str = "Echoes_of_Time";
+#[cfg(feature = "title-mm3d")]
+pub const LINUX_PRODUCT_EXECUTABLE: &str = "Moonfall_Curse";
 /// The root runtime of Windows installations made before the product names:
 /// removed when Forge places the renamed one.
 pub const LEGACY_WINDOWS_RUNTIME: &str = "TriAevum.exe";
@@ -78,7 +86,7 @@ pub const LINUX: ReleasePlatform = ReleasePlatform {
     archiver: "llvm-ar",
     support_library: "libtriaevum_title_whole_aot_support.a",
     archive_suffix: ".tar.gz",
-    installed_runtime: "TriAevum",
+    installed_runtime: LINUX_PRODUCT_EXECUTABLE,
 };
 
 /// The APK: Android installs its libraries in the application's native
@@ -228,6 +236,14 @@ mod tests {
         assert_eq!(WINDOWS.runtime, "runtime/TriAevum.exe");
         assert_ne!(WINDOWS.installed_runtime, LEGACY_WINDOWS_RUNTIME);
         assert_eq!(launch_profile_name(WINDOWS.installed_runtime), expected.replace(".exe", ".launch.json"));
-        assert_eq!(launch_profile_name(LINUX.installed_runtime), LEGACY_LAUNCH_PROFILE);
+        // Linux: the product name without an extension (linux_executable);
+        // the package keeps the build output TriAevum and the Forge its name.
+        let linux = facts["linux_executable"].as_str().unwrap();
+        assert_eq!(format!("{linux}.exe"), expected);
+        assert_eq!(LINUX.installed_runtime, linux);
+        assert_eq!(LINUX.runtime, "TriAevum");
+        assert_eq!(LINUX.forge, "TriAevumForge");
+        assert_eq!(launch_profile_name(LINUX.installed_runtime), expected.replace(".exe", ".launch.json"));
+        assert_ne!(launch_profile_name(LINUX.installed_runtime), LEGACY_LAUNCH_PROFILE);
     }
 }
