@@ -1639,6 +1639,38 @@ def _emit_terminal(
                 f"hint block 0x{block.pc:08X} has no unique fallthrough"
             )
         return [*lines, _goto(int(fallthrough_edges[0]["target"]), block_pcs)]
+    if (raw & 0xFE000000) == 0xFA000000:
+        # BLX #imm: an unconditional call into Thumb.  Thumb code has no
+        # compiled function; the product dispatch executes it from guest
+        # memory (a32_thumb), as the registry's Branch op does.  The program
+        # records it as a "thumb_call" edge whose target carries bit 0.
+        imm24 = raw & 0x00FFFFFF
+        if imm24 & 0x00800000:
+            imm24 -= 0x01000000
+        target = ((pc + 8 + (imm24 << 2) + ((raw >> 23) & 2)) & 0xFFFFFFFF) | 1
+        recorded = [
+            int(edge["target"]) for edge in block.successors
+            if edge.get("kind") == "thumb_call"
+        ]
+        if recorded != [target]:
+            raise LoweringError(
+                f"BLX immediate at 0x{pc:08X} has no matching thumb_call edge"
+            )
+        return_pc = pc + 4
+        return [
+            "++context.Stats.DirectCalls;",
+            f"state.R[14] = 0x{return_pc:08X}U;",
+            "{",
+            "const Oot3dWholeAotFlow callFlow = "
+            f"Oot3dAotCallExternal(context, 0x{target:08X}U, frame, state, "
+            "commitState, reloadState);",
+            "if (callFlow.Kind != Oot3dWholeAotFlowKind::Returned ||",
+            f"    callFlow.Pc != 0x{return_pc:08X}U) {{",
+            "    return callFlow;",
+            "}",
+            "}",
+            _goto(return_pc, block_pcs),
+        ]
     if (raw & 0x0E000000) == 0x0A000000 and ((raw >> 28) & 0xF) != 0xF:
         if raw & (1 << 24):
             target = _branch_target(pc, raw)

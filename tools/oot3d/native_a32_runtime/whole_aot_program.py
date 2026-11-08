@@ -379,6 +379,21 @@ def _edge_target(
     return AotEdge(site=site, kind=kind, target=target, condition=condition)
 
 
+def _arm_blx_immediate_target(item: DecodedInstruction) -> int | None:
+    """Thumb destination (bit 0 set) of an A32 ``BLX #imm``, else None.
+
+    The encoding is cond=0xF, 101H, imm24: target = pc + 8 + imm24 * 4 + H * 2,
+    entered in Thumb state (a32_runtime.cpp Opcode::Branch, a32_thumb.h).
+    """
+    if item.state != "arm" or ((item.raw >> 25) & 0x7F) != 0x7D:
+        return None
+    imm24 = item.raw & 0x00FFFFFF
+    if imm24 & 0x00800000:
+        imm24 -= 0x01000000
+    target = (item.pc + 8 + (imm24 << 2) + ((item.raw >> 23) & 2)) & 0xFFFFFFFF
+    return target | 1
+
+
 def _successors(
     item: DecodedInstruction,
     explicit_lr_calls: dict[int, int],
@@ -397,7 +412,14 @@ def _successors(
             edges.append(_edge_target(pc, "fallthrough", fallthrough, condition))
         return tuple(edges)
     if item.kind == "call":
-        if item.target is not None:
+        thumb = _arm_blx_immediate_target(item)
+        if thumb is not None:
+            # BLX #imm enters Thumb.  Thumb code has no A32 function in this
+            # program: the runtime executes it from guest memory (a32_thumb),
+            # exactly as the registry's Branch op does.  Model it as a call
+            # to an external Thumb boundary, not as an unresolved A32 edge.
+            edges.append(_edge_target(pc, "thumb_call", thumb, None))
+        elif item.target is not None:
             edges.append(_edge_target(pc, "direct_call", item.target, condition))
         edges.append(_edge_target(pc, "resume", fallthrough, condition))
         return tuple(edges)
@@ -653,6 +675,10 @@ def _function_closure(
                 else:
                     unresolved.add(edge)
                     closed = False
+                continue
+            if edge.kind == "thumb_call":
+                # External Thumb boundary: dispatched at run time, so it
+                # neither opens the CFG nor adds an A32 callee.
                 continue
             if edge.kind in {"indirect_call", "indirect_branch"}:
                 indirect_sites.add((edge.site, edge.kind))

@@ -711,6 +711,56 @@ class WholeAotCppTests(unittest.TestCase):
             self.assertIn("Oot3dAotCallExternal(context, 0x00001008U", source)
             self.assertIn("std::array<uint32_t, 2>", source)
 
+    def _blx_program(self, root: Path, successors: list[dict]) -> tuple[Path, Path, Path]:
+        code = words(0xFB000001, 0xE12FFF1E, 0, 0x47704770)
+        code_path = root / "code.bin"
+        program_path = root / "program.json"
+        selection_path = root / "selection.json"
+        code_path.write_bytes(code)
+        program_path.write_text(json.dumps({
+            "format": PROGRAM_FORMAT,
+            "base": 0x1000,
+            "code_sha256": hashlib.sha256(code).hexdigest(),
+            "blocks": [
+                {"id": 0, "pc": 0x1000, "end_pc": 0x1004, "successors": successors},
+                {"id": 1, "pc": 0x1004, "end_pc": 0x1008,
+                 "successors": [{"site": 0x1004, "kind": "return"}]},
+            ],
+            "functions": [{
+                "entry": 0x1000, "name": "Caller", "blocks": [0, 1],
+                "closed_static_cfg": True, "direct_calls": [],
+                "tail_calls": [], "indirect_sites": [],
+            }],
+        }), encoding="utf-8")
+        selection_path.write_text(json.dumps({
+            "format": SELECTION_FORMAT,
+            "functions": [{"entry": 0x1000}],
+            "external_functions": [],
+        }), encoding="utf-8")
+        return program_path, selection_path, code_path
+
+    def test_blx_immediate_calls_the_thumb_boundary_externally(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self._blx_program(root, [
+                {"site": 0x1000, "kind": "thumb_call", "target": 0x100F},
+                {"site": 0x1000, "kind": "resume", "target": 0x1004},
+            ])
+            manifest = generate(*paths, root / "output")
+            source = (root / "output" / SOURCE_NAME).read_text(encoding="utf-8")
+            self.assertIn("r14 = 0x00001004U;", source)
+            self.assertIn("Oot3dAotCallExternal(context, 0x0000100FU", source)
+            self.assertEqual(manifest["functions"][0]["resume_entries"], [0x1004])
+
+    def test_blx_immediate_without_thumb_edge_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self._blx_program(root, [
+                {"site": 0x1000, "kind": "resume", "target": 0x1004},
+            ])
+            with self.assertRaisesRegex(LoweringError, "no matching thumb_call"):
+                generate(*paths, root / "output")
+
     def test_indirect_call_exits_and_reenters_aot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
