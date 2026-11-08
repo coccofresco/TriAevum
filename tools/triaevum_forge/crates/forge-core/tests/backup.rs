@@ -119,7 +119,7 @@ impl Site {
     fn recipes(&self) {
         let recipe = json!({"id": RECIPE, "title": "Fixture", "region": "EUR"});
         write_json(
-            &self.package.join("recipes/oot3d.json"),
+            &self.package.join(forge_catalog::title::ACTIVE.packaged_recipes),
             &json!({"format": "triaevum_supported_revisions_v1", "recipes": [recipe]}),
         );
     }
@@ -187,7 +187,7 @@ fn appimage_site(directory: &tempfile::TempDir) -> Site {
     let root = resolve(directory.path()).unwrap();
     let package = root.join(".mount_TriAevum/usr/lib/triaevum");
     let home = root.join("home/player");
-    let activation = home.join(".local/share/TriAevum");
+    let activation = home.join(".local/share").join(forge_catalog::title::ACTIVE.data_namespace);
     let data = activation.join("data");
     let site = Site { root, package, activation, data, os: HostOs::Linux, env: vec![("HOME", text(&home))] };
     std::fs::create_dir_all(&site.package).unwrap();
@@ -346,7 +346,7 @@ fn android_backups_carry_the_touch_preferences_the_app_serializes() {
         env: &no_env,
         sizes: false,
     };
-    write_json(&installation.layout.package.join("recipes/oot3d.json"),
+    write_json(&installation.layout.package.join(forge_catalog::title::ACTIVE.packaged_recipes),
         &json!({"format": "triaevum_supported_revisions_v1", "recipes": [{"id": RECIPE}]}));
     let inventory = resolve_inventory(&installation).unwrap();
     assert!(backup_plan(&inventory, &[], None).unwrap().needs_touch_preferences);
@@ -487,7 +487,7 @@ fn smuggle(manifest: &mut Value, files: &mut Vec<(String, Vec<u8>)>, unit: &str,
 
 /// Deliberately synthetic recipe metadata, not supported game inputs/modules.
 fn title_site(site: &Site, game: &str) {
-    write_json(&site.package.join("recipes/oot3d.json"), &json!({
+    write_json(&site.package.join(forge_catalog::title::ACTIVE.packaged_recipes), &json!({
         "format": "triaevum_supported_revisions_v1",
         "recipes": [{"id": RECIPE, "game": "oot3d"}, {"id": "fixture-other", "game": "mm3d"}]
     }));
@@ -561,7 +561,7 @@ fn unknown_or_ambiguous_installation_identity_never_creates_a_backup() {
     for case in ["missing-active", "unknown-recipe", "wrong-game", "malformed-active", "partial-catalog", "missing-catalog"] {
         title_site(&site, "mm3d");
         let active = site.data.join("active-title.json");
-        let catalog = site.package.join("recipes/oot3d.json");
+        let catalog = site.package.join(forge_catalog::title::ACTIVE.packaged_recipes);
         match case {
             "missing-active" => std::fs::remove_file(&active).unwrap(),
             "unknown-recipe" => { let mut v = read_json(&active); v["recipe"] = json!("unknown"); write_json(&active, &v); }
