@@ -49,8 +49,188 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 1048649,
+      "name": "thumb_00100048",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048693,
+      "name": "thumb_00100074",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048709,
+      "name": "thumb_00100084",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048737,
+      "name": "thumb_001000A0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048745,
+      "name": "thumb_001000A8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048777,
+      "name": "thumb_001000C8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048901,
+      "name": "thumb_00100144",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048939,
+      "name": "thumb_0010016A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1048957,
+      "name": "thumb_0010017C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049001,
+      "name": "thumb_001001A8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049089,
+      "name": "thumb_00100200",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049117,
+      "name": "thumb_0010021C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049121,
+      "name": "thumb_00100220",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049127,
+      "name": "thumb_00100226",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049153,
+      "name": "thumb_00100240",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 1049176,
       "name": "thunk_FUN_00100260",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049185,
+      "name": "thumb_00100260",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049189,
+      "name": "thumb_00100264",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049203,
+      "name": "thumb_00100272",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049229,
+      "name": "thumb_0010028C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049253,
+      "name": "thumb_001002A4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049259,
+      "name": "thumb_001002AA",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049337,
+      "name": "thumb_001002F8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049357,
+      "name": "thumb_0010030C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049433,
+      "name": "thumb_00100358",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049473,
+      "name": "thumb_00100380",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049501,
+      "name": "thumb_0010039C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049545,
+      "name": "thumb_001003C8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049567,
+      "name": "thumb_001003DE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049583,
+      "name": "thumb_001003EE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049593,
+      "name": "thumb_001003F8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049603,
+      "name": "thumb_00100402",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049641,
+      "name": "thumb_00100428",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049657,
+      "name": "thumb_00100438",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049739,
+      "name": "thumb_0010048A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049765,
+      "name": "thumb_001004A4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1049873,
+      "name": "thumb_00100510",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -59,13 +239,288 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 1049921,
+      "name": "thumb_00100540",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050029,
+      "name": "thumb_001005AC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050145,
+      "name": "thumb_00100620",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 1050188,
       "name": "thunk_FUN_0010065e",
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 1050197,
+      "name": "thumb_00100654",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050207,
+      "name": "thumb_0010065E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050221,
+      "name": "thumb_0010066C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050333,
+      "name": "thumb_001006DC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050501,
+      "name": "thumb_00100784",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050545,
+      "name": "thumb_001007B0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050579,
+      "name": "thumb_001007D2",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050625,
+      "name": "thumb_00100800",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050645,
+      "name": "thumb_00100814",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050685,
+      "name": "thumb_0010083C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050829,
+      "name": "thumb_001008CC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1050925,
+      "name": "thumb_0010092C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051037,
+      "name": "thumb_0010099C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051065,
+      "name": "thumb_001009B8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051105,
+      "name": "thumb_001009E0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051141,
+      "name": "thumb_00100A04",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051197,
+      "name": "thumb_00100A3C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051213,
+      "name": "thumb_00100A4C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051409,
+      "name": "thumb_00100B10",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051431,
+      "name": "thumb_00100B26",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051447,
+      "name": "thumb_00100B36",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051465,
+      "name": "thumb_00100B48",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051533,
+      "name": "thumb_00100B8C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051557,
+      "name": "thumb_00100BA4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051577,
+      "name": "thumb_00100BB8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051641,
+      "name": "thumb_00100BF8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051653,
+      "name": "thumb_00100C04",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051677,
+      "name": "thumb_00100C1C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051687,
+      "name": "thumb_00100C26",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051689,
+      "name": "thumb_00100C28",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051751,
+      "name": "thumb_00100C66",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1051791,
+      "name": "thumb_00100C8E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052019,
+      "name": "thumb_00100D72",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052349,
+      "name": "thumb_00100EBC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052581,
+      "name": "thumb_00100FA4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052593,
+      "name": "thumb_00100FB0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052629,
+      "name": "thumb_00100FD4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052661,
+      "name": "thumb_00100FF4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052697,
+      "name": "thumb_00101018",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1052985,
+      "name": "thumb_00101138",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1053217,
+      "name": "thumb_00101220",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1053425,
+      "name": "thumb_001012F0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1053641,
+      "name": "thumb_001013C8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1053741,
+      "name": "thumb_0010142C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1053749,
+      "name": "thumb_00101434",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1053777,
+      "name": "thumb_00101450",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1054501,
+      "name": "thumb_00101724",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1055421,
+      "name": "thumb_00101ABC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1055953,
+      "name": "thumb_00101CD0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1056661,
+      "name": "thumb_00101F94",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1056823,
+      "name": "thumb_00102036",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 1056860,
       "name": "mm3d_fun_0010205C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1056869,
+      "name": "thumb_00102064",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -76,6 +531,526 @@
     {
       "entry": 1057680,
       "name": "mm3d_fun_00102390",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1057693,
+      "name": "thumb_0010239C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058009,
+      "name": "thumb_001024D8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058019,
+      "name": "thumb_001024E2",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058033,
+      "name": "thumb_001024F0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058053,
+      "name": "thumb_00102504",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058071,
+      "name": "thumb_00102516",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058085,
+      "name": "thumb_00102524",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058109,
+      "name": "thumb_0010253C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058119,
+      "name": "thumb_00102546",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058143,
+      "name": "thumb_0010255E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058153,
+      "name": "thumb_00102568",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058521,
+      "name": "thumb_001026D8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058529,
+      "name": "thumb_001026E0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058533,
+      "name": "thumb_001026E4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058685,
+      "name": "thumb_0010277C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058737,
+      "name": "thumb_001027B0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058741,
+      "name": "thumb_001027B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058831,
+      "name": "thumb_0010280E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058851,
+      "name": "thumb_00102822",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058881,
+      "name": "thumb_00102840",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058935,
+      "name": "thumb_00102876",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058939,
+      "name": "thumb_0010287A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058945,
+      "name": "thumb_00102880",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1058997,
+      "name": "thumb_001028B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059001,
+      "name": "thumb_001028B8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059011,
+      "name": "thumb_001028C2",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059015,
+      "name": "thumb_001028C6",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059029,
+      "name": "thumb_001028D4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059039,
+      "name": "thumb_001028DE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059043,
+      "name": "thumb_001028E2",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059053,
+      "name": "thumb_001028EC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059057,
+      "name": "thumb_001028F0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059103,
+      "name": "thumb_0010291E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059113,
+      "name": "thumb_00102928",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059125,
+      "name": "thumb_00102934",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059155,
+      "name": "thumb_00102952",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059167,
+      "name": "thumb_0010295E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059197,
+      "name": "thumb_0010297C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059397,
+      "name": "thumb_00102A44",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059717,
+      "name": "thumb_00102B84",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059729,
+      "name": "thumb_00102B90",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059849,
+      "name": "thumb_00102C08",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059865,
+      "name": "thumb_00102C18",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059885,
+      "name": "thumb_00102C2C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059913,
+      "name": "thumb_00102C48",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059939,
+      "name": "thumb_00102C62",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1059951,
+      "name": "thumb_00102C6E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1060233,
+      "name": "thumb_00102D88",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1060245,
+      "name": "thumb_00102D94",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1060253,
+      "name": "thumb_00102D9C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1060261,
+      "name": "thumb_00102DA4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1060269,
+      "name": "thumb_00102DAC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1060277,
+      "name": "thumb_00102DB4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061061,
+      "name": "thumb_001030C4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061237,
+      "name": "thumb_00103174",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061249,
+      "name": "thumb_00103180",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061265,
+      "name": "thumb_00103190",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061277,
+      "name": "thumb_0010319C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061383,
+      "name": "thumb_00103206",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061423,
+      "name": "thumb_0010322E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061439,
+      "name": "thumb_0010323E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061449,
+      "name": "thumb_00103248",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061473,
+      "name": "thumb_00103260",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061489,
+      "name": "thumb_00103270",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061549,
+      "name": "thumb_001032AC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061565,
+      "name": "thumb_001032BC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061637,
+      "name": "thumb_00103304",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061689,
+      "name": "thumb_00103338",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061741,
+      "name": "thumb_0010336C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061793,
+      "name": "thumb_001033A0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061807,
+      "name": "thumb_001033AE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061821,
+      "name": "thumb_001033BC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061829,
+      "name": "thumb_001033C4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061957,
+      "name": "thumb_00103444",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061977,
+      "name": "thumb_00103458",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061987,
+      "name": "thumb_00103462",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1061997,
+      "name": "thumb_0010346C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1062137,
+      "name": "thumb_001034F8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1062147,
+      "name": "thumb_00103502",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1062197,
+      "name": "thumb_00103534",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1062577,
+      "name": "thumb_001036B0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1062657,
+      "name": "thumb_00103700",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1062951,
+      "name": "thumb_00103826",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1063061,
+      "name": "thumb_00103894",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1063343,
+      "name": "thumb_001039AE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1063345,
+      "name": "thumb_001039B0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1063437,
+      "name": "thumb_00103A0C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1063739,
+      "name": "thumb_00103B3A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1063849,
+      "name": "thumb_00103BA8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064131,
+      "name": "thumb_00103CC2",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064133,
+      "name": "thumb_00103CC4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064229,
+      "name": "thumb_00103D24",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064251,
+      "name": "thumb_00103D3A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064269,
+      "name": "thumb_00103D4C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064287,
+      "name": "thumb_00103D5E",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064329,
+      "name": "thumb_00103D88",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064331,
+      "name": "thumb_00103D8A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064337,
+      "name": "thumb_00103D90",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064359,
+      "name": "thumb_00103DA6",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064377,
+      "name": "thumb_00103DB8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064395,
+      "name": "thumb_00103DCA",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064439,
+      "name": "thumb_00103DF6",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064441,
+      "name": "thumb_00103DF8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1064447,
+      "name": "thumb_00103DFE",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -6849,6 +7824,11 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 1360408,
+      "name": "dispatch_entry_0014C218",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 1360412,
       "name": "mm3d_fun_0014C21C",
       "reason": "whole-program closed-CFG lowering"
@@ -10266,6 +11246,11 @@
     {
       "entry": 1490260,
       "name": "mm3d_fun_0016BD54",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1490384,
+      "name": "dispatch_entry_0016BDD0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -19534,6 +20519,26 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 1935320,
+      "name": "internal_switch_001D87D8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1935324,
+      "name": "internal_switch_001D87DC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1935328,
+      "name": "internal_switch_001D87E0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1935332,
+      "name": "internal_switch_001D87E4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 1935364,
       "name": "mm3d_fun_001D8804",
       "reason": "whole-program closed-CFG lowering"
@@ -19746,6 +20751,11 @@
     {
       "entry": 1944976,
       "name": "mm3d_fun_001DAD90",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1945100,
+      "name": "dispatch_entry_001DAE0C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36099,8 +37109,58 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3142057,
+      "name": "thumb_002FF1A8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142097,
+      "name": "thumb_002FF1D0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142141,
+      "name": "thumb_002FF1FC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142177,
+      "name": "thumb_002FF220",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142187,
+      "name": "thumb_002FF22A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3142224,
       "name": "mm3d_fun_002FF250",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142245,
+      "name": "thumb_002FF264",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142741,
+      "name": "thumb_002FF454",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142917,
+      "name": "thumb_002FF504",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142939,
+      "name": "thumb_002FF51A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3142961,
+      "name": "thumb_002FF530",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36134,6 +37194,26 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3143161,
+      "name": "thumb_002FF5F8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3143181,
+      "name": "thumb_002FF60C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3143257,
+      "name": "thumb_002FF658",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3143333,
+      "name": "thumb_002FF6A4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3143400,
       "name": "mm3d_fun_002FF6E8",
       "reason": "whole-program closed-CFG lowering"
@@ -36144,8 +37224,18 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3143601,
+      "name": "thumb_002FF7B0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3143992,
       "name": "mm3d_fun_002FF938",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3145741,
+      "name": "thumb_0030000C",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36169,6 +37259,16 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3145801,
+      "name": "thumb_00300048",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3145843,
+      "name": "thumb_00300072",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3145868,
       "name": "mm3d_fun_0030008C",
       "reason": "whole-program closed-CFG lowering"
@@ -36189,8 +37289,23 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3146033,
+      "name": "thumb_00300130",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3146043,
+      "name": "thumb_0030013A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3146072,
       "name": "mm3d_fun_00300158",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3146225,
+      "name": "thumb_003001F0",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36229,6 +37344,11 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3146597,
+      "name": "thumb_00300364",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3146956,
       "name": "mm3d_fun_003004CC",
       "reason": "whole-program closed-CFG lowering"
@@ -36244,8 +37364,28 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3147117,
+      "name": "thumb_0030056C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3147252,
       "name": "mm3d_fun_003005F4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3147689,
+      "name": "thumb_003007A8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3147691,
+      "name": "thumb_003007AA",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3148097,
+      "name": "thumb_00300940",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36299,8 +37439,43 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3153649,
+      "name": "thumb_00301EF0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3153681,
+      "name": "thumb_00301F10",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3153829,
+      "name": "thumb_00301FA4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3153913,
+      "name": "thumb_00301FF8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3153925,
+      "name": "thumb_00302004",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3154001,
+      "name": "thumb_00302050",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3154076,
       "name": "thunk_FUN_003020a8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3154089,
+      "name": "thumb_003020A8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36314,13 +37489,108 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3154873,
+      "name": "thumb_003023B8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155117,
+      "name": "thumb_003024AC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155171,
+      "name": "thumb_003024E2",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155275,
+      "name": "thumb_0030254A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155381,
+      "name": "thumb_003025B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3155536,
       "name": "mm3d_fun_00302650",
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3155577,
+      "name": "thumb_00302678",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155593,
+      "name": "thumb_00302688",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155633,
+      "name": "thumb_003026B0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155729,
+      "name": "thumb_00302710",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155737,
+      "name": "thumb_00302718",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155793,
+      "name": "thumb_00302750",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155853,
+      "name": "thumb_0030278C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155865,
+      "name": "thumb_00302798",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155901,
+      "name": "thumb_003027BC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3155921,
+      "name": "thumb_003027D0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3156008,
       "name": "mm3d_fun_00302828",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156105,
+      "name": "thumb_00302888",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156125,
+      "name": "thumb_0030289C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156185,
+      "name": "thumb_003028D8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156197,
+      "name": "thumb_003028E4",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36334,13 +37604,88 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3156369,
+      "name": "thumb_00302990",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156391,
+      "name": "thumb_003029A6",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156449,
+      "name": "thumb_003029E0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156513,
+      "name": "thumb_00302A20",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156539,
+      "name": "thumb_00302A3A",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156593,
+      "name": "thumb_00302A70",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156665,
+      "name": "thumb_00302AB8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3156929,
+      "name": "thumb_00302BC0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3157001,
+      "name": "thumb_00302C08",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3157037,
+      "name": "thumb_00302C2C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3157165,
+      "name": "thumb_00302CAC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3157201,
+      "name": "thumb_00302CD0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3157208,
       "name": "mm3d_fun_00302CD8",
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3157349,
+      "name": "thumb_00302D64",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3157365,
+      "name": "thumb_00302D74",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3157380,
       "name": "mm3d_fun_00302D84",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3157625,
+      "name": "thumb_00302E78",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36354,8 +37699,53 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3158437,
+      "name": "thumb_003031A4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3158453,
+      "name": "thumb_003031B4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3158493,
+      "name": "thumb_003031DC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3158504,
       "name": "mm3d_fun_003031E8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3158757,
+      "name": "thumb_003032E4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3158777,
+      "name": "thumb_003032F8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159009,
+      "name": "thumb_003033E0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159037,
+      "name": "thumb_003033FC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159133,
+      "name": "thumb_0030345C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159173,
+      "name": "thumb_00303484",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36369,8 +37759,58 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3159653,
+      "name": "thumb_00303664",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159777,
+      "name": "thumb_003036E0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159793,
+      "name": "thumb_003036F0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159889,
+      "name": "thumb_00303750",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3159941,
+      "name": "thumb_00303784",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160065,
+      "name": "thumb_00303800",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160081,
+      "name": "thumb_00303810",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160177,
+      "name": "thumb_00303870",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3160228,
       "name": "mm3d_fun_003038A4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160413,
+      "name": "thumb_0030395C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160419,
+      "name": "thumb_00303962",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36379,8 +37819,108 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3160777,
+      "name": "thumb_00303AC8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160801,
+      "name": "thumb_00303AE0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160825,
+      "name": "thumb_00303AF8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160849,
+      "name": "thumb_00303B10",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160869,
+      "name": "thumb_00303B24",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160893,
+      "name": "thumb_00303B3C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3160961,
+      "name": "thumb_00303B80",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3161161,
+      "name": "thumb_00303C48",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3161171,
+      "name": "thumb_00303C52",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3161301,
+      "name": "thumb_00303CD4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3161313,
+      "name": "thumb_00303CE0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3161440,
       "name": "mm3d_fun_00303D60",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3161913,
+      "name": "thumb_00303F38",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3161925,
+      "name": "thumb_00303F44",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3161997,
+      "name": "thumb_00303F8C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3162017,
+      "name": "thumb_00303FA0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3162041,
+      "name": "thumb_00303FB8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3162069,
+      "name": "thumb_00303FD4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3162079,
+      "name": "thumb_00303FDE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3162101,
+      "name": "thumb_00303FF4",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3162129,
+      "name": "thumb_00304010",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -36389,8 +37929,78 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 3163229,
+      "name": "thumb_0030445C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163237,
+      "name": "thumb_00304464",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163253,
+      "name": "thumb_00304474",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163281,
+      "name": "thumb_00304490",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163311,
+      "name": "thumb_003044AE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163327,
+      "name": "thumb_003044BE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163359,
+      "name": "thumb_003044DE",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163385,
+      "name": "thumb_003044F8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163453,
+      "name": "thumb_0030453C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163473,
+      "name": "thumb_00304550",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163501,
+      "name": "thumb_0030456C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163525,
+      "name": "thumb_00304584",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163555,
+      "name": "thumb_003045A2",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 3163596,
       "name": "mm3d_fun_003045CC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 3163765,
+      "name": "thumb_00304674",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -78214,6 +79824,11 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 5978544,
+      "name": "dispatch_entry_005B39B0",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 5978628,
       "name": "mm3d_fun_005B3A04",
       "reason": "whole-program closed-CFG lowering"
@@ -86119,6 +87734,11 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 6286268,
+      "name": "dispatch_entry_005FEBBC",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 6286468,
       "name": "mm3d_fun_005FEC84",
       "reason": "whole-program closed-CFG lowering"
@@ -92074,6 +93694,11 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 6409852,
+      "name": "dispatch_entry_0061CE7C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 6409988,
       "name": "mm3d_fun_0061CF04",
       "reason": "whole-program closed-CFG lowering"
@@ -92134,6 +93759,97 @@
       "name": "ctr_interior_entry_0010001C",
       "dispatch_entry": 1048608,
       "selected_owner": 1048576,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1049189,
+      "name": "thumb_00100264",
+      "dispatch_entry": 1049193,
+      "selected_owner": 1049185,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1050645,
+      "name": "thumb_00100814",
+      "dispatch_entry": 1050655,
+      "selected_owner": 1050625,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1051751,
+      "name": "thumb_00100C66",
+      "dispatch_entry": 1051781,
+      "selected_owner": 1051689,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1051791,
+      "name": "thumb_00100C8E",
+      "dispatch_entry": 1051819,
+      "selected_owner": 1051689,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1056823,
+      "name": "thumb_00102036",
+      "dispatch_entry": 1056709,
+      "selected_owner": 1056661,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1058019,
+      "name": "thumb_001024E2",
+      "dispatch_entry": 1058025,
+      "selected_owner": 1058009,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1058109,
+      "name": "thumb_0010253C",
+      "dispatch_entry": 1058103,
+      "selected_owner": 1058085,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1058143,
+      "name": "thumb_0010255E",
+      "dispatch_entry": 1058139,
+      "selected_owner": 1058119,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1058831,
+      "name": "thumb_0010280E",
+      "dispatch_entry": 1058801,
+      "selected_owner": 1058741,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1063343,
+      "name": "thumb_001039AE",
+      "dispatch_entry": 1063397,
+      "selected_owner": 1063061,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1063345,
+      "name": "thumb_001039B0",
+      "dispatch_entry": 1063397,
+      "selected_owner": 1063061,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1064131,
+      "name": "thumb_00103CC2",
+      "dispatch_entry": 1064189,
+      "selected_owner": 1063849,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1064133,
+      "name": "thumb_00103CC4",
+      "dispatch_entry": 1064189,
+      "selected_owner": 1063849,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
@@ -93513,6 +95229,13 @@
       "name": "mm3d_fun_00169CFC",
       "dispatch_entry": 1482032,
       "selected_owner": 1481972,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1490384,
+      "name": "dispatch_entry_0016BDD0",
+      "dispatch_entry": 1490420,
+      "selected_owner": 1490260,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
@@ -97786,6 +99509,13 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
+      "entry": 3145843,
+      "name": "thumb_00300072",
+      "dispatch_entry": 3145861,
+      "selected_owner": 3145801,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
       "entry": 3146296,
       "name": "mm3d_fun_00300238",
       "dispatch_entry": 3146332,
@@ -97814,10 +99544,24 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
+      "entry": 3155171,
+      "name": "thumb_003024E2",
+      "dispatch_entry": 3155201,
+      "selected_owner": 3155117,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
       "entry": 3158132,
       "name": "ctr_interior_entry_00303074",
       "dispatch_entry": 3158152,
       "selected_owner": 3157932,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 3163237,
+      "name": "thumb_00304464",
+      "dispatch_entry": 3163249,
+      "selected_owner": 3163229,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {

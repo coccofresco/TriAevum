@@ -2097,6 +2097,9 @@ def _emit_thumb_terminal(
     link = pc + item.size  # odd: the Thumb return address with bit 0
     if kind == "b":
         return [_goto(int(item.target), block_pcs)]
+    if kind == "udf":
+        # Permanently undefined: the guest traps here (no fallback path).
+        return [f"return {{Oot3dWholeAotFlowKind::Unsupported, 0x{pc:08X}U, 0x{item.raw:08X}U}};"]
     if kind == "bcc":
         branch = _goto(int(item.target), block_pcs)
         normalized = (

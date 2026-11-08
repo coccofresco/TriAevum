@@ -18,9 +18,10 @@ Each accepted Thumb instruction becomes a record that the C++ lowering
 * ``kind`` selects Thumb-specific lowering where no proxy exists: ``const``
   (ADR: constant value), ``add_pc`` (hi-register ADD of the Thumb PC value
   ``address + 4``), and the control transfers ``b``, ``bcc``, ``bl``,
-  ``blx_imm``, ``blx_reg``, ``bx`` and ``pop_pc``.
+  ``blx_imm``, ``blx_reg``, ``bx``, ``pop_pc`` and ``udf`` (a trap
+  without successors).
 
-The decoder accepts exactly the Thumb forms the MM3D EUR code uses (Thumb-1:
+The decoder accepts exactly the Thumb forms the MM3D EUR code uses (Thumb-1 incl. UDF:
 no IT blocks, no other 32-bit Thumb-2 forms) and REJECTS every other
 encoding with ThumbDecodeError, so coverage remains provable.
 """
@@ -73,7 +74,7 @@ class ThumbInstruction:
         return result
 
 
-TERMINAL_KINDS = frozenset({"b", "bcc", "bl", "blx_imm", "blx_reg", "bx", "pop_pc"})
+TERMINAL_KINDS = frozenset({"b", "bcc", "bl", "blx_imm", "blx_reg", "bx", "pop_pc", "udf"})
 _ALU = {
     0x0: ("ands", 0xE0100000), 0x1: ("eors", 0xE0300000),
     0x5: ("adcs", 0xE0B00000), 0x6: ("sbcs", 0xE0D00000),
@@ -247,8 +248,11 @@ def decode(code: bytes, base: int, address: int) -> ThumbInstruction:
         return make(raw, "ldm" if load else "stm")
     if (h >> 12) == 0xD:  # Bcc
         cond = (h >> 8) & 0xF
-        if cond >= 0xE:
-            raise ThumbDecodeError(f"UDF/SVC at 0x{a:08X} is not an accepted Thumb form")
+        if cond == 0xE:  # UDF #imm8: a permanently undefined trap
+            imm = h & 0xFF
+            return make(0xE7F000F0 | ((imm & 0xF0) << 4) | (imm & 0xF), "udf", "udf")
+        if cond == 0xF:
+            raise ThumbDecodeError(f"SVC at 0x{a:08X} is not an accepted Thumb form")
         target = ((a + 4 + _sign(h & 0xFF, 8) * 2) & 0xFFFFFFFF) | 1
         return make((cond << 28) | 0x0A000000, "b" + _CONDITIONS[cond], "bcc",
                     target=target, condition=_CONDITIONS[cond])
@@ -290,6 +294,8 @@ def successors(item: ThumbInstruction) -> tuple[tuple[str, int | None, str | Non
         return (("return", None, None),) if rm == 14 else (("indirect_branch", None, None),)
     if kind == "pop_pc":
         return (("return", None, None),)
+    if kind == "udf":  # traps: no successor
+        return ()
     return (("fallthrough", item.next_pc, None),)
 
 

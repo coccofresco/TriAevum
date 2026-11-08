@@ -99,11 +99,19 @@ class DecoderTests(unittest.TestCase):
         self.assertEqual((blx.kind, blx.target), ("blx_imm", 0x00100008))
         self.assertEqual(bl.next_pc, 0x00100005)
 
+    def test_udf_is_a_trap_without_successors(self) -> None:
+        # A BL into a UDF stub (an abort helper) ends the walk there.
+        code = _halfwords(0xF000, 0xF800, 0xDE00)
+        flow = thumb.walk(code, BASE, ((BASE, BASE + 6),))
+        trap = flow.instructions[BASE + 4]
+        self.assertEqual((trap.kind, trap.raw), ("udf", 0xE7F000F0))
+        self.assertEqual(thumb.successors(trap), ())
+        self.assertIn(BASE + 5, flow.block_starts)
+
     def test_rejects_forms_outside_the_accepted_set(self) -> None:
         rejected = {
             "IT block": _halfwords(0xBF08, 0),
             "SVC": _halfwords(0xDF00, 0),
-            "UDF": _halfwords(0xDE00, 0),
             "SXTH": _halfwords(0xB200, 0),
             "REV": _halfwords(0xBA00, 0),
             "BKPT": _halfwords(0xBE00, 0),

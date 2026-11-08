@@ -836,6 +836,11 @@ def load_inline_argument_calls(path: Path | None, code: bytes,
     return calls
 
 
+# Boundary-audit classifications whose entries become dispatchable block
+# starts (see build_program).  Absent from OoT3D's audit: a no-op there.
+DISPATCH_ENTRY_CLASSES = ("multi_return_slot", "unreferenced_code")
+
+
 def load_thumb_ranges(path: Path | None) -> tuple[tuple[int, int], ...]:
     """Title Thumb code ranges (CSV kind,start,end with an inclusive end)."""
     if path is None:
@@ -846,6 +851,30 @@ def load_thumb_ranges(path: Path | None) -> tuple[tuple[int, int], ...]:
             for row in csv.DictReader(source)
             if row.get("kind", "range") == "range"
         )
+
+
+def check_thumb_range_guards(path: Path | None, code: bytes, base: int) -> int:
+    """Verify the optional ``guard`` column (first halfword of the range).
+
+    Returns the number of guarded rows; a mismatch raises ValueError."""
+    if path is None:
+        return 0
+    checked = 0
+    with path.open(newline="", encoding="utf-8-sig") as source:
+        for row in csv.DictReader(source):
+            guard = (row.get("guard") or "").strip()
+            if not guard:
+                continue
+            start = int(row["start"], 0)
+            offset = start - base
+            if offset < 0 or offset + 2 > len(code):
+                raise ValueError(f"{path}: guarded range 0x{start:08X} is outside code")
+            actual = int.from_bytes(code[offset:offset + 2], "little")
+            if actual != int(guard, 0):
+                raise ValueError(
+                    f"{path}: guard at 0x{start:08X} is 0x{actual:04X}, expected {guard}")
+            checked += 1
+    return checked
 
 
 def load_thumb_entries(path: Path | None) -> tuple[int, ...]:
@@ -912,11 +941,22 @@ def build_program(
     # Seed only missing, explicitly classified internal cases, never data or
     # arbitrary excluded intervals. Keep them distinct from public ABI roots.
     with boundary_audit_path.open(newline="", encoding="utf-8-sig") as source:
-        internal_cases = {
-            int(row["entry"], 0)
-            for row in csv.DictReader(source)
-            if row.get("classification") == "switch_owned_case"
-        }
+        audit_rows = list(csv.DictReader(source))
+    internal_cases = {
+        int(row["entry"], 0)
+        for row in audit_rows
+        if row.get("classification") == "switch_owned_case"
+    }
+    # Executable entries the runtime may dispatch although no static edge
+    # names them: return slots of a multi-return helper (the callee returns
+    # to BL + 8 + 4 * k) and code no static reference reaches.  They are
+    # block starts and roots even when linear flow already decodes them.
+    dispatch_entries = {
+        int(row["entry"], 0)
+        for row in audit_rows
+        if row.get("classification") in DISPATCH_ENTRY_CLASSES
+    }
+    internal_cases |= dispatch_entries
     internal_cases -= flow.decoded_reachable | flow.unknown_stops
     internal_cases &= flow_slots - literal_data
     if internal_cases:
@@ -935,7 +975,7 @@ def build_program(
         )
         raise ValueError(f"inline argument words are also reached as code: {overlap}")
     literal_data = set(literal_data) | flow.inline_argument_words
-    observed = frozenset(observed_sites)
+    observed = frozenset(observed_sites) | frozenset(dispatch_entries)
     if observed - flow.decoded_reachable:
         missing = ", ".join(f"0x{pc:08X}" for pc in sorted(observed - flow.decoded_reachable))
         raise ValueError(f"observed sites are not reachable code: {missing}")
@@ -959,7 +999,8 @@ def build_program(
         for edge in block.successors
         if edge.kind == "direct_call" and edge.target in entry_to_block
     }
-    roots = set(inventory_by_entry) | set(flow.pointer_roots) | direct_targets | internal_cases
+    roots = (set(inventory_by_entry) | set(flow.pointer_roots) | direct_targets
+             | internal_cases | dispatch_entries)
     missing_thumb_callees = set(thumb_arm_targets) - set(entry_to_block)
     if missing_thumb_callees:
         raise ValueError(
@@ -1007,6 +1048,8 @@ def build_program(
         record = inventory_by_entry.get(entry)
         if record is not None:
             return record.end, record.name, "inventory"
+        if entry in dispatch_entries:
+            return None, f"dispatch_entry_{entry:08X}", "audited_dispatch_entry"
         if entry in internal_cases:
             return None, f"internal_switch_{entry:08X}", "internal_dispatch"
         if entry in flow.pointer_roots:
@@ -1227,6 +1270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
     code = args.code.read_bytes()
+    check_thumb_range_guards(args.thumb_ranges, code, args.base)
     program = build_program(
         code,
         args.inventory,

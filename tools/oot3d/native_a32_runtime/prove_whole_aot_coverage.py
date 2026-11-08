@@ -16,8 +16,24 @@ COMPLETENESS: every byte of the executable image [base, base + size) is
                      (A32 LDR pc, [pc, rX, lsl #2] / ADD pc idioms) up to the
                      first word that is not a code address of the function;
       pointer      - a word whose value is an address inside the image;
-      padding      - an all-zero word or a Thumb alignment halfword
+      padding      - an all-zero word, an A32 NOP word, or a Thumb alignment halfword
                      (0x0000 / 0x46C0 NOP) that no translated code reaches.
+  A maximal run of bytes left after these word classes may still be data:
+      fill         - only 0xFF bytes (linker fill);
+      string       - printable ASCII bytes and NUL terminators, starting with
+                     a printable byte and holding or followed by a NUL;
+      padding      - A32 NOP words (MOV r0, r0) no translated code reaches;
+      title_data   - a run fully inside a guarded title data fact
+                     (--data-facts CSV: start,size,guard_word,meaning);
+      addressed    - a run holding an address that translated code or a
+                     classified data word names (A32/Thumb ADR targets,
+                     literal and pointer word values);
+      data_island  - a run inside a non-code island (bytes between translated
+                     instructions) that holds such an address elsewhere.
+  fill/string/padding/addressed/data_island never apply to a code-shaped
+  run (a function prologue, an A32 BX lr, or straight-line Thumb ending in a
+  return): such a run stays residual unless a guarded title data fact
+  covers it.
   Anything else is RESIDUAL and fails the proof (exit 1).
 
 REACHABILITY: a static walk from the entry point (and from listed extra
@@ -30,12 +46,17 @@ pc that is not a selected block or a selected function entry fails (exit 1).
 from __future__ import annotations
 
 import argparse
+import bisect
+import csv
 import hashlib
 import json
 import sys
 from collections import Counter, deque
 from pathlib import Path
 from typing import Sequence
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import whole_aot_thumb as thumb_decoder  # noqa: E402
 
 
 def _sha256(path: Path) -> str:
@@ -77,6 +98,16 @@ def _a32_literal_words(pc: int, raw: int) -> tuple[int, ...]:
     return ()
 
 
+def _run_bounds(addresses: list[int]) -> list[tuple[int, int]]:
+    runs: list[list[int]] = []
+    for address in addresses:
+        if runs and runs[-1][1] == address:
+            runs[-1][1] = address + 1
+        else:
+            runs.append([address, address + 1])
+    return [(start, end) for start, end in runs]
+
+
 def _runs(addresses: list[int]) -> list[str]:
     runs: list[list[int]] = []
     for address in addresses:
@@ -87,9 +118,87 @@ def _runs(addresses: list[int]) -> list[str]:
     return [f"0x{start:08X}+{end - start}" for start, end in runs]
 
 
+def _ror(value: int, amount: int) -> int:
+    amount %= 32
+    if not amount:
+        return value
+    return ((value >> amount) | (value << (32 - amount))) & 0xFFFFFFFF
+
+
+def _a32_adr_target(pc: int, raw: int) -> int | None:
+    """Address computed by A32 ADD/SUB rd, pc, #imm (ADR)."""
+    if raw >> 28 == 0xF or (raw & 0x0E000000) != 0x02000000 or (raw >> 16) & 0xF != 15:
+        return None
+    opcode = (raw >> 21) & 0xF
+    if opcode not in (2, 4):
+        return None
+    immediate = _ror(raw & 0xFF, 2 * ((raw >> 8) & 0xF))
+    return (pc + 8 + immediate if opcode == 4 else pc + 8 - immediate) & 0xFFFFFFFF
+
+
+def _code_shaped(code: bytes, start: int, end: int) -> bool:
+    """A run that looks like code is never data: it holds a function
+    prologue (Thumb PUSH {.., lr} or A32 PUSH {.., lr}) or an A32 BX lr at
+    natural alignment, or it decodes from its start as straight-line Thumb
+    code ending in a return (BX lr / POP {.., pc}) inside the run."""
+    for offset in range(start + (start & 1), end - 1, 2):
+        if code[offset + 1] == 0xB5:
+            return True
+        if offset % 4 == 0 and offset + 4 <= end:
+            word = int.from_bytes(code[offset:offset + 4], "little")
+            if (word & 0xFFFF4000) == 0xE92D4000 or word == 0xE12FFF1E:
+                return True
+    offset = start + (start & 1)
+    while offset + 2 <= end:
+        try:
+            item = thumb_decoder.decode(code, 0, offset)
+        except thumb_decoder.ThumbDecodeError:
+            return False
+        if item.kind in ("bx", "pop_pc") and offset + item.size <= end:
+            return True
+        if item.kind in thumb_decoder.TERMINAL_KINDS:
+            return False
+        offset += item.size
+    return False
+
+
+def _run_class(code: bytes, start: int, end: int) -> str | None:
+    data = code[start:end]
+    if all(byte == 0xFF for byte in data):
+        return "fill"
+    terminated = 0 in data or (end < len(code) and code[end] == 0)
+    if (data[0] != 0 and terminated
+            and all(32 <= byte < 127 or byte in (0, 9, 10, 13) for byte in data)):
+        return "string"
+    if start % 4 == 0 and (end - start) % 4 == 0 and all(
+            int.from_bytes(data[index:index + 4], "little") == 0xE1A00000
+            for index in range(0, len(data), 4)):
+        return "padding"
+    return None
+
+
+def load_data_facts(path: Path, code: bytes, base: int) -> list[tuple[int, int]]:
+    """Guarded title data facts (start,size,guard_word,meaning)."""
+    facts = []
+    with path.open(newline="", encoding="utf-8-sig") as source:
+        for row in csv.DictReader(source):
+            start, size = int(row["start"], 0), int(row["size"], 0)
+            offset = start - base
+            if size <= 0 or offset < 0 or offset + size > len(code):
+                raise ValueError(f"data fact 0x{start:08X}+{size} is outside code")
+            actual = int.from_bytes(code[offset:offset + 4], "little")
+            if actual != int(row["guard_word"], 0):
+                raise ValueError(
+                    f"data fact guard at 0x{start:08X} is 0x{actual:08X}, "
+                    f"expected {row['guard_word']}")
+            facts.append((start, start + size))
+    return facts
+
+
 def prove(program: dict, selection: dict, code: bytes, executable_size: int,
           inline_callees: dict[int, int] | None = None,
-          extra_entries: Sequence[int] = ()) -> dict:
+          extra_entries: Sequence[int] = (),
+          data_facts: Sequence[tuple[int, int]] = ()) -> dict:
     base = int(program["base"])
     if executable_size <= 0 or executable_size > len(code):
         raise ValueError("executable size is outside code.bin")
@@ -108,6 +217,7 @@ def prove(program: dict, selection: dict, code: bytes, executable_size: int,
     inline_words: set[int] = set()
     inline_callees = inline_callees or {}
     switch_sites: list[tuple[int, int]] = []
+    references: set[int] = set()
     for block_id in owned:
         block = blocks[block_id]
         selected_block_pcs.add(int(block["pc"]))
@@ -117,6 +227,8 @@ def prove(program: dict, selection: dict, code: bytes, executable_size: int,
                 kind[start:start + int(record["size"])] = b"\x01" * int(record["size"])
                 if "literal" in record:
                     literals.add(int(record["literal"]))
+                if record.get("kind") == "const" and "target" in record:
+                    references.add(int(record["target"]))
             continue
         start = int(block["pc"]) - base
         end = int(block["end_pc"]) - base
@@ -124,6 +236,9 @@ def prove(program: dict, selection: dict, code: bytes, executable_size: int,
         for offset in range(start, end, 4):
             raw = int.from_bytes(code[offset:offset + 4], "little")
             literals.update(_a32_literal_words(base + offset, raw))
+            adr = _a32_adr_target(base + offset, raw)
+            if adr is not None:
+                references.add(adr)
             if (raw & 0x0F000000) == 0x0B000000 and raw >> 28 != 0xF:
                 displacement = raw & 0x00FFFFFF
                 if displacement & 0x00800000:
@@ -163,7 +278,7 @@ def prove(program: dict, selection: dict, code: bytes, executable_size: int,
             label = "inline_arg"
         elif aligned in table_words:
             label = "switch_table"
-        elif word == 0:
+        elif word in (0, 0xE1A00000):  # zero word or A32 NOP (MOV r0, r0)
             label = "padding"
         elif base <= (word & ~1) < image_end:
             label = "pointer"
@@ -175,8 +290,51 @@ def prove(program: dict, selection: dict, code: bytes, executable_size: int,
         else:
             label = "residual"
             residual.append(address)
+        if label in ("literal", "pointer") and base <= (word & ~1) < image_end:
+            references.add(word & ~1)
         classes[label] += 1
         position += 1
+    # Run-level data classes over what the word classes left.
+    reference_offsets = sorted(
+        address - base for address in references
+        if base <= address < base + executable_size)
+
+    def referenced(start: int, end: int) -> bool:
+        index = bisect.bisect_left(reference_offsets, start)
+        return index < len(reference_offsets) and reference_offsets[index] < end
+
+    remaining: list[int] = []
+    run_classes: Counter[str] = Counter()
+    classified_runs: list[str] = []
+    for run_start, run_end in _run_bounds(residual):
+        start, end = run_start - base, run_end - base
+        shaped = _code_shaped(code, start, end)
+        label = None if shaped else _run_class(code, start, end)
+        if label is None and any(
+                low <= run_start and run_end <= high for low, high in data_facts):
+            label = "title_data"
+        if label is None and not shaped:
+            if referenced(start, end):
+                label = "addressed"
+            else:
+                low, high = start, end
+                while low > 0 and not kind[low - 1]:
+                    low -= 1
+                while high < executable_size and not kind[high]:
+                    high += 1
+                if referenced(low, high):
+                    label = "data_island"
+        if label is None:
+            remaining.extend(range(run_start, run_end))
+        else:
+            run_classes[label] += end - start
+            classified_runs.append(f"0x{run_start:08X}+{run_end - run_start}:{label}")
+    for label, count in run_classes.items():
+        classes[label] += count
+        classes["residual"] -= count
+    if classes.get("residual", 1) == 0:
+        del classes["residual"]
+    residual = remaining
     # Reachability.
     pc_to_block = {int(block["pc"]): int(block["id"]) for block in program["blocks"]}
     roots = [base, *extra_entries]
@@ -221,6 +379,7 @@ def prove(program: dict, selection: dict, code: bytes, executable_size: int,
         "residual_bytes": len(residual),
         "residual_first": [f"0x{address:08X}" for address in residual[:32]],
         "residual_runs": _runs(residual)[:400],
+        "classified_runs": classified_runs,
         "reachability": {
             "roots": [f"0x{root:08X}" for root in roots],
             "visited_blocks": len(visited),
@@ -240,6 +399,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--executable-size", type=lambda v: int(v, 0), required=True)
     parser.add_argument("--inline-argument-calls", type=Path, default=None)
     parser.add_argument("--entry", type=lambda v: int(v, 0), action="append", default=[])
+    parser.add_argument("--data-facts", type=Path, default=None,
+                        help="guarded title data facts CSV (start,size,guard_word,meaning)")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--check", choices=("all", "completeness", "reachability"),
                         default="all", help="which proof decides the exit code")
@@ -252,8 +413,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         facts = json.loads(args.inline_argument_calls.read_text(encoding="utf-8"))
         for callee in facts.get("callees", []):
             inline_callees[int(str(callee["entry"]), 0)] = int(callee["inline_words"])
+    data_facts = (load_data_facts(args.data_facts, code, int(program["base"]))
+                  if args.data_facts else [])
     result = prove(program, selection, code, args.executable_size,
-                   inline_callees, args.entry)
+                   inline_callees, args.entry, data_facts)
     result["inputs"] = {
         "program_sha256": _sha256(args.program),
         "selection_sha256": _sha256(args.selection),

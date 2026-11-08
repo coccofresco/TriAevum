@@ -1,0 +1,3 @@
+start,size,guard_word,meaning
+0x002417AC,128,0x7E7F8080,"128-byte descending table 0x80..0x41 after the bx lr at 0x2417A8 (RVCT math helper area); no ADR target, literal or pointer word names it (offline search, CATALOGS r15)"
+0x002FF260,4,0xFFE3883C,"data word after the pop {r4, pc} at 0x2FF25C; no code reaches it"
