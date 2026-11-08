@@ -20,7 +20,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_OBJDUMP = Path(r"C:\devkitPro\devkitARM\bin\arm-none-eabi-objdump.exe")
 OBJDUMP_INSN_RE = re.compile(r"^\s*(?P<addr>[0-9a-fA-F]+):\s+(?:[0-9a-fA-F]{2,8}\s+)+\t(?P<op>.+?)\s*$")
 

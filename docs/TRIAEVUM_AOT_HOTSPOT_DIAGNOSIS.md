@@ -53,11 +53,11 @@ Private artifacts, not release payloads:
 
 | Evidence | Location |
 | --- | --- |
-| Initial cold diagnostic | `I:/TriAevum-public/aot-native-sampling-20260916/0/` |
-| Two steady diagnostic runs | `I:/TriAevum-public/aot-native-steady-20260916/{0,1}/` |
-| Unmodified DLL control | `I:/TriAevum-public/aot-native-baseline-check-20260916/0/` |
-| Symbol DLL and map | `I:/TriAevum-aot-lab-debug/plugin/` |
-| Original invocation | `I:/TriAevum-aot-lab-runs/host-ab2/0-shipped/command.json` |
+| Initial cold diagnostic | `<public-work>/aot-native-sampling-20260916/0/` |
+| Two steady diagnostic runs | `<public-work>/aot-native-steady-20260916/{0,1}/` |
+| Unmodified DLL control | `<public-work>/aot-native-baseline-check-20260916/0/` |
+| Symbol DLL and map | `<local>/TriAevum-aot-lab-debug/plugin/` |
+| Original invocation | `<local>/TriAevum-aot-lab-runs/host-ab2/0-shipped/command.json` |
 
 Symbol DLL SHA256:
 `2e91d80b432354886fd89145c18ef4118d6c655066c26d973786e3ca78c7a38c`
@@ -80,12 +80,12 @@ samples. Do not use a sampled run as a clean A/B timing result.
 
 ```powershell
 python tools/renderer/tev_program/measure_prebackend.py `
-  --invocation I:/TriAevum-aot-lab-runs/host-ab2/0-shipped/command.json `
-  --executable I:/TriAevum-public/ui-dependencies/bin/TriAevum.exe `
-  --output I:/TriAevum-public/aot-investigation-new `
+  --invocation <local>/TriAevum-aot-lab-runs/host-ab2/0-shipped/command.json `
+  --executable <public-work>/ui-dependencies/bin/TriAevum.exe `
+  --output <public-work>/aot-investigation-new `
   --runs 2 --frames 4200 `
-  --diagnostic-plugin I:/TriAevum-aot-lab-debug/plugin/triaevum_title_aot.dll `
-  --sample-map I:/TriAevum-aot-lab-debug/plugin/title.map
+  --diagnostic-plugin <local>/TriAevum-aot-lab-debug/plugin/triaevum_title_aot.dll `
+  --sample-map <local>/TriAevum-aot-lab-debug/plugin/title.map
 ```
 
 ## Ranked observations
@@ -136,7 +136,7 @@ translations per region is distinct from merely making each translation inline.
 Useful pilot loop entries are `0x004A022C` and `0x004A0338`: fixed-length 160-
 element loops with many indexed reads, writes and guest-stack temporaries.
 Read-only decomp evidence is in
-`I:/oot3decomp/src/runtime/owner_runtime/z_owner_runtime_accel_long_tail_14.c`.
+`<oot3d-decomp>/src/runtime/owner_runtime/z_owner_runtime_accel_long_tail_14.c`.
 Its generic semantic labels do not establish a gameplay owner or justify blindly
 substituting those C bodies. The emitted ARM semantics remain the differential
 oracle. Mesh command and transform routines are additional pilot candidates.

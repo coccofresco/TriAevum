@@ -42,7 +42,7 @@ Use observed `reflection_texture_usages.texture_hash`, not a guessed or
 replacement-texture RGBA hash. An unmatched rule proves nothing.
 
 Private evidence root on the development machine:
-`I:/oot3dre_work/linux-port-proof/` (not distributed).
+`<oot3d-work>/linux-port-proof/` (not distributed).
 Windows useful runs: `windows-sssr-enabled`, `windows-sssr-profiled`.
 `windows-sssr-probe` used an invalid enum spelling and must NOT count as SSSR
 evidence; `windows-sssr-material` used an unmatched texture hash and must NOT

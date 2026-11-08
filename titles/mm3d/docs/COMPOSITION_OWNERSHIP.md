@@ -135,10 +135,10 @@ not visible, so it does not establish numerical normal correctness. No successfu
 FXAA/upscaler/TAA gameplay acceptance or live title-logo qualification is claimed.
 
 One 400-frame OoT-only Kokiri run passed: all three original BMP hashes match
-`I:/_triaevum_work/retuned/cap-p13.sha256` exactly. There were three gameplay
+`<work>/retuned/cap-p13.sha256` exactly. There were three gameplay
 attempts total (two MM, one OoT), no retries. Complete hashes, logs, captures,
 remaining gaps and build configuration are recorded under
-`I:/_triaevum_work/mm3d-port/analysis/parity/COMPOSITION/RESULTS.md`.
+`W/analysis/parity/COMPOSITION/RESULTS.md`.
 
 ## Authorized continuation (2026-11-07, source `72553f70`)
 
@@ -233,7 +233,7 @@ full title matrix and owner look approval remain open.
 The assigned private-NRI build was restored and rebuilt dual-title
 (`oot3d;mm3d`, developer tools ON, registryv10), without a confirmation launch.
 Exact binary hashes, attempt markers, measurements and current remaining work:
-`I:/_triaevum_work/mm3d-port/analysis/parity/COMPOSITION/RESULTS.md`.
+`W/analysis/parity/COMPOSITION/RESULTS.md`.
 
 ## F18 normal-guide criterion and round-3 grouped live run (2026-11-08)
 

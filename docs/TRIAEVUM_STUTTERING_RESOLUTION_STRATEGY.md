@@ -529,7 +529,7 @@ no interpolation/VSync/pacing/limiter/captures; driver cache NOT cleared):
   This is comparable to the prior steady-state range, not a large mean-FPS gain.
 
 Private reproduction evidence: `%TEMP%/TriAevum-tail-{attribution,stage,fixed,
-correctness,boot,steady}-20260915`. Build remains the frozen `J:/TriAevum-verify-20260910/runtime`
+correctness,boot,steady}-20260915`. Build remains the frozen `<verify-20260910>/runtime`
 lane with `ninja -f .tev-validation.ninja -j 2 TriAevum.exe`; no title-AOT rebuild.
 
 This does NOT close stuttering. The next measured target is first replay
@@ -788,7 +788,7 @@ and `TriAevum-bounded-debt-field-check` (framebuffer correctness).
 
 ### Adult Link outside the castle: timed checkpoint qualification
 
-Use `J:/TriAevum-verify-20260910/win-field-x2/checkpoint.oot3dsav`, SHA-256
+Use `<verify-20260910>/win-field-x2/checkpoint.oot3dsav`, SHA-256
 `73a3d5e8ffe35a9048a07b909e50ced5cddb532b00a7b3ffe9d6c1156061af0d`.
 The corresponding fixture framebuffer shows adult Link on foot facing the
 castle-town bridge from Hyrule Field. This is NOT the mounted Epona fixture.

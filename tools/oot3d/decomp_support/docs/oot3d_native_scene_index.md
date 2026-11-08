@@ -3,29 +3,29 @@
 This workspace exports OOT3D scene/room indices from native ZSI payloads with:
 
 ```powershell
-$env:PYTHONPATH='I:\oot3dre\tools\oot3d\oot3d_asset_tool\src'
-python -m oot3d_asset_tool export-zsi-scene-index 'E:\ppssppvr\oot3d_decomp\work\extract\romfs\scene' --scene link --scene spot04 --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.md --full-entries --sample-limit 32
+$env:PYTHONPATH='<local>/oot3dre\tools\oot3d\oot3d_asset_tool\src'
+python -m oot3d_asset_tool export-zsi-scene-index '<ppssppvr>\oot3d_decomp\work\extract\romfs\scene' --scene link --scene spot04 --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.md --full-entries --sample-limit 32
 ```
 
 Source-like C support files for decompilation are generated from the same complete native decode with:
 
 ```powershell
-$env:PYTHONPATH='I:\oot3dre\tools\oot3d\oot3d_asset_tool\src'
-python -m oot3d_asset_tool export-zsi-scene-index 'E:\ppssppvr\oot3d_decomp\work\extract\romfs\scene' --scene link --scene spot04 --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.md --c-output-dir .\tools\oot3d\decomp_support\src\assets\scenes --full-entries --sample-limit 32
+$env:PYTHONPATH='<local>/oot3dre\tools\oot3d\oot3d_asset_tool\src'
+python -m oot3d_asset_tool export-zsi-scene-index '<ppssppvr>\oot3d_decomp\work\extract\romfs\scene' --scene link --scene spot04 --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_link_spot04.md --c-output-dir .\tools\oot3d\decomp_support\src\assets\scenes --full-entries --sample-limit 32
 ```
 
 The RomFS-wide source-like C dump for all decoded OOT3D scene indices is generated with:
 
 ```powershell
-$env:PYTHONPATH='I:\oot3dre\tools\oot3d\oot3d_asset_tool\src'
-python -m oot3d_asset_tool export-zsi-scene-index 'E:\ppssppvr\oot3d_decomp\work\extract\romfs\scene' --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_full.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_full.md --c-output-dir .\tools\oot3d\decomp_support\src\assets\scenes --full-entries --sample-limit 32 --no-room-mesh-summaries
+$env:PYTHONPATH='<local>/oot3dre\tools\oot3d\oot3d_asset_tool\src'
+python -m oot3d_asset_tool export-zsi-scene-index '<ppssppvr>\oot3d_decomp\work\extract\romfs\scene' --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_full.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_full.md --c-output-dir .\tools\oot3d\decomp_support\src\assets\scenes --full-entries --sample-limit 32 --no-room-mesh-summaries
 ```
 
 The RomFS-wide lightweight index is generated with:
 
 ```powershell
-$env:PYTHONPATH='I:\oot3dre\tools\oot3d\oot3d_asset_tool\src'
-python -m oot3d_asset_tool export-zsi-scene-index 'E:\ppssppvr\oot3d_decomp\work\extract\romfs\scene' --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_summary.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_summary.md --sample-limit 8 --no-room-mesh-summaries
+$env:PYTHONPATH='<local>/oot3dre\tools\oot3d\oot3d_asset_tool\src'
+python -m oot3d_asset_tool export-zsi-scene-index '<ppssppvr>\oot3d_decomp\work\extract\romfs\scene' --output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_summary.json --markdown-output .\tools\oot3d\decomp_support\analysis\oot3d_native_scene_index_all_summary.md --sample-limit 8 --no-room-mesh-summaries
 ```
 
 The scene-command decompilation workorder queue is generated from the RomFS-wide index with:
@@ -59,16 +59,16 @@ Primary outputs:
 
 This index is the review/query layer over the generated C sources. It maps every native scene basename to its generated C file and `Oot3dSceneIndex` symbol, every setup to its materialized payload symbols, every room binding to its object-prefixed actor array/object-bank array, and every scene command to its decoded payload count plus OOT3D `code.bin` support level. The current generated source map covers 114 scenes, 175 setups, 1050 scene-room bindings, 610 unique room files, 2132 scene commands, 8092 room actor entries, 6573 room object-bank entries, 598 spawn entries, and 1467 light-setting records. No scene command class is still marked semantic/consumer pending in that index; native path lists `0x0D` and exit lists `0x13` are now represented from OOT3D ZSI payloads plus OOT3D `code.bin` consumer evidence.
 
-The workorder generator also reads the native `code.bin` scene command handler table at `0x0053CC84` from `E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin`. The current table resolves 14 non-null handlers for the commands observed in ZSI scene setup lists. Apply the generated function splits to the Ghidra project with:
+The workorder generator also reads the native `code.bin` scene command handler table at `0x0053CC84` from `<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin`. The current table resolves 14 non-null handlers for the commands observed in ZSI scene setup lists. Apply the generated function splits to the Ghidra project with:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oot3d\decomp_support\scripts\ghidra-apply-function-splits.ps1 -GhidraRoot 'E:\azahar pcvr\tools\pcvr-re-tools\ghidra' -JdkRoot 'E:\azahar pcvr\tools\pcvr-re-tools\jdk21' -ProjectDir 'E:\ppssppvr\oot3d_decomp\work\ghidra_project' -ProjectName 'oot3d_code' -SplitsCsv '.\analysis\scene_command_handler_function_splits.csv'
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oot3d\decomp_support\scripts\ghidra-apply-function-splits.ps1 -GhidraRoot '<azahar-pcvr>\tools\pcvr-re-tools\ghidra' -JdkRoot '<azahar-pcvr>\tools\pcvr-re-tools\jdk21' -ProjectDir '<ppssppvr>\oot3d_decomp\work\ghidra_project' -ProjectName 'oot3d_code' -SplitsCsv '.\analysis\scene_command_handler_function_splits.csv'
 ```
 
 Then export the handler bodies, callers, and callees with:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oot3d\decomp_support\scripts\ghidra-export-selected.ps1 -GhidraRoot 'E:\azahar pcvr\tools\pcvr-re-tools\ghidra' -JdkRoot 'E:\azahar pcvr\tools\pcvr-re-tools\jdk21' -ProjectDir 'E:\ppssppvr\oot3d_decomp\work\ghidra_project' -ProjectName 'oot3d_code' -ExportDir 'analysis\scene_command_handlers_ghidra_export' -EntriesFile 'analysis\scene_command_handler_export_entries.txt' -IncludeCallers -IncludeCallees -KeepSelectedArtifacts
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oot3d\decomp_support\scripts\ghidra-export-selected.ps1 -GhidraRoot '<azahar-pcvr>\tools\pcvr-re-tools\ghidra' -JdkRoot '<azahar-pcvr>\tools\pcvr-re-tools\jdk21' -ProjectDir '<ppssppvr>\oot3d_decomp\work\ghidra_project' -ProjectName 'oot3d_code' -ExportDir 'analysis\scene_command_handlers_ghidra_export' -EntriesFile 'analysis\scene_command_handler_export_entries.txt' -IncludeCallers -IncludeCallees -KeepSelectedArtifacts
 ```
 
 The runtime extraction report is generated from that focused Ghidra export with:
@@ -85,9 +85,9 @@ Runtime-map outputs:
 Downstream consumers for scene indices are scanned with Ghidra offset access evidence. The current focused scan covers `0x13 exit_list` at `play+0x5C1C` and `0x0D path_list` at `play+0x5C20`:
 
 ```powershell
-$ghidra='E:\azahar pcvr\tools\pcvr-re-tools\ghidra'
-$jdk='E:\azahar pcvr\tools\pcvr-re-tools\jdk21'
-$project='E:\ppssppvr\oot3d_decomp\work\ghidra_project'
+$ghidra='<azahar-pcvr>\tools\pcvr-re-tools\ghidra'
+$jdk='<azahar-pcvr>\tools\pcvr-re-tools\jdk21'
+$project='<ppssppvr>\oot3d_decomp\work\ghidra_project'
 $env:JAVA_HOME=$jdk
 $env:PATH="$jdk\bin;$env:PATH"
 & (Join-Path $ghidra 'support\analyzeHeadless.bat') $project 'oot3d_code' -process code.bin -noanalysis -scriptPath '.\tools\oot3d\decomp_support\ghidra_scripts' -postScript FindOot3dOffsetAccesses.java 'tools\oot3d\decomp_support\analysis\scene_command_exit_path_offset_accesses.csv' '0x5c1c 0xc1c 0x5c20 0xc20 0x5c18 0xc18 0x5c02 0xc02'
@@ -397,7 +397,7 @@ This table currently emits 35 unique native collision header rows referenced by 
 The selected consumer bodies are exported with:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oot3d\decomp_support\scripts\ghidra-export-selected.ps1 -GhidraRoot 'E:\azahar pcvr\tools\pcvr-re-tools\ghidra' -JdkRoot 'E:\azahar pcvr\tools\pcvr-re-tools\jdk21' -ProjectDir 'E:\ppssppvr\oot3d_decomp\work\ghidra_project' -ProjectName 'oot3d_code' -ExportDir 'analysis\scene_command_index_consumers_ghidra_export' -EntriesFile 'analysis\scene_command_index_consumer_export_entries.txt' -IncludeCallers -IncludeCallees -KeepSelectedArtifacts
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\oot3d\decomp_support\scripts\ghidra-export-selected.ps1 -GhidraRoot '<azahar-pcvr>\tools\pcvr-re-tools\ghidra' -JdkRoot '<azahar-pcvr>\tools\pcvr-re-tools\jdk21' -ProjectDir '<ppssppvr>\oot3d_decomp\work\ghidra_project' -ProjectName 'oot3d_code' -ExportDir 'analysis\scene_command_index_consumers_ghidra_export' -EntriesFile 'analysis\scene_command_index_consumer_export_entries.txt' -IncludeCallers -IncludeCallees -KeepSelectedArtifacts
 ```
 
 The JSON records native scene setup commands, room references, gameplay spawn `ActorEntry` records, entrance lists, transition actors, native `0x1C` light-setting records, collision/camera/water summaries, embedded room CMB summaries, and object-prefixed room actor lists. The generated C files in `src/assets/scenes/` serialize the same decoded native structures through `include/oot3d/scene.h`, making the OOT3D scene/room indices usable as decompilation support data. Actor and keep-object IDs are emitted as `ACTOR_*`/`OBJECT_*` enum symbols from `include/oot3d/actor_object_semantics.h` when the native value is known; unknown fallback IDs remain numeric so the export does not introduce unproven labels.

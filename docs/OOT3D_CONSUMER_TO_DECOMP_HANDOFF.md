@@ -10,19 +10,19 @@
 
 This document is the stable entry point for semantic work reconstructed in the
 native runtime before the same owner exists as reviewed source in
-`I:\oot3decomp`. The decomp checkout remains a read-only producer input here.
+`<oot3d-decomp>`. The decomp checkout remains a read-only producer input here.
 No consumer script switches its branch, edits its files or commits into it.
 
 The machine-readable transfer is generated below:
 
 ```text
-I:\oot3dre_work\source_integration\<snapshot>\
+<oot3d-work>\source_integration\<snapshot>\
   decomp_handoff.json
   decomp_handoff.md
   decomp_work_request.json
 ```
 
-`I:\oot3dre_work\source_integration\latest.json` identifies the latest package.
+`<oot3d-work>\source_integration\latest.json` identifies the latest package.
 The JSON handoff is authoritative for paths, hashes and structured evidence;
 this document explains how to consume it.
 
@@ -51,7 +51,7 @@ Runtime activation is a separate decision. An active owner must have a hashed
 The current package is:
 
 ```text
-I:\oot3dre_work\source_integration\6a1197f3a520-7286a857de90
+<oot3d-work>\source_integration\6a1197f3a520-7286a857de90
 ```
 
 It is pinned to producer commit
@@ -650,7 +650,7 @@ as a complete owner import.
 1. Resolve `latest.json`, verify its manifest SHA-256 and use only the pinned
    source candidate recorded by the Actor work order.
 2. Compile the candidate in an isolated consumer target. The normal build
-   must not inspect or depend on `I:\oot3decomp`.
+   must not inspect or depend on `<oot3d-decomp>`.
 3. Map producer pointer/global resolver macros onto `NativeA32Memory`, with
    checked guest-to-host and host-to-guest address conversion.
 4. Route target-address callbacks through the existing typed-or-A32
@@ -718,7 +718,7 @@ Only after source closure should the runtime evaluate the separate
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\b2263fafb2dd-7286a857de90
+<oot3d-work>\source_integration\b2263fafb2dd-7286a857de90
 ```
 
 Producer commit `b2263fafb2dd23288456c97cef5c9c1632d8ff86` promotes 100
@@ -762,7 +762,7 @@ must not convert source coverage into an implicit acceptance.
 The current immutable consumer baseline is:
 
 ```text
-I:\oot3dre_work\source_integration\449e219e8a8b-a6b96b41f301
+<oot3d-work>\source_integration\449e219e8a8b-a6b96b41f301
 ```
 
 It pins producer commit `449e219e8a8bdd8025981b0ba5f961f1a6614ea4`
@@ -896,7 +896,7 @@ Verification completed in the consumer:
 - bridge failures, whole-AOT memory faults and unsupported exits: zero.
 
 The smoke report is
-`I:\oot3dre_work\native_game\actor_update_all_source_smoke.json`, SHA-256
+`<oot3d-work>\native_game\actor_update_all_source_smoke.json`, SHA-256
 `d7052debf18b38c953b34c5c56ae811a82e59589cd8ce86ee41d9fd4ff102242`.
 Its `source_actor_update_all` object is the machine-readable acceptance
 record. The import manifest now labels runtime activation
@@ -963,7 +963,7 @@ The later frame-10420 checkpoint completes 120 Native30 presentation frames
 with 119 source `Actor_UpdateAll` calls, 39,428 nested guest calls, 6,624
 update callbacks and no failure, but observes zero `Actor_InitContext` calls.
 Report:
-`I:\oot3dre_work\native_game\actor_init_context_source_smoke_10420.json`;
+`<oot3d-work>\native_game\actor_init_context_source_smoke_10420.json`;
 SHA-256
 `07c5af58e937e3b537a353c28942c85d5b83f09474320bbefb16791e977430ba`.
 It must not be used to promote `Actor_InitContext`.
@@ -1006,7 +1006,7 @@ no ObjHana/CMB address test.
 Process evidence:
 
 ```text
-I:\oot3dre_work\native_game\actor_init_context_source_smoke_10380_objhana.json
+<oot3d-work>\native_game\actor_init_context_source_smoke_10380_objhana.json
 SHA-256 44dcac6bea9a601cc0f0bde8b412bcea44181d0b9f3f5cf23b25d932f63ac8ef
 ```
 
@@ -1029,12 +1029,12 @@ as an explicit Native30 opt-in. The frame-12000 run reaches
 failure. Its report is:
 
 ```text
-I:\oot3dre_work\native_game\actor_init_context_source_smoke_frame12000_accepted.json
+<oot3d-work>\native_game\actor_init_context_source_smoke_frame12000_accepted.json
 SHA-256 bab3cbe1e70352747c4ac5a472dbae6f3efab3f0737ddf76cdd101b35d2e886a
 ```
 
 Formal consumer acceptance is recorded in
-`I:\oot3dre_work\source_integration\d5c292708f7f-4adc6afbb839`.
+`<oot3d-work>\source_integration\d5c292708f7f-4adc6afbb839`.
 The package remains pinned to producer commit `d5c2927`, reports all eight
 source graphs closed and hashes three runtime-ready owner records.
 
@@ -1132,16 +1132,16 @@ pointer and FPSCR across all nine cases and restore/replay.
 Evidence:
 
 ```text
-I:\oot3dre_work\native_game\cutscene_update_frame_source_smoke_link_dream.json
+<oot3d-work>\native_game\cutscene_update_frame_source_smoke_link_dream.json
 SHA-256 e59ca5d4ee2c40ce6a7c482021a69c03c7560632177843f2f02a8eb24a810f75
 
-I:\oot3dre_work\native_game\cutscene_update_frame_a32_baseline_link_dream.json
+<oot3d-work>\native_game\cutscene_update_frame_a32_baseline_link_dream.json
 SHA-256 10a81e87b63a156251008538d385691aeca7f84cb133390a3f1d66d3a703f322
 route: current typed Cutscene_UpdateFrame baseline
 ```
 
 Formal consumer acceptance is recorded in
-`I:\oot3dre_work\source_integration\d5c292708f7f-ca8c22db1095`.
+`<oot3d-work>\source_integration\d5c292708f7f-ca8c22db1095`.
 The package remains pinned to producer commit `d5c2927`, reports all eight
 source graphs closed, four runtime-ready owner records and no remaining
 closure worklist. Producer source does not need reopening for this owner.
@@ -1197,10 +1197,10 @@ unlocked gameplay timing.
 Final process evidence:
 
 ```text
-I:\oot3dre_work\native_game\cutscene_process_commands_a32_baseline_link_dream_accepted.json
+<oot3d-work>\native_game\cutscene_process_commands_a32_baseline_link_dream_accepted.json
 SHA-256 9004795e6a67e602de973736aaba89b83a4d74cf47abfb9c7a08168df40e4372
 
-I:\oot3dre_work\native_game\cutscene_process_commands_source_smoke_link_dream_accepted.json
+<oot3d-work>\native_game\cutscene_process_commands_source_smoke_link_dream_accepted.json
 SHA-256 ddfeb034745612f83e3d22bafa33d75efcb44896b3dbce46313ba2a5b50419d9
 ```
 
@@ -1251,10 +1251,10 @@ hidden sret, early return, normal camera and dynamic camera dispatch.
 Final process reports:
 
 ```text
-I:\oot3dre_work\native_game\camera_update_a32_baseline_link_dream_accepted.json
+<oot3d-work>\native_game\camera_update_a32_baseline_link_dream_accepted.json
 SHA-256 7da50afaed77e8c4c54012c9742b04332fc3c1f5d10661f88dcb91a605c2dbbd
 
-I:\oot3dre_work\native_game\camera_update_source_link_dream_accepted.json
+<oot3d-work>\native_game\camera_update_source_link_dream_accepted.json
 SHA-256 4c26d89c47b3dca8952f70976c7b216eddc9d56861c50533791ba373f53994e3
 ```
 
@@ -1298,10 +1298,10 @@ registers/VFP state and FPSCR with generated A32.
 Final process reports:
 
 ```text
-I:\oot3dre_work\native_game\player_update_a32_baseline_link_dream_accepted.json
+<oot3d-work>\native_game\player_update_a32_baseline_link_dream_accepted.json
 SHA-256 6cb820acbf2ab58f1d4fe64a22d2a36cf85a05ac1f593d61925c48aeb386c208
 
-I:\oot3dre_work\native_game\player_update_source_link_dream_accepted.json
+<oot3d-work>\native_game\player_update_source_link_dream_accepted.json
 SHA-256 df52b3030e99fea98654ff4293895d0a10251bdb17995de750d47bfe97e5dc61
 ```
 
@@ -1355,16 +1355,16 @@ the complete memory content is exact.
 Retained evidence:
 
 ```text
-I:\oot3dre_work\native_game\player_update_common_a32_baseline_link_dream_accepted.json
+<oot3d-work>\native_game\player_update_common_a32_baseline_link_dream_accepted.json
 SHA-256 3e3e559ba1d0199674d8cbf0a12e8b3c08bf85df6ae46ee84f77cfdfede08042
 
-I:\oot3dre_work\native_game\player_update_common_source_link_dream_accepted.json
+<oot3d-work>\native_game\player_update_common_source_link_dream_accepted.json
 SHA-256 491875d10f73827766f3c454051650881e3ea12ed19e0fff94a6b138f6f005d4
 
-I:\oot3dre_work\native_game\player_update_common_a32_gameplay_accepted.json
+<oot3d-work>\native_game\player_update_common_a32_gameplay_accepted.json
 SHA-256 72bea70337622b364d47dbf6c28cb47c27b76de1cdb40a29fb4cbaaafe7078b
 
-I:\oot3dre_work\native_game\player_update_common_source_gameplay_accepted.json
+<oot3d-work>\native_game\player_update_common_source_gameplay_accepted.json
 SHA-256 2c367ca472b2150df398eed68e414f8db2bbaabefa95d20ccd058341e32d452e
 ```
 
@@ -1401,7 +1401,7 @@ completions, all owner counters and PCM fingerprint
 `4924382187376014073` match. The retained report is:
 
 ```text
-I:\oot3dre_work\native_game\source_gameplay_profile_link_dream_accepted.json
+<oot3d-work>\native_game\source_gameplay_profile_link_dream_accepted.json
 SHA-256 ce16eabbd911aa4a62a8c2d74a5af9c2d539bb40f9a8d9fbbc63f548ab55a5e5
 ```
 

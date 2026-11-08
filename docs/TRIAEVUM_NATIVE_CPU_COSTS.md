@@ -116,29 +116,29 @@ generalize the percentage to every scene or GPU configuration.
 
 ## Reproduction and Artifacts
 
-Active worktree: `I:/oot3dre_work/triaevum-release`.
-Runtime: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
+Active worktree: `<oot3d-work>/triaevum-release`.
+Runtime: `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
 Before binary: same directory, `TriAevum.before-native-costs.exe`; original PDB
-preserved under `I:/oot3dre_work/native-performance-20260907-before/`.
+preserved under `<oot3d-work>/native-performance-20260907-before/`.
 The catalogued user release has not been rebuilt or overwritten by these tests.
 
 ```powershell
 node tools/triaevum_release/tests/benchmark_gameplay.mjs `
-  exe=I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe `
+  exe=<oot3d-work>/triaevum-direct-module-build/TriAevum.exe `
   profile=I:/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json `
-  state=I:/oot3dre_work/native_game/checkpoints/hudtest.oot3dsav `
-  output=I:/oot3dre_work/UNIQUE_NATIVE_BENCHMARK_DIRECTORY `
+  state=<oot3d-work>/native_game/checkpoints/hudtest.oot3dsav `
+  output=<oot3d-work>/UNIQUE_NATIVE_BENCHMARK_DIRECTORY `
   overrides=tools/triaevum_release/tests/renderer_native_performance.json `
   frames=1200 warmup=120 diagnostics=true interpolation=false
 ```
 
-Paired evidence: `I:/oot3dre_work/native-costs-20260907-{a1,b1,a2,b2}/`.
+Paired evidence: `<oot3d-work>/native-costs-20260907-{a1,b1,a2,b2}/`.
 Framebuffers: `.../native-costs-20260907-visual-{a,b}/`.
 Enhanced test: `.../native-costs-20260907-effects-validation/`.
 Original sampler capture and machine-readable summary:
-`I:/oot3dre_work/native-performance-20260907-sample/{cpu.sleepy,cpu-summary.json}`.
+`<oot3d-work>/native-performance-20260907-sample/{cpu.sleepy,cpu-summary.json}`.
 
-User-mode profiler: `I:/oot3dre_tools/verysleepy/app/sleepy.exe`, unpacked from
+User-mode profiler: `<tools>/verysleepy/app/sleepy.exe`, unpacked from
 the official [Very Sleepy 0.91 release](https://github.com/VerySleepy/verysleepy/releases/tag/v0.91).
 Attach only after benchmark startup: `/a PID /t 15 /o ABSOLUTE_CAPTURE.sleepy /q`.
 Use an owned, bounded benchmark process and close any remaining profiler window.

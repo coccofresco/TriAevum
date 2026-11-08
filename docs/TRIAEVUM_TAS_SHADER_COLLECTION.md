@@ -85,7 +85,7 @@ Kageyu, BSD-2-Clause; bundled disassembler notices retained privately).
 
 ## Reproducible local artifacts
 
-Private workspace: `I:/TriAevum-private-tas/` (never release inputs).
+Private workspace: `<local>/TriAevum-private-tas/` (never release inputs).
 
 - `all-dungeons.ctm`: unchanged author recording.
 - `nightly-mingw/`: verified historical executable and isolated portable data.

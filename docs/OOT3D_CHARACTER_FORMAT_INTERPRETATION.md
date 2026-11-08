@@ -7,7 +7,7 @@ Child Link is the first validation target, but the rules below are general.
 
 The confirmed-good inspection asset is:
 
-`I:\oot3dre_work\character_static_glb\link_child_static_base_character.glb`
+`<oot3d-work>\character_static_glb\link_child_static_base_character.glb`
 
 It establishes these facts for the current skinned character path:
 
@@ -45,18 +45,18 @@ identity has been verified.
 The Child Link base profile is not justified only by visual confirmation. The
 current structural evidence from `childlink_v2` is captured by:
 
-`I:\oot3dre_work\character_visibility_reconstruction\link_child_visibility_reconstruction.json`
+`<oot3d-work>\character_visibility_reconstruction\link_child_visibility_reconstruction.json`
 
 The audit was generated with:
 
 ```powershell
-$env:PYTHONPATH='I:\oot3dre\tools\oot3d\oot3d_asset_tool\src'
+$env:PYTHONPATH='<local>/oot3dre\tools\oot3d\oot3d_asset_tool\src'
 python -m oot3d_asset_tool audit-character-visibility-reconstruction `
-  E:\ppssppvr\oot3d_decomp\work\extract\romfs\actor\zelda_link_child_new.zar `
+  <ppssppvr>\oot3d_decomp\work\extract\romfs\actor\zelda_link_child_new.zar `
   --cmb-name child/model/childlink_v2.cmb `
   --selection-manifest tools\oot3d\oot3d_asset_tool\profiles\link_child_static_base_selection.json `
-  --n64-player-lib E:\ppssppvr\oot3d_decomp\external\oot\src\code\z_player_lib.c `
-  --output I:\oot3dre_work\character_visibility_reconstruction\link_child_visibility_reconstruction.json
+  --n64-player-lib <ppssppvr>\oot3d_decomp\external\oot\src\code\z_player_lib.c `
+  --output <oot3d-work>\character_visibility_reconstruction\link_child_visibility_reconstruction.json
 ```
 
 Key findings:
@@ -179,14 +179,14 @@ vertex positions/normals by sampling CSAB bone poses.
 For Child Link running with free hands, the current reference command is:
 
 ```powershell
-$env:PYTHONPATH='I:\oot3dre\tools\oot3d\oot3d_asset_tool\src'
+$env:PYTHONPATH='<local>/oot3dre\tools\oot3d\oot3d_asset_tool\src'
 python -m oot3d_asset_tool export-skinned-animation-glb `
-  E:\ppssppvr\oot3d_decomp\work\extract\romfs\actor\zelda_link_child_new.zar `
+  <ppssppvr>\oot3d_decomp\work\extract\romfs\actor\zelda_link_child_new.zar `
   --cmb-name child/model/childlink_v2.cmb `
   --csab-name child/anim/nml_run_free.csab `
-  --selection-manifest I:\oot3dre\tools\oot3d\oot3d_asset_tool\profiles\link_child_static_base_selection.json `
-  --output I:\oot3dre_work\character_animation_glb\link_child_nml_run_free_step_base_hands.glb `
-  --manifest-output I:\oot3dre_work\character_animation_glb\link_child_nml_run_free_step_base_hands.manifest.json `
+  --selection-manifest <local>/oot3dre\tools\oot3d\oot3d_asset_tool\profiles\link_child_static_base_selection.json `
+  --output <oot3d-work>\character_animation_glb\link_child_nml_run_free_step_base_hands.glb `
+  --manifest-output <oot3d-work>\character_animation_glb\link_child_nml_run_free_step_base_hands.manifest.json `
   --frame-step 1 `
   --fps 60 `
   --interpolation STEP

@@ -20,7 +20,7 @@ $diagnosticsPath = Join-Path $artifactRoot `
 $screenshotPath = Join-Path $artifactRoot "native-game.bmp"
 $summaryPath = Join-Path $artifactRoot "native-game-summary.json"
 $transitionCheckpoint = Join-Path `
-    "I:\oot3dre_work\native_game\checkpoints" `
+    "<oot3d-work>\native_game\checkpoints" `
     "timing_link_house_11800.oot3dsav"
 $environmentNames = @(
     "OOT3D_VULKAN_VALIDATION",

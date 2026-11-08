@@ -110,7 +110,7 @@ framebuffer readback, and incurs cold caches. Maximum interval was **17.50 s**;
 performance is not accepted. The run recorded 1,780 guest refreshes and 958
 presentations, which must not be conflated into a native FPS measurement.
 
-Private evidence: `I:/oot3dre_work/linux-port-proof/steamrt4-build-proof.json`,
+Private evidence: `<oot3d-work>/linux-port-proof/steamrt4-build-proof.json`,
 `steamrt4-captures/`, and the corresponding Linux build/play directories.
 The transferred source contains the portability changes accompanying this
 document; its older remote Git HEAD is not an exact release-source identity.

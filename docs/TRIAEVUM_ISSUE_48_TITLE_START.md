@@ -39,7 +39,7 @@ exception, guest/AOT change, or optional-effect workaround is introduced.
   exits zero and reaches file selection, using the published Windows package
   dependencies with only its runtime executable replaced.
 - Private logs, framebuffer captures and runtime summaries are under
-  `I:/TriAevum-public/issue48-verification`; the failing release log remains in
+  `<public-work>/issue48-verification`; the failing release log remains in
   the alpha.3 qualification directory. No private evidence is committed.
 
 The initial live runs above qualify Windows. Subsequent alpha.3b qualification

@@ -65,7 +65,7 @@ values stay unchanged because they are not code pointers. Both CameraLive
 projection variants now select the same vanilla routine.
 
 Reproduction/evidence lives in `W/analysis/dekui`, where
-`W = I:/_triaevum_work/mm3d-port`:
+`W` = the local work directory (not in this repository):
 
 - `port_guest_core.py`: donor closure, source conversion, Core extraction and
   independent candidate-test manifest. It preserves manual host/test/notes

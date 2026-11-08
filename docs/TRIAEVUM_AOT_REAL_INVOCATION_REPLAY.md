@@ -69,7 +69,7 @@ repeatably and then pass clean, unchanged-game pre-NRI A/B measurement.
 
 Use `tools/renderer/tev_program/run_aot_invocation_probe.py` with:
 
-- `--compiler I:/oot3dre_tools/llvm-22.1.6/bin/clang-cl.exe`
+- `--compiler <tools>/llvm-22.1.6/bin/clang-cl.exe`
 - `--support` pointing to a freshly built `triaevum_title_whole_aot_support.lib`
 - `--include C:/vcpkg/installed/x64-windows-static/include`
 - `--baseline` pointing to a title module rebuilt for memory-observation ABI 3
@@ -275,7 +275,7 @@ frozen control byte-for-byte. Both end with zero pending draws/transfers. The
 matched ABI-3 reference also passes the field comparison. This establishes
 equivalence in these scenarios, not every game state or a CPU speedup.
 
-Private evidence under `I:/_triaevum_work/cpu-dynarmic/`:
+Private evidence under `<work>/cpu-dynarmic/`:
 `v3-field-control`, `v3-field-local`, `v3-copy-baseline`, `v3-copy-local`.
 Each candidate directory has `equivalence.json` with full framebuffer hashes.
 The original live executable remains unchanged.

@@ -13,7 +13,7 @@ from typing import Any
 
 FORMAT = "oot3d_player_shadow_model_tables_v1"
 IMAGE_BASE = 0x00100000
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 
 GROUP_TABLE_ADDR = 0x0053A558
 GROUP_TABLE_ENTRY_SIZE = 5

@@ -41,12 +41,12 @@ Le prime correzioni sotto non richiedono nuova decompilazione.
 
 | Percorso | Identita' osservata | Significato per questa revisione |
 | --- | --- | --- |
-| `I:\oot3dre` | `oot3d-port`, `36c74ec2eae38973448c5cf5de29a3013f47d949` | Worktree storico fornito come directory iniziale; non contiene il prodotto TriAevum piu' recente. Submodule locale modificato, non toccato. |
-| `I:\oot3dre_work\triaevum-release` | `release/triaevum-forge`, `7e5a14a8964e05b8df6e6a40a5ed3926d2d4b1ec` | Sorgenti principali revisionati. Worktree pulito prima del rapporto. |
-| `I:\oot3dre_work\whole-aot-product` | `mod/topscreen-2.1.1`, `51139e5eb074f62be3124ae1c28e362e85b0504a` | Linea di sviluppo da non confondere con il pacchetto Forge. |
-| `I:\oot3dre_work\oot3d-native-renderer-integration` | `renderer/oot3d-native-integration`, `530a6450a2871dde362c3fb3c4ae4e9bb47e6520` | Altro worktree storico, non automaticamente la build corrente. |
-| `I:\oot3dre_work\triaevum-direct-module-build` | CMake Release, clang-cl LLVM 22.1.6, plugin diretto attivo | Directory di build locale; contiene sia il vecchio `TriAevum.exe` sia il maturo `oot3d_native_game.exe`. |
-| `I:\TriAevum-0.5.0-public-final` | Installazione modificata dopo il packaging | Contiene anche dati privati generati da Forge. Non e' piu' un pacchetto pubblico immacolato. |
+| `<local>/oot3dre` | `oot3d-port`, `36c74ec2eae38973448c5cf5de29a3013f47d949` | Worktree storico fornito come directory iniziale; non contiene il prodotto TriAevum piu' recente. Submodule locale modificato, non toccato. |
+| `<oot3d-work>\triaevum-release` | `release/triaevum-forge`, `7e5a14a8964e05b8df6e6a40a5ed3926d2d4b1ec` | Sorgenti principali revisionati. Worktree pulito prima del rapporto. |
+| `<oot3d-work>\whole-aot-product` | `mod/topscreen-2.1.1`, `51139e5eb074f62be3124ae1c28e362e85b0504a` | Linea di sviluppo da non confondere con il pacchetto Forge. |
+| `<oot3d-work>\oot3d-native-renderer-integration` | `renderer/oot3d-native-integration`, `530a6450a2871dde362c3fb3c4ae4e9bb47e6520` | Altro worktree storico, non automaticamente la build corrente. |
+| `<oot3d-work>\triaevum-direct-module-build` | CMake Release, clang-cl LLVM 22.1.6, plugin diretto attivo | Directory di build locale; contiene sia il vecchio `TriAevum.exe` sia il maturo `oot3d_native_game.exe`. |
+| `<local>/TriAevum-0.5.0-public-final` | Installazione modificata dopo il packaging | Contiene anche dati privati generati da Forge. Non e' piu' un pacchetto pubblico immacolato. |
 
 Le righe di codice citate si riferiscono al commit `7e5a14a89`, non a eventuali
 modifiche successive. I collegamenti relativi puntano a quel worktree.
@@ -64,7 +64,7 @@ modifiche successive. I collegamenti relativi puntano a quel worktree.
   dimostra che `ok` non certifica la capacita' di compilare/installare.
 - Verifica diretta degli hash di runtime, Forge e archivio sorgenti installati.
 - Lettura del benchmark esistente
-  `I:\TriAevum-0.5.0-public-final\data\forge-abi-v2-final-benchmark.json`.
+  `<local>/TriAevum-0.5.0-public-final\data\forge-abi-v2-final-benchmark.json`.
 
 Non sono stati effettuati nuovi avvii del gioco, benchmark GPU, rebuild completi,
 test su Windows pulito o riallineamenti della decompilazione. Le prove storiche
@@ -182,7 +182,7 @@ sezione 5. Input, audio e velocita' di simulazione devono restare nativi.
 
 ### R04. Separare installazione privata e artefatto di rilascio
 
-**Evidenza.** Il manifesto di `I:\TriAevum-0.5.0-public-final` dichiara il commit
+**Evidenza.** Il manifesto di `<local>/TriAevum-0.5.0-public-final` dichiara il commit
 `0ed044b8fbe12b413f4c22aac5c0ca1a438c05cf`, precedente alla correzione v2.
 Gli hash SHA-256 verificati sono:
 

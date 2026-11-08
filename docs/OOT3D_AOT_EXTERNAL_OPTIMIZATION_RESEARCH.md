@@ -334,7 +334,7 @@ Sul medesimo `MeshCommandPacket_Submit_00466E2C` usato dal pilot LLVM, Clang
 store; i load/store diretti di `GuestState` restano entrambi a zero. Gli accessi
 residui sono nei cammini di ingresso/uscita e osservazione, non nel modello di
 esecuzione delle singole istruzioni guest. Artefatti riproducibili:
-`I:\oot3dre_work\whole_aot_optimization\llvm_pilot\scalar_mesh_submit`.
+`<oot3d-work>\whole_aot_optimization\llvm_pilot\scalar_mesh_submit`.
 
 ### Fase 4: Backend LLVM AOT
 
@@ -375,13 +375,13 @@ per default:
 Il merge delle run instrumented e deterministico:
 
 ```powershell
-$env:LLVM_PROFILE_FILE='I:\oot3dre_work\profiles\oot3d-%p-%m.profraw'
+$env:LLVM_PROFILE_FILE='<oot3d-work>\profiles\oot3d-%p-%m.profraw'
 # Eseguire qui le workload rappresentative senza usare la run come benchmark.
 python tools\oot3d\native_a32_runtime\merge_llvm_profiles.py `
-  --llvm-root I:\oot3dre_tools\llvm-22.1.6 `
-  --input-directory I:\oot3dre_work\profiles `
-  --output I:\oot3dre_work\profiles\oot3d.profdata `
-  --report I:\oot3dre_work\profiles\merge_report.json
+  --llvm-root <tools>\llvm-22.1.6 `
+  --input-directory <oot3d-work>\profiles `
+  --output <oot3d-work>\profiles\oot3d.profdata `
+  --report <oot3d-work>\profiles\merge_report.json
 ```
 
 Un pilot clang-cl 22.1.6 sullo shard scalare 168 ha gia verificato insieme
@@ -421,7 +421,7 @@ considerata separatamente come nondeterminismo runtime da localizzare, non come
 una differenza attribuita al profilo.
 
 Artefatti e report sono in
-`I:\oot3dre_work\profiles\aot_scalar_thinlto`. Le configurazioni `generate`,
+`<oot3d-work>\profiles\aot_scalar_thinlto`. Le configurazioni `generate`,
 `use` e `none` devono usare build directory distinte: cambiare modalita nella
 stessa directory invalida tutti i 256 shard e costa circa otto minuti anche su
 questa macchina. Il prossimo raffinamento di layout deve ricavare un ordine di
@@ -435,7 +435,7 @@ vcpkg statico validato e porta in ogni build il medesimo `aot_program.json`.
 ```powershell
 .\scripts\oot3d\Build-Oot3dLlvmWholeAot.ps1 `
   -ProfileMode use `
-  -ProfileFile I:\oot3dre_work\profiles\aot_scalar_thinlto\oot3d.profdata
+  -ProfileFile <oot3d-work>\profiles\aot_scalar_thinlto\oot3d.profdata
 ```
 
 `-ConfigureOnly` valida una nuova configurazione senza avviarne la build; una

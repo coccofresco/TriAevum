@@ -8,7 +8,7 @@ Example:
 
 ```powershell
 python tools/oot3d/frame_rate_audit/build_temporal_inventory.py `
-  --decomp-root I:\oot3decomp `
+  --decomp-root <oot3d-decomp> `
   --owner player `
   --output-dir native_game\frame_rate_audit\player
 ```

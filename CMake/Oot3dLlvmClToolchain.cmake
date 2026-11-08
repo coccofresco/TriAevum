@@ -1,13 +1,18 @@
 # LLVM/Clang-cl toolchain for isolated OOT3D AOT experiments on Windows.
 # Keep the validated MSVC build tree separate from builds using this file.
 
-set(_oot3d_llvm_default_root "I:/oot3dre_tools/llvm-22.1.6")
+# No host path is built in: the configure scripts pass OOT3D_LLVM_ROOT (cache or
+# environment), and a configure without it stops with a clear message.
+set(_oot3d_llvm_default_root "")
 if(DEFINED ENV{OOT3D_LLVM_ROOT} AND NOT "$ENV{OOT3D_LLVM_ROOT}" STREQUAL "")
     file(TO_CMAKE_PATH "$ENV{OOT3D_LLVM_ROOT}" _oot3d_llvm_default_root)
 endif()
 
 set(OOT3D_LLVM_ROOT "${_oot3d_llvm_default_root}" CACHE PATH
     "Root of the pinned OOT3D LLVM toolchain")
+if(OOT3D_LLVM_ROOT STREQUAL "")
+    message(FATAL_ERROR "Set OOT3D_LLVM_ROOT (cache or environment) to the pinned LLVM 22.1.6 root")
+endif()
 
 set(_oot3d_clang_cl "${OOT3D_LLVM_ROOT}/bin/clang-cl.exe")
 set(_oot3d_lld_link "${OOT3D_LLVM_ROOT}/bin/lld-link.exe")

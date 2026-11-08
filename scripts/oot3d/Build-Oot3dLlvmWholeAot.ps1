@@ -4,15 +4,15 @@ param(
     [string]$ProfileMode = "none",
     [string]$ProfileFile = "",
     [string]$OrderFile = "",
-    [string]$BuildRoot = "I:\oot3dre_work\build-aot-llvm",
-    [string]$LlvmRoot = "I:\oot3dre_tools\llvm-22.1.6",
+    [string]$BuildRoot = "<oot3d-work>\build-aot-llvm",
+    [string]$LlvmRoot = $env:OOT3D_LLVM_ROOT,
     [string]$WholeAotGeneratedDir =
-        "I:\oot3dre_work\whole_aot_optimization\scalar_full",
+        "<oot3d-work>\whole_aot_optimization\scalar_full",
     [string]$A32AotGeneratedDir =
-        "I:\oot3dre-vulkan\build-codex\oot3d_a32_generated",
+        "<local>/oot3dre-vulkan\build-codex\oot3d_a32_generated",
     [string]$WholeAotProgram =
-        "I:\oot3dre-vulkan\build-codex\oot3d_whole_aot\aot_program.json",
-    [string]$VcpkgRoot = "I:\oot3dre-vulkan\build-codex\vcpkg",
+        "<local>/oot3dre-vulkan\build-codex\oot3d_whole_aot\aot_program.json",
+    [string]$VcpkgRoot = "<local>/oot3dre-vulkan\build-codex\vcpkg",
     [ValidateRange(1, 64)]
     [int]$Parallel = 12,
     [switch]$ConfigureOnly

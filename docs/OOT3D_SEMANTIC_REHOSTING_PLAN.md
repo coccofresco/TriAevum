@@ -303,9 +303,9 @@ Rigenerare quindi il core pack che incorpora entrambi i cataloghi:
 Gli output controllabili sono:
 
 ```text
-I:\oot3dre_work\playable_catalog\oot3d_semantic_route_catalog.json
-I:\oot3dre_work\playable_catalog\oot3d_semantic_route_catalog.md
-I:\oot3dre_work\qdb_catalog\oot3d_qdb_catalog.json
-I:\oot3dre_work\qdb_catalog\oot3d-cutscenes.o2r
-I:\oot3dre_work\playable_pack\oot3d-core.o2r
+<oot3d-work>\playable_catalog\oot3d_semantic_route_catalog.json
+<oot3d-work>\playable_catalog\oot3d_semantic_route_catalog.md
+<oot3d-work>\qdb_catalog\oot3d_qdb_catalog.json
+<oot3d-work>\qdb_catalog\oot3d-cutscenes.o2r
+<oot3d-work>\playable_pack\oot3d-core.o2r
 ```

@@ -45,7 +45,7 @@ Implementation boundaries:
 
 ### Windows Verification
 
-Private evidence root: `J:/TriAevum-diagnostics/issues45-46/`.
+Private evidence root: `<diagnostics>/issues45-46/`.
 The original Kokiri checkpoint is untouched; `zero-health.oot3dsav` is a copy
 with only health `0058799C` set to zero. It is a diagnostic setup, not a claim
 to have tested every cause of player death.

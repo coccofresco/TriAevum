@@ -77,10 +77,10 @@ counts and average FPS do not measure stutter percentiles; no p95/p99 claim is m
 ## Reproduction and Provenance
 
 Runner: `tools/renderer/tev_program/benchmark_native_paths.py`.
-Historical executable: `J:/TriAevum-verify-20260910/package/TriAevum.exe`,
+Historical executable: `<verify-20260910>/package/TriAevum.exe`,
 release manifest source commit `c7f96869a9bf07c4dada763b067102d94f24d9bd`.
 It predates the architecture work but is not the immediately preceding commit.
-Current executable: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`, `aadc050`.
+Current executable: `<verify-20260910>/runtime/TriAevum.exe`, `aadc050`.
 
 SHA256:
 - Historical: `29365168792bdf275e49c7985cdc98b9630daa2599dbab2c06261582977a89b8`

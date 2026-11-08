@@ -4,7 +4,7 @@ param(
     [string]$GeneratedDirectory,
     [Parameter(Mandatory = $true)]
     [string]$BuildDirectory,
-    [string]$LlvmRoot = "I:\oot3dre_tools\llvm-22.1.6",
+    [string]$LlvmRoot = $env:OOT3D_LLVM_ROOT,
     [int]$Parallel = 12,
     [switch]$ThinLto
 )

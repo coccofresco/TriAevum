@@ -1736,12 +1736,12 @@ Entry, conferma, creazione del file e primo avvio. Il gate Vulkan ha prodotto
 un `save00.bin` da 5.340 byte, poi riletto e validato dal guest, ed e arrivato
 al prologo originale "In the vast, deep forest of Hyrule..." senza IPC non
 gestite. Le catture framebuffer di riferimento sono in
-`I:\oot3dre_work\native_game\new_file_gate_20260719k`.
+`<oot3d-work>\native_game\new_file_gate_20260719k`.
 
 I binding interattivi correnti sono: `Enter` Start, `Space` o `Z` A, `X` B,
 `C` X, `V` Y, `Q`/`E` L/R, frecce D-pad, `WASD` Circle Pad, `Tab` o
 `Backspace` Select ed `Esc` uscita. Il launcher usa per default
-`I:\oot3dre_work\native_game\oot3d_native_savedata`, cosi i file creati
+`<oot3d-work>\native_game\oot3d_native_savedata`, cosi i file creati
 sopravvivono alle run successive.
 
 ### Puntatore Dei Menu OOT3D Single-Screen Del 19 Luglio 2026

@@ -1,5 +1,5 @@
 param(
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$CallsiteContext = "",
     [string]$RuntimeParitySummary = "",
     [string]$OutputRoot = "",

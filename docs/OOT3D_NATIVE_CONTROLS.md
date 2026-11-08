@@ -98,7 +98,7 @@ calibration remain on their existing path. Freecam still consumes C-Stick.
 
 Evidence and verification:
 
-- Read-only native evidence: `I:/oot3decomp/src/runtime/shared_semantic/`
+- Read-only native evidence: `<oot3d-decomp>/src/runtime/shared_semantic/`
   `z_shared_n64_semantic_mass11_agent_wave2r_collision_runtime.c`,
   `PlayerView_UpdateStickAndMotionAngles` at `0x002C036C`; SDK reader
   `CalculateGyroscopeAxisStatus` at `0x002FA5EC`. No new decompilation/import.
@@ -116,7 +116,7 @@ Evidence and verification:
   These are observed camera angles, not a claim of one-to-one sensor gain.
 - Timelines emitted by the **actual updated mapper** produce a retained
   pitched view and correctly directed horizontal aiming in the game. Local
-  evidence is under `J:/TriAevum-verify-20260910/aim-sensor-*` and
+  evidence is under `<verify-20260910>/aim-sensor-*` and
   `aim-mapped-{pitch,yaw}`; captures come from the renderer framebuffer.
   Physical mouse feel and remaining native angle limits need user validation.
 

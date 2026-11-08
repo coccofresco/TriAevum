@@ -39,15 +39,15 @@ claim that the generated corpus itself was committed to `Zelda3drecomp`.
 
 ## Kokiri Initial Route
 
-Run from `I:\oot3dre-vulkan`:
+Run from `<local>/oot3dre-vulkan`:
 
 ```powershell
 $env:PYTHONPATH='tools/oot3d/oot3d_asset_tool/src'
 python -m oot3d_asset_tool promote-native-corpus `
-  --room-unit 'I:\oot3dre_work\room_compilation_units\scene_entry_SCENE_ENTRY_KOKIRI_FOREST_FROM_LINKS_HOUSE_KOKIRI_FOREST_INITIAL_CHILD_DAY.json' `
-  --zelda3drecomp-root 'I:\Zelda3drecomp' `
+  --room-unit '<oot3d-work>\room_compilation_units\scene_entry_SCENE_ENTRY_KOKIRI_FOREST_FROM_LINKS_HOUSE_KOKIRI_FOREST_INITIAL_CHILD_DAY.json' `
+  --zelda3drecomp-root '<legacy-recomp>' `
   --revision 607aaa60e1e94caaeaaa524c9d6d120fdd265701 `
-  --output 'I:\oot3dre_work\native_corpus\kokiri_initial_607aaa6' `
+  --output '<oot3d-work>\native_corpus\kokiri_initial_607aaa6' `
   --replace
 ```
 

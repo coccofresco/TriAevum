@@ -25,7 +25,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_SCENE_INDEX = ROOT / "analysis" / "oot3d_native_scene_index_all_full.json"
 DEFAULT_SCENE_INDEX_REGISTRY = ROOT / "src" / "assets" / "scenes" / "scene_index_registry.c"
 DEFAULT_N64_SCENE_TABLE = ROOT / "reference_inputs" / "n64_scene_table.h"

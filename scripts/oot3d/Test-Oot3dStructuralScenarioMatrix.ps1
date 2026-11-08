@@ -6,20 +6,20 @@ param(
     [string]$Mode = "full",
     [string[]]$Scenario = @(),
     [string]$ProductExecutable =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe",
     [string]$PicaCompiler =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_pica_aot_compiler.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_pica_aot_compiler.exe",
     [string]$ScenarioCatalog = "",
     [string]$BaselineInventory = "",
     [string]$PicaAotShaderPack = "",
     [string]$AnchorState =
-        "I:\oot3dre_work\native_game\checkpoints\hud_minimap_visible_20260721.oot3dsav",
+        "<oot3d-work>\native_game\checkpoints\hud_minimap_visible_20260721.oot3dsav",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [string]$OutputRoot =
-        "I:\oot3dre_work\structural-scenarios\matrices",
+        "<oot3d-work>\structural-scenarios\matrices",
     [ValidateRange(1, 1000000)]
     [int]$MaximumFrames = 2000,
     [ValidateRange(15, 3600)]

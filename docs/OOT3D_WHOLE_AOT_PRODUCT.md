@@ -57,7 +57,7 @@ extension are documented in
 .\scripts\oot3d\Build-Oot3dWholeAotProduct.ps1 -Parallel 4
 .\scripts\oot3d\Configure-Oot3dWholeAotProduct.ps1
 .\scripts\oot3d\Build-Oot3dLlvm.ps1 `
-  -BuildDirectory I:\oot3dre_work\whole-aot-product-consumer `
+  -BuildDirectory <oot3d-work>\whole-aot-product-consumer `
   -Target oot3d_native_game -Parallel 2
 ```
 
@@ -305,7 +305,7 @@ to relative paths and marks the resulting package as non-redistributable.
 ```powershell
 .\scripts\oot3d\Package-Oot3dWholeAotProduct.ps1
 .\scripts\oot3d\Test-Oot3dWholeAotPackage.ps1 `
-  -PackageDirectory I:\oot3dre_work\whole-aot-product-packages\<package>
+  -PackageDirectory <oot3d-work>\whole-aot-product-packages\<package>
 ```
 
 The package test verifies every inventoried SHA-256, rejects absolute game-data
@@ -315,7 +315,7 @@ framebuffer, and enforces the strict runtime counters.
 The release bundle from commit `fb6fe6d6d` contains 171 inventoried files
 (757,001,048 bytes), including the product golden contract and input-timeline
 test closure. Its validated local path is
-`I:\oot3dre_work\whole-aot-product-packages\oot3d-whole-aot-release-4d27d0453f42`.
+`<oot3d-work>\whole-aot-product-packages\oot3d-whole-aot-release-4d27d0453f42`.
 Its isolated frame-300 SHA-256 was
 `c188d6ea67d4f31547d623df018061e9ef03a9f66d29246eb7a882fd296ad6b3`,
 identical to the controlled oracle checkpoint.

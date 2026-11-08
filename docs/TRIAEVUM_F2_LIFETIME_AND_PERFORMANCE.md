@@ -15,7 +15,7 @@ native images. Implementation and repeatable stress procedure:
 This removes an actual unnecessary GPU-wide synchronization/allocation path and
 the loss of retained scanout. It does **not** establish a steady-state FPS gain.
 The before executable is retained privately as
-`I:/oot3dre_work/triaevum-direct-module-build/TriAevum.before-f2-lifetime.exe`.
+`<oot3d-work>/triaevum-direct-module-build/TriAevum.before-f2-lifetime.exe`.
 
 ## Measured Costs
 
@@ -50,7 +50,7 @@ Kokiri view, not a whole-game minimum, and does not promise a locked 60 FPS.
 The legacy `sdl_frame_limiter_enabled` field does not pace the Vulkan host;
 `pacing_enabled=false` and `vsync=false` describe this run.
 
-Private evidence directories under `I:/oot3dre_work/`:
+Private evidence directories under `<oot3d-work>/`:
 
 - `f2-general-performance-before-20260907`
 - `f2-general-performance-after-20260907`
@@ -163,7 +163,7 @@ These two clean runs replace 60-61 FPS as the **native** capacity baseline and
 strengthen the CPU-bottleneck conclusion: a 16x pixel reduction gives no throughput
 gain. They are not a performance improvement from a code optimization.
 
-Evidence: `I:/oot3dre_work/native-performance-20260907-pure-{1440,360}/`.
+Evidence: `<oot3d-work>/native-performance-20260907-pure-{1440,360}/`.
 
 In the first comparison, both output extents and zero effect execution were
 verified in renderer diagnostics. Reducing output pixels 16-fold cuts GPU time 46%, but increases
@@ -213,7 +213,7 @@ Revised priority:
 
 Reproducible override files: `tools/triaevum_release/tests/renderer_native_performance.json`
 and `renderer_native_performance_360p.json`. Evidence directories:
-`I:/oot3dre_work/native-performance-20260907-{1440,360,profile}/`.
+`<oot3d-work>/native-performance-20260907-{1440,360,profile}/`.
 These baseline investigations do not themselves constitute a general-performance fix.
 The subsequent sampled CPU analysis and implemented +15% native-throughput
 improvement are documented in `TRIAEVUM_NATIVE_CPU_COSTS.md`.

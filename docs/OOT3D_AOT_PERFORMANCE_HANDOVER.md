@@ -21,7 +21,7 @@ accelerare una micro-fixture non e un risultato sufficiente.
 
 Snapshot di riferimento:
 
-- repository: `I:\oot3dre-vulkan`;
+- repository: `<local>/oot3dre-vulkan`;
 - branch: `oot3d-vulkan`;
 - commit AOT principale: `8ee54835c` (`Validate and accelerate whole-program AOT`);
 - commit build incrementale: `986531094` (`Regenerate whole AOT shards incrementally`);
@@ -30,7 +30,7 @@ Snapshot di riferimento:
 - backend di produzione per questo lavoro: Vulkan;
 - scena benchmark: Foresta Kokiri, checkpoint dopo il caricamento della scena.
 
-Non riallineare o leggere `I:\Zelda3drecomp` finche l'utente non lo chiede
+Non riallineare o leggere `<legacy-recomp>` finche l'utente non lo chiede
 esplicitamente. Il lavoro prestazionale descritto qui e autosufficiente e usa
 soltanto repository, artifact e input gia disponibili.
 
@@ -86,12 +86,12 @@ audio e rendering completi. `FPS` e `480 / host_loop_seconds`.
 File autoritativi delle ultime righe:
 
 ```text
-I:\oot3dre_work\native_game\perf\forest_pure_interpreter_480_v18.json
-I:\oot3dre_work\native_game\perf\forest_pure_whole_aot_complete_480_v18.json
-I:\oot3dre_work\native_game\perf\forest_production_aot_480_v14.json
-I:\oot3dre_work\native_game\perf\forest_production_aot_hot_480_v16.json
-I:\oot3dre_work\native_game\perf\forest_production_aot_complete_480_v17.json
-I:\oot3dre_work\native_game\perf\forest_production_aot_fastwrite_480_v19.json
+<oot3d-work>\native_game\perf\forest_pure_interpreter_480_v18.json
+<oot3d-work>\native_game\perf\forest_pure_whole_aot_complete_480_v18.json
+<oot3d-work>\native_game\perf\forest_production_aot_480_v14.json
+<oot3d-work>\native_game\perf\forest_production_aot_hot_480_v16.json
+<oot3d-work>\native_game\perf\forest_production_aot_complete_480_v17.json
+<oot3d-work>\native_game\perf\forest_production_aot_fastwrite_480_v19.json
 ```
 
 Il benchmark migliore supera 60 FPS, ma non ha ancora il margine abbondante
@@ -111,7 +111,7 @@ puo inoltre renderne casualmente il wall time migliore di una run pulita.
 Checkpoint:
 
 ```text
-I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav
+<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav
 size:   75.871.428 byte
 SHA256: 888E3F2D599BA42A792EFAECBC9785D43EAD00BFE2CFE732DFC6444828B9DD1B
 ```
@@ -119,7 +119,7 @@ SHA256: 888E3F2D599BA42A792EFAECBC9785D43EAD00BFE2CFE732DFC6444828B9DD1B
 Immagine originale A32:
 
 ```text
-E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin
+<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin
 size:   4.567.040 byte
 SHA256: 16A6B0AA4C4784680220A6F780F7F8A73CFB205557AA9F9F0E705179E0613220
 ```
@@ -267,7 +267,7 @@ inventare un fallback host.
 `build-codex` e una junction:
 
 ```text
-I:\oot3dre-vulkan\build-codex
+<local>/oot3dre-vulkan\build-codex
   -> %USERPROFILE%\AppData\Local\oot3dre-build\build-vulkan
 ```
 
@@ -406,7 +406,7 @@ committare i file `_whole_aot_functions_*_candidate.json`.
 ### Produzione
 
 ```powershell
-.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -LoadState 'I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output 'I:\oot3dre_work\native_game\perf\candidate_production_480.json'
+.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -LoadState '<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output '<oot3d-work>\native_game\perf\candidate_production_480.json'
 ```
 
 Non disattivare audio o interpolazione per il numero di prodotto.
@@ -414,7 +414,7 @@ Non disattivare audio o interpolazione per il numero di prodotto.
 ### Interprete Puro
 
 ```powershell
-.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -DisableCompiledFunctions -LoadState 'I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output 'I:\oot3dre_work\native_game\perf\candidate_interpreter_480.json'
+.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -DisableCompiledFunctions -LoadState '<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output '<oot3d-work>\native_game\perf\candidate_interpreter_480.json'
 ```
 
 `-DisableCompiledFunctions` disabilita manual functions, whole-AOT e true-AOT.
@@ -422,7 +422,7 @@ Non disattivare audio o interpolazione per il numero di prodotto.
 ### Whole-AOT Puro
 
 ```powershell
-.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -DisableManualCompiledFunctions -DisableTrueAotBlocks -LoadState 'I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output 'I:\oot3dre_work\native_game\perf\candidate_whole_aot_480.json'
+.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -DisableManualCompiledFunctions -DisableTrueAotBlocks -LoadState '<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output '<oot3d-work>\native_game\perf\candidate_whole_aot_480.json'
 ```
 
 Questa e la configurazione corretta per giudicare il lowering generico.
@@ -430,7 +430,7 @@ Questa e la configurazione corretta per giudicare il lowering generico.
 ### Profilo
 
 ```powershell
-.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -ProfileA32Runtime -ProfileA32Blocks -LoadState 'I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output 'I:\oot3dre_work\native_game\perf\candidate_profile_480.json'
+.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 480 -ProfileA32Runtime -ProfileA32Blocks -LoadState '<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output '<oot3d-work>\native_game\perf\candidate_profile_480.json'
 ```
 
 Il profiler runtime campiona 1 chiamata su 64. Il block profiler campiona gli
@@ -453,19 +453,19 @@ Generare trace corte, perche tre frame occupano circa 177 MB ciascuna.
 Interprete:
 
 ```powershell
-.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 3 -DisableCompiledFunctions -A32BlockTrace 'I:\oot3dre_work\native_game\perf\candidate_interpreter.trace.jsonl' -LoadState 'I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output 'I:\oot3dre_work\native_game\perf\candidate_interpreter_trace.json'
+.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 3 -DisableCompiledFunctions -A32BlockTrace '<oot3d-work>\native_game\perf\candidate_interpreter.trace.jsonl' -LoadState '<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output '<oot3d-work>\native_game\perf\candidate_interpreter_trace.json'
 ```
 
 Whole-AOT puro:
 
 ```powershell
-.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 3 -DisableManualCompiledFunctions -DisableTrueAotBlocks -A32BlockTrace 'I:\oot3dre_work\native_game\perf\candidate_whole_aot.trace.jsonl' -LoadState 'I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output 'I:\oot3dre_work\native_game\perf\candidate_whole_aot_trace.json'
+.\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 -SkipBuild -Renderer vulkan -Frames 3 -DisableManualCompiledFunctions -DisableTrueAotBlocks -A32BlockTrace '<oot3d-work>\native_game\perf\candidate_whole_aot.trace.jsonl' -LoadState '<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav' -Output '<oot3d-work>\native_game\perf\candidate_whole_aot_trace.json'
 ```
 
 Confronto:
 
 ```powershell
-python tools/oot3d/native_a32_runtime/compare_block_traces.py 'I:\oot3dre_work\native_game\perf\candidate_interpreter.trace.jsonl' 'I:\oot3dre_work\native_game\perf\candidate_whole_aot.trace.jsonl'
+python tools/oot3d/native_a32_runtime/compare_block_traces.py '<oot3d-work>\native_game\perf\candidate_interpreter.trace.jsonl' '<oot3d-work>\native_game\perf\candidate_whole_aot.trace.jsonl'
 ```
 
 Baseline validata: `equivalent traces: 257159 records`.
@@ -536,8 +536,8 @@ prodotto 61,30 e 61,47 FPS contro 62,28. E stata completamente rimossa.
 Artifact:
 
 ```text
-I:\oot3dre_work\native_game\perf\forest_production_aot_pagecache_480_v20a.json
-I:\oot3dre_work\native_game\perf\forest_production_aot_pagecache_480_v20b.json
+<oot3d-work>\native_game\perf\forest_production_aot_pagecache_480_v20a.json
+<oot3d-work>\native_game\perf\forest_production_aot_pagecache_480_v20b.json
 ```
 
 Conclusione: il doppio lookup della page table non e oggi il primo problema.
@@ -553,8 +553,8 @@ meglio l'attuale doppio contatore. La modifica e stata rimossa.
 Artifact:
 
 ```text
-I:\oot3dre_work\native_game\perf\forest_production_aot_blockbudget_480_v21a.json
-I:\oot3dre_work\native_game\perf\forest_production_aot_blockbudget_480_v21b.json
+<oot3d-work>\native_game\perf\forest_production_aot_blockbudget_480_v21a.json
+<oot3d-work>\native_game\perf\forest_production_aot_blockbudget_480_v21b.json
 ```
 
 Conclusione: cambiare la formula del contatore non basta. Serve ridurre il
@@ -596,8 +596,8 @@ L'analisi completa e riproducibile con:
 python tools\oot3d\native_a32_runtime\analyze_whole_aot_optimization_ir.py `
   --program build-codex\oot3d_whole_aot\aot_program.json `
   --selection tools\oot3d\native_a32_runtime\whole_aot_functions.json `
-  --code E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin `
-  --output I:\oot3dre_work\whole_aot_optimization\analysis.json
+  --code <ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin `
+  --output <oot3d-work>\whole_aot_optimization\analysis.json
 ```
 
 Baseline corrente: 12.196 funzioni, 159.651 blocchi, 909.577 istruzioni,

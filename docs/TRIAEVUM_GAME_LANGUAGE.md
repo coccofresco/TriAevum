@@ -66,13 +66,13 @@
   preservation of malformed preferences and the actual Tk combo event.
   Twelve Python tests pass with the native detector enabled. Source and frozen
   Windows Forge GUI probes pass, including combo layout bounds. The one-file
-  Forge executable was rebuilt under `J:/TriAevum-verify-20260910/forge-language`.
+  Forge executable was rebuilt under `<verify-20260910>/forge-language`.
 - Actual F1 widget smoke selects Italiano, checks persistence, restart notice,
   CFG ID 4 on next boot and rejection of unavailable languages (3,819 assertions
   across the complete widget smoke suite).
 - Windows/NRI cold boot with `--game-language it` in `probe_renderer.py`
   reached the file-selection menu in Italian. Framebuffer evidence:
-  `J:/TriAevum-verify-20260910/language-italian-menu/framebuffer_000840.bmp`.
+  `<verify-20260910>/language-italian-menu/framebuffer_000840.bmp`.
   The isolated probe exits successfully after 900 frames; no user save changed.
 - Native CFG service test already checks block `0x000A0002` returning the
   configured Italian language ID. No platform-specific language logic added;

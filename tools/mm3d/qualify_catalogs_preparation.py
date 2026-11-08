@@ -1,7 +1,8 @@
 """Local-only, single-attempt CATALOGS GPU acceptance via the real Forge host.
 
-The coordinator approved this lane-local helper launcher. It owns the same
-mkdir/owner-token lock as W/tools/run_safe.sh; never nest the two launchers.
+Private lab tooling, not shipped. It owns the same mkdir/owner-token GPU lock
+as the work-dir run scripts (path from --gpu-lock or the environment); never
+nest two launchers.
 This is NOT a supported title recipe, installer, or whole-game qualification.
 """
 from __future__ import annotations
@@ -22,8 +23,19 @@ sys.path.insert(0, str(REPO / "tools/triaevum_release"))
 from common import atomic_write_json, sha256_file
 from device_pipeline_preparation import FORMAT, prepare_device_pipelines
 
-GPU_LOCK = Path("I:/_triaevum_work/gpu-run.lock")
 DISK_FLOOR = 8 * 1024**3
+
+
+def default_gpu_lock(environ=os.environ) -> Path | None:
+    """The shared GPU lock: TRIAEVUM_GPU_LOCK, else <TRIAEVUM_WORK_DIR>/gpu-run.lock.
+
+    No host path is built in; without either variable --gpu-lock is required.
+    """
+    explicit = environ.get("TRIAEVUM_GPU_LOCK", "")
+    if explicit:
+        return Path(explicit)
+    work = environ.get("TRIAEVUM_WORK_DIR", "")
+    return Path(work) / "gpu-run.lock" if work else None
 
 
 @contextmanager
@@ -90,12 +102,18 @@ def main() -> int:
     parser.add_argument("--runtime-inputs", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True, help="new directory; existing attempt is never overwritten")
     parser.add_argument("--lock-wait", type=int, default=600)
+    parser.add_argument("--gpu-lock", type=Path, default=default_gpu_lock(),
+                        help="mkdir lock shared with the work-dir run scripts "
+                             "(default: TRIAEVUM_GPU_LOCK or <TRIAEVUM_WORK_DIR>/gpu-run.lock)")
     args = parser.parse_args()
     if args.lock_wait < 0:
         parser.error("lock wait must be nonnegative")
+    if args.gpu_lock is None:
+        parser.error("--gpu-lock (or TRIAEVUM_GPU_LOCK / TRIAEVUM_WORK_DIR) is required")
     inputs_sha = verify_inputs(args.runtime_inputs)
-    if shutil.disk_usage("I:/").free < DISK_FLOOR:
-        raise RuntimeError("I: is below the owner 8 GiB floor")
+    disk_root = Path(args.output.resolve().anchor)
+    if shutil.disk_usage(disk_root).free < DISK_FLOOR:
+        raise RuntimeError(f"{disk_root} is below the owner 8 GiB floor")
     for source in (args.helper, args.pack, args.manifest, args.title_program_pack):
         if not source.is_file():
             raise ValueError(f"missing artifact: {source}")
@@ -120,9 +138,9 @@ def main() -> int:
     os.environ["TRIAEVUM_CRASH_DIALOG"] = "0"
     os.environ["TRIAEVUM_PIPELINE_PREPARE_THREADS"] = "4"
     result = None
-    with owned_gpu_lock(GPU_LOCK, wait_seconds=args.lock_wait) as token:
-        if shutil.disk_usage("I:/").free < DISK_FLOOR:
-            raise RuntimeError("I: fell below floor while waiting; helper not launched")
+    with owned_gpu_lock(args.gpu_lock, wait_seconds=args.lock_wait) as token:
+        if shutil.disk_usage(disk_root).free < DISK_FLOOR:
+            raise RuntimeError(f"{disk_root} fell below floor while waiting; helper not launched")
         atomic_write_json(out / "ATTEMPTED.json", {"token": token, "time": time.time(), "helper_launches": 1})
         result = prepare_device_pipelines(root=package, data_root=out / "data", title=title,
             pack=package / pack_record["path"], cache_directory=out / "cache",

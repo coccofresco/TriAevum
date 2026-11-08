@@ -61,7 +61,7 @@ Paths below are relative to `runtime/three_ds_recomp/`.
    This requires a profile with Grass, Toon and CACAO enabled; reflection mode
    coverage is also checked by the runtime/widget test, even when the scene has none.
 
-Evidence: `I:/oot3dre_work/f2-hotkeys-20260907-d/`. The five tested intervals are
+Evidence: `<oot3d-work>/f2-hotkeys-20260907-d/`. The five tested intervals are
 configured, overridden, restored, overridden with F1 visible, restored with F1
 closed. GPU validation and failed effect-graph counters are zero. Frame 90 starts
 without F1 despite `menu=true`; frame 720 shows the active header; frame 900 shows
@@ -94,7 +94,7 @@ update after warmup. A separate 112-frame walk crosses mixed native sequences
 at renderer frames 2–30 and 67–85; every post-warmup frame publishes one shadow
 map, with 18–65 updated pages. Typed light samples at host frames 16–48 confirm
 active, moving Navi. Paired VSM/Off framebuffers and structural diagnostics
-are retained under `J:/TriAevum-diagnostics/f2-navi-fix/`; no renderer validation
+are retained under `<diagnostics>/f2-navi-fix/`; no renderer validation
 or graph errors occur in these completed runs. A first trace attempt exhausted
 the diagnostic volume and is excluded; the repeat bounds semantic tracing.
 These are correctness probes, not performance measurements.
@@ -104,7 +104,7 @@ These are correctness probes, not performance measurements.
 Renderer commit: `71a575b3`. Runtime-only build passed; actual F1 widgets passed
 1,723 assertions, renderer foundation/GPU suites passed 328 tests. Checkpoint
 test passed 1,000 frames with MSAA 4x actually active:
-`I:/oot3dre_work/f2-lifetime-msaa4-20260907-b/`, zero validation errors and no
+`<oot3d-work>/f2-lifetime-msaa4-20260907-b/`, zero validation errors and no
 native target recreation during the F2 sequence.
 
 The first hotkey test did not cover retained scanout during the intro. The user's
@@ -124,7 +124,7 @@ by an effect activation change. Resolution/sample-count changes still retain
 their separate, explicit reset path; this is not a redesign of those operations.
 
 Bounded intro stress: `verify_renderer_hotkeys.ps1 ... -Boot -Stress`.
-Evidence: `I:/oot3dre_work/f2-lifetime-{before,after}-20260907/`.
+Evidence: `<oot3d-work>/f2-lifetime-{before,after}-20260907/`.
 The old executable produced NRI descriptor-pool exhaustion (128 storage-clear
 bindings) from continual target recreation. The fixed executable passed 473
 F2 presses, 2,979 frames, 1,162 enhanced and 1,811 native transfer frames, with

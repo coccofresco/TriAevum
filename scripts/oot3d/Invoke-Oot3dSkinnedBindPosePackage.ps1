@@ -1,8 +1,8 @@
 param(
     [string]$ToolRoot = "",
-    [string]$RomFs = "E:\ppssppvr\oot3d_decomp\work\extract\romfs",
+    [string]$RomFs = "<ppssppvr>\oot3d_decomp\work\extract\romfs",
     [string]$ActorRoot = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [int]$SampleLimit = 10,
     [string]$ArchiveName = "oot3d_skinned_bind_pose_candidates.o2r",
     [string]$ArchivePrefix = "objects/oot3d/skinned_bind_pose",

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$LlvmRoot = "I:\oot3dre_tools\llvm-22.1.6",
-    [string]$BuildDirectory = "I:\oot3dre_work\build-llvm-22.1.6",
+    [string]$LlvmRoot = $env:OOT3D_LLVM_ROOT,
+    [string]$BuildDirectory = "<oot3d-work>\build-llvm-22.1.6",
     [string]$CodeBin = "",
     [switch]$RebuildWholeAot,
     [switch]$Force,

@@ -21,7 +21,7 @@ The dispatch boundary is `tools/oot3d/source_overlay/oot3d_source_overlay_csab_c
 
 ## Native evidence preserved
 
-The source import is pinned to `d5c292708f7f25f921a066449db3cea43fad73c4` and the original `code.bin` at `E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin`. The S16 Hermite path calls `Math_TanF@0x003555D8`; it is not a `sinf` call and is not delegated to host `tanf`.
+The source import is pinned to `d5c292708f7f25f921a066449db3cea43fad73c4` and the original `code.bin` at `<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin`. The S16 Hermite path calls `Math_TanF@0x003555D8`; it is not a `sinf` call and is not delegated to host `tanf`.
 
 The shared core reproduces the observed ARM/VFP contract:
 
@@ -43,7 +43,7 @@ Opt-in whole-AOT differential probe:
 
 ```powershell
 $env:OOT3D_SOURCE_OVERLAY_CSAB_COMPARE='1'
-.\scripts\oot3d\Invoke-Oot3dSourceOverlayGame.ps1 -LoadState 'I:\oot3dre_work\native_game\source_overlay_baseline_frame4.oot3dsav' -Frames 2 -MaxSeconds 15 -DisableAudio -SkipOverlayBuild -Output 'I:\oot3dre_work\native_game\csab_probe.json'
+.\scripts\oot3d\Invoke-Oot3dSourceOverlayGame.ps1 -LoadState '<oot3d-work>\native_game\source_overlay_baseline_frame4.oot3dsav' -Frames 2 -MaxSeconds 15 -DisableAudio -SkipOverlayBuild -Output '<oot3d-work>\native_game\csab_probe.json'
 ```
 
 The validated probe from the promoted build reported `1003/1003` handled

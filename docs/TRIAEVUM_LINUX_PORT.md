@@ -171,8 +171,8 @@ source manifest (256 shards plus registry). No new decompilation or translation.
   reject duplicate/missing plugin arguments, reject missing library.
 
 Private Windows evidence copies:
-`I:/oot3dre_work/linux-port-proof/linux-captures` (first run), and
-`I:/oot3dre_work/linux-port-proof/second-run` (second summary, log, late capture).
+`<oot3d-work>/linux-port-proof/linux-captures` (first run), and
+`<oot3d-work>/linux-port-proof/second-run` (second summary, log, late capture).
 Latest complete captures remain in the Linux test installation.
 
 Performance is **not accepted yet**: these are paced, vsync-enabled capture runs

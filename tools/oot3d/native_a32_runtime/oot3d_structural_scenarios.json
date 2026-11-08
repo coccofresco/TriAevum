@@ -4,32 +4,32 @@
   "source_policy": "Recipes select code.bin global entrances decoded from OOT3D and invoke the original transition helper. The host never constructs PlayState, rooms, actors, cameras, lights, or materials.",
   "generated_from": [
     {
-      "path": "I:/oot3dre_work/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_global_entrance_table.json",
+      "path": "<oot3d-work>/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_global_entrance_table.json",
       "bytes": 350223,
       "sha256": "c027e47100212e3d9687379469c5b7312ea9122fce1fb0e5e0ccb9554ee40604"
     },
     {
-      "path": "I:/oot3dre_work/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_setup_source_table.json",
+      "path": "<oot3d-work>/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_setup_source_table.json",
       "bytes": 1248770,
       "sha256": "2b4e0bebc68f25dc3fc30886c7a3fa9e4d8dec64844a77e211c940c3d8115da8"
     },
     {
-      "path": "I:/oot3dre_work/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_actor_source_table.json",
+      "path": "<oot3d-work>/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_actor_source_table.json",
       "bytes": 15030564,
       "sha256": "4bf21573532d7275e4ab8c0c059e4aed6cebb95bb1ebfd41c49926c34a002f07"
     },
     {
-      "path": "I:/oot3dre_work/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_light_source_table.json",
+      "path": "<oot3d-work>/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_light_source_table.json",
       "bytes": 3603869,
       "sha256": "bfcfa68d0a73fc4e7a5d6a9950fbe4a2c666eb02e727363a8e833001d8c8c5aa"
     },
     {
-      "path": "I:/oot3dre_work/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_cutscene_source_table.json",
+      "path": "<oot3d-work>/whole-aot-product/tools/oot3d/decomp_support/analysis/scene_cutscene_source_table.json",
       "bytes": 1258626,
       "sha256": "67a909dec49983a5b73bb23901be80627819369d6b327937fc892f07ef2f860a"
     },
     {
-      "path": "I:/oot3dre_work/whole-aot-product/tools/oot3d/decomp_support/analysis/transition_request_helper_semantics.json",
+      "path": "<oot3d-work>/whole-aot-product/tools/oot3d/decomp_support/analysis/transition_request_helper_semantics.json",
       "bytes": 36166,
       "sha256": "ba2d8822b0d56ee70ae8e262255f74d3fb210166275a62a91bbb560412b7df56"
     }

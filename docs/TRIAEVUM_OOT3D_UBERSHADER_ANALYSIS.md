@@ -25,13 +25,13 @@ was measured in this investigation.
 
 ## Evidence identity
 
-- ROMFS: `E:/ppssppvr/oot3d_decomp/work/extract/romfs`.
+- ROMFS: `<ppssppvr>/oot3d_decomp/work/extract/romfs`.
 - `CmbVShader.shbin`: 3,144 bytes; SHA256
   `1125cfb9193e6c605ae4a3f8a80accdae948af2fb35bbaf432ef426e66de076a`.
-- `E:/ppssppvr/oot3d_decomp/work/extract/exefs/code.bin`: SHA256
+- `<ppssppvr>/oot3d_decomp/work/extract/exefs/code.bin`: SHA256
   `16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220`.
-- `I:/oot3decomp`: commit `e0b6c5f7d19488cf8a9333288901d8bd22ce5a83`.
-- `I:/Zelda3drecomp`: commit `9fd2f56b14c1e51273eb607862d4852282bab68d`.
+- `<oot3d-decomp>`: commit `e0b6c5f7d19488cf8a9333288901d8bd22ce5a83`.
+- `<legacy-recomp>`: commit `9fd2f56b14c1e51273eb607862d4852282bab68d`.
 - Public zeldaret: `a87ddae43252cb3add71bf1003e7391bbe006033`.
 
 External repositories were read only. Addresses below refer to the local
@@ -65,7 +65,7 @@ arbitrary containers and is not proof of all possible gameplay GPU states.
 Reproduce without a game run or writes to either evidence repository:
 
 ```powershell
-python -B tools/oot3d/native_pica_frontend/inspect_cmb_shader_surface.py --romfs E:/ppssppvr/oot3d_decomp/work/extract/romfs --code E:/ppssppvr/oot3d_decomp/work/extract/exefs/code.bin
+python -B tools/oot3d/native_pica_frontend/inspect_cmb_shader_surface.py --romfs <ppssppvr>/oot3d_decomp/work/extract/romfs --code <ppssppvr>/oot3d_decomp/work/extract/exefs/code.bin
 python -B -m unittest discover -s tools/oot3d/native_pica_frontend -p test_inspect_cmb_shader_surface.py
 ```
 
@@ -81,7 +81,7 @@ not the length of the called model/board subroutines. ROMFS also contains
 `profile.shbin`: 664 bytes, 25 instruction words, two vertex entries. Therefore
 one CMB program must not be assumed to cover every shader the game can submit.
 
-`src/genuine/z_genuine_cohort_30.c` in `I:/oot3decomp` contains the startup call
+`src/genuine/z_genuine_cohort_30.c` in `<oot3d-decomp>` contains the startup call
 using `rom:/CmbVShader.shbin` at native string address `0x00416BD8`.
 The original code bytes confirm this string. Loader and uniform resolution:
 
@@ -91,7 +91,7 @@ The original code bytes confirm this string. Loader and uniform resolution:
 | `0x00420F7C` | Binary-shader helper called by loader with format `0x6000`; inspect before replacing upload semantics |
 | `0x004174EC` | Resolve 180 named locations through `glGetUniformLocation` |
 
-Maintained bodies: `I:/oot3decomp/src/runtime/owner_runtime/z_whole_residual_21_all_residual_21_21.c`,
+Maintained bodies: `<oot3d-decomp>/src/runtime/owner_runtime/z_whole_residual_21_all_residual_21_21.c`,
 entry comments `@ 0x0041724C` and `@ 0x004174EC`. The latter's literal points
 to a name table at `0x0054C958`. The 180 engine locations are not 180 shader
 programs. Native `gl*` names here denote the 3DS wrapper, not desktop GLSL.
@@ -130,10 +130,10 @@ the requested renderer entries are largely assembly placeholders:
 
 Use zeldaret for entry identity and surrounding architecture, not as an already
 implemented typed material renderer. The richer local semantic map is in
-`I:/Zelda3drecomp/analysis/codebin_cmb_{renderer,material_lane,runtime_lighting,tev_override}_symbols.csv`
+`<legacy-recomp>/analysis/codebin_cmb_{renderer,material_lane,runtime_lighting,tev_override}_symbols.csv`
 and `analysis/codebin_material_binding_struct_fields.csv`.
 
-Read actual bodies in `I:/Zelda3drecomp/build/analysis/decomp_batches/`:
+Read actual bodies in `<legacy-recomp>/build/analysis/decomp_batches/`:
 `cmb_material_lane_representative_typed.md`, `cmb_material_lane_family_typed.md`,
 `cmb_raster_material_family_typed.md`, `cmb_runtime_lighting_family_typed.md`,
 `cmb_geometry_family_typed.md`, and `cmb_tev_override_family_typed.md`.
@@ -149,7 +149,7 @@ semantic equivalence.
 
 Names below are the maintained Zelda3drecomp aliases, keyed by entry address.
 The newer oot3decomp often uses longer generated names; resolve through
-`I:/oot3decomp/symbols/manual_symbols.csv` to its exact `source_file`.
+`<oot3d-decomp>/symbols/manual_symbols.csv` to its exact `source_file`.
 
 | Entries | Consumer / renderer responsibility |
 | --- | --- |
@@ -417,7 +417,7 @@ the live draw planner cache. The default remains specialized. The bootstrap
 diagnostic representation also records the requested mode.
 
 The actual Windows runtime was incrementally rebuilt from this worktree in
-`J:/TriAevum-verify-20260910/runtime`, using its existing Clang 22.1.6/Ninja
+`<verify-20260910>/runtime`, using its existing Clang 22.1.6/Ninja
 configuration and precompiled title module. The inspected build comprised 37
 actions, with **no gameplay AOT compilation**. The shader corpus preparation
 step is separate from gameplay AOT. Both complete tests now ran successfully:
@@ -457,8 +457,8 @@ count statistics. Neither zero runtime compilation nor zero stutter is achieved.
 
 Private evidence (not release inputs):
 
-- `J:/TriAevum-diagnostics/tev-native-20260914/comparison.json`
-- `J:/TriAevum-diagnostics/tev-native-boot-20260914/comparison.json`
+- `<diagnostics>/tev-native-20260914/comparison.json`
+- `<diagnostics>/tev-native-boot-20260914/comparison.json`
 - Corresponding mode subdirectories contain invocation, runtime report,
   effective shader inventory, stderr counters and framebuffer/temporal metadata.
 - Tested executable SHA-256:
@@ -531,11 +531,11 @@ Verification:
 
 Private verification paths (never package these):
 
-- `J:/TriAevum-diagnostics/lighting-program-build`: standalone CMake/CTest.
-- `J:/TriAevum-diagnostics/lighting-native-field-20260914/comparison.json`.
-- `J:/TriAevum-diagnostics/lighting-native-boot-20260914/comparison.json`.
-- Final current-binary reruns: `I:/TriAevum-diagnostics/lighting-final-field-20260914`
-  and `I:/TriAevum-diagnostics/lighting-final-boot-20260914`. An initial final-run
+- `<diagnostics>/lighting-program-build`: standalone CMake/CTest.
+- `<diagnostics>/lighting-native-field-20260914/comparison.json`.
+- `<diagnostics>/lighting-native-boot-20260914/comparison.json`.
+- Final current-binary reruns: `<diagnostics>/lighting-final-field-20260914`
+  and `<diagnostics>/lighting-final-boot-20260914`. An initial final-run
   attempt exhausted J: before inventory output; its two incomplete temporary
   directories were removed. It is not counted as a successful comparison.
 

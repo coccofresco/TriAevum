@@ -55,7 +55,7 @@ Validation:
 - `oot3d_native_game` incremental build: 6 compile actions, 10 total;
 - bounded NRI run started with a `1600x900` host canvas and recorded the
   configured `1280x720` renderer output in
-  `I:\oot3dre_work\native_game\presentation_runtime_vulkan_20260725.json`.
+  `<oot3d-work>\native_game\presentation_runtime_vulkan_20260725.json`.
 
 An immediate frame-zero BMP can predate the presentation transaction. Delayed
 framebuffer captures and Vulkan diagnostics are authoritative for the applied
@@ -69,7 +69,7 @@ reported `msaa_samples=4` while dynamic draw and scanout remained active.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\nri_msaa4_validation_20260725.json`
+- `<oot3d-work>\native_game\nri_msaa4_validation_20260725.json`
 
 ### CACAO And Scene-View Availability
 
@@ -86,10 +86,10 @@ and pixels; the scene-only right crop has normalized RMSE `0.0139191`.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\nri_cacao_on_frame100_validation_20260725.json`
-- `I:\oot3dre_work\native_game\nri_cacao_off_frame100_validation_20260725.json`
-- `I:\oot3dre_work\native_game\nri_cacao_on_frame100_20260725.bmp`
-- `I:\oot3dre_work\native_game\nri_cacao_off_frame100_20260725.bmp`
+- `<oot3d-work>\native_game\nri_cacao_on_frame100_validation_20260725.json`
+- `<oot3d-work>\native_game\nri_cacao_off_frame100_validation_20260725.json`
+- `<oot3d-work>\native_game\nri_cacao_on_frame100_20260725.bmp`
+- `<oot3d-work>\native_game\nri_cacao_off_frame100_20260725.bmp`
 
 The earlier byte-identical black captures sampled presentation frame zero,
 before the loaded scene and CACAO became active; they were not evidence of a
@@ -133,9 +133,9 @@ assignment found 37 source meshes and 36 texture selectors. The pass rendered
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\ri_grass_semantics_validation_20260726.json`
-- `I:\oot3dre_work\native_game\ri_grass_semantics_runtime_20260726.json`
-- `I:\oot3dre_work\native_game\ri_grass_semantics_frame160_20260726.bmp`
+- `<oot3d-work>\native_game\ri_grass_semantics_validation_20260726.json`
+- `<oot3d-work>\native_game\ri_grass_semantics_runtime_20260726.json`
+- `<oot3d-work>\native_game\ri_grass_semantics_frame160_20260726.bmp`
 
 Automatic assignment remains diagnostic-only. Production rendering still
 requires explicit native texture rules, so unrelated materials are never
@@ -179,10 +179,10 @@ being inset into an unrelated 16:9 viewport.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\ri_topscreen_aspect_16x9_fixed_runtime_20260726.json`
-- `I:\oot3dre_work\native_game\ri_topscreen_aspect_16x9_fixed_frame120_20260726.bmp`
-- `I:\oot3dre_work\native_game\ri_topscreen_aspect_4x3_fixed_runtime_20260726.json`
-- `I:\oot3dre_work\native_game\ri_topscreen_aspect_4x3_fixed_frame120_20260726.bmp`
+- `<oot3d-work>\native_game\ri_topscreen_aspect_16x9_fixed_runtime_20260726.json`
+- `<oot3d-work>\native_game\ri_topscreen_aspect_16x9_fixed_frame120_20260726.bmp`
+- `<oot3d-work>\native_game\ri_topscreen_aspect_4x3_fixed_runtime_20260726.json`
+- `<oot3d-work>\native_game\ri_topscreen_aspect_4x3_fixed_frame120_20260726.bmp`
 
 The complete Items-page path was also exercised at `1720x720`. The renderer
 fits the `400x240` page to a centered `1200x720` viewport while leaving the
@@ -192,9 +192,9 @@ draws, 298 NRI scanouts, 150 NRI presents, and no presentation failure.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\ri_topscreen_items_ultrawide_late_runtime_20260726.json`
-- `I:\oot3dre_work\native_game\ri_topscreen_items_ultrawide_late_validation_20260726.json`
-- `I:\oot3dre_work\native_game\ri_topscreen_items_ultrawide_late_frame140_20260726.bmp`
+- `<oot3d-work>\native_game\ri_topscreen_items_ultrawide_late_runtime_20260726.json`
+- `<oot3d-work>\native_game\ri_topscreen_items_ultrawide_late_validation_20260726.json`
+- `<oot3d-work>\native_game\ri_topscreen_items_ultrawide_late_frame140_20260726.bmp`
 
 ### Window And Output Modes
 
@@ -229,9 +229,9 @@ change.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\ri_presentation_windowed_20260726.json`
-- `I:\oot3dre_work\native_game\ri_presentation_borderless_20260726.json`
-- `I:\oot3dre_work\native_game\ri_presentation_exclusive_final_20260726.json`
+- `<oot3d-work>\native_game\ri_presentation_windowed_20260726.json`
+- `<oot3d-work>\native_game\ri_presentation_borderless_20260726.json`
+- `<oot3d-work>\native_game\ri_presentation_exclusive_final_20260726.json`
 
 ## Verification Closure
 

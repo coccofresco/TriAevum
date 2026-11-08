@@ -1,17 +1,17 @@
 [CmdletBinding()]
 param(
     [string]$ProductExecutable =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe",
     [string]$ScenarioCatalog = "",
-    [string]$ArtifactRoot = "I:\oot3dre_work\native_game",
+    [string]$ArtifactRoot = "<oot3d-work>\native_game",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [ValidateSet("oot3d", "topscreen")]
     [string]$UiProfile = "topscreen",
     [string]$OutputRoot =
-        "I:\oot3dre_work\whole-aot-product-run\resume-matrices",
+        "<oot3d-work>\whole-aot-product-run\resume-matrices",
     [string[]]$Scenario = @(),
     [ValidateRange(10, 3600)]
     [double]$RunTimeoutSeconds = 240,

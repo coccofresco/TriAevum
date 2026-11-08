@@ -14,10 +14,10 @@ Two trees are involved and they are not the same:
 
 | Tree | Path | Role |
 | --- | --- | --- |
-| Public clean repository | `I:/TriAevum-public/source-repository-clean` | The tree under review, tracked, `port/linux-nri`. No ROM-derived data, no captures. |
-| Development workspace | `I:/oot3dre` (`repoRoot` in the manifest) | Where the code.bin reconstruction, generated trees and experiments live. Many manifest entries point here. |
-| Separate renderer checkout | `I:/oot3d-native-renderer` | Its own git history (`integration-source`, remote `I:/oot3dre-vulkan/libultraship`) with a scratch build in `.renderer-dev/build`. Not this repository and not the development workspace; check before assuming a path belongs to either. |
-| Verification build | `J:/TriAevum-verify-20260910/runtime` | Ninja + clang-cl tree configured against the clean repository. Test executables land in `I:/TriAevum-public/ui-dependencies/bin`. |
+| Public clean repository | `<public-work>/source-repository-clean` | The tree under review, tracked, `port/linux-nri`. No ROM-derived data, no captures. |
+| Development workspace | `<local>/oot3dre` (`repoRoot` in the manifest) | Where the code.bin reconstruction, generated trees and experiments live. Many manifest entries point here. |
+| Separate renderer checkout | `<local>/oot3d-native-renderer` | Its own git history (`integration-source`, remote `<local>/oot3dre-vulkan/libultraship`) with a scratch build in `.renderer-dev/build`. Not this repository and not the development workspace; check before assuming a path belongs to either. |
+| Verification build | `<verify-20260910>/runtime` | Ninja + clang-cl tree configured against the clean repository. Test executables land in `<public-work>/ui-dependencies/bin`. |
 
 ## 1. Translated title code
 
@@ -26,17 +26,17 @@ source is what to read when a question is about what the guest actually does.
 
 | What | Path |
 | --- | --- |
-| Generated whole-AOT C++, one directory per product hash: `cpp/oot3d_whole_aot_generated.{h,cpp}`, `cpp/oot3d_whole_aot_shard_NNN.cpp`, `aot_program.json`, `product_artifacts.json`, `whole_aot_archive.json` | `I:/oot3dre_work/oot3d-whole-aot-product-cache/<hash>/` |
-| Loose generated trees from earlier experiments | `I:/oot3dre_work/native_game/whole_aot_kokiri_main_top12/`, `I:/oot3dre_work/native_game/whole_aot_navi_pica_flush/` |
+| Generated whole-AOT C++, one directory per product hash: `cpp/oot3d_whole_aot_generated.{h,cpp}`, `cpp/oot3d_whole_aot_shard_NNN.cpp`, `aot_program.json`, `product_artifacts.json`, `whole_aot_archive.json` | `<oot3d-work>/oot3d-whole-aot-product-cache/<hash>/` |
+| Loose generated trees from earlier experiments | `<oot3d-work>/native_game/whole_aot_kokiri_main_top12/`, `<oot3d-work>/native_game/whole_aot_navi_pica_flush/` |
 | Generator and selection indices | `tools/oot3d/native_a32_runtime/generate_whole_aot_cpp.py`, `whole_aot_cpp.py`, `whole_aot_program.py`, `whole_aot_functions.json`, `whole_aot_product_manifest.json`, `whole_aot_product_golden.json` |
 | Structured decomp evidence inside the repository (struct layouts, symbols, metadata, analysis, Ghidra helpers) and the native actor layout headers the game includes (`include/oot3d/actor{,_spawn}.h`) | `tools/oot3d/decomp_support/` |
-| Corresponding source shipped with the package | `I:/TriAevum-public/releases/v0.6.0-alpha.3/title-build-source/` (`SOURCE_ARCHIVE_MANIFEST.json` pins the commit and the renderer subtree hash) |
-| External reconstruction checkout (read-only evidence) | `I:/Zelda3drecomp` (with `analysis/`, `ghidra/`, `build/`), original image at `E:/ppssppvr/oot3d_decomp/work/extract/exefs/code.bin`, ROMFS at `.../extract/romfs` |
+| Corresponding source shipped with the package | `<public-work>/releases/v0.6.0-alpha.3/title-build-source/` (`SOURCE_ARCHIVE_MANIFEST.json` pins the commit and the renderer subtree hash) |
+| External reconstruction checkout (read-only evidence) | `<legacy-recomp>` (with `analysis/`, `ghidra/`, `build/`), original image at `<ppssppvr>/oot3d_decomp/work/extract/exefs/code.bin`, ROMFS at `.../extract/romfs` |
 
 Legacy A32 trees: `oot3d_a32_generated.h` also exists at
-`I:/oot3d-native-renderer/.renderer-dev/build/oot3d_a32_generated/`,
-`I:/oot3dre_work/mods/topscreen_single_screen/a32_generated/` and twice under
-`I:/Zelda3drecomp/build/`. All of them are **declaration-only stubs** of
+`<local>/oot3d-native-renderer/.renderer-dev/build/oot3d_a32_generated/`,
+`<oot3d-work>/mods/topscreen_single_screen/a32_generated/` and twice under
+`<legacy-recomp>/build/`. All of them are **declaration-only stubs** of
 162-301 bytes (`GetA32GeneratedRegistry()` and nothing else), not translations;
 do not treat them as generated title code, and do not expect them to satisfy a
 target that needs the real A32 registry. The legacy generator writes
@@ -63,10 +63,10 @@ Build and iteration entry points: `scripts/oot3d/Build-Oot3dLlvmWholeAot.ps1`,
 
 | What | Path |
 | --- | --- |
-| Scenario checkpoints used by the product scenario list, plus their JSON profiles (117 files) | `I:/oot3dre_work/native_game/checkpoints/` |
-| Issue-specific savestates and captures: `sheik-*` (raw TextureCopy, revelation, overlap), `gameover-*` (composition variants), `zero-health`, `sheik-before-event` | `J:/TriAevum-diagnostics/issues45-46/` |
-| Iteration states: `sheik-near-copy/checkpoint.oot3dsav` sits 73 run frames before the first raw copy, so a 400-frame run (about 37 s) reaches the phase instead of replaying 3,500 frames; provenance and commands in its README. Use it for iteration, the full run for qualification. | `J:/TriAevum-diagnostics/issues45-46/` |
-| Other topic evidence: performance campaigns, lighting/TEV probes, Y2R codec, revelation freeze diagnostics | `J:/TriAevum-diagnostics/*` |
+| Scenario checkpoints used by the product scenario list, plus their JSON profiles (117 files) | `<oot3d-work>/native_game/checkpoints/` |
+| Issue-specific savestates and captures: `sheik-*` (raw TextureCopy, revelation, overlap), `gameover-*` (composition variants), `zero-health`, `sheik-before-event` | `<diagnostics>/issues45-46/` |
+| Iteration states: `sheik-near-copy/checkpoint.oot3dsav` sits 73 run frames before the first raw copy, so a 400-frame run (about 37 s) reaches the phase instead of replaying 3,500 frames; provenance and commands in its README. Use it for iteration, the full run for qualification. | `<diagnostics>/issues45-46/` |
+| Other topic evidence: performance campaigns, lighting/TEV probes, Y2R codec, revelation freeze diagnostics | `<diagnostics>/*` |
 | Scenario list with checkpoint filename, SHA-256, input profile and frame budget (8 scenarios: `file_select_empty_slots`, `link_dream`, `navi_kokiri_flight`, `kokiri_preload_transition`, `link_house_gameplay`, `kokiri_hud_gameplay`, `kokiri_ladder_interaction`, `topscreen_items`) | `tools/oot3d/native_a32_runtime/whole_aot_product_scenarios.json` |
 
 A savestate is loaded read-only with `--load-state <path>`; the probe copies
@@ -108,7 +108,7 @@ Three mechanisms, in increasing order of effort:
      `direct_call_return_address`, `current_entrance_address`, `play_state`
      offsets) and per-recipe frame windows. Documentation:
      `docs/OOT3D_STRUCTURAL_SCENARIO_COVERAGE.md`.
-   - Output and matrices: `I:/oot3dre_work/structural-scenarios/`
+   - Output and matrices: `<oot3d-work>/structural-scenarios/`
      (`all-entrances-v2/`, `compiled/`, `matrices/latest.json`,
      `matrices/<timestamp>/structural_scenario_matrix.json`).
    - Runtime: `--scenario-catalog <catalog.json> --scenario <id>`, implemented by
@@ -116,7 +116,7 @@ Three mechanisms, in increasing order of effort:
      (`tools/oot3d/native_game_runtime/oot3d_native_scenario_bootstrap.cpp`).
      It needs a **quiescent gameplay state as anchor** through `--load-state`:
      the recorded matrices use
-     `I:/oot3dre_work/native_game/checkpoints/hud_minimap_visible_20260721.oot3dsav`.
+     `<oot3d-work>/native_game/checkpoints/hud_minimap_visible_20260721.oot3dsav`.
      Starting from the title screen instead faults (`native A32 process faulted`,
      the transition request has no valid PlayState to run in).
 3. **Named scenarios with their own checkpoint** (section 2), for paths that
@@ -127,18 +127,18 @@ Ready commands (private playable installation, packaged runtime):
 ```powershell
 # revelation raw TextureCopy window, extended diagnostics, no captures
 python tools\triaevum_release\probe_renderer.py `
-  'I:/TriAevum-public/releases/v0.6.0-alpha.3b/qualification-windows' `
-  'I:/TriAevum-public/ui-dependencies/bin/TriAevum.exe' I:/_triaevum_work/attr3 `
+  '<public-work>/releases/v0.6.0-alpha.3b/qualification-windows' `
+  '<public-work>/ui-dependencies/bin/TriAevum.exe' <work>/attr3 `
   --native-fidelity --frames 3500 --seconds 400 --no-captures --extended-diagnostics `
-  --load-state 'J:/TriAevum-diagnostics/issues45-46/sheik-native-trigger/checkpoint.oot3dsav' `
+  --load-state '<diagnostics>/issues45-46/sheik-native-trigger/checkpoint.oot3dsav' `
   --input-timeline tools\oot3d\native_game_runtime\input_timelines\native_cutscene_dialogue_advance.json
 
 # structural scenario run through a native transition
 python tools\triaevum_release\probe_renderer.py `
-  'I:/TriAevum-public/releases/v0.6.0-alpha.3b/qualification-windows' `
-  'I:/TriAevum-public/ui-dependencies/bin/TriAevum.exe' I:/_triaevum_work/scenario `
+  '<public-work>/releases/v0.6.0-alpha.3b/qualification-windows' `
+  '<public-work>/ui-dependencies/bin/TriAevum.exe' <work>/scenario `
   --native-fidelity --frames 600 --seconds 200 --capture-interval 60 `
-  --load-state 'I:/oot3dre_work/native_game/checkpoints/hud_minimap_visible_20260721.oot3dsav' `
+  --load-state '<oot3d-work>/native_game/checkpoints/hud_minimap_visible_20260721.oot3dsav' `
   --scenario-catalog 'tools/oot3d/native_a32_runtime/oot3d_structural_scenarios.json' `
   --scenario link_info_entry_00bb
 ```
@@ -147,7 +147,7 @@ python tools\triaevum_release\probe_renderer.py `
 
 | What | Command or path |
 | --- | --- |
-| Product and tests | `ninja -C J:/TriAevum-verify-20260910/runtime <target>`; executables are written to `I:/TriAevum-public/ui-dependencies/bin` |
+| Product and tests | `ninja -C <verify-20260910>/runtime <target>`; executables are written to `<public-work>/ui-dependencies/bin` |
 | Title-neutral renderer boundary gate | `ninja -C <build> verify_renderer_3ds_cross_title_boundary` (also runs as a dependency of the cross-title canary and capture-conformance tests) |
 | Actual-widget F1 smoke | `tools/triaevum_release/tests/run_f1_settings_smoke.ps1 -Build <build> -Dependencies <deps> -Compiler <clang++>`; it resolves the archive directory from the build cache |
 | Probe and captures | `tools/triaevum_release/probe_renderer.py` (see section 3) |
@@ -156,7 +156,7 @@ python tools\triaevum_release\probe_renderer.py `
 
 ## 5. Cautions
 
-- `I:/Zelda3drecomp`, `I:/oot3dre`, the decomp checkouts and the extracted ROMFS
+- `<legacy-recomp>`, `<local>/oot3dre`, the decomp checkouts and the extracted ROMFS
   are read-only evidence. Copy what is needed into the repository deliberately.
 - Never commit ROM images, keys, extracted assets, `code.bin`, savestates,
   captures, `game.tam`, `content.tap` or shader caches; the manifest's

@@ -1162,7 +1162,7 @@ bool ReadTopScreenPausePressedButtons(NativeA32Memory &memory,
 // TopScreen 2.1.1 shows the native item/gear description (message context
 // 0x005C1878, drawn under the relocated page) over the page when SELECT is
 // pressed on an open Items or Gear page. Typed form of payload word
-// 0x005E3D3C; see I:/_triaevum_work/topscreen-r6/R6_SPEC.md.
+// 0x005E3D3C; see <work>/topscreen-r6/R6_SPEC.md.
 struct TopScreenItemDescriptionInputs {
   std::uint32_t Items = 0;      // 0x0050672C
   std::uint32_t Gear = 0;       // 0x00504484

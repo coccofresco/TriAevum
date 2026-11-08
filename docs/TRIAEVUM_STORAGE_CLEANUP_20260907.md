@@ -42,7 +42,7 @@ unrelated caches were deliberately not deleted.
 
 ## Still required: do not delete by directory name
 
-All paths below are under `I:/oot3dre_work/` unless stated otherwise:
+All paths below are under `<oot3d-work>/` unless stated otherwise:
 
 - `triaevum-release`: active source worktree.
 - `triaevum-direct-module-build`: current runtime, incremental build, symbols
@@ -53,8 +53,8 @@ All paths below are under `I:/oot3dre_work/` unless stated otherwise:
 - `triaevum-fully-acquired-sysroot`: current usable SDK/sysroot.
 - `native-game-costs-20260907-symbols-b`: latest diagnostic DLL, PDB/map and cache.
 - `native_game/checkpoints`, recent performance evidence and original captures.
-- `I:/TriAevum-0.6.0-candidate-r1`: current release, plugin/source offer, assets,
-  savedata, presets and TopScreen data. `I:/TriAevumReleaseFinalData` also remains
+- `<local>/TriAevum-0.6.0-candidate-r1`: current release, plugin/source offer, assets,
+  savedata, presets and TopScreen data. `<local>/TriAevumReleaseFinalData` also remains
   referenced by the global active-title configuration.
 - Original ROMs, `code.bin`, extracted assets, decomp repositories and tools.
 - C: installed SDKs/toolchains, TriAevum config/module cache, and
@@ -73,7 +73,7 @@ All paths below are under `I:/oot3dre_work/` unless stated otherwise:
   is **not** certified by this cleanup. User settings were not changed; all
   test processes were closed.
 - Detailed plans, deletion receipts, compression hashes, protected-path check
-  and launch evidence: `J:/TriAevum-diagnostics/cleanup-20260907/`.
+  and launch evidence: `<diagnostics>/cleanup-20260907/`.
   `deleted-*.jsonl` records completed removals; `compressed-diagnostics.jsonl`
   records verified files. Plans are inventories, not proof of execution.
 

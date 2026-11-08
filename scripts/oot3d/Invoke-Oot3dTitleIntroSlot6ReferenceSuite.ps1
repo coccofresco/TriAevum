@@ -1,12 +1,12 @@
 param(
-    [string]$OutputRoot = "I:\oot3dre\captures\azahar_pica\title_intro_slot6_reference_suites",
+    [string]$OutputRoot = "<local>/oot3dre\captures\azahar_pica\title_intro_slot6_reference_suites",
     [string]$SuiteName = "",
     [int[]]$WarmupSeconds = @(0, 6, 12, 18, 24, 36),
     [int]$Frames = 3,
     [int]$RetryCount = 3,
     [int]$TimeoutSeconds = 120,
-    [string]$AzaharExe = "E:\azahar pcvr\build-pcvr-qt\bin\Release\azahar.exe",
-    [string]$RomPath = "E:\ppssppvr\oot3d_decomp\oot3d.cci"
+    [string]$AzaharExe = "<azahar-pcvr>\build-pcvr-qt\bin\Release\azahar.exe",
+    [string]$RomPath = "<ppssppvr>\oot3d_decomp\oot3d.cci"
 )
 
 Set-StrictMode -Version Latest

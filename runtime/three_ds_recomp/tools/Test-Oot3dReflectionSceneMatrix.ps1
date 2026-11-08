@@ -7,7 +7,7 @@ param(
     [ValidateRange(1, 600)]
     [int]$MaxSeconds = 60,
     [string]$CheckpointRoot =
-        "I:\oot3dre_work\native_game",
+        "<oot3d-work>\native_game",
     [ValidateRange(0.0, 1.0)]
     [double]$MinimumChangedPixelFraction = 0.005,
     [ValidateRange(0.0, 1.0)]

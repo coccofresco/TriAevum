@@ -63,7 +63,7 @@ callers and is counted separately in Vulkan diagnostics.
 - Dynamic and strict-AOT 60-presentation Kokiri captures are byte-identical at
   SHA-256 `a83b5d41bbdabb1cb19955ac03edc881a6342f9b57197d706015fb6c054e1008`;
   the strict pack resolves `69/0` hits/misses. Evidence is under
-  `I:/oot3dre_work/visual-parity/typed-shadow-caster-20260826/`.
+  `<oot3d-work>/visual-parity/typed-shadow-caster-20260826/`.
 
 ## Frontend Closure Evidence (2026-08-25)
 
@@ -92,4 +92,4 @@ callers and is counted separately in Vulkan diagnostics.
   coverage passes `26/26`. The default AOT corpus now contains 254 modules and
   reproduces both TAA and SSSR+TAA with `60/0` strict hits/misses.
 - Reproducible logs, inventories, diagnostics and framebuffer captures are in
-  `I:/oot3dre_work/visual-parity/canonical-output-contract-20260825/`.
+  `<oot3d-work>/visual-parity/canonical-output-contract-20260825/`.

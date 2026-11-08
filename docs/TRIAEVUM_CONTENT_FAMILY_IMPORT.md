@@ -69,7 +69,7 @@ Do not ship the publisher's inputs or synthetic test ROMs.
 
 ## Qualification
 
-Private evidence: `I:/oot3dre_work/catalog-rom-inputs/family-overlay`,
+Private evidence: `<oot3d-work>/catalog-rom-inputs/family-overlay`,
 `family-forge`, `family-proof`, `families.json`, `repack_for_test.py` and
 `qualify_families.py`. Frozen Forge was built in approximately 20 seconds;
 the game DLL and runtime were not rebuilt.

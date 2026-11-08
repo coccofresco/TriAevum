@@ -31,7 +31,7 @@ needed. Runtime misses continue to populate the same writable installation cache
 
 ## Applied state
 
-- Package: `J:/TriAevum-verify-20260910/package`.
+- Package: `<verify-20260910>/package`.
 - Recipe: `oot3d-eur-project-baseline-16a6b0aa`.
 - Pack: **1,039 modules** = previous 887 + 150 TAS additions + 2 compiler-added
   scanout modules. The latter are not new TAS discoveries.
@@ -45,9 +45,9 @@ needed. Runtime misses continue to populate the same writable installation cache
   `--pica-aot-shader-pack` and the installation's renderer cache directory.
 
 Private evidence and backups:
-`I:/TriAevum-private-tas/citra-1796-repaired/activation/`.
+`<local>/TriAevum-private-tas/citra-1796-repaired/activation/`.
 The adjacent `merged-receipt.json` identifies both input packs.
-Private repeatable drivers are `I:/TriAevum-private-tas/activate-corpus.py` and
+Private repeatable drivers are `<local>/TriAevum-private-tas/activate-corpus.py` and
 `verify-corpus.py`; neither their machine paths nor game-derived payloads are
 release inputs.
 
@@ -96,12 +96,12 @@ Windows activation was subsequently rechecked through
 and installation-local cache routing all pass.
 
 A verified private Linux handoff was transferred from
-`I:/TriAevum-private-tas/citra-1796-repaired/linux-corpus-handoff.zip`
+`<local>/TriAevum-private-tas/citra-1796-repaired/linux-corpus-handoff.zip`
 (2,369,757 bytes, SHA256
 `aef194af42995d9df85303834a57e2e470774048c293178a961183a18ab452e7`).
 It contains portable packs, provenance, merge tools and instructions; no native
 executables or driver caches. Reproduce with the private
-`I:/TriAevum-private-tas/prepare-linux-corpus-handoff.py`.
+`<local>/TriAevum-private-tas/prepare-linux-corpus-handoff.py`.
 
 The initial SSH authorization block was resolved with explicit user approval.
 

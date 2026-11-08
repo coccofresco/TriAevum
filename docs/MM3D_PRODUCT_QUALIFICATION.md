@@ -415,7 +415,7 @@ Installed layout:
   steel mask. The CLI `triaevum-forge.exe` has no icon in either title.
 
 F07 Windows row: still **NOT QUALIFIED**. The one granted installed run exited 2 within one second, before any guest
-execution. The cause was diagnosed offline and lies in the run harness, not the product: `run_safe.sh` (installed mode)
+execution. The cause was diagnosed offline and lies in the run harness, not the product: the private lab run harness (installed mode)
 put `--screenshot-rgb8` before `--launch-profile`. The runtime only loads a profile given as argv[1], so it rejected
 `--launch-profile` as an unknown option. The harness is fixed, and its dry-run receipt shows argv[1] =
 `--launch-profile`. Under the run budget, no retry or diagnostic run was made, so no realtime product evidence exists yet.
@@ -454,7 +454,7 @@ No realtime product evidence (F14) exists yet. Evidence: `W/analysis/parity/INTE
   - Fix 3b4d72b6: the product needs Pc+4 only where a handler returns there (per-site title fact HandlerReturnsNext=false; registry boundaries unchanged). Unit test positive exit 0, mutant negative exit 1.
   - Re-packaged and installed as out-r18 (Moonfall_Curse.exe de547284). Self-check positive exit 0 ("341 of 341 guest-patch sites enabled", whole_aot_available=1). Negatives: wrong (OoT3D) module exit 1; --ui-profile topscreen exit 1.
 - OoT3D: the OoT-only exe changed 27f0dcf7 -> 16289971, so the per-cut O2 ran: PASS 3/3 cap-p13, reproducible=1, uber_draws=0.
-- The F07 run (out-r18, the one granted run) FAILED: A exited after about 100 s with run_safe result=stall, exit 12. game.err.log shows the product start chain passed: adapter mm3d, "MM3D product: 341 of 341 guest-patch site(s) enabled", Vulkan/NRI up, the native program preparation started (165 parts). Then: TRIAEVUM_FATAL "native A32 process faulted: native A32 dispatch exited unexpectedly: kind=6 pc=0x00100085 detail=1463897940". kind=6 is ExitKind::MissingBlock and detail 0x57414F54 ('WAOT') is DispatchWholeAotProduct's !handled exit. The first guest code after the process entry branches to 0x00100084 in Thumb state (pc bit 0 set). The MM whole-AOT title module (plugin 3e6ebcd0, kEntryPoints 238478, generation 2020030e) has no entry there and the product build has no interpreter fallback; the developer build's registry interprets it. Second defect: after the fatal the process did not exit and was killed by the stall watchdog (100 s). The --startup-check cannot see this because it is coverage of executed code, not a startup site. B was not started, so no runtime.json, no realtime fields and no settings round trip. No retry and no diagnostic run (run budget).
+- The F07 run (out-r18, the one granted run) FAILED: A exited after about 100 s with lab-harness result=stall, exit 12. game.err.log shows the product start chain passed: adapter mm3d, "MM3D product: 341 of 341 guest-patch site(s) enabled", Vulkan/NRI up, the native program preparation started (165 parts). Then: TRIAEVUM_FATAL "native A32 process faulted: native A32 dispatch exited unexpectedly: kind=6 pc=0x00100085 detail=1463897940". kind=6 is ExitKind::MissingBlock and detail 0x57414F54 ('WAOT') is DispatchWholeAotProduct's !handled exit. The first guest code after the process entry branches to 0x00100084 in Thumb state (pc bit 0 set). The MM whole-AOT title module (plugin 3e6ebcd0, kEntryPoints 238478, generation 2020030e) has no entry there and the product build has no interpreter fallback; the developer build's registry interprets it. Second defect: after the fatal the process did not exit and was killed by the stall watchdog (100 s). The --startup-check cannot see this because it is coverage of executed code, not a startup site. B was not started, so no runtime.json, no realtime fields and no settings round trip. No retry and no diagnostic run (run budget).
 
 F07 Windows row: still **NOT QUALIFIED** (owner item). The fix needs a title module that covers the Thumb code reached at boot (generator/catalog work), plus the fatal-exit hang. No F14 realtime product evidence. Evidence: `W/analysis/parity/INTEG/module-window/out-r17/`, `out-r18/`, `W/analysis/parity/INTEG/r16/`.
 
@@ -476,7 +476,7 @@ F07 Windows row: still **NOT QUALIFIED** (owner item). The fix needs a title mod
   145.8 s, just after the background preparation ended (165 parts, no PICA draw yet), the guest faulted:
   MemoryFault (kind=4) at pc 0x0015127C, which is `ldr r0,[r0,#0x150]` in FUN_00151270 (192 ARM callers),
   read address 0x150, so r0 = NULL at entry. The process then EXITED by itself 3 s after the fatal line
-  (run_safe result=exit, exit 1; no watchdog kill). No runtime.json and no realtime evidence. Offline,
+  (lab-harness result=exit, exit 1; no watchdog kill). No runtime.json and no realtime evidence. Offline,
   we cannot tell which caller passed NULL: there is no register/LR trace in the product fault report.
 
 F07 Windows row: still **NOT QUALIFIED** (owner item). The fatal path is fixed (the process exits).

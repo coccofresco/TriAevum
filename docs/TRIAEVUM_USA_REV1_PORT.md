@@ -11,8 +11,8 @@ verified, byte-identical canonical image derived offline from that input.
 ## Input identity
 
 User-provided file:
-`I:/zeldaroms/Legend of Zelda, The - Ocarina of Time 3D (USA) (En,Fr,Es) (Rev 1) Decrypted.3ds`.
-Source was read only; private extraction is in `I:/oot3dre_work/usa-rev1-port/inputs`.
+`<local>/zeldaroms/Legend of Zelda, The - Ocarina of Time 3D (USA) (En,Fr,Es) (Rev 1) Decrypted.3ds`.
+Source was read only; private extraction is in `<oot3d-work>/usa-rev1-port/inputs`.
 
 | Input | Bytes | SHA-256 |
 | --- | --- | --- |
@@ -90,11 +90,11 @@ Run from the source checkout; use the actual private input paths:
 ```powershell
 python -m tools.triaevum_release.revision_port_audit `
   --reference-code <EUR-code.bin> --reference-exheader <EUR-exheader.bin> `
-  --target-code I:/oot3dre_work/usa-rev1-port/inputs/code.bin `
-  --target-exheader I:/oot3dre_work/usa-rev1-port/inputs/exheader.bin `
+  --target-code <oot3d-work>/usa-rev1-port/inputs/code.bin `
+  --target-exheader <oot3d-work>/usa-rev1-port/inputs/exheader.bin `
   --selection tools/oot3d/native_a32_runtime/whole_aot_functions.json `
   --source-root tools/oot3d/native_game_runtime `
-  --output I:/oot3dre_work/usa-rev1-port/address-audit.json
+  --output <oot3d-work>/usa-rev1-port/address-audit.json
 ```
 
 Repeat with `--source-root tools/oot3d/ui_topscreen` for the separate UI module.

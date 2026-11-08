@@ -208,7 +208,7 @@ and after: its fixture binds no water uniform (bindings 7-9) to the filter.
 
 ## Reproduce
 
-Scripts are private (`I:/_triaevum_work/perf-levers/tmp/intro-fps`); the
+Scripts are private (`<work>/perf-levers/tmp/intro-fps`); the
 procedure is: copy `dev-latest/config.json`, run the developer launch with
 `--frames 2400 --benchmark-warmup-frames 300` (wall clock) or with
 `--fixed-delta-seconds 0.016666666666666666` plus `--screenshot ...

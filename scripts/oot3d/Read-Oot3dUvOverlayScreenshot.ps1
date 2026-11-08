@@ -1,8 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string[]]$Screenshot,
-    [string]$PaletteCsv = "I:\oot3dre_work\spot04\labeled_uv_overlay\spot04_labeled_uv_palette.csv",
-    [string]$OutputRoot = "I:\oot3dre_work\spot04\labeled_uv_overlay\screenshot_decode",
+    [string]$PaletteCsv = "<oot3d-work>\spot04\labeled_uv_overlay\spot04_labeled_uv_palette.csv",
+    [string]$OutputRoot = "<oot3d-work>\spot04\labeled_uv_overlay\screenshot_decode",
     [ValidateRange(0, 3)]
     [int]$Tolerance5 = 1,
     [ValidateRange(1, 16)]

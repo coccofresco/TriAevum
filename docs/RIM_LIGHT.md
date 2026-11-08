@@ -95,7 +95,7 @@ PBR shader compilations, and focused F1 smoke 1,978 assertions. Full F1 still
 fails before this panel at the unchanged material-editor texture-identity
 assertion (see the F1 review). No game or play-kokiri profile was touched.
 
-Claude's lab should use `I:/_triaevum_work/devwarp/host-build/savestates`: compare
+Claude's lab should use `<work>/devwarp/host-build/savestates`: compare
 fixed-pose daylight and dark-interior captures, with all real lights/ambient
 zeroed and with full key/local shadows. The independent rim must remain.
 Rotate the camera; check top/right/left/bottom azimuths, coverage 0/.25/1,

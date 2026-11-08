@@ -23,7 +23,7 @@ DEFAULT_OUT_CSV = ROOT / "analysis" / "scene_command_decompilation_workorders.cs
 DEFAULT_OUT_MD = ROOT / "analysis" / "scene_command_decompilation_workorders.md"
 DEFAULT_SPLITS_CSV = ROOT / "analysis" / "scene_command_handler_function_splits.csv"
 DEFAULT_ENTRIES_TXT = ROOT / "analysis" / "scene_command_handler_export_entries.txt"
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_MANUAL_SYMBOLS = ROOT / "symbols" / "manual_symbols.csv"
 CODE_LOAD_BASE = 0x00100000
 SCENE_COMMAND_HANDLER_TABLE = 0x0053CC84
@@ -31,9 +31,9 @@ SCENE_COMMAND_HANDLER_ENTRY_COUNT = 0x1A
 GHIDRA_EXPORT_TEMPLATE = (
     "powershell -NoProfile -ExecutionPolicy Bypass -File "
     "tools\\oot3d\\decomp_support\\scripts\\ghidra-export-selected.ps1 "
-    "-GhidraRoot 'E:\\azahar pcvr\\tools\\pcvr-re-tools\\ghidra' "
-    "-JdkRoot 'E:\\azahar pcvr\\tools\\pcvr-re-tools\\jdk21' "
-    "-ProjectDir 'E:\\ppssppvr\\oot3d_decomp\\work\\ghidra_project' "
+    "-GhidraRoot '<azahar-pcvr>\\tools\\pcvr-re-tools\\ghidra' "
+    "-JdkRoot '<azahar-pcvr>\\tools\\pcvr-re-tools\\jdk21' "
+    "-ProjectDir '<ppssppvr>\\oot3d_decomp\\work\\ghidra_project' "
     "-ProjectName 'oot3d_code' "
     "-ExportDir '{export_dir}' "
     "-Entries {entry} -IncludeCallers -IncludeCallees -KeepSelectedArtifacts"

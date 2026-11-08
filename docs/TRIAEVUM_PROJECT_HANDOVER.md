@@ -9,7 +9,7 @@ Le verifiche di questa sessione sono letture di sorgenti, manifest e Git:
 
 ## 1. Stato da cui partire
 
-- Repository operativo: `I:/TriAevum-public/source-repository-clean`.
+- Repository operativo: `<public-work>/source-repository-clean`.
 - Repository pubblico: <https://github.com/coccofresco/TriAevum>.
 - Branch locale osservato: `port/linux-nri`.
 - HEAD osservato: `a9b4477`, 18 settembre 2026, ritiro delle release rotte.
@@ -367,15 +367,15 @@ il checkout attuale. Non aggiornarlo in blocco senza controllare i consumer.
 
 | Riferimento | Stato/uso |
 | --- | --- |
-| `I:/oot3decomp/` | Decomp esterna recente; read-only salvo richiesta esplicita |
-| `I:/Zelda3drecomp/` | Decomp/evidenze storiche; distinguere branch grezzo e semantico via Git/manifests |
-| `E:/azahar pcvr/` | Emulator donor/oracolo e strumentazione storica |
-| `E:/azahar pcvr/build-pcvr-qt/bin/Release/azahar.exe` | Percorso emulatore indicato dall'utente; verificare esistenza |
-| `E:/azahar pcvr/tools/pcvr-re-tools/ghidra/` | Tool Ghidra storico, non cercarlo ogni iterazione |
-| `E:/ppssppvr/oot3d_decomp/work/extract/exefs/code.bin` | Input storico canonico; controllare hash |
-| `I:/oot3dre_tools/llvm-22.1.6/` | LLVM usato dai percorsi AOT documentati |
-| `I:/oot3dre_work/`, `J:/...`, `%TEMP%/...` | Build/catture/cache storiche; possono essere state rimosse |
-| `I:/TriAevum-public/donor-review-windroid/` | Clone di sola analisi del donor Android |
+| `<oot3d-decomp>/` | Decomp esterna recente; read-only salvo richiesta esplicita |
+| `<legacy-recomp>/` | Decomp/evidenze storiche; distinguere branch grezzo e semantico via Git/manifests |
+| `<azahar-pcvr>/` | Emulator donor/oracolo e strumentazione storica |
+| `<azahar-pcvr>/build-pcvr-qt/bin/Release/azahar.exe` | Percorso emulatore indicato dall'utente; verificare esistenza |
+| `<azahar-pcvr>/tools/pcvr-re-tools/ghidra/` | Tool Ghidra storico, non cercarlo ogni iterazione |
+| `<ppssppvr>/oot3d_decomp/work/extract/exefs/code.bin` | Input storico canonico; controllare hash |
+| `<tools>/llvm-22.1.6/` | LLVM usato dai percorsi AOT documentati |
+| `<oot3d-work>/`, `<local>/...`, `%TEMP%/...` | Build/catture/cache storiche; possono essere state rimosse |
+| `<public-work>/donor-review-windroid/` | Clone di sola analisi del donor Android |
 | `ssh <linux-host>` | Host Linux di prova; non e' uno Steam Deck |
 
 In questa sessione ha funzionato il Git Windows:
@@ -481,8 +481,8 @@ stato collegato. Non presumere che sia attualmente collegato o autorizzato.
 Tool locali documentati:
 
 ```powershell
-$env:ADB = 'I:/oot3dre_tools/android/platform-tools/adb.exe'
-$env:SCRCPY = 'I:/oot3dre_tools/android/scrcpy-4.1/scrcpy-win64-v4.1/scrcpy.exe'
+$env:ADB = '<tools>/android/platform-tools/adb.exe'
+$env:SCRCPY = '<tools>/android/scrcpy-4.1/scrcpy-win64-v4.1/scrcpy.exe'
 & $env:ADB devices -l
 # Impostare solo dopo aver identificato il dispositivo:
 $Serial = '<seriale-verificato>'
@@ -543,7 +543,7 @@ Preview non interattiva, chiudibile senza terminare il gioco:
 
 ```powershell
 & $env:SCRCPY --serial=$Serial --no-control --no-audio --window-title='TriAevum Android'
-python tools/android/capture_device.py --serial $Serial --package org.triaevum.android --output I:/oot3dre_work/android-captures --seconds 15
+python tools/android/capture_device.py --serial $Serial --package org.triaevum.android --output <oot3d-work>/android-captures --seconds 15
 ```
 
 Il tool salva video display, PNG, metadati e logcat filtrato; supporta anche

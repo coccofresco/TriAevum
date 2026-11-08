@@ -213,7 +213,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
         "--llvm-root", type=Path,
-        default=Path(r"I:\oot3dre_tools\llvm-22.1.6"),
+        default=Path(r"<tools>\llvm-22.1.6"),
     )
     args = parser.parse_args()
     source = args.source or _source_for_symbol(

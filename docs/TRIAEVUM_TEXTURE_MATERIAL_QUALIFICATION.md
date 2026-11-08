@@ -132,9 +132,9 @@ comparisons are in `structural-qualification.json` under the evidence root.
 ## Evidence
 
 Private source-build, GPU and runtime evidence belongs under
-`I:/_triaevum_work/material-commit-qualification/`. Earlier material-editor,
+`<work>/material-commit-qualification/`. Earlier material-editor,
 material-weights and material-seams campaigns remain under their existing
-`I:/_triaevum_work/` directories. Their historical measurements must not be
+`<work>/` directories. Their historical measurements must not be
 presented as fresh measurements of a different source tree.
 
 ## Isolated build

@@ -92,7 +92,7 @@ objects plus normal link/product metadata, not the title DLL.
   84 passed and three optional/platform skips;
   optional real compiler tests are run explicitly, not counted as skipped proof.
 
-Private evidence: `J:/TriAevum-verify-20260910/public-shader-tools-{proof,fixed}`,
+Private evidence: `<verify-20260910>/public-shader-tools-{proof,fixed}`,
 `public-shader-game-{proof,fixed}`, and
 `~/triaevum-shader-distribution-review/`.
 
@@ -157,4 +157,4 @@ python tools/triaevum_release/qualify_pr15_lifetime.py
 ```
 
 Alternatively `--source PINNED_WINDOW_CPP` accepts only the exact reviewed Git
-blob. Private baseline evidence: `J:/TriAevum-verify-20260910/pr15-field-a{1,2,3}`.
+blob. Private baseline evidence: `<verify-20260910>/pr15-field-a{1,2,3}`.

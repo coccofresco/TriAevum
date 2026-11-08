@@ -92,7 +92,7 @@ assignments and writes
 with:
 
 ```powershell
-python tools/oot3d/decomp_support/scripts/build_topscreen_mod_coverage.py --raw-analysis I:\oot3dre_work\native_game\topscreen_v1_2_raw_analysis.json --semantic-port tools/oot3d/decomp_support/analysis/topscreen_mod_semantic_port.json --output tools/oot3d/decomp_support/analysis/topscreen_mod_coverage.json
+python tools/oot3d/decomp_support/scripts/build_topscreen_mod_coverage.py --raw-analysis <oot3d-work>\native_game\topscreen_v1_2_raw_analysis.json --semantic-port tools/oot3d/decomp_support/analysis/topscreen_mod_semantic_port.json --output tools/oot3d/decomp_support/analysis/topscreen_mod_coverage.json
 ```
 
 The record-level matrix is authoritative for closing each IPS patch site, but
@@ -278,7 +278,7 @@ static closures, the focused C++ tests, paired TopScreen/default runtime
 evidence, and authoritative framebuffer artifacts:
 
 ```powershell
-python tools/oot3d/decomp_support/scripts/verify_topscreen_mod_completion.py --contract tools/oot3d/decomp_support/analysis/topscreen_mod_completion_contract.json --repo-root . --artifact-root I:\oot3dre_work\native_game --test-bin-dir I:\oot3dre_work\build-hud-baseline-a30 --output I:\oot3dre_work\native_game\topscreen_mod_completion_result_v1_2_20260723.json
+python tools/oot3d/decomp_support/scripts/verify_topscreen_mod_completion.py --contract tools/oot3d/decomp_support/analysis/topscreen_mod_completion_contract.json --repo-root . --artifact-root <oot3d-work>\native_game --test-bin-dir <oot3d-work>\build-hud-baseline-a30 --output <oot3d-work>\native_game\topscreen_mod_completion_result_v1_2_20260723.json
 ```
 
 The current result passes 2 static evidence groups, 23 runtime evidence
@@ -797,7 +797,7 @@ The diagnostic checkpoint is reproduced from the unmodified frame-574 state
 with:
 
 ```powershell
-python tools/oot3d/native_game_runtime/patch_native_a32_savestate_memory.py --input I:\oot3dre_work\native_game\checkpoints\file_select_good_no_whole_frame574_20260723.oot3dsav --output I:\oot3dre_work\native_game\checkpoints\file_select_empty_slots_coherent_20260723.oot3dsav --write 0x0055BEA8:000000000000000000000000 --write 0x0055B53C:000000000000000000000000
+python tools/oot3d/native_game_runtime/patch_native_a32_savestate_memory.py --input <oot3d-work>\native_game\checkpoints\file_select_good_no_whole_frame574_20260723.oot3dsav --output <oot3d-work>\native_game\checkpoints\file_select_empty_slots_coherent_20260723.oot3dsav --write 0x0055BEA8:000000000000000000000000 --write 0x0055B53C:000000000000000000000000
 ```
 
 The native transition is then driven by
@@ -841,7 +841,7 @@ boundary instead (before 2026-10-13) interleaved them with a native routine
 the guest was suspended in: closing while the selected item's detail message
 was being prepared let the preparation finish after the reset, so the message
 reopened over gameplay with no page left to close it (issue #60, reproduced by
-`early_close_77` in `I:/_triaevum_work/issue60`), and closing while its icon
+`early_close_77` in `<work>/issue60`), and closing while its icon
 was loading faulted in `ZAR_GetCMBByIndex`. The page is resolved again at
 delivery; a request the native update does not reach within eight host
 refreshes is dropped, START wins over a Save/Quit of the same refresh, and a

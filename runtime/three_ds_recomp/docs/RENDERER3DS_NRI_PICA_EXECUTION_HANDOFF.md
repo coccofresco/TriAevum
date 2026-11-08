@@ -45,9 +45,9 @@ Il nuovo target isolato e
 2. Scegliere una singola tranche successiva tra texture
    upload/decode e display transfer; non spostarle insieme.
 
-Build directory usata: `I:/oot3dre_work/whole-aot-product-consumer`.
+Build directory usata: `<oot3d-work>/whole-aot-product-consumer`.
 Evidenza runtime:
-`I:/oot3dre_work/visual-parity/portable-3ds-nri-executor-20260826`.
+`<oot3d-work>/visual-parity/portable-3ds-nri-executor-20260826`.
 La cattura accettata e `frame-final.png`; `frame.png` e intenzionalmente
 respinta perche, senza `ScreenshotStartFrame=59`, fotografa il frame iniziale
 nero prima della prima presentazione utile.

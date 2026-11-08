@@ -1,20 +1,20 @@
 [CmdletBinding()]
 param(
     [string]$ProductExecutable =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe",
     [string]$GoldenContract = "",
     [string]$OutputDirectory =
-        "I:\oot3dre_work\whole-aot-product-run\golden-gate",
+        "<oot3d-work>\whole-aot-product-run\golden-gate",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [string]$KokiriCutsceneState =
-        "I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav",
+        "<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav",
     [string]$KokiriGameplayState =
-        "I:\oot3dre_work\native_game\checkpoints\hudtest_after120.oot3dsav",
+        "<oot3d-work>\native_game\checkpoints\hudtest_after120.oot3dsav",
     [string]$GameplayInputTimeline =
-        "I:\oot3dre_work\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
+        "<oot3d-work>\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
     [ValidateRange(1, 20)]
     [int]$Repetitions = 2
 )

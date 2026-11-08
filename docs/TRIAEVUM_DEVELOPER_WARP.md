@@ -252,9 +252,8 @@ buttons, and acknowledges once settled with the scene, entrance and arrival
 state; `{"op":"panel","tab":"Dev Tools"}` shows F1 on that tab so a lab
 `capture` records it (the capture includes ImGui). The lab's tab request,
 F1 show/hide and `TRIAEVUM_CRASH_DIALOG=0` exist only in developer builds
-(`TRIAEVUM_RENDERER_DEVELOPER_TOOLS` in the shared runtime). The MM3D work tree's
-`tools/devwarp_verify.py` runs a plan through `run_safe.sh` (its watchdog and
-GPU lock): one warp after another from `sct_day1_idle`, a fresh process after a
+(`TRIAEVUM_RENDERER_DEVELOPER_TOOLS` in the shared runtime). A private lab verifier (not shipped, not part of this repository) runs a plan
+through the lab run harness (its watchdog and GPU lock): one warp after another from `sct_day1_idle`, a fresh process after a
 fault or a warp that never left a cutscene, one rgb8 JPEG per warp with the
 expected place and the observed result burned in.
 

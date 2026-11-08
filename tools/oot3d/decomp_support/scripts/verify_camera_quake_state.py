@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_EXPORT_DIR = ROOT / "analysis" / "camera_quake_state_ghidra_export"
 DEFAULT_OUT_MD = ROOT / "analysis" / "camera_quake_state_verify.md"
 DEFAULT_HEADER = ROOT / "include" / "oot3d" / "camera_quake.h"

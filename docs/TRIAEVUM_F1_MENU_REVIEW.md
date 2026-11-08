@@ -725,7 +725,7 @@ Three deterministic Shaded captures at 0/1/4x also verify the renderer consumer:
 0x exactly matches the previous no-height framebuffer, 1x preserves the pack,
 and 1xÃ¢â€ â€™4x changes 215,295 pixels. Compared native geometry, registers and lights
 stay identical. Vulkan/NRI report zero errors and the same 11 baseline Vulkan
-warnings. Private receipts are under `I:/_triaevum_work/f1-height/`.
+warnings. Private receipts are under `<work>/f1-height/`.
 
 2026-09-25 global dielectric specular control (historical; superseded below):
 Lighting owned **Specular level**, persisted as `Graphics.Effects.PBR.SpecularLevel`. Range 0Ã¢â‚¬â€œ2x
@@ -750,7 +750,7 @@ and the previous `bin-height-f1` build time out before a completed frame with
 Vulkan errors for resources destroyed while referenced by a command buffer.
 The shared guide producer is updated, but these runs do not establish successful
 SSSR execution or fallback-free SSSR behavior. Private captures, receipts and
-the paired failure logs are under `I:/_triaevum_work/f1-specular/`.
+the paired failure logs are under `<work>/f1-specular/`.
 
 2026-09-25 material editor: F1 now has an always-available **Material editor** tab.
 The scene-wide PBR controls are removed; the material JSON owns normal scale,
@@ -779,7 +779,7 @@ images, mismatched channel dimensions, and failed-save recovery.
 Ten deterministic renderer captures preserve default PBR and Native output,
 exercise minimum roughness in shaded output and Hi-Z guides, and retain identical
 compared native draw state. All have zero Vulkan/NRI errors and the same 11
-baseline Vulkan warnings. Private evidence: `I:/_triaevum_work/material-editor/`.
+baseline Vulkan warnings. Private evidence: `<work>/material-editor/`.
 The SSSR limitation above is unchanged.
 
 2026-09-25 per-material reflection weights: **Material editor** adds **Specular
@@ -809,7 +809,7 @@ All 110 compared native draws retain composition, geometry, texture, light and
 raster state. Every run reports zero Vulkan/NRI errors, no failed/missing/
 unresolved graph passes/resources, and the same 11 baseline Vulkan warnings.
 Foundation, pipeline-cache and scene-frame suites pass 292/292, 41/41 and 19/19.
-Evidence and invocation recipes: `I:/_triaevum_work/material-weights/`.
+Evidence and invocation recipes: `<work>/material-weights/`.
 The private `Avvia-PBR-Height.cmd` now selects `bin-material-weights/TriAevum.exe`;
 the interactive profile, authored pack and already-running game are untouched.
 
@@ -839,7 +839,7 @@ and Native bypass exactly. Width 1%/5%/15% changes 2,991/17,916/59,439 pixels at
 the wall's UV seams. Native state remains identical across all 110 compared draws.
 Every diagnostic frame has zero Vulkan/NRI and graph errors; the same 11 baseline
 warnings remain. The staged executable matches the qualified enabled image.
-Evidence: `I:/_triaevum_work/material-seams/`.
+Evidence: `<work>/material-seams/`.
 
 `Avvia-PBR-Height.cmd` now selects `bin-material-seams/TriAevum.exe`. The user's
 interactive profile, material pack and existing game process are not modified.
@@ -1028,8 +1028,8 @@ Both runners now pass 3,896 assertions against the current built runtime objects
 First build the regular runtime target, without rebuilding the title:
 
 ```powershell
-cmake --build I:/oot3dre_work/triaevum-direct-module-build --target triaevum_public_runtime --parallel 3
-tools/triaevum_release/tests/run_f1_settings_smoke.ps1 -Build I:/oot3dre_work/triaevum-direct-module-build -Dependencies I:/oot3dre_work/whole-aot-product-consumer/_deps -Compiler I:/oot3dre_tools/llvm-22.1.6/bin/clang++.exe
+cmake --build <oot3d-work>/triaevum-direct-module-build --target triaevum_public_runtime --parallel 3
+tools/triaevum_release/tests/run_f1_settings_smoke.ps1 -Build <oot3d-work>/triaevum-direct-module-build -Dependencies <oot3d-work>/whole-aot-product-consumer/_deps -Compiler <tools>/llvm-22.1.6/bin/clang++.exe
 ```
 
 The standalone test links the **actual built panels and runtime libraries**.
@@ -1066,7 +1066,7 @@ The current bounded Vulkan runner is
 `tools.triaevum_release.validate_ambient_occlusion_run`; select a disposable
 launch profile as well as private configuration/save paths.
 The earlier CACAO smoke under
-`I:/oot3dre_work/f1-menu-diagnostics/vulkan-menu/` completed with 213 recorded
+`<oot3d-work>/f1-menu-diagnostics/vulkan-menu/` completed with 213 recorded
 frames, 179 CACAO passes and zero Vulkan/NRI validation errors. Its captured
 F1 panel was visible and legible. That historical result is not GTAO validation
 or an FPS benchmark.
@@ -1141,8 +1141,8 @@ released, host/native UI-owned polls, capture transitions and physical movement.
 Together with `free_camera_input` and TopScreen camera counters, these distinguish
 capture, delivery and native-camera eligibility without another instrumented build.
 
-Current local build: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`; evidence:
-`J:/TriAevum-verify-20260910/camera-consumer-20260910-162418/` (command) and
+Current local build: `<verify-20260910>/runtime/TriAevum.exe`; evidence:
+`<verify-20260910>/camera-consumer-20260910-162418/` (command) and
 `camera-consumer-20260910-162456/` (control). Only host runtime/UI libraries were
 rebuilt; the title AOT module, game data and savestate format are unchanged.
 
@@ -1170,9 +1170,9 @@ effect is visually perfect in every game scene. No new named-profile manager,
 gameplay feature, or renderer effect is introduced in this change.
 
 The developer executable remains
-`I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
+`<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
 The existing local launcher
-`I:/oot3dre_work/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
+`<oot3d-work>/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
 uses it with the user's installed launch profile. The catalogued release
 installation is not overwritten with an unpaired executable.
 

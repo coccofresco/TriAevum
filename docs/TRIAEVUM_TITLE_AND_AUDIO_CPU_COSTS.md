@@ -50,15 +50,15 @@ records; both retain 18 existing validation warnings. Draw publication remains
 107/107. No capture, savestate or validation run is used as an FPS benchmark.
 An additional start-from-boot run with the existing enhanced profile and audio
 completed 600 presentations / 287 updates, with visual interpolation active.
-Evidence: `J:/TriAevum-diagnostics/audio-costs-20260907-intro/`. Its repeated and
+Evidence: `<diagnostics>/audio-costs-20260907-intro/`. Its repeated and
 synthetic presentations are explicitly not counted as native benchmark frames.
 
 Reproduce the audio test, optionally comparing two real checkpoints:
 
 ```powershell
-& I:/oot3dre_work/triaevum-direct-module-build/oot3d_native_audio_storage_tests.exe `
-  J:/TriAevum-diagnostics/audio-costs-20260907-visual-a/checkpoint.oot3dsav `
-  J:/TriAevum-diagnostics/audio-costs-20260907-visual-b/checkpoint.oot3dsav
+& <oot3d-work>/triaevum-direct-module-build/oot3d_native_audio_storage_tests.exe `
+  <diagnostics>/audio-costs-20260907-visual-a/checkpoint.oot3dsav `
+  <diagnostics>/audio-costs-20260907-visual-b/checkpoint.oot3dsav
 ```
 
 ## Measurements and Limits
@@ -83,9 +83,9 @@ core plus substantial remoting/other activity. None were stopped or modified.
 Do not compare these absolute FPS to the previous tranche's quieter +15% result.
 Re-measure overall FPS under stable host load before attributing a total gain.
 
-Artifacts: `I:/oot3dre_work/audio-costs-20260907-{a1,b1,a2,b2}/`.
-Functional framebuffer/checkpoint evidence: `J:/TriAevum-diagnostics/audio-costs-20260907-visual-{a,b}/`.
-Before executable: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.before-audio-costs.exe`.
+Artifacts: `<oot3d-work>/audio-costs-20260907-{a1,b1,a2,b2}/`.
+Functional framebuffer/checkpoint evidence: `<diagnostics>/audio-costs-20260907-visual-{a,b}/`.
+Before executable: `<oot3d-work>/triaevum-direct-module-build/TriAevum.before-audio-costs.exe`.
 Current executable: same directory, `TriAevum.exe`.
 
 The initial functional save runs on I: failed because free space fell to about
@@ -109,12 +109,12 @@ checked; no warm-cache timing is claimed for this tranche.
 
 Exact local inputs (do not search for another compiler or regenerate the title):
 
-- Source archive: `I:/TriAevum-0.6.0-candidate-r1/source/titles/oot3d-eur-project-baseline-16a6b0aa-build.zip`.
-- Generated headers: `I:/oot3dre_work/triaevum-full-title-proof/data/translator-cache/whole-aot-v2/generated/b8a9abc888cbc74ed180d4cef6356a183b2945858f611f49be9920cc50cf1cee/fade3a4fcc298ab8f4568e0384103012f03dc9aa1d055666cd47525a2eda4cf2`.
-- Object archive: `I:/oot3dre_work/triaevum-full-title-proof/data/translator-cache/whole-aot-v2/native-objects/archives/4a1c0a10d757ac674346241b10bbda5b6e9f03c13d268faa11b4ba10643b4226.lib`.
-- Support/compiler: `I:/oot3dre_work/triaevum-full-title-proof/forge/{triaevum_title_whole_aot_support.lib,clang-cl.exe}`.
-- Sysroot: `I:/oot3dre_work/triaevum-fully-acquired-sysroot`.
-- Diagnostic result: `I:/oot3dre_work/native-game-costs-20260907-symbols-b/`, including `relink.json`, `title.map`, `title.pdb` and the DLL.
+- Source archive: `<local>/TriAevum-0.6.0-candidate-r1/source/titles/oot3d-eur-project-baseline-16a6b0aa-build.zip`.
+- Generated headers: `<oot3d-work>/triaevum-full-title-proof/data/translator-cache/whole-aot-v2/generated/b8a9abc888cbc74ed180d4cef6356a183b2945858f611f49be9920cc50cf1cee/fade3a4fcc298ab8f4568e0384103012f03dc9aa1d055666cd47525a2eda4cf2`.
+- Object archive: `<oot3d-work>/triaevum-full-title-proof/data/translator-cache/whole-aot-v2/native-objects/archives/4a1c0a10d757ac674346241b10bbda5b6e9f03c13d268faa11b4ba10643b4226.lib`.
+- Support/compiler: `<oot3d-work>/triaevum-full-title-proof/forge/{triaevum_title_whole_aot_support.lib,clang-cl.exe}`.
+- Sysroot: `<oot3d-work>/triaevum-fully-acquired-sysroot`.
+- Diagnostic result: `<oot3d-work>/native-game-costs-20260907-symbols-b/`, including `relink.json`, `title.map`, `title.pdb` and the DLL.
 
 The benchmark harness accepts `plugin=PATH` only for an isolated run and records
 the actual plugin hash. The sample was taken **from the diagnostic DLL itself**,
@@ -122,7 +122,7 @@ not by assuming its offsets match an older DLL. It ran with the matching runtime
 PDB before the audio rebuild. Very Sleepy `/a PID /t 15 /o CAPTURE /q` was attached
 after startup; stacks are filtered to `TriAevum!main`. Profiling FPS is not a benchmark.
 
-Capture and summary: `I:/oot3dre_work/native-game-costs-20260907-profile/{cpu.sleepy,cpu-summary.json}`.
+Capture and summary: `<oot3d-work>/native-game-costs-20260907-profile/{cpu.sleepy,cpu-summary.json}`.
 Summarizer: `tools/triaevum_release/tests/summarize_cpu_sample.ps1`.
 
 | Sampled surface | Main-thread exclusive share |

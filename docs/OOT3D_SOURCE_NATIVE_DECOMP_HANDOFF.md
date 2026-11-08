@@ -23,7 +23,7 @@ The current external closure contains:
 - 37 declared compiler, C runtime, CTR and typed host imports.
 
 The revision-pinned owner package is
-`I:\oot3dre_work\source_integration\ded8104e66ea-6e7b2907b523`. It reports
+`<oot3d-work>\source_integration\ded8104e66ea-6e7b2907b523`. It reports
 8/8 source-closed owners, 1,216/1,216 unique closure entries and an empty
 semantic worklist. Four old per-owner import acceptances remain unapproved,
 but those gates belong to the superseded incremental A32-owner migration and
@@ -64,8 +64,8 @@ Run the consumer preparation through `-BuildLlvmLegalizedSurface`, then run:
 
 ```powershell
 python tools\oot3d\source_native_runtime\analyze_source_global_evidence.py `
-  --clang I:\oot3dre_tools\llvm-22.1.6\bin\clang.exe `
-  --decomp-root I:\oot3decomp `
+  --clang <tools>\llvm-22.1.6\bin\clang.exe `
+  --decomp-root <oot3d-decomp> `
   --snapshot-root build-source-native\decomp-snapshot `
   --snapshot-manifest build-source-native\decomp-snapshot\source_snapshot_manifest.json `
   --surface-contracts build-source-native\llvm-legalized-surface\source_surface_contracts.json `

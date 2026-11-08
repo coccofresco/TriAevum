@@ -23,8 +23,8 @@ private directory. It does not authorize public redistribution of that material.
 python tools/triaevum_release/import_windows_sysroot.py `
   --msvc "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207" `
   --sdk "C:/Program Files (x86)/Windows Kits/10" --sdk-version 10.0.26100.0 `
-  --clang I:/oot3dre_tools/llvm-22.1.6/lib/clang/22 `
-  --output I:/oot3dre_work/triaevum-private-sysroot
+  --clang <tools>/llvm-22.1.6/lib/clang/22 `
+  --output <oot3d-work>/triaevum-private-sysroot
 ```
 
 The output must not already exist. Builders accept a `sysroot` path in their
@@ -70,12 +70,12 @@ from the game. `whole_aot_abi_probe.cpp` then loads the DLL and checks:
 
 ```powershell
 python tools/triaevum_release/validate_whole_aot_toolchain.py `
-  --compiler I:/oot3dre_tools/llvm-22.1.6/bin/clang-cl.exe `
-  --archiver I:/oot3dre_tools/llvm-22.1.6/bin/llvm-lib.exe `
-  --support I:/oot3dre_work/triaevum-direct-module-build/triaevum_title_whole_aot_support.lib `
+  --compiler <tools>/llvm-22.1.6/bin/clang-cl.exe `
+  --archiver <tools>/llvm-22.1.6/bin/llvm-lib.exe `
+  --support <oot3d-work>/triaevum-direct-module-build/triaevum_title_whole_aot_support.lib `
   --include C:/vcpkg/installed/x64-windows-static/include `
-  --sysroot I:/oot3dre_work/triaevum-private-sysroot `
-  --output I:/oot3dre_work/triaevum-native-abi-probe
+  --sysroot <oot3d-work>/triaevum-private-sysroot `
+  --output <oot3d-work>/triaevum-native-abi-probe
 ```
 
 The local probe passed all six checks. Its actual private DLL hash is

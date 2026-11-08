@@ -114,7 +114,7 @@ Selections are:
 ```
 
 Reports and per-scenario logs are written below
-`I:\oot3dre_work\structural-scenarios\matrices`; `latest.json` points to the
+`<oot3d-work>\structural-scenarios\matrices`; `latest.json` points to the
 latest aggregate report.
 
 ## Validated baseline
@@ -147,7 +147,7 @@ The 2026-08-24 representative-scene run then passed all 27 catalog scenes in
 | Declared cutscene sources | 101 |
 
 The aggregate evidence is
-`I:\oot3dre_work\structural-scenarios\scene-matrices-proctex\20260824T155618Z\structural_scenario_matrix.json`.
+`<oot3d-work>\structural-scenarios\scene-matrices-proctex\20260824T155618Z\structural_scenario_matrix.json`.
 Death Mountain Crater (`spot17_info_entry_0147`) exercises the newly closed
 native ProcTex path; its strict pass submitted 15,384 draws with zero misses.
 
@@ -168,7 +168,7 @@ current runtime:
 | Declared cutscene sources | 358 |
 
 The strict aggregate report is
-`I:\oot3dre_work\structural-scenarios\all-entrances-v2\strict-matrix\20260824T171322Z\structural_scenario_matrix.json`.
+`<oot3d-work>\structural-scenarios\all-entrances-v2\strict-matrix\20260824T171322Z\structural_scenario_matrix.json`.
 The two lifecycle variants are evidence-visible rather than scene-specific
 exceptions:
 

@@ -5,7 +5,7 @@ sources through the same renderer mechanisms as OoT3D, without changing the
 MM3D base profile. Title facts belong here; mechanisms belong in the renderer.
 
 Baseline investigation and proof ledger (local evidence, not shipped assets):
-`I:/_triaevum_work/mm3d-port/analysis/parity/DL/INVENTORY.md`.
+`W/analysis/parity/DL/INVENTORY.md`.
 Running log: `DL/PROGRESS.md` alongside it.
 
 Native fragment lights must be replaced by exact source identity, never added
@@ -148,7 +148,7 @@ All ten serial launches succeeded, **zero retries**: Off/On night Clock Town
 lamps, Stock Pot Inn, Woodfall torches, the semantic window policy and visible
 Tatl. A labelled native warp-glow crop derives from the Tatl pair with no extra
 launch. JPEGs, checksums, profile overlays and exact receipts are indexed at:
-`I:/_triaevum_work/mm3d-port/analysis/parity/DL/captures/INDEX.md`.
+`W/analysis/parity/DL/captures/INDEX.md`.
 No implementation/binary change followed the batch; this status update is docs only.
 
 The Inn actually installed the neutral-map PBR fixture:152 GGX trace records

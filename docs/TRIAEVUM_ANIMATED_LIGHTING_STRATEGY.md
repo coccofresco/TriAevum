@@ -107,7 +107,7 @@ Consequences:
   fixed pair such as `(72,-72,72)` / `(-72,72,-72)` is also exactly opposite
   (the nightmare cutscene, 3.5).
 
-The read-only decompilation evidence (`I:/oot3decomp`, never copied) confirms
+The read-only decompilation evidence (`<oot3d-decomp>`, never copied) confirms
 that cutscenes carry set-time and lighting commands; both act on the state
 above.
 

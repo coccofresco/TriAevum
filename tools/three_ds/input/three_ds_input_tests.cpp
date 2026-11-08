@@ -535,7 +535,7 @@ void TestInputDeviceLog() {
     DeviceDescriptor pad;
     pad.InstanceId = 3;
     pad.Guid = "030000005e040000130b000011050000";
-    pad.Name = "Xander's \"Xbox\" Controller\n";
+    pad.Name = "Player's \"Xbox\" Controller\n";
     pad.Serial = "SN-123456";
     pad.Selected = true;
     pad.Type = ControllerType::XboxOne;
@@ -546,7 +546,7 @@ void TestInputDeviceLog() {
     keyboard.VideoDriver = "wayland";
     keyboard.WindowFocused = true;
     const std::vector<DeviceDescriptor> pads{pad};
-    const auto lines = DescribeInputDevices("startup", pads, keyboard, "xander");
+    const auto lines = DescribeInputDevices("startup", pads, keyboard, "player");
     Require(lines.size() == 3U, "summary, pad and keyboard lines");
     Require(lines[0] == "TRIAEVUM_INPUT_DEVICES reason=startup pads=1 selected=3 video_driver=wayland",
             "summary line");
@@ -556,7 +556,7 @@ void TestInputDeviceLog() {
             "pad line");
     Require(lines[2] == "TRIAEVUM_INPUT_KEYBOARD enabled=1 focus=1 prompts=keyboard", "keyboard line");
     for (const auto& line : lines)
-        Require(line.find("SN-123456") == std::string::npos && line.find("Xander") == std::string::npos,
+        Require(line.find("SN-123456") == std::string::npos && line.find("Player") == std::string::npos,
                 "a serial number or the user name was logged");
 
     InputDeviceLog log;

@@ -1,10 +1,10 @@
 param(
     [string]$ToolRoot = "",
-    [string]$SceneRoot = "E:\ppssppvr\oot3d_decomp\work\extract\romfs\scene",
+    [string]$SceneRoot = "<ppssppvr>\oot3d_decomp\work\extract\romfs\scene",
     [string]$SceneIndex = "",
     [string[]]$Scene = @("spot04"),
     [string]$ShardName = "oot3d-scenes-overworld",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [switch]$Verify
 )
 

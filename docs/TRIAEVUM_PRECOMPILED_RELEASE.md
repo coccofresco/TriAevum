@@ -195,13 +195,13 @@ measured on one. `--candidate` remains an explicitly unqualified test artifact.
 ## First measured end-to-end result
 
 Implementation commit: `1d4e95cc9`, branch `release/triaevum-precompiled`.
-Candidate: `I:/TriAevum-0.6.0-candidate-r1`, 37 files / 180,612,481 bytes,
+Candidate: `<local>/TriAevum-0.6.0-candidate-r1`, 37 files / 180,612,481 bytes,
 allowlist audit passed. Runtime and Forge correspond to that commit; the title
 DLL is reused unchanged from the earlier full ROM-build proof. No game asset,
 compiler executable, SDK generation or translator object cache is packaged.
 
 On this 12-logical-CPU Windows host, the frozen installation worker imported
-`I:/Zelda3drecomp/oot3d.cci` into a fresh copy of the candidate:
+`<legacy-recomp>/oot3d.cci` into a fresh copy of the candidate:
 
 - Worker process start to exit: **20.905 seconds**.
 - Import/verification/activation inside the worker: **17.016 seconds**.
@@ -213,7 +213,7 @@ On this 12-logical-CPU Windows host, the frozen installation worker imported
   enabled. This is a functional paced-run result, not maximum throughput.
 - Both processes were closed by the harness; no test executable left running.
 
-Private evidence: `I:/oot3dre_work/triaevum-precompiled-r1-proof/` contains
+Private evidence: `<oot3d-work>/triaevum-precompiled-r1-proof/` contains
 `qualification.json`, `forge.stdout.log`, `runtime.json`, `framebuffer.bmp` and
 the prepared `installation/`. Never include this proof directory in a release.
 

@@ -30,8 +30,8 @@ Azahar's existing PICA frame recorder is title-independent despite its legacy
 captured under:
 
 ```text
-I:\oot3dre_work\visual-parity\cross-title-sm3dl-20260826\azahar-boot-smoke
-I:\oot3dre_work\visual-parity\cross-title-sm3dl-20260826\azahar-idle-30s
+<oot3d-work>\visual-parity\cross-title-sm3dl-20260826\azahar-boot-smoke
+<oot3d-work>\visual-parity\cross-title-sm3dl-20260826\azahar-idle-30s
 ```
 
 Texture payload capture was disabled. The checked-in code consumes JSONL one
@@ -91,7 +91,7 @@ Example repeat command:
 The canonical local aggregate report is:
 
 ```text
-I:\oot3dre_work\visual-parity\cross-title-sm3dl-20260826\reports\idle-conformance.json
+<oot3d-work>\visual-parity\cross-title-sm3dl-20260826\reports\idle-conformance.json
 ```
 
 ## Architectural Result

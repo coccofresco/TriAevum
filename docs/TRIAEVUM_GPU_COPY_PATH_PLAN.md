@@ -44,7 +44,7 @@ Nessuna condizione dipende dal flashback, dagli asset o da indirizzi del titolo.
 Compatibilità: `MemoryWriteObservationVersion` **2** certifica anche la visibilità
 delle letture. Il runtime rifiuta moduli precedenti; serve una coppia runtime/DLL
 ricostruita dal publisher, non compilazione o fallback nell'installazione utente.
-Il modulo privato verificato è in `I:/_triaevum_work/deferred-copy/`; nessun
+Il modulo privato verificato è in `<work>/deferred-copy/`; nessun
 catalogo o pacchetto pubblico è stato modificato.
 
 Prove sul checkpoint `sheik-near-copy`, Authentic, stessa timeline:
@@ -81,7 +81,7 @@ differiti e 7.776 confronti resampler, e osserva PCM non nullo nella runtime.
 [`TRIAEVUM_RUNTIME_PROGRESS_QUALIFICATION.md`](TRIAEVUM_RUNTIME_PROGRESS_QUALIFICATION.md).
 
 Invocazioni, log, catture e ricevute restano fuori repository in
-`I:/_triaevum_work/deferred-copy/`: `before`, `after`, `final`, `smoke`,
+`<work>/deferred-copy/`: `before`, `after`, `final`, `smoke`,
 `validated-save`, `resumed`, `boot`, `file-select`, `abi`; riepilogo verificato
 in `verification.json`, incluso SHA-256 dell'eseguibile finale.
 La suite process completa non è dichiarata
@@ -197,7 +197,7 @@ generale non è verde: frontend legacy 13 file contro limite 8, adapter Fast3D
 11 contro 10; il core renderer non contiene dipendenze legacy/N64/Fast3D.
 Non è una qualifica globale della suite o degli altri preset.
 
-Evidenza privata: `I:/_triaevum_work/nri-interpolation-performance/`,
+Evidenza privata: `<work>/nri-interpolation-performance/`,
 `x2-before-optimization`, `x2-after-optimization`, `native-after-optimization`,
 `x2-final-validation`, `x2-realtime-after`, `x2-realtime-warm`, relativi
 `verification.json` e `renderer-dependency-audit.json`.
@@ -260,14 +260,14 @@ Prova sul prodotto, checkpoint `sheik-near-copy`, profilo Authentic:
   **291/291**; gate renderer condiviso **69 file title-neutral**; test GPU
   registrato in CTest e compilazione offline degli shader verdi.
 
-Evidenza privata: `I:/_triaevum_work/copy-strategy-review/verification.json`,
+Evidenza privata: `<work>/copy-strategy-review/verification.json`,
 `after/` (coppia sorgente/consumer), `after-visible/` (scena e log),
 `boot/`, `file-select/`, `validated/` (validazione attiva, riepilogo in
 `validation.json`). Le invocazioni complete sono nei rispettivi `invocation.json`;
 il run `after/` abilita anche `TRIAEVUM_GPU_COPY_DUMP` e
 `TRIAEVUM_RAW_COPY_ENCODE_VERIFY`, quello `validated/` abilita
 `OOT3D_VULKAN_VALIDATION=1`. Eseguibile verificato:
-`I:/TriAevum-public/ui-dependencies/bin/TriAevum.exe`. Nessun asset o capture
+`<public-work>/ui-dependencies/bin/TriAevum.exe`. Nessun asset o capture
 viene aggiunto al repository. Questa verifica non qualifica Linux, effetti
 opzionali o materializzazione guest differita.
 
@@ -547,7 +547,7 @@ Conseguenza dei campi verificati sopra: senza `texture_copy_bytes` nel trace la 
 python tools/triaevum_release/probe_renderer.py $install "$bin/TriAevum.exe" "$diag/gpucopy-d1-probe" --native-fidelity --frames 5000 --seconds 400 --no-captures --extended-diagnostics --load-state $trigger --input-timeline $timeline
 Select-String -Path "$diag/gpucopy-d1-probe/runtime.json" -Pattern '"texture_copy_bytes": [1-9]'
 # (2) stesso scenario con il checkpoint di overlap, già usato dal probe UI.
-python I:/_triaevum_work/ui_profile_probe.py topscreen "$diag/gpucopy-d1-overlap" 1200 100
+python <work>/ui_profile_probe.py topscreen "$diag/gpucopy-d1-overlap" 1200 100
 python tools/triaevum_release/probe_renderer.py $install "$bin/TriAevum.exe" "$diag/gpucopy-d1-overlap-json" --native-fidelity --frames 3500 --seconds 400 --no-captures --extended-diagnostics --load-state $overlap --input-timeline $timeline
 Select-String -Path "$diag/gpucopy-d1-overlap-json/runtime.json" -Pattern '"texture_copy_bytes": [1-9]'
 ```
@@ -557,7 +557,7 @@ Nessun hit = **inconcludente** (la copia può cadere fuori dalla finestra di 64 
 **D1b — rendere il trace autosufficiente (un campo, writer esistente).** Aggiungere `{"texture_copy_bytes", transfer.Transfer.TextureCopyBytes}` a `RecordDisplayTransfer` (`oot3d_native_pica_semantic_trace.cpp:338-363`), accanto a `signal_interrupt` già presente. Niente nuovo sistema di log, niente finestra: il trace JSONL è già storia completa del run e questa è la sola forma che rende ricostruibile la storia delle copie su tutti i frame. Dopo questo, un singolo `movie_trace.py` sul flashback è sufficiente:
 
 ```powershell
-python I:/_triaevum_work/movie_trace.py "$diag/gpucopy-d1-trace" $trigger $timeline 5000 60 1280 720
+python <work>/movie_trace.py "$diag/gpucopy-d1-trace" $trigger $timeline 5000 60 1280 720
 # poi, sull'output JSONL, elencare le copie raw e correlarle ai draw
 Select-String -Path "$diag/gpucopy-d1-trace/pica_trace.jsonl" -Pattern '"event": "display_transfer"'
 ```
@@ -600,14 +600,14 @@ Output obbligatorio dell'esperimento, fuori repo: tabella producer/range -> cons
 Tutti i comandi seguenti sono da eseguire durante l'implementazione, non risultati già ottenuti da questo documento. PowerShell, dalla radice checkout; usare directory output nuove. Gli harness privati `movie_trace.py`/`ui_profile_probe.py` eliminano l'output se esiste: mai puntarli alle baseline o all'installazione. Il probe pubblico usa invece `exist_ok=False`.
 
 ```powershell
-$bin = 'I:/TriAevum-public/ui-dependencies/bin'
-$build = 'J:/TriAevum-verify-20260910/runtime'
+$bin = '<public-work>/ui-dependencies/bin'
+$build = '<verify-20260910>/runtime'
 $ninja = '%USERPROFILE%/.local/bin/ninja.exe'
-$install = 'I:/TriAevum-public/releases/v0.6.0-alpha.3b/qualification-windows'
-$diag = 'I:/_triaevum_work'
+$install = '<public-work>/releases/v0.6.0-alpha.3b/qualification-windows'
+$diag = '<work>'
 $timeline = 'tools/oot3d/native_game_runtime/input_timelines/native_cutscene_dialogue_advance.json'
-$trigger = 'J:/TriAevum-diagnostics/issues45-46/sheik-native-trigger/checkpoint.oot3dsav'
-$overlap = 'J:/TriAevum-diagnostics/issues45-46/sheik-copy-overlap-save/checkpoint.oot3dsav'
+$trigger = '<diagnostics>/issues45-46/sheik-native-trigger/checkpoint.oot3dsav'
+$overlap = '<diagnostics>/issues45-46/sheik-copy-overlap-save/checkpoint.oot3dsav'
 ```
 
 ### C1 — suite esistenti e loro copertura reale
@@ -655,12 +655,12 @@ La fixture deve chiamare backend/copy/sampling reali; test readback esplicito co
 
 ### C3 — flashback e trace strutturale, due harness riusati
 
-Il wrapper indicato nel contesto `I:/_triaevum_work/probe_renderer.py` non risulta presente: usare direttamente l'implementazione esistente `tools/triaevum_release/probe_renderer.py` (CLI a 38-69, isolamento/capture a 166-193). Il secondo harness `I:/_triaevum_work/movie_trace.py` esiste: CLI a 4 e 18-40, abilita già `--pica-semantic-trace`. Per l'identificazione delle copie raw questo trace richiede il campo aggiunto in D1b; senza di esso usare il canale `display_transfer_events` con la cautela della finestra di 64 eventi.
+Il wrapper indicato nel contesto `<work>/probe_renderer.py` non risulta presente: usare direttamente l'implementazione esistente `tools/triaevum_release/probe_renderer.py` (CLI a 38-69, isolamento/capture a 166-193). Il secondo harness `<work>/movie_trace.py` esiste: CLI a 4 e 18-40, abilita già `--pica-semantic-trace`. Per l'identificazione delle copie raw questo trace richiede il campo aggiunto in D1b; senza di esso usare il canale `display_transfer_events` con la cautela della finestra di 64 eventi.
 
 ```powershell
 python tools/triaevum_release/probe_renderer.py $install "$bin/TriAevum.exe" "$diag/gpucopy-after-flashback" --native-fidelity --frames 5000 --seconds 400 --capture-interval 300 --extended-diagnostics --load-state $trigger --input-timeline $timeline
-python I:/_triaevum_work/movie_trace.py "$diag/gpucopy-after-trace" $trigger $timeline 3500 60 1280 720
-python I:/_triaevum_work/compare_captures.py I:/_triaevum_work/movie5 "$diag/gpucopy-after-flashback"
+python <work>/movie_trace.py "$diag/gpucopy-after-trace" $trigger $timeline 3500 60 1280 720
+python <work>/compare_captures.py <work>/movie5 "$diag/gpucopy-after-flashback"
 ```
 
 Usare una baseline A/B creata con medesimo harness, cache/seed/config/timing/dimensioni e stato; `movie5` è anche riferimento storico misurato, non un permesso a ignorare differenze tra eseguibili/config. `movie_trace.py` e probe hanno cadenze screenshot diverse: non confrontare file per indice tra questi due output. La sequenza trace include frame 3120/3420 a intervalli 60. L'harness di confronto (`compare_captures.py:17-28`) zip-a le liste e usa soglia per pixel >8: non prova byte identity né segnala automaticamente lunghezze diverse. Controllare nomi/numero di frame e digest separatamente.
@@ -668,14 +668,14 @@ Usare una baseline A/B creata con medesimo harness, cache/seed/config/timing/dim
 Per profili UI previsti dal prodotto riusare anche:
 
 ```powershell
-python I:/_triaevum_work/ui_profile_probe.py topscreen "$diag/gpucopy-after-ui" 200 100
+python <work>/ui_profile_probe.py topscreen "$diag/gpucopy-after-ui" 200 100
 ```
 
 Quel helper usa già il checkpoint overlap (`ui_profile_probe.py:15,29`) ed è un controllo aggiuntivo, non un test di cold boot.
 
 ### C4 — prestazioni e diagnostica, senza spostare il costo
 
-Baseline verificata leggendo `I:/_triaevum_work/movie5/runtime.json` e `invocation.json`: 5000 presentazioni, native30/fixed delta, Authentic, 1280x720, capture sincrone ogni 300, extended diagnostics, stesso checkpoint trigger/timeline.
+Baseline verificata leggendo `<work>/movie5/runtime.json` e `invocation.json`: 5000 presentazioni, native30/fixed delta, Authentic, 1280x720, capture sincrone ogni 300, extended diagnostics, stesso checkpoint trigger/timeline.
 
 `visual_interpolation.execution_scheduler`:
 
@@ -701,7 +701,7 @@ Controllo negativo: nel metodo copia e nel suo callgraph caldo non devono compar
 
 ### C5 — inerzia boot/file-select byte-exact
 
-Le invocation esistenti `I:/_triaevum_work/screen_boot/invocation.json` e `screen_fileselect/invocation.json` sono state lette: rispettivamente 420/1200 frame, capture 60/200, native fidelity, 1280x720; file-select usa `title_to_file_select.json`.
+Le invocation esistenti `<work>/screen_boot/invocation.json` e `screen_fileselect/invocation.json` sono state lette: rispettivamente 420/1200 frame, capture 60/200, native fidelity, 1280x720; file-select usa `title_to_file_select.json`.
 
 ```powershell
 python tools/triaevum_release/probe_renderer.py $install "$bin/TriAevum.exe" "$diag/gpucopy-after-boot" --native-fidelity --frames 420 --seconds 120 --capture-interval 60
@@ -711,7 +711,7 @@ python tools/triaevum_release/probe_renderer.py $install "$bin/TriAevum.exe" "$d
 Confrontare con le baseline Screen già qualificate, non con quelle pre-correzione; verificare prima identità del set di nomi e poi byte/digest di ogni capture, non soltanto immagini visivamente simili. Check eseguibile senza nuovi asset:
 
 ```powershell
-$a = Get-ChildItem 'I:/_triaevum_work/screen_boot/framebuffer_*.bmp' | Sort-Object Name
+$a = Get-ChildItem '<work>/screen_boot/framebuffer_*.bmp' | Sort-Object Name
 $b = Get-ChildItem "$diag/gpucopy-after-boot/framebuffer_*.bmp" | Sort-Object Name
 if ($a.Count -eq 0 -or $a.Count -ne $b.Count) { throw 'capture set mismatch' }
 for ($i=0; $i -lt $a.Count; $i++) {
@@ -737,9 +737,9 @@ Poi nuovo processo con `--load-state "$diag/gpucopy-after-save/checkpoint.oot3ds
 Il build helper esistente espone `-Target`, `-BuildDirectory`, `-PreflightOnly`, `-Configure` (`tools/oot3d/build_fast_dev.ps1:1-12`); genera A32 a 79-98 e whole-AOT solo se la configurazione lo richiede a 100-115. Prima ispezionare cache/manifest del modulo reale; non assumere che quel tree generi automaticamente la DLL privata installata.
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/oot3d/build_fast_dev.ps1 -Target oot3d_native_game -BuildDirectory J:/TriAevum-verify-20260910/runtime -PreflightOnly
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/oot3d/build_fast_dev.ps1 -Target oot3d_native_game -BuildDirectory <verify-20260910>/runtime -PreflightOnly
 # Dopo aver risolto gli input privati e la corrispondenza del modulo:
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/oot3d/build_fast_dev.ps1 -Target oot3d_native_game -BuildDirectory J:/TriAevum-verify-20260910/runtime
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/oot3d/build_fast_dev.ps1 -Target oot3d_native_game -BuildDirectory <verify-20260910>/runtime
 python tools/oot3d/native_a32_runtime/audit_whole_aot_product.py --help
 ```
 

@@ -17,7 +17,7 @@ DEFAULT_CODE_BASE = 0x00100000
 DEFAULT_CODE_BIN_CANDIDATES = [
     ROOT / "work" / "extract" / "exefs" / "code.bin",
     ROOT.parent / "work" / "extract" / "exefs" / "code.bin",
-    Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin"),
+    Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin"),
 ]
 DAT_RE = re.compile(r"\bDAT_([0-9A-Fa-f]{8})\b")
 

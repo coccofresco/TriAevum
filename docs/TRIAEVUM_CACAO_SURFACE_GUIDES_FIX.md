@@ -9,7 +9,7 @@ Current coordinate/graph checks:
 `tests/pica_surface_coordinates_tests.cpp` and
 `tests/ambient_occlusion_guide_tests.cpp` under the renderer runtime.
 
-Date: 2026-09-06. Worktree: `I:/oot3dre_work/triaevum-release`.
+Date: 2026-09-06. Worktree: `<oot3d-work>/triaevum-release`.
 Starting revisions: project `86fe95865`, renderer `eeb78ce3`.
 Renderer correction commit: `e33d7b20` (`fix/cacao-effect-guide-contracts`).
 
@@ -101,7 +101,7 @@ All paths below are relative to `runtime/three_ds_recomp`:
 
 ## Reproducible evidence
 
-Local evidence root: `I:/oot3dre_work/cacao-release-diagnostics`.
+Local evidence root: `<oot3d-work>/cacao-release-diagnostics`.
 These contain user-ROM-derived images/shaders: **never package them**.
 
 | Run | Result |
@@ -167,11 +167,11 @@ enabled in this recipe. Validation is enabled:
 
 Only the runtime and provider shaders were rebuilt; the precompiled title DLL
 was reused unchanged. Build target: `triaevum_public_runtime`, existing build
-`I:/oot3dre_work/triaevum-direct-module-build`, parallelism 3.
+`<oot3d-work>/triaevum-direct-module-build`, parallelism 3.
 
 The installed r1 candidate has NOT been overwritten. Its hash-validated local
 catalog/receipt must not be invalidated by replacing just the EXE. A local test
-launcher `I:/oot3dre_work/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
+launcher `<oot3d-work>/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
 runs the corrected developer runtime with the existing installed profile,
 configuration and saves. It is not a redistributable release package.
 

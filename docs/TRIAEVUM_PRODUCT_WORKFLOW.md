@@ -57,12 +57,12 @@ Run from the clean, committed release checkout, against its configured build:
 ```powershell
 python tools/triaevum_release/prepare_release.py `
   --cmake "C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/CMake/bin/cmake.exe" `
-  --build-dir I:/oot3dre_work/triaevum-direct-module-build `
-  --llvm I:/oot3dre_tools/llvm-22.1.6 `
+  --build-dir <oot3d-work>/triaevum-direct-module-build `
+  --llvm <tools>/llvm-22.1.6 `
   --include C:/vcpkg/installed/x64-windows-static/include `
   --vc-redist-dir "C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Redist/MSVC/14.44.35112/x64/Microsoft.VC143.CRT" `
-  --work I:/oot3dre_work/triaevum-release-artifacts `
-  --output I:/TriAevum-0.5.1-candidate `
+  --work <oot3d-work>/triaevum-release-artifacts `
+  --output <local>/TriAevum-0.5.1-candidate `
   --version 0.5.1 --candidate
 ```
 

@@ -4,7 +4,7 @@
 
 The active immutable snapshot is
 `tools/oot3d/decomp_support/evidence/zelda3drecomp/849140697187b895`.
-It was copied read-only from `I:\Zelda3drecomp` revision
+It was copied read-only from `<legacy-recomp>` revision
 `2cec5ef08305fbe1e4fe00efaf3f2467ff5228b1`. Selection version 16 reads the
 commit tree rather than the live checkout, so unrelated local modifications are
 excluded. The 907 selected files and two derived catalogs match the canonical
@@ -23,7 +23,7 @@ expensive no-op AOT regeneration without discarding the new native contracts.
 
 ## Scope
 
-`I:\Zelda3drecomp` was initially inspected on `master` at `4d082fa` without
+`<legacy-recomp>` was initially inspected on `master` at `4d082fa` without
 modifying the checkout. During the audit its owner committed the semantic stack
 as `5aeeb990cb9de08a43979735a64453a0f2245ea4`. The checkout was re-audited at
 `426ec7d94cc5ed18b3eb96d6854d1125712390c3`. The intervening committed work adds
@@ -41,7 +41,7 @@ and pause-menu implementation are not integration targets; both our OpenGL and
 Vulkan routes retain N64 HUD/menu semantics.
 
 The checkout is dirty. Treat every path below as read-only, record
-the source file hash, and copy selected inputs into `I:\oot3dre` before running
+the source file hash, and copy selected inputs into `<local>/oot3dre` before running
 any tool that may rewrite generated files.
 
 ## Binary And Provenance
@@ -50,7 +50,7 @@ any tool that may rewrite generated files.
 - `code.bin`: 4,567,040 bytes, SHA-256
   `16A6B0AA4C4784680220A6F780F7F8A73CFB205557AA9F9F0E705179E0613220`.
 - The external report states that this image is byte-identical to our canonical
-  `E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin`.
+  `<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin`.
 - The external inventory imported all 3,099 symbols from our revision
   `920d8b979a40cab8556dbea15104a43bd93cf386`, so those entries are circular
   evidence and must not be counted as new findings.

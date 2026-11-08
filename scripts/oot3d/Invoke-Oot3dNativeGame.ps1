@@ -18,14 +18,14 @@ param(
     [string]$Renderer = "nri",
     [ValidateSet("oot3d", "topscreen")]
     [string]$UiProfile = "topscreen",
-    [string]$GraphicsConfig = "I:\oot3dre_work\native_game\oot3d_native_game.json",
+    [string]$GraphicsConfig = "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$ControlsConfig = "",
     [string]$TopScreenConfig = "",
     [string]$TopScreenTextureOverrides = "",
-    [string]$Output = "I:\oot3dre_work\native_game\kokiri_native_game.json",
+    [string]$Output = "<oot3d-work>\native_game\kokiri_native_game.json",
     [string]$Screenshot = "",
     [string]$A32ProcessManifest = "",
-    [string]$SaveDataDirectory = "I:\oot3dre_work\native_game\oot3d_native_savedata",
+    [string]$SaveDataDirectory = "<oot3d-work>\native_game\oot3d_native_savedata",
     [switch]$ScreenshotSequence,
     [switch]$ExtendedDiagnostics,
     [ValidateSet("native30_interpolated", "native30_no_interpolation", "enhanced60")]
@@ -117,7 +117,7 @@ if ([string]::IsNullOrWhiteSpace($PicaAotShaderPack) -and
 }
 if ([string]::IsNullOrWhiteSpace($A32ProcessManifest)) {
     $A32ProcessManifest =
-        "I:\oot3dre_work\native_game\oot3d_native_process_manifest.json"
+        "<oot3d-work>\native_game\oot3d_native_process_manifest.json"
 } else {
     $A32ProcessManifest = [System.IO.Path]::GetFullPath($A32ProcessManifest)
 }

@@ -6,6 +6,7 @@ import json
 import _ctypes
 import tempfile
 import unittest
+import os
 from pathlib import Path
 
 from direct_aot_backend import (
@@ -15,7 +16,7 @@ from direct_aot_backend import (
 )
 
 
-LLVM_ROOT = Path("I:/oot3dre_tools/llvm-22.1.6")
+LLVM_ROOT = Path(os.environ.get("OOT3D_LLVM_ROOT") or "llvm-root-not-configured")
 
 
 class DirectAotBackendTests(unittest.TestCase):

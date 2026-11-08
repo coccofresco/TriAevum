@@ -15,13 +15,13 @@ The canonical policy is in `docs/native_source_decompilation_goal.md`.
 
 ## Repository And Current Revision
 
-- Active repository: `I:\oot3dre`
+- Active repository: `<local>/oot3dre`
 - Active root branch: `oot3d-port`
 - Current root checkpoint when this report was written: `9a3dfda58` (`Fix native horse dust atlas orientation`)
-- OOT3D engine fork: `I:\oot3dre\libultraship`
+- OOT3D engine fork: `<local>/oot3dre\libultraship`
 - Current engine checkpoint: `8aa0fd46` (`Preserve native EffectSs atlas row order`)
-- Original/full decomp workspace: `E:\ppssppvr\oot3d_decomp\oot3d_decomp_git`
-- Vendored working subset: `I:\oot3dre\tools\oot3d\decomp_support`
+- Original/full decomp workspace: `<ppssppvr>\oot3d_decomp\oot3d_decomp_git`
+- Vendored working subset: `<local>/oot3dre\tools\oot3d\decomp_support`
 
 Do not assume a clean worktree. At report creation the following tracked changes already belonged to the user/current work and must not be reverted:
 
@@ -34,10 +34,10 @@ Numerous ignored/untracked captures and Ghidra exports also exist. Do not bulk-d
 
 - Game image identity: European OOT3D, title ID `0004000000033600`, product code `CTR-P-AQEP`.
 - Recorded game-image SHA-256: `D4670C962A6DD5C9CB953DE63E6316B1B03214D78CE3FD52B75CCA6BCFE6AEF2`.
-- Extracted ExeFS: `E:\ppssppvr\oot3d_decomp\work\extract\exefs`
-- Main executable: `E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin` (4,567,040 bytes).
-- Extracted RomFS: `E:\ppssppvr\oot3d_decomp\work\extract\romfs`
-- Other extraction roots: `E:\ppssppvr\oot3d_decomp\work\extract\contents` and `...\ncch0`.
+- Extracted ExeFS: `<ppssppvr>\oot3d_decomp\work\extract\exefs`
+- Main executable: `<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin` (4,567,040 bytes).
+- Extracted RomFS: `<ppssppvr>\oot3d_decomp\work\extract\romfs`
+- Other extraction roots: `<ppssppvr>\oot3d_decomp\work\extract\contents` and `...\ncch0`.
 - Extraction metadata: `metadata/oot3d_ctrtool_info.txt` and `metadata/romfs_manifest.json`.
 - Full input/status record: `docs/status.md`.
 
@@ -45,8 +45,8 @@ Raw game files and full asset dumps must remain outside Git. This repository sto
 
 ## Ghidra Environment
 
-- Installed Ghidra launcher: `E:\azahar pcvr\tools\pcvr-re-tools\ghidra\ghidraRun.bat`
-- Ghidra installation root: `E:\azahar pcvr\tools\pcvr-re-tools\ghidra`
+- Installed Ghidra launcher: `<azahar-pcvr>\tools\pcvr-re-tools\ghidra\ghidraRun.bat`
+- Ghidra installation root: `<azahar-pcvr>\tools\pcvr-re-tools\ghidra`
 - Project automation: `tools/oot3d/decomp_support/ghidra_scripts`
 - Generated baseline export: `tools/oot3d/decomp_support/ghidra_export`
 - Full disassembly: `ghidra_export/disassembly.txt`
@@ -64,7 +64,7 @@ Important separation:
 Preferred focused checkpoint:
 
 ```powershell
-cd I:\oot3dre\tools\oot3d\decomp_support
+cd <local>/oot3dre\tools\oot3d\decomp_support
 .\scripts\ghidra-export-selected.ps1 -Entries 0029041c,002907a4 -ApplyManualSymbols -IncludeCallers -IncludeCallees
 ```
 
@@ -163,7 +163,7 @@ Start a new session by reading:
 Refresh the OOT3D-first queue:
 
 ```powershell
-cd I:\oot3dre\tools\oot3d\decomp_support
+cd <local>/oot3dre\tools\oot3d\decomp_support
 python .\scripts\build_native_source_decompilation_queue.py
 ```
 
@@ -186,7 +186,7 @@ The project has repeatedly used GNU `arm-none-eabi` tools. The supported explici
 Build and compare maintained source:
 
 ```powershell
-cd I:\oot3dre\tools\oot3d\decomp_support
+cd <local>/oot3dre\tools\oot3d\decomp_support
 .\scripts\build-matched-objects.ps1 -ToolRoot %USERPROFILE%\Downloads\arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
 python .\scripts\report_porting_metrics.py
 ```
@@ -263,10 +263,10 @@ Prefer `direct-import-test` rows for exact C experiments. Treat `split-or-subsys
 
 ## Azahar Validation Environment
 
-- Active emulator executable: `E:\azahar pcvr\build-pcvr-qt\bin\Release\azahar.exe`
-- Instrumented source repository: `E:\azahar pcvr`
-- Ghidra tools bundled with that workspace: `E:\azahar pcvr\tools\pcvr-re-tools\ghidra`
-- Captures in this project: `I:\oot3dre\captures\azahar_pica`
+- Active emulator executable: `<azahar-pcvr>\build-pcvr-qt\bin\Release\azahar.exe`
+- Instrumented source repository: `<azahar-pcvr>`
+- Ghidra tools bundled with that workspace: `<azahar-pcvr>\tools\pcvr-re-tools\ghidra`
+- Captures in this project: `<local>/oot3dre\captures\azahar_pica`
 - Trace launcher: `scripts/azahar-trace.ps1`
 - Documentation: `docs/azahar_runtime_trace.md` and `docs/emulator_instrumentation.md`
 - Trace schema: `schemas/runtime_trace_event.schema.json`
@@ -321,7 +321,7 @@ Avoid a loop of tiny gates. Use exact matching as a promotion criterion, not as 
 ## Quick Start
 
 ```powershell
-cd I:\oot3dre
+cd <local>/oot3dre
 git status --short
 cd .\tools\oot3d\decomp_support
 Get-Content .\docs\native_source_decompilation_goal.md

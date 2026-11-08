@@ -67,4 +67,4 @@ The earlier source's same-key registry lifetime weakness was found offline and
 is superseded by2ce2f911. No validation layers were enabled in these game runs.
 Unknown-layer target maximum2 at startup and wider F03/F18 inventories remain
 open; do not generalize this NIS Quality/Woodfall result to all providers or UI.
-Full receipts: `I:/_triaevum_work/mm3d-port/analysis/parity/COMPOSITION/OUTPUT_UI/`.
+Full receipts: `W/analysis/parity/COMPOSITION/OUTPUT_UI/`.

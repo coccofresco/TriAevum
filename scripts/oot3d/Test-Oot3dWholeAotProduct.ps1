@@ -1,15 +1,15 @@
 [CmdletBinding()]
 param(
     [string]$OracleExecutable =
-        "I:\oot3dre_work\native_game\captures\overall_perf_20260726\binaries\baseline_61593d357_82caab12\oot3d_native_game.exe",
+        "<oot3d-work>\native_game\captures\overall_perf_20260726\binaries\baseline_61593d357_82caab12\oot3d_native_game.exe",
     [string]$ProductExecutable =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe",
     [string]$OutputDirectory =
-        "I:\oot3dre_work\whole-aot-product-run\equivalence",
+        "<oot3d-work>\whole-aot-product-run\equivalence",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [string]$LoadState = "",
     [string]$InputTimeline = "",
     [ValidateRange(2, 1000000)]

@@ -36,5 +36,5 @@ or add a duplicate regional port to bypass this prerequisite.
 
 No game launch was attempted: encrypted contents cannot supply the required
 inputs. Private reproducible audit script and JSON are under
-`I:/oot3dre_work/catalog-rom-inputs/inspect_cia.py` and `cia-audit.json`.
+`<oot3d-work>/catalog-rom-inputs/inspect_cia.py` and `cia-audit.json`.
 No ROM, ticket, key or content payload is included in this document.

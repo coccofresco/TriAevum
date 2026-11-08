@@ -32,8 +32,8 @@ bounded tests should let the runtime exit normally.
 
 ## Measurements
 
-Private artifacts: `I:/oot3dre_work/menu-performance/`. Checkpoint:
-`I:/oot3dre_work/native_game/checkpoints/hudtest.oot3dsav`, confirmed by an actual
+Private artifacts: `<oot3d-work>/menu-performance/`. Checkpoint:
+`<oot3d-work>/native_game/checkpoints/hudtest.oot3dsav`, confirmed by an actual
 framebuffer capture to be playable Kokiri Forest beside Saria. Config copied
 from the installed profile: 2560x1440 output, scale 1, CACAO Low, custom grass
 settings retained, TopScreen, audio, visual x2. No grass is generated in the
@@ -82,7 +82,7 @@ average approximately 4.57 ms/frame, including 1.34 ms CACAO, on the RTX 3060.
 `tools/triaevum_release/tests/benchmark_gameplay.mjs` accepts `key=value` arguments:
 
 ```powershell
-node tools/triaevum_release/tests/benchmark_gameplay.mjs exe=I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe profile=I:/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json state=I:/oot3dre_work/native_game/checkpoints/hudtest.oot3dsav output=I:/oot3dre_work/menu-performance/NEW frames=360 warmup=120
+node tools/triaevum_release/tests/benchmark_gameplay.mjs exe=<oot3d-work>/triaevum-direct-module-build/TriAevum.exe profile=I:/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json state=<oot3d-work>/native_game/checkpoints/hudtest.oot3dsav output=<oot3d-work>/menu-performance/NEW frames=360 warmup=120
 ```
 
 - Add `diagnostics=true` to collect GPU timings without Vulkan validation.
@@ -108,6 +108,6 @@ generated grass. Do not infer that it is fixed from an idle scene or lower
 graphics settings. No automatic decomp synchronization or unrelated refactor
 belongs to this investigation.
 
-Developer executable: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
-Existing launcher: `I:/oot3dre_work/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`.
+Developer executable: `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
+Existing launcher: `<oot3d-work>/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`.
 The catalogued installed candidate has deliberately not been overwritten.

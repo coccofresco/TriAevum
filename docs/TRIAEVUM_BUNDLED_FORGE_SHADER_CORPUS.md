@@ -88,9 +88,9 @@ mount error involving an unavailable host mount. No system mount was changed.
 The existing desktop session runner successfully executed the same staged
 Forge/import command. The failed log is retained, not counted as qualification.
 
-Do not use the old Windows `J:/TriAevum-verify-20260910/package/TriAevum.exe`
+Do not use the old Windows `<verify-20260910>/package/TriAevum.exe`
 as the current release runtime: it identifies `c7f9686`. This test instead uses
-the updated runtime from `J:/TriAevum-verify-20260910/runtime` (`55d17e4`, SHA
+the updated runtime from `<verify-20260910>/runtime` (`55d17e4`, SHA
 `6a1f9454984b86f9b98eb8682a8713ed31d2142a0b3b0dfe8f874b0b559dae24`).
 
 ## Reproduction And Evidence
@@ -101,12 +101,12 @@ bindings on both target platforms, relocation, cold/warm reuse, corruption and
 driver-cache/schema rejection. They also run on the Linux host. Full Windows
 release-tool discovery: 380 tests, 366 passed, 14 optional/platform skips.
 
-Private Windows evidence: `I:/TriAevum-forge-bundled-corpus-win/`, with
+Private Windows evidence: `<local>/TriAevum-forge-bundled-corpus-win/`, with
 `forge-worker-cold.log`, the generated catalog/profile and `game-cold` /
-`game-warm`; writable test data is `J:/TriAevum-forge-bundled-corpus-data`.
+`game-warm`; writable test data is `<local>/TriAevum-forge-bundled-corpus-data`.
 Private Linux evidence: `~/triaevum-forge-bundled-corpus/`, with the generated
 activation receipts, `game-verification.json`, and both game replay directories.
-Drivers: `I:/TriAevum-private-tas/qualify-bundled-forge.py`,
+Drivers: `<local>/TriAevum-private-tas/qualify-bundled-forge.py`,
 `refresh-test-binding.py`, and `verify-bundled-linux.py`. Existing personal
 installations/profiles and saves were not overwritten by these tests.
 

@@ -27,7 +27,7 @@ DEFAULT_SOURCE_TRACE = (
     / "derived"
     / "title_intro_material_scalar_source_trace.json"
 )
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_OUT_JSON = ROOT / "analysis" / "title_intro_material_scalar_trace_routes.json"
 DEFAULT_OUT_MD = ROOT / "analysis" / "title_intro_material_scalar_trace_routes.md"
 DEFAULT_CODE_BASE = 0x00100000

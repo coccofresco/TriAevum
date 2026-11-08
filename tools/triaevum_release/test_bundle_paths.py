@@ -47,7 +47,7 @@ class BundlePathTests(unittest.TestCase):
         )
 
     def test_frozen_root_uses_meipass(self) -> None:
-        marker = Path("I:/isolated/frozen-root")
+        marker = Path("X:/isolated/frozen-root")
         with patch.object(sys, "_MEIPASS", str(marker), create=True):
             self.assertEqual(distribution_root(), marker.resolve())
             self.assertEqual(

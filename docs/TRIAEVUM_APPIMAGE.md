@@ -215,4 +215,4 @@ Available for local testing on the Linux desktop as
 Flatpak storage and the separate development launcher were left intact.
 The first ordinary launch requests a ROM if this XDG installation is unprepared.
 The same artifact is retained on the Windows publisher under
-`I:/TriAevum-public/artifacts/appimage-20260917/`.
+`<public-work>/artifacts/appimage-20260917/`.

@@ -15,7 +15,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_SCENE_INDEX = ROOT / "analysis" / "oot3d_native_scene_index_all_full.json"
 DEFAULT_HELPER_SEMANTICS = ROOT / "analysis" / "transition_request_helper_semantics.json"
 DEFAULT_TRANSITION_TABLES = ROOT / "analysis" / "scene_exit_transition_tables.json"

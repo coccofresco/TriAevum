@@ -73,9 +73,9 @@ limited to two, with a persistent ThinLTO cache for subsequent iterations.
 Production qualification must use the normal complete build/cache contract.
 
 Private artifacts: `%USERPROFILE%/triaevum-aot-memory-region/`.
-Frozen source manifest/module: `I:/TriAevum-aot-lab-evidence/baseline/`.
-Support library: `J:/TriAevum-verify-20260910/runtime/triaevum_title_whole_aot_support.lib`.
-Compiler: `I:/oot3dre_tools/llvm-22.1.6/bin/clang-cl.exe`.
+Frozen source manifest/module: `<local>/TriAevum-aot-lab-evidence/baseline/`.
+Support library: `<verify-20260910>/runtime/triaevum_title_whole_aot_support.lib`.
+Compiler: `<tools>/llvm-22.1.6/bin/clang-cl.exe`.
 
 ## In-game qualification
 
@@ -124,6 +124,6 @@ pre-backend ratio remains 1.0174 and the experiment is still not promoted.
 The old frozen control is not permission to reuse objects across subsequent
 memory/header changes; the sparse helper must reject any difference outside
 its documented friend-only exception. No title DLL was installed or promoted.
-Private evidence is under `I:/_triaevum_work/remaining-progress-qualification/`.
+Private evidence is under `<work>/remaining-progress-qualification/`.
 The combined renderer/audio/pacing qualification and its separate limitations
 are in [`TRIAEVUM_RUNTIME_PROGRESS_QUALIFICATION.md`](TRIAEVUM_RUNTIME_PROGRESS_QUALIFICATION.md).

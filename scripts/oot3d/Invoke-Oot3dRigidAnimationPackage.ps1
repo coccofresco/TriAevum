@@ -1,8 +1,8 @@
 param(
     [string]$ToolRoot = "",
-    [string]$RomFs = "E:\ppssppvr\oot3d_decomp\work\extract\romfs",
+    [string]$RomFs = "<ppssppvr>\oot3d_decomp\work\extract\romfs",
     [string]$ActorRoot = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$ArchiveName = "oot3d_rigid_animation_candidates.o2r",
     [string]$ArchivePrefix = "animations/oot3d/csab/rigid",
     [string]$Name = "OOT3D Rigid Animation Candidates",

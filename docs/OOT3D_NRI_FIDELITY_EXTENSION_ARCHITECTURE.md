@@ -231,7 +231,7 @@ historical measurements, not the current instrumented layout. See
 - Instrumented profile, 180 frames: 28,410 requested draws, color attachment count `5`, auxiliary mask `0x0B` (normal/material/ambient), two targets backed by fourteen images, no rejects, Vulkan warnings or NRI warnings.
 - Strict shader resolution reports 69/0 and 75/0 AOT hits/misses respectively against the 95-entry pack.
 - A Native Fidelity savestate written with the reduced target set reloads successfully at guest frame 10,621; canonical capture synthesizes schema-compatible guide defaults and restore omits uploads for physically absent guide targets.
-- Reproducible artifacts are under `I:/oot3dre_work/visual-parity/` with the `native-fidelity-attachment-*` and `instrumented-attachment-*` prefixes.
+- Reproducible artifacts are under `<oot3d-work>/visual-parity/` with the `native-fidelity-attachment-*` and `instrumented-attachment-*` prefixes.
 
 ### Typed Extension Graph Status (2026-08-25)
 
@@ -293,12 +293,12 @@ historical measurements, not the current instrumented layout. See
 - Validation exposed and fixed two native-composer ownership defects. Display copy now allocates immutable descriptor sets per invocation until command submission, rather than updating a set already bound by an earlier copy. Scanout now binds auxiliary images only for resources declared as reads by its compiled pass; inactive slots retain the valid primary image instead of silently binding attachment-layout guide images.
 - The reworked map uses exact typed PICA `ClipToWorld`/`ViewToWorld` transforms, including generated-shader viewport-Y and clip-Z conversion. Native lights are transformed to world space and clustered by direction; no duplicate register decoder or global draw-local light tuple remains.
 - Shadow caster eligibility includes rigid and skinned opaque perspective geometry with valid typed view transforms. The former skeleton-only gate excluded the static level and was removed; native receiver classification remains separate from caster eligibility. Native mode preserves its original receiver policy, while per-pixel/PBR lighting shadows the matching direct-light contribution on actors and static surfaces. Selection never uses scene, actor, shader or texture IDs.
-- Earlier `nativeview_v6` Kokiri validation covered projected actor shadows only: 180 frames executed 89 maps, with 19 skinned caster draws, 38 native light candidates in two world-space clusters, and 29 rigid baked receivers. Its extensions-off/on RMSE was `0.00701319`, with clean Vulkan/NRI validation. These historical artifacts remain under `I:/oot3dre_work/visual-parity/directional-shadow-rework-20260825/`; they are not evidence of static-world casting. The scene-environment verification below covers that correction.
+- Earlier `nativeview_v6` Kokiri validation covered projected actor shadows only: 180 frames executed 89 maps, with 19 skinned caster draws, 38 native light candidates in two world-space clusters, and 29 rigid baked receivers. Its extensions-off/on RMSE was `0.00701319`, with clean Vulkan/NRI validation. These historical artifacts remain under `<oot3d-work>/visual-parity/directional-shadow-rework-20260825/`; they are not evidence of static-world casting. The scene-environment verification below covers that correction.
 - `InteractiveGrass` is now the first closed `GeometryProvider`. Its compiled pass reads only the versioned `PicaSceneFrame` and `NativeSceneView`, writes and exports `ExtensionGeometry`, and schedules at `BeforeTransparent`. Source inspection, publication, execution, reuse, fallback and rejection are recorded in a fixed ledger; settings can no longer authorize grass when the compiled pass is absent.
 - Grass-only no longer requests fabricated normal/material/ambient guides. The graph therefore keeps the canonical one-color-attachment path, while grass+TAA selects the stable five-MRT ABI only because TAA declares material and rigid-motion guides. `InteractiveGrassPass` owns matching canonical/instrumented pipeline and fragment-shader variants, selected from `PicaAttachmentRequirements`; this fixed a validation error where the former fixed five-MRT grass pipeline was bound inside a one-attachment rendering scope.
 - The normal Kokiri path reaches the declared boundary directly. The display-transfer safety path now runs only for an eligible world/top-screen target that has not already attempted the declared insertion, rather than being invoked for every top/bottom transfer and reported as fallback work.
 - Validation over 24 Kokiri frames closes all three gates. Grass-only publishes 23 sources and executes 22 providers after one asynchronous placement-build skip, with zero fallback, unavailable inputs, schedule rejects or failures; it keeps attachment count/mask `1/0`, 2,559 canonical and zero instrumented draws. Grass+TAA preserves the same provider counts, executes 23 Motion and 23 TAA passes, resolves `207/207` reads and `414/414` physical resources, and selects `5/0x06` with 2,559 direct-hook instrumented draws and zero legacy analyses. Authentic declares no provider, publishes or executes no grass, keeps `1/0`, 2,559 canonical and zero instrumented draws, and resolves `46/46` reads plus `92/92` resources.
-- All three runs have zero graph binding fallback, missing reads/resources, failed/unresolved work and Vulkan/NRI errors. Their final Vulkan warning count is the same 11-message machine/PICA-interface baseline documented by the shadow tranche; the grass migration adds none. Reproducible artifacts use the `geometry-provider-grass-only-*-v1/v3`, `geometry-provider-grass-taa-*-v1` and `geometry-provider-authentic-*-v1` prefixes under `I:/oot3dre_work/visual-parity/`.
+- All three runs have zero graph binding fallback, missing reads/resources, failed/unresolved work and Vulkan/NRI errors. Their final Vulkan warning count is the same 11-message machine/PICA-interface baseline documented by the shadow tranche; the grass migration adds none. Reproducible artifacts use the `geometry-provider-grass-only-*-v1/v3`, `geometry-provider-grass-taa-*-v1` and `geometry-provider-authentic-*-v1` prefixes under `<oot3d-work>/visual-parity/`.
 - `NativeSceneView` is now a real schema-versioned, renderer-owned semantic object rather than an alias for the camera singleton. It references the current `PicaSceneFrame` directly, retains current/previous camera state and projects stable per-draw geometry identities/content versions, canonical PICA material-state identities and native texture handles/content hashes without copying geometry, uniforms or image payloads.
 - Object identity remains explicitly unavailable because the native draw stream does not expose a stable object owner. Current/previous transform and skeleton semantics are published only when the CMB vertex program is structurally decoded and, for previous state, when the renderer owns exact temporal history; none is inferred from scene, shader hash or asset fixture.
 - `DisplayEffectResourceTable` can now bind and resolve typed semantic objects by object identity, monotonic generation and exact schema version. Both `PicaSceneFrame` and `NativeSceneView` use this path; grass source discovery and insertion consume the same stable view, and the TAA display graph resolves both semantic resources rather than an opaque camera identity.
@@ -320,44 +320,44 @@ historical measurements, not the current instrumented layout. See
 - The vertex hook layout now carries a typed texture-coordinate program. The frontend derives CMB affine UV selection, route enables/scales, matrix rows and homogeneous mode structurally from decoded PICA bytecode and output semantics. It does not use a generated-GLSL pattern, shader hash, scene identity or configured texture hash. The grass consumer resolves the live transform from this contract and current uniform bytes, and refuses unsupported typed programs instead of guessing.
 - Native texture identity is split by purpose. Full decoded mip-chain content identifies GPU resources and cache entries; base-level content identifies semantic material use and remains compatible with Azahar dump/load names. Both identities cross draw state, semantic trace, savestate reconstruction, Vulkan plan/bridge and `PicaSceneFrame`, preventing mip changes from aliasing GPU resources while preserving stable material matching.
 - Real generated shaders exposed and fixed a legacy temporal defect: the duplicated PICA helper and main-local identifiers were not scoped independently, producing invalid GLSL when TAA was enabled. Both the typed producer and compatibility fallback now apply the complete generated-vertex identifier contract.
-- A 30-frame TAA run recorded 5,202 instrumentation requests, 5,202 direct fragment layouts, 5,202 direct temporal vertex programs, zero legacy fragment/vertex analyses, 29 TAA passes, 29 motion passes, zero rejected draws and zero Vulkan/NRI warnings or errors. Artifacts use the `typed-temporal-hooks-*-v3` prefix under `I:/oot3dre_work/visual-parity/`.
+- A 30-frame TAA run recorded 5,202 instrumentation requests, 5,202 direct fragment layouts, 5,202 direct temporal vertex programs, zero legacy fragment/vertex analyses, 29 TAA passes, 29 motion passes, zero rejected draws and zero Vulkan/NRI warnings or errors. Artifacts use the `typed-temporal-hooks-*-v3` prefix under `<oot3d-work>/visual-parity/`.
 - A real Kokiri grass draw now resolves its UV transform (`U scale 3.03993e-05`, native V flip and offset) through the typed bytecode-derived layout on every covered frame. The prior rejection changed from an unsupported generated-GLSL pattern to successful source publication without retaining a fixture-specific parser or correction.
 - The then-published 71-entry optional-effect AOT pack did not contain these corrected temporal modules and the covered run reported 69 dynamic shader resolutions. The refreshed default corpus below supersedes that pack while preserving this result as the evidence that required regeneration.
 - Vertex-hook schema 3 adds typed `ModelViewProjection3x4` and `MatrixPalette3x4` layouts. The frontend follows PICA `DP4`/`DP3`, `MOVA`, indexed uniform access, `CALL`, `IFU` and bone-index/weight feeds in bytecode; it does not parse generated GLSL or key behavior by shader hash, scene, actor or texture.
-- The read-only decomp corroborates this boundary. `I:/oot3decomp/src/code/sys_matrix.c` and `include/oot3d/matrix.h` define the explicit row-major 0x30-byte `Oot3dMtxF`; `z_renderer_vertex_layout_runtime.c` converts CTXB/CMB declarations through typed semantic/format maps; `z_model_render.c` and `docs/reconstruction/model_render_submit.md` keep queue submission and model `prepareRender` ownership separate. The renderer therefore publishes uniform layouts and references rather than fabricating CPU scene objects.
+- The read-only decomp corroborates this boundary. `<oot3d-decomp>/src/code/sys_matrix.c` and `include/oot3d/matrix.h` define the explicit row-major 0x30-byte `Oot3dMtxF`; `z_renderer_vertex_layout_runtime.c` converts CTXB/CMB declarations through typed semantic/format maps; `z_model_render.c` and `docs/reconstruction/model_render_submit.md` keep queue submission and model `prepareRender` ownership separate. The renderer therefore publishes uniform layouts and references rather than fabricating CPU scene objects.
 - `PicaSceneFrame` and `NativeSceneView` schema 3 retain compact transform/skeleton summaries plus versioned current and previous vertex-uniform slices. Palette, geometry and uniform payloads remain renderer-owned; previous state reuses the temporal path's existing uploaded slice and is unavailable when exact history is absent.
-- The real canonical vertex program `0x78765df8bf6684cc` remains structurally decoded from 512 program words and 54 swizzles: projection `f0`, view `f4`, model/palette `f20`, position/normal inputs `0/1`, skeleton booleans `b2/b3`, bone index/weight inputs `6/7` and up to four influences. A four-frame scene capture covered 351/351 transforms, 75 active skeleton draws and 72 multi-influence draws. The final rebuilt boot capture reconfirmed the same immutable dictionary and 9/9 draw-local transform states; its interval intentionally contained no active skeleton draw. Static layout and dynamic branch state are separate trace records, so first-use pose cannot alter shader identity. Artifacts are `transform-bytecode-capture-v3.jsonl` and `transform-bytecode-capture-v5.jsonl` under `I:/oot3dre_work/visual-parity/`.
+- The real canonical vertex program `0x78765df8bf6684cc` remains structurally decoded from 512 program words and 54 swizzles: projection `f0`, view `f4`, model/palette `f20`, position/normal inputs `0/1`, skeleton booleans `b2/b3`, bone index/weight inputs `6/7` and up to four influences. A four-frame scene capture covered 351/351 transforms, 75 active skeleton draws and 72 multi-influence draws. The final rebuilt boot capture reconfirmed the same immutable dictionary and 9/9 draw-local transform states; its interval intentionally contained no active skeleton draw. Static layout and dynamic branch state are separate trace records, so first-use pose cannot alter shader identity. Artifacts are `transform-bytecode-capture-v3.jsonl` and `transform-bytecode-capture-v5.jsonl` under `<oot3d-work>/visual-parity/`.
 - Fixed-delta 24-frame validation records transform coverage equal to every scene draw: Authentic `1,277/1,277`, Grass-only `2,437/2,437`, and Grass+TAA `2,437/2,437`. Skeleton states are `275`, `525` and `525`; only the exact-history TAA profile publishes previous state (`1,304` transforms and `456` skeletons). Timing modes differ between these profile configs, so cross-profile draw totals are not performance comparisons. All runs report zero rejected draws, missing reads/resources, failed passes or Vulkan/NRI errors.
 - Focused closure is green after the shadow rework: 11/11 PICA-frame/scene-view/lighting-semantic tests, 21/21 shader/attachment tests and 4/4 Vulkan diagnostics. The whole-AOT product audit remains 12,419 compiled functions, three host boundaries and zero residual A32 entries. The next tranche is physical lifetime and aliasing for graph-owned extension resources.
 - Physical lifetime ownership has started at renderer commit `4f41f8be`. `BuildEffectTransientAllocationPlan` turns compiled graph lifetimes plus explicit image requirements into fixed-capacity physical slots before any provider dispatch; it rejects missing lifetimes, duplicate/invalid declarations and overlapping aliases, and unions image usage only across compatible non-overlapping resources.
 - `NriEffectGraphTransientImageArena` owns those physical slots and exposes borrowed typed bindings to providers. `SceneCompositePass` is the first migrated consumer: it retains only pipeline, descriptors, barriers and execution state, while `CompositeColor` allocation/destruction belongs exclusively to the arena. Resolution/sample-count/state invalidation clears the borrower before destroying arena images.
-- A deterministic 20-frame Kokiri CACAO+TAA run configured the arena 36 times across multiple display transfers, executed 18 composite passes, allocated one physical image once and reused the same configuration 35 times. It reported zero binding fallback, missing reads, failed/unresolved passes, Vulkan errors or NRI warnings/errors. The extensions-off regression performs zero arena/composite work, keeps 302 canonical and zero instrumented draws, and retains only the documented 11-warning machine/PICA-interface baseline. Artifacts are under `I:/oot3dre_work/visual-parity/effect-transient-arena-20260825/`.
+- A deterministic 20-frame Kokiri CACAO+TAA run configured the arena 36 times across multiple display transfers, executed 18 composite passes, allocated one physical image once and reused the same configuration 35 times. It reported zero binding fallback, missing reads, failed/unresolved passes, Vulkan errors or NRI warnings/errors. The extensions-off regression performs zero arena/composite work, keeps 302 canonical and zero instrumented draws, and retains only the documented 11-warning machine/PICA-interface baseline. Artifacts are under `<oot3d-work>/visual-parity/effect-transient-arena-20260825/`.
 - A plan that a cached configuration covers reuses it (2026-10-14): every requested resource exists there with the same requirement and storage class, and resources in distinct slots of the plan stay in distinct images. The TopScreen pause plan is the gameplay plan without `CompositeColor`; a second configuration made every pass see new images at each toggle and rebuild its screen resources behind a `CompleteRecordedWork` drain (`composite_taa` about 34 ms). The covering configuration keeps its own plan; an exact match is still preferred.
 - Renderer commit `d80883b2` realizes the first cross-provider alias. `ReflectionMaterialResolvePass`, `SceneCompositePass` and the public SMAA output now borrow graph-owned bindings; SMAA retains ownership only of its two private edge/weight images. The arena also owns the physical-image state tracker, so a reused slot carries its real Vulkan state from reflection completion into the later SMAA write instead of restarting from a fictitious undefined state.
-- The actual SSSR+SMAA display graph deterministically maps three RGBA16F resources to two physical images: `ReflectionColor` and `AntiAliasedColor` share one slot because their lifetimes are disjoint, while `CompositeColor` remains separate because it overlaps both adjacent pass boundaries. A 30-frame Kokiri run covered 28 reflection resolves and 28 SMAA executions; 56 arena configurations allocated two slots once, reused the plan 55 times and reported one alias opportunity per presentation. Vulkan/NRI validation recorded zero errors. The composer now binds only optional guide inputs declared by its compiled pass, removing a hidden `AmbientGuide` attachment-layout dependency exposed by the validation run. Artifacts are under `I:/oot3dre_work/visual-parity/effect-transient-alias-20260825/`.
+- The actual SSSR+SMAA display graph deterministically maps three RGBA16F resources to two physical images: `ReflectionColor` and `AntiAliasedColor` share one slot because their lifetimes are disjoint, while `CompositeColor` remains separate because it overlaps both adjacent pass boundaries. A 30-frame Kokiri run covered 28 reflection resolves and 28 SMAA executions; 56 arena configurations allocated two slots once, reused the plan 55 times and reported one alias opportunity per presentation. Vulkan/NRI validation recorded zero errors. The composer now binds only optional guide inputs declared by its compiled pass, removing a hidden `AmbientGuide` attachment-layout dependency exposed by the validation run. Artifacts are under `<oot3d-work>/visual-parity/effect-transient-alias-20260825/`.
 - Follow-up renderer commit `868230ce` closes the multi-presentation SMAA mismatch at its source. The preparatory overlay presentation reuses the same world output, but the old key compared the graph-input extent against the packed display-transfer extent. Reuse is now keyed to the declared SMAA input domain; SSSR+SMAA records zero skipped passes, missing reads/resources and fallbacks across both presentations. SMAA-only also allocates its graph output without requiring an unrelated guide target and closes the same gates. Both validation profiles report zero Vulkan/NRI errors; the final artifacts use the `v3` and `smaa_only` suffixes in the same directory.
 - Renderer commit `b536a989` moves `LinearWorkingColor` and the public filtered HiZ `ReflectionColor` into the same graph arena. HiZ retains only its raw ray result as provider-private scratch. Temporal AA history is deliberately excluded: it is a persistent two-image cross-frame contract, not a transient output, and therefore cannot participate in physical aliasing.
-- The final SSSR+SMAA run plans four logical outputs into three physical images per presentation (`8/6` aggregate), with one safe alias and a peak of three live resources. HiZ+SMAA plans three logical outputs into two images per presentation (`6/4` aggregate), again with one alias and a peak of two. Both paths execute every declared pass with zero skips, missing reads/resources, binding fallbacks, failures, unresolved passes or Vulkan/NRI errors. Their framebuffer captures are valid and the extensions-off regression performs zero arena work. Reproducible configs, diagnostics, runtime reports and captures are under `I:/oot3dre_work/visual-parity/effect-transient-public-outputs-20260825/`.
+- The final SSSR+SMAA run plans four logical outputs into three physical images per presentation (`8/6` aggregate), with one safe alias and a peak of three live resources. HiZ+SMAA plans three logical outputs into two images per presentation (`6/4` aggregate), again with one alias and a peak of two. Both paths execute every declared pass with zero skips, missing reads/resources, binding fallbacks, failures, unresolved passes or Vulkan/NRI errors. Their framebuffer captures are valid and the extensions-off regression performs zero arena work. Reproducible configs, diagnostics, runtime reports and captures are under `<oot3d-work>/visual-parity/effect-transient-public-outputs-20260825/`.
 - Renderer commit `1d889e12` migrates the paired `MotionVectors` and `ReactiveMask` outputs. `MotionVectorPass` now borrows exact typed images and state trackers and retains only compute, uniform and descriptor ownership. In the real SSSR+SMAA graph, six logical outputs occupy four physical images per presentation: motion later aliases composite, reflection later aliases SMAA, and the differently formatted reactive mask remains separate. Runtime accounting is `12/8` aggregate resources/slots, four alias opportunities, peak live count three, and zero graph or validation failures.
-- CACAO+TAA independently exercises motion next to persistent temporal history. It executes Motion, CACAO, Composite and TAA with `6/6` aggregate arena resources/slots, no aliases, valid history and a valid framebuffer. The earlier direct TAA-only capture exposed that packed physical `SceneColor` and logical guide-domain color were being conflated; that evidence is retained under `I:/oot3dre_work/visual-parity/effect-transient-motion-20260825/`.
+- CACAO+TAA independently exercises motion next to persistent temporal history. It executes Motion, CACAO, Composite and TAA with `6/6` aggregate arena resources/slots, no aliases, valid history and a valid framebuffer. The earlier direct TAA-only capture exposed that packed physical `SceneColor` and logical guide-domain color were being conflated; that evidence is retained under `<oot3d-work>/visual-parity/effect-transient-motion-20260825/`.
 - Renderer commit `656613a7` closes that source-domain gate with an explicit `WorkingColor` graph pass. It samples the immutable packed display image using its real physical extent, writes graph-owned RGBA16F `LinearWorkingColor` at the guide/render-target extent, and publishes that typed resource to direct TAA, temporal upscalers and SSSR. Reflection output encoding is tracked independently, so an SSSR-to-HiZ fallback cannot disable or relabel the shared working color.
 - Duplicate presentations of the same scene identity reuse the first `WorkingColor` result. This is part of the resource contract rather than a descriptor workaround: it prevents a second dispatch from updating an already-recorded Vulkan descriptor set and records the later logical pass as reused.
-- Validation-enabled direct TAA now produces a complete framebuffer and reports one working-color conversion per frame, `6/6` aggregate transient resources/slots, peak live count three, and zero missing reads, binding fallbacks, skipped/failed/unresolved passes or Vulkan/NRI errors. SSSR+SMAA retains `12/8` aggregate resources/slots, four safe aliases and peak three; CACAO+TAA remains `6/6` and correctly omits the redundant working pass because Composite already establishes the logical domain. The extensions-off profile performs zero arena and working-color work. Artifacts are under `I:/oot3dre_work/visual-parity/effect-working-color-20260825/`.
+- Validation-enabled direct TAA now produces a complete framebuffer and reports one working-color conversion per frame, `6/6` aggregate transient resources/slots, peak live count three, and zero missing reads, binding fallbacks, skipped/failed/unresolved passes or Vulkan/NRI errors. SSSR+SMAA retains `12/8` aggregate resources/slots, four safe aliases and peak three; CACAO+TAA remains `6/6` and correctly omits the redundant working pass because Composite already establishes the logical domain. The extensions-off profile performs zero arena and working-color work. Artifacts are under `<oot3d-work>/visual-parity/effect-working-color-20260825/`.
 - Renderer commit `2e3b0e89` moves the public `UpscaledColor` output into the graph arena. `NriUpscalerPass` now borrows the typed image and its persistent physical-state tracker; NIS/FSR/DLSS retain ownership only of provider objects, histories and scratch state. Screen invalidation releases the borrower before the arena destroys or aliases its physical slot.
-- Upscaler sizing now preserves the actual producer domain. Direct NIS consumes packed `SceneColor` and resolves `480x853 -> 720x1280`; NIS after Composite consumes the physical PICA guide domain and resolves `960x853 -> 1440x1280`. The former display-derived output extent mixed those domains and violated the provider's maximum render-resolution contract. The corrected CACAO+NIS run has zero NRI errors, missing reads, fallbacks or failed/skipped/unresolved passes, and its captured scanout remains correctly oriented at `1280x720`. Existing machine/PICA-interface and pinned-CACAO format warnings are unchanged by this migration. Artifacts are under `I:/oot3dre_work/visual-parity/effect-transient-upscaler-20260825/`.
+- Upscaler sizing now preserves the actual producer domain. Direct NIS consumes packed `SceneColor` and resolves `480x853 -> 720x1280`; NIS after Composite consumes the physical PICA guide domain and resolves `960x853 -> 1440x1280`. The former display-derived output extent mixed those domains and violated the provider's maximum render-resolution contract. The corrected CACAO+NIS run has zero NRI errors, missing reads, fallbacks or failed/skipped/unresolved passes, and its captured scanout remains correctly oriented at `1280x720`. Existing machine/PICA-interface and pinned-CACAO format warnings are unchanged by this migration. Artifacts are under `<oot3d-work>/visual-parity/effect-transient-upscaler-20260825/`.
 - Renderer commit `2b474442` moves `AmbientOcclusion` into the graph arena and adds a two-phase plan-change transaction: the backend waits for submitted GPU work, releases every pass or temporal client that can retain an arena descriptor, then replaces physical images. The transaction also accepts an empty plan so disabling all world effects releases old resources, while lower-screen composition cannot invalidate top-screen resources recorded in the same frame. `CacaoPass` now owns only its FidelityFX context and private scratch resources; its public R32F image and persistent physical state belong to the graph.
-- Validation over direct CACAO, CACAO+TAA and CACAO+NIS executes CACAO from the borrowed NRI image in every captured frame and reports zero missing reads, binding fallbacks, skipped/failed/unresolved passes or Vulkan/NRI errors. Their captured arena resource/slot counts are `2/2`, `8/8` and `6/6` respectively, and all three framebuffer captures are complete at `1280x720`. The 21 pinned-CACAO format warnings exactly match the pre-migration combined-provider baseline and are not lifetime regressions. Artifacts are under `I:/oot3dre_work/visual-parity/effect-transient-cacao-20260825/`.
+- Validation over direct CACAO, CACAO+TAA and CACAO+NIS executes CACAO from the borrowed NRI image in every captured frame and reports zero missing reads, binding fallbacks, skipped/failed/unresolved passes or Vulkan/NRI errors. Their captured arena resource/slot counts are `2/2`, `8/8` and `6/6` respectively, and all three framebuffer captures are complete at `1280x720`. The 21 pinned-CACAO format warnings exactly match the pre-migration combined-provider baseline and are not lifetime regressions. Artifacts are under `<oot3d-work>/visual-parity/effect-transient-cacao-20260825/`.
 - Renderer commit `abde2daa` closes transient-image ownership by moving `HierarchicalDepth` into the graph arena. Multi-mip bindings expose one persistent state tracker per physical mip; aliases share those trackers through their physical slot, while single-mip consumers retain the existing whole-image tracker. `HiZDepthPyramidPass` borrows the exact R32F image and per-mip state, owns only its pipeline, descriptor pool and explicitly releasable mip views, and cannot represent a partially transitioned pyramid as one fictitious whole-image state.
-- Direct HiZ and HiZ+SMAA runs each build the complete eleven-mip pyramid, execute reflection and produce complete `1280x720` framebuffer captures. The direct 20-frame allocation run allocates two physical slots once, reuses them thereafter and executes HiZ on all 18 active frames. Both profiles report zero missing reads/resources, binding fallbacks, skipped/failed/unresolved passes or Vulkan/NRI errors; the 11 Vulkan warnings remain the pre-existing machine/PICA-interface baseline. Artifacts are under `I:/oot3dre_work/visual-parity/effect-transient-hiz-20260825/`.
+- Direct HiZ and HiZ+SMAA runs each build the complete eleven-mip pyramid, execute reflection and produce complete `1280x720` framebuffer captures. The direct 20-frame allocation run allocates two physical slots once, reuses them thereafter and executes HiZ on all 18 active frames. Both profiles report zero missing reads/resources, binding fallbacks, skipped/failed/unresolved passes or Vulkan/NRI errors; the 11 Vulkan warnings remain the pre-existing machine/PICA-interface baseline. Artifacts are under `<oot3d-work>/visual-parity/effect-transient-hiz-20260825/`.
 - Focused closure is now 35/35 effect-graph/lifetime/contract tests and 4/4 Vulkan diagnostics; the whole-AOT audit remains 12,419 compiled functions, three host boundaries and zero residual A32 entries. All nine real public transient image outputs are graph-owned. Temporal histories and provider scratch remain deliberately outside the transient arena because their lifetimes are cross-frame or provider-private rather than transient graph outputs.
-- FSR provider execution is runtime-closed on the covered Vulkan machine. The permanent post-build validation is under `I:/oot3dre_work/visual-parity/effect-fsr-provider-20260825/`: `runtime-v2.json` completes 20/20 frames, dispatches FSR and HiZ in all 18 active world frames, resolves `234/234` reads and reports zero skipped, failed, unresolved, missing or fallback work and zero NRI/Vulkan errors. Renderer commit `82b3d027` keeps the HiZ requirement active for duplicate presentations and records the existing surface output as reused instead of incorrectly reporting a skip. The first active frame includes FidelityFX context creation and dominates CPU time; steady-state provider timing remains a separate performance gate rather than an availability fallback.
-- The default PICA AOT corpus now merges the existing boot/title/Kokiri inventory with fresh Authentic, TAA, CACAO+TAA, SSSR+TAA, Toon, FSR and directional-shadow captures. It contains 224 deterministic modules (111 canonical fragments, 111 NRI fragments and two vertices), up from 95 modules and 1,917,012 packed bytes. The build-produced `oot3d_pica_default.o3ps`, rather than only the intermediate pack, passes the first six strict checkpoint runs with hit/miss counts `57/0`, `57/0`, `60/0`, `57/0`, `57/0` and `57/0`; the shadow profile adds `57/0`. This is 402 hits and zero runtime compilation fallbacks in aggregate. The generated inventories, manifests, strict host reports and captured logs are under `I:/oot3dre_work/visual-parity/shader-corpus-20260825/` and `I:/oot3dre_work/visual-parity/directional-shadow-artifact-20260825/`.
-- Directional-shadow receiver filtering remains inside the typed `PicaLighting` contribution. The old nearest box count exposed only ten opacity levels at radius one and produced visible square/banded coverage. The replacement translates a bilinear footprint across the box-PCF kernel and collapses shared taps to `(2r+2)^2` depth comparisons: 16 fetches at radius one and 36 at radius two. It changes neither caster/receiver policy nor light selection and produces a continuous framebuffer transition in `I:/oot3dre_work/visual-parity/aa-color-contract-20260825/shadow-custom.bmp`.
-- Steady-state figures use 600 fixed-delta 1/60 presentations, discard 120 warm-up presentations, measure the remaining 480, disable VSync and audio, and load the same real Kokiri checkpoint. The corrected results are Authentic `100.75 FPS`, FSR `87.93 FPS`, SSSR+TAA `92.24 FPS` and shadow-only `102.11 FPS`; the shadow result is within run variance of Authentic and therefore shows no measurable steady-state regression. The earlier free-delta figures counted duplicate presentations and are invalid. The earlier `shadow-config.json` result is also not a shadow-only comparison because that file enabled FXAA, AO, grass and a texture-pack path; `shadow-clean-config.json` is the accepted one-setting profile. Artifacts are under `I:/oot3dre_work/visual-parity/nri-steady-benchmark-20260825/`.
-- The configuration audit also exposed that the former FXAA shader was a contrast-gated isotropic five-sample average. It has been replaced by edge-direction search and sampling along the resolved edge, with luma evaluated in an sRGB response domain while color remains in its declared source domain. A one-setting direct-framebuffer comparison is under `I:/oot3dre_work/visual-parity/aa-color-contract-20260825/`; shadow-only preserves the baseline tone, while the FXAA path no longer applies a generic cross blur. Validation profiles must use `Preset: Custom`, because `Preset: Authentic` intentionally normalizes every extension back off.
-- Effect image bindings now carry the typed `SceneColorEncoding { Unknown, Linear, Srgb }` contract instead of an ambiguous linear-color boolean. Native PICA scene color is explicitly display-encoded: a linear-working pass decodes it once and scanout encodes it once, while SMAA preserves the encoded domain. The extensions-off framebuffer is byte-identical before and after the change (RMSE `0`); the TAA mean luminance moves from the broken double-encoded `0.673` to `0.442` against a `0.441` baseline, with expected temporal-filter RMSE `0.026-0.028`. A 26-frame active TAA capture records 26 source-sRGB working conversions, 52 encoded scanouts and zero missing reads, binding fallbacks, failed passes or Vulkan/NRI errors. Reproducible profiles, diagnostics and in-frame captures are under `I:/oot3dre_work/visual-parity/aa-color-contract-20260825/`.
-- The encoding contract now remains typed through the resource table, scene-surface registry, Composite, TAA, SMAA and NIS/FSR/DLSS provider boundaries. Conversion to boolean flags occurs only at shader push constants or the external NRI provider ABI. Scanout no longer reconstructs a parallel source or encoding from feature booleans: the compiled graph binding is authoritative, and an absent or `Unknown` color binding is rejected. Fixed-delta 48-frame Authentic, FXAA, TAA, SMAA, FSR and NIS runs complete with strict shader-pack resolution `57/0`, zero missing reads, binding fallbacks, failed/unresolved passes or Vulkan/NRI errors. At frame 36, Authentic mean luminance is `0.360247`, FXAA `0.360104` and TAA `0.361213`, excluding the former whole-frame gamma shift. Artifacts are under `I:/oot3dre_work/visual-parity/typed-color-propagation-20260825/`; focused coverage passes `36/36` graph, `4/4` Vulkan-diagnostics and `21/21` pipeline-cache tests, while the full foundation target remains `223/226` on the same three unrelated pre-existing failures.
-- Native GSP command-list ownership now crosses the frontend, visual replay, Vulkan bridge and `PicaSceneFrame` as the typed `Scene/Ui/Unknown` composition domain together with command-list identity. Replay schema `PVR4` preserves the domain while retaining `PVR1-PVR3` compatibility, and diagnostics expose exact per-domain draw counts. A 12-frame Kokiri checkpoint run classifies every active guest update as `89/90` scene draws on the top target plus `11` native UI draws on the lower target, with zero unknown draws and zero Vulkan/NRI errors. The visible TopScreen gameplay HUD is composed by the host after scanout; the four depth-disabled top-target draws are therefore scene overlays, not HUD. This evidence keeps AA and scene effects on the scene surface without inventing an asset-based UI classifier. Artifacts are under `I:/oot3dre_work/visual-parity/composition-domain-contract-20260825/`; the full foundation target now passes `226/226` after updating its stale native-light and graph-order fixtures.
+- FSR provider execution is runtime-closed on the covered Vulkan machine. The permanent post-build validation is under `<oot3d-work>/visual-parity/effect-fsr-provider-20260825/`: `runtime-v2.json` completes 20/20 frames, dispatches FSR and HiZ in all 18 active world frames, resolves `234/234` reads and reports zero skipped, failed, unresolved, missing or fallback work and zero NRI/Vulkan errors. Renderer commit `82b3d027` keeps the HiZ requirement active for duplicate presentations and records the existing surface output as reused instead of incorrectly reporting a skip. The first active frame includes FidelityFX context creation and dominates CPU time; steady-state provider timing remains a separate performance gate rather than an availability fallback.
+- The default PICA AOT corpus now merges the existing boot/title/Kokiri inventory with fresh Authentic, TAA, CACAO+TAA, SSSR+TAA, Toon, FSR and directional-shadow captures. It contains 224 deterministic modules (111 canonical fragments, 111 NRI fragments and two vertices), up from 95 modules and 1,917,012 packed bytes. The build-produced `oot3d_pica_default.o3ps`, rather than only the intermediate pack, passes the first six strict checkpoint runs with hit/miss counts `57/0`, `57/0`, `60/0`, `57/0`, `57/0` and `57/0`; the shadow profile adds `57/0`. This is 402 hits and zero runtime compilation fallbacks in aggregate. The generated inventories, manifests, strict host reports and captured logs are under `<oot3d-work>/visual-parity/shader-corpus-20260825/` and `<oot3d-work>/visual-parity/directional-shadow-artifact-20260825/`.
+- Directional-shadow receiver filtering remains inside the typed `PicaLighting` contribution. The old nearest box count exposed only ten opacity levels at radius one and produced visible square/banded coverage. The replacement translates a bilinear footprint across the box-PCF kernel and collapses shared taps to `(2r+2)^2` depth comparisons: 16 fetches at radius one and 36 at radius two. It changes neither caster/receiver policy nor light selection and produces a continuous framebuffer transition in `<oot3d-work>/visual-parity/aa-color-contract-20260825/shadow-custom.bmp`.
+- Steady-state figures use 600 fixed-delta 1/60 presentations, discard 120 warm-up presentations, measure the remaining 480, disable VSync and audio, and load the same real Kokiri checkpoint. The corrected results are Authentic `100.75 FPS`, FSR `87.93 FPS`, SSSR+TAA `92.24 FPS` and shadow-only `102.11 FPS`; the shadow result is within run variance of Authentic and therefore shows no measurable steady-state regression. The earlier free-delta figures counted duplicate presentations and are invalid. The earlier `shadow-config.json` result is also not a shadow-only comparison because that file enabled FXAA, AO, grass and a texture-pack path; `shadow-clean-config.json` is the accepted one-setting profile. Artifacts are under `<oot3d-work>/visual-parity/nri-steady-benchmark-20260825/`.
+- The configuration audit also exposed that the former FXAA shader was a contrast-gated isotropic five-sample average. It has been replaced by edge-direction search and sampling along the resolved edge, with luma evaluated in an sRGB response domain while color remains in its declared source domain. A one-setting direct-framebuffer comparison is under `<oot3d-work>/visual-parity/aa-color-contract-20260825/`; shadow-only preserves the baseline tone, while the FXAA path no longer applies a generic cross blur. Validation profiles must use `Preset: Custom`, because `Preset: Authentic` intentionally normalizes every extension back off.
+- Effect image bindings now carry the typed `SceneColorEncoding { Unknown, Linear, Srgb }` contract instead of an ambiguous linear-color boolean. Native PICA scene color is explicitly display-encoded: a linear-working pass decodes it once and scanout encodes it once, while SMAA preserves the encoded domain. The extensions-off framebuffer is byte-identical before and after the change (RMSE `0`); the TAA mean luminance moves from the broken double-encoded `0.673` to `0.442` against a `0.441` baseline, with expected temporal-filter RMSE `0.026-0.028`. A 26-frame active TAA capture records 26 source-sRGB working conversions, 52 encoded scanouts and zero missing reads, binding fallbacks, failed passes or Vulkan/NRI errors. Reproducible profiles, diagnostics and in-frame captures are under `<oot3d-work>/visual-parity/aa-color-contract-20260825/`.
+- The encoding contract now remains typed through the resource table, scene-surface registry, Composite, TAA, SMAA and NIS/FSR/DLSS provider boundaries. Conversion to boolean flags occurs only at shader push constants or the external NRI provider ABI. Scanout no longer reconstructs a parallel source or encoding from feature booleans: the compiled graph binding is authoritative, and an absent or `Unknown` color binding is rejected. Fixed-delta 48-frame Authentic, FXAA, TAA, SMAA, FSR and NIS runs complete with strict shader-pack resolution `57/0`, zero missing reads, binding fallbacks, failed/unresolved passes or Vulkan/NRI errors. At frame 36, Authentic mean luminance is `0.360247`, FXAA `0.360104` and TAA `0.361213`, excluding the former whole-frame gamma shift. Artifacts are under `<oot3d-work>/visual-parity/typed-color-propagation-20260825/`; focused coverage passes `36/36` graph, `4/4` Vulkan-diagnostics and `21/21` pipeline-cache tests, while the full foundation target remains `223/226` on the same three unrelated pre-existing failures.
+- Native GSP command-list ownership now crosses the frontend, visual replay, Vulkan bridge and `PicaSceneFrame` as the typed `Scene/Ui/Unknown` composition domain together with command-list identity. Replay schema `PVR4` preserves the domain while retaining `PVR1-PVR3` compatibility, and diagnostics expose exact per-domain draw counts. A 12-frame Kokiri checkpoint run classifies every active guest update as `89/90` scene draws on the top target plus `11` native UI draws on the lower target, with zero unknown draws and zero Vulkan/NRI errors. The visible TopScreen gameplay HUD is composed by the host after scanout; the four depth-disabled top-target draws are therefore scene overlays, not HUD. This evidence keeps AA and scene effects on the scene surface without inventing an asset-based UI classifier. Artifacts are under `<oot3d-work>/visual-parity/composition-domain-contract-20260825/`; the full foundation target now passes `226/226` after updating its stale native-light and graph-order fixtures.
 
 ### Scene Aspect And UI Presentation Contract (2026-08-25)
 
@@ -366,7 +366,7 @@ historical measurements, not the current instrumented layout. See
 - The top PICA render target follows the full output extent at every valid aspect. This produces real `1280x720` and `1024x768` scene frames instead of widening only one case or letterboxing the other.
 - Since 2026-10-20 the "output" of that contract is the presentation picture (`fast/extension/presentation_picture.h`): the user's aspect ratio (`Graphics.Output.Aspect`: Original 3DS 5:3, 16:9 default, 21:9, Free), fitted into the swapchain, centred, with black bars on the remaining sides; Free is the whole swapchain and keeps the previous behaviour. The Vulkan backend resolves the picture once per frame from the acquired swapchain (`mPresentationPicture`), sizes the native PICA targets to it (`NativePicaOutputExtent`), fits the scanout into it and leaves the bars to the scanout clear; the window host resolves the same picture from the window size for the scene FOV policy, the UI canvases (`N64UiOutputRegion`), the in-game menu and the pointer/touch mapping. The scene is never cropped or stretched: a wider picture widens the FOV, a narrower one heightens it, exactly as a window of the picture's shape did before.
 - The existing persisted `Graphics.Camera.FovMultiplier` contract remains compatible and is now composed in the typed scene projection policy before aspect extension. It changes both scene axes around the original optical center and cannot affect orthographic UI geometry.
-- Full foundation coverage passes `228/228`. Deterministic strict-NRI Kokiri runs report `57/0` PICA AOT hits/misses; `16:9` modifies 42 perspective calls with horizontal expansion `1.0666667`, while `4:3` modifies 42 with vertical expansion `1.25`; both leave 21 orthographic calls untouched. All 30 HUD primitive descriptors are identical across both aspects and FOV `1.0/1.25`. Reproducible configs, diagnostics and framebuffer captures are under `I:/oot3dre_work/visual-parity/scene-aspect-fov-contract-20260825/`.
+- Full foundation coverage passes `228/228`. Deterministic strict-NRI Kokiri runs report `57/0` PICA AOT hits/misses; `16:9` modifies 42 perspective calls with horizontal expansion `1.0666667`, while `4:3` modifies 42 with vertical expansion `1.25`; both leave 21 orthographic calls untouched. All 30 HUD primitive descriptors are identical across both aspects and FOV `1.0/1.25`. Reproducible configs, diagnostics and framebuffer captures are under `<oot3d-work>/visual-parity/scene-aspect-fov-contract-20260825/`.
 
 ### Canonical Shader Output Closure (2026-08-25)
 
@@ -390,8 +390,8 @@ historical measurements, not the current instrumented layout. See
   refreshed default corpus now contains 274 current modules and resolves the
   covered TAA camera-motion run at `81/0` hits/misses. Full foundation coverage
   remains `228/228`; artifacts are under
-  `I:/oot3dre_work/visual-parity/canonical-output-contract-20260825/` and
-  `I:/oot3dre_work/visual-parity/aa-reactive-mask-20260825/`.
+  `<oot3d-work>/visual-parity/canonical-output-contract-20260825/` and
+  `<oot3d-work>/visual-parity/aa-reactive-mask-20260825/`.
 
 ### Temporal AA Reactive Contract Closure (2026-08-25)
 
@@ -420,7 +420,7 @@ historical measurements, not the current instrumented layout. See
   Link's House, Kokiri Forest and Hyrule Field. Runtime evidence reports zero
   missing reads, failed passes, Vulkan errors or NRI validation errors. All
   configs, inventories, manifests, diagnostics and framebuffer sequences are
-  under `I:/oot3dre_work/visual-parity/aa-reactive-mask-20260825/`.
+  under `<oot3d-work>/visual-parity/aa-reactive-mask-20260825/`.
 
 ### Strict Display-Effect Read Ownership (2026-08-25)
 
@@ -440,7 +440,7 @@ historical measurements, not the current instrumented layout. See
   comparison caught and rejected an intermediate SSSR color-priority bug that
   aggregate counters alone could not expose. Focused coverage passes `38/38`
   graph/resource tests and `4/4` Vulkan-diagnostics tests; evidence is under
-  `I:/oot3dre_work/visual-parity/strict-effect-bindings-prepost-20260825/`.
+  `<oot3d-work>/visual-parity/strict-effect-bindings-prepost-20260825/`.
 
 ### Native Azahar Injection Coverage (2026-08-25)
 
@@ -548,7 +548,7 @@ historical measurements, not the current instrumented layout. See
   runs retain 1,817 draws over 36 presentation frames and produce visible
   framebuffer sequences. Kokiri is a regression scene rather than a bump
   activation scene; the asset and shader gates retain that distinction.
-  Evidence is under `I:/oot3dre_work/visual-parity/pica-bump-20260826`.
+  Evidence is under `<oot3d-work>/visual-parity/pica-bump-20260826`.
 - Native Shadow2D is now a typed frontend/backend contract rather than a type-5
   fallback. Texture type 2 decodes as tiled R32UI depth24/intensity8 data,
   samples with the native four-tap compare and perspective/orthographic bias,
@@ -567,7 +567,7 @@ historical measurements, not the current instrumented layout. See
   Strict NRI resolves 66/66 modules on the 30-frame Kokiri gate and is
   byte-identical to dynamic generation; all ten 901-frame boot/title
   checkpoints also match dynamic generation. Evidence is under
-  `I:/oot3dre_work/visual-parity/pica-shadow2d-native-20260826/`.
+  `<oot3d-work>/visual-parity/pica-shadow2d-native-20260826/`.
 - The Azahar corpus validator accepts legacy capture summaries only when their
   retained PICA frame list is still present and readable; an explicit false
   retention marker remains a hard rejection. The surviving five-scenario
@@ -619,7 +619,7 @@ historical measurements, not the current instrumented layout. See
   strict misses; the complete 901-frame boot/title gate resolves 96/96 and
   remains identical to the prior dynamic run at all 10 checkpoints. Evidence
   is under
-  `I:/oot3dre_work/visual-parity/pica-fragment-lighting-scene-20260826/`.
+  `<oot3d-work>/visual-parity/pica-fragment-lighting-scene-20260826/`.
 - This closes the typed scene-access contract and direct fragment-lighting
   activation gate. It does not claim runtime activation of LUT consumption,
   bump mapping or Shadow2D shadow factors when the captured draw does not
@@ -655,7 +655,7 @@ historical measurements, not the current instrumented layout. See
   lazy, original-prewarm and diagnostics-prewarm framebuffers share SHA-256
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`.
   All runs submitted 3,307 draws. Evidence is under
-  `I:/oot3dre_work/visual-parity/pica-pipeline-prewarm-20260826/`.
+  `<oot3d-work>/visual-parity/pica-pipeline-prewarm-20260826/`.
 - The qualified schema-2 corpus merges Kokiri, complete boot/title and seven
   renderer profiles into 232 unique descriptors across 66,918 observations:
   87 canonical and 145 instrumented, all with an available NRI fragment
@@ -664,7 +664,7 @@ historical measurements, not the current instrumented layout. See
   109 logical Toon descriptors. Toon creates 91 Vulkan pipelines and reuses
   18 equivalent objects. Every paired framebuffer is byte-identical at the
   SHA-256 above, with zero prewarm skips. Evidence is under
-  `I:/oot3dre_work/visual-parity/pica-pipeline-corpus-20260826/schema2/`.
+  `<oot3d-work>/visual-parity/pica-pipeline-corpus-20260826/schema2/`.
 - Diagnostics publish manifest, cache, enabled, created, reused and skipped
   counts per frame. Focused gates pass 5/5 manifest, 31/31 shader pipeline,
   4/4 Vulkan diagnostics, 11/11 scene-frame and 230/230 graphics-foundation
@@ -718,7 +718,7 @@ historical measurements, not the current instrumented layout. See
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`,
   byte-identical to the qualified extensions-off baseline. Runtime report,
   diagnostics and framebuffer are retained under
-  `I:/oot3dre_work/visual-parity/resolved-pica-material-contract-20260826/`.
+  `<oot3d-work>/visual-parity/resolved-pica-material-contract-20260826/`.
 - Focused scene-frame, Vulkan-diagnostics, shader-pipeline and graphics-
   foundation gates pass 11/11, 4/4, 31/31 and 230/230 respectively, and all
   eight native PICA descriptor/pack/submission/plan/trace/capture/bridge/
@@ -755,7 +755,7 @@ historical measurements, not the current instrumented layout. See
   to the qualified extensions-off baseline at SHA-256
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`.
   Evidence is retained under
-  `I:/oot3dre_work/visual-parity/resolved-pica-raster-target-contract-20260826/`.
+  `<oot3d-work>/visual-parity/resolved-pica-raster-target-contract-20260826/`.
 - Focused scene-frame, Vulkan-diagnostics, shader-pipeline and graphics-foundation
   gates pass 11/11, 4/4, 31/31 and 230/230 respectively. All eight native PICA
   descriptor/pack/submission/plan/trace/capture/bridge/savestate harnesses pass,
@@ -804,7 +804,7 @@ historical measurements, not the current instrumented layout. See
   baseline at SHA-256
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`.
   Evidence is retained under
-  `I:/oot3dre_work/visual-parity/composition-layer-contract-20260826/`, with
+  `<oot3d-work>/visual-parity/composition-layer-contract-20260826/`, with
   `targeted-primitive-runtime-v1` as the qualified trace.
 - An exhaustive low-level-writer diagnostic prototype resolved the same owner
   chain but reduced the 600-presentation benchmark from the historical
@@ -869,7 +869,7 @@ historical measurements, not the current instrumented layout. See
   the historical `100.75 FPS` baseline. This proves no measurable structural
   regression and is not claimed as a speedup.
 - Evidence is retained under
-  `I:/oot3dre_work/visual-parity/composition-schedule-20260826/`. Remaining work
+  `<oot3d-work>/visual-parity/composition-schedule-20260826/`. Remaining work
   is to migrate the other optional effects to these typed boundaries and to
   extend proven native-owner coverage through the structural scenario corpus;
   neither is inferred from the qualified Kokiri sample.
@@ -943,7 +943,7 @@ historical measurements, not the current instrumented layout. See
   windows measure `102.32` and `103.53 FPS`, mean `102.93 FPS`, against the
   historical `100.75 FPS` baseline. This proves no measurable structural
   regression and is not a speedup claim. Evidence is retained under
-  `I:/oot3dre_work/visual-parity/display-composition-contract-20260826/` in
+  `<oot3d-work>/visual-parity/display-composition-contract-20260826/` in
   the `*-qualified` directories, including the two `*-strict-qualified`
   profiles and `benchmark-owner-qualified-1/2`.
 - The target-to-display ownership path is now closed for the qualified corpus.
@@ -984,7 +984,7 @@ historical measurements, not the current instrumented layout. See
   `0,1,2`, zero dropped guest refreshes and zero Vulkan/NRI validation errors.
   Final structural evidence is retained as `runtime_x2_final.json` and
   `runtime_x3_final.json` under
-  `I:/oot3dre_work/native_game/frame_composer_validation/`.
+  `<oot3d-work>/native_game/frame_composer_validation/`.
 - A direct framebuffer gate now joins every captured presentation to the NRI
   temporal diagnostics. From one deterministic moving sequence, all `11/11`
   authoritative samples in both x2 and x3 match the native-30 capture bit for
@@ -997,7 +997,7 @@ historical measurements, not the current instrumented layout. See
   `Test-Oot3dNativeFrameCompositionPixels.ps1` makes this gate repeatable; the
   retained report is
   `frame_composition_pixel_validation.json` under
-  `I:/oot3dre_work/native_game/frame_composer_validation/pixel_probe/`.
+  `<oot3d-work>/native_game/frame_composer_validation/pixel_probe/`.
 - Canonical shader sources now publish one immutable dual-hash-and-size identity
   when the frontend creates them. `PicaShaderPipelineCache` audits a published
   identity on its first canonical insertion and uses that identity for later
@@ -1053,7 +1053,7 @@ historical measurements, not the current instrumented layout. See
   the selected final frame also matches Authentic and therefore is not used to
   claim that the pre-existing shadow implementation is visually complete.
 - Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-extension-schedule-20260826/`.
+  `<oot3d-work>/visual-parity/portable-extension-schedule-20260826/`.
   The product audit remains at 12,419 compiled functions, three host boundaries
   and zero residual A32 entries.
 - Cross-title extraction is not complete. `EffectResource`, the physical graph
@@ -1088,7 +1088,7 @@ historical measurements, not the current instrumented layout. See
 - Both direct captures preserve SHA-256
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`.
   Evidence is retained under
-  `I:/oot3dre_work/visual-parity/portable-resource-graph-20260826/`.
+  `<oot3d-work>/visual-parity/portable-resource-graph-20260826/`.
 - The concrete post-dispatch binding table and its physical alias summary still
   use OOT3D enums. Transient image allocation has moved to the portable layer
   described below; format selection, native attachment lookup and scene-view
@@ -1125,7 +1125,7 @@ historical measurements, not the current instrumented layout. See
   all three direct captures retain SHA-256
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`.
   Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-transient-allocation-20260826/`.
+  `<oot3d-work>/visual-parity/portable-transient-allocation-20260826/`.
   The product audit remains at 12,419 compiled functions, three host boundaries
   and zero residual A32 entries.
 - The physical binding plan and portable resource publication surface have now
@@ -1168,7 +1168,7 @@ historical measurements, not the current instrumented layout. See
 - All three framebuffer captures retain SHA-256
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`,
   with zero Vulkan/NRI validation errors. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-physical-binding-20260826/`.
+  `<oot3d-work>/visual-parity/portable-physical-binding-20260826/`.
   The product remains at 12,419 compiled functions, three host boundaries and
   zero residual A32 entries.
 - Remaining cross-title work is concentrated above these mechanics:
@@ -1200,7 +1200,7 @@ historical measurements, not the current instrumented layout. See
   `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`,
   and reports zero graph, composition or Vulkan/NRI validation errors. Evidence
   is under
-  `I:/oot3dre_work/visual-parity/portable-renderer-core-target-20260826/`.
+  `<oot3d-work>/visual-parity/portable-renderer-core-target-20260826/`.
 - A future 3DS title can now link the core and supply its own schedule/resource
   identities, residency/storage policy and native binding publication. It does
   not need to fork the allocator or NRI scheduling mechanics. A later physical
@@ -1237,7 +1237,7 @@ historical measurements, not the current instrumented layout. See
   provider publication/authorization path but does not claim a provider draw.
   The product remains at 12,419 compiled functions, three host boundaries and
   zero residual A32 entries. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-scene-publication-20260826/`.
+  `<oot3d-work>/visual-parity/portable-3ds-scene-publication-20260826/`.
 - Cross-title 3DS extraction remains incomplete at the frame/view level:
   concrete resolved draw streams and semantic scene views still live under
   `fast/extension`. Camera, material, raster and target payload extraction is closed
@@ -1275,7 +1275,7 @@ historical measurements, not the current instrumented layout. See
   framebuffer capture is taken at the actual scene frame; the older comparison
   image was captured before useful presentation and was black, so it is not
   used as pixel-parity evidence. Artifacts are under
-  `I:/oot3dre_work/visual-parity/portable-3ds-shared-payloads-20260826/`.
+  `<oot3d-work>/visual-parity/portable-3ds-shared-payloads-20260826/`.
 - Remaining cross-title work is now narrower and explicit: publish a genuinely
   shared resolved-draw stream and semantic view, extract common PICA shader-hook
   contracts from the legacy title namespace, and keep object, asset and
@@ -1305,7 +1305,7 @@ historical measurements, not the current instrumented layout. See
   are byte-identical at SHA-256
   `4f368098a185480a3fb94eaa0f1505460e4f7e24d47fc4d6a21dad7f4b86eb74`,
   with zero composition, provider, Vulkan or NRI errors. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-composition-identity-20260826/`.
+  `<oot3d-work>/visual-parity/portable-3ds-composition-identity-20260826/`.
 - The next dependency to extract is the typed PICA shader-hook program. Only
   after that contract is title-neutral should the shared resolved-draw stream
   expose shader, geometry and uniform references; semantic actor/asset identity
@@ -1335,7 +1335,7 @@ historical measurements, not the current instrumented layout. See
   `4f368098a185480a3fb94eaa0f1505460e4f7e24d47fc4d6a21dad7f4b86eb74`.
   It submits 9,233 native draws and reports zero provider-schedule rejection,
   composition mismatch, Vulkan error or NRI error. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-shader-hooks-20260826/`.
+  `<oot3d-work>/visual-parity/portable-3ds-shader-hooks-20260826/`.
 - The next cross-title extraction is a shared resolved PICA draw stream built
   from these common shader, state, composition and GPU-resource contracts. Each
   game adapter will continue to own actor, asset, scene-state and gameplay
@@ -1370,7 +1370,7 @@ historical measurements, not the current instrumented layout. See
   `4f368098a185480a3fb94eaa0f1505460e4f7e24d47fc4d6a21dad7f4b86eb74`.
   It submits 9,233 draws and reports zero schedule, composition or Vulkan/NRI
   errors. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-resolved-draw-stream-20260826-v2/`.
+  `<oot3d-work>/visual-parity/portable-3ds-resolved-draw-stream-20260826-v2/`.
 - The immediate first run is retained separately because one empty diagnostic
   presentation shifted the subsequent frame sequence; the unchanged rerun is
   the accepted parity evidence. A separate 180-presentation shadow-enabled
@@ -1417,7 +1417,7 @@ historical measurements, not the current instrumented layout. See
   framebuffer is byte-identical at SHA-256
   `4f368098a185480a3fb94eaa0f1505460e4f7e24d47fc4d6a21dad7f4b86eb74`.
   Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-semantic-scene-view-20260826-v5/`.
+  `<oot3d-work>/visual-parity/portable-3ds-semantic-scene-view-20260826-v5/`.
 - Earlier captures in that evidence family are retained but rejected as parity
   gates: two used the native OOT3D lower-screen profile instead of the baseline
   TopScreen profile, and one cold TopScreen run contained the known empty
@@ -1461,7 +1461,7 @@ historical measurements, not the current instrumented layout. See
   zero differences across 22,214 comparable scalar fields. The differing final
   framebuffer therefore records a different source instant and is not accepted
   as a pixel-parity comparison. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-view-family-timing-20260826-v3/`.
+  `<oot3d-work>/visual-parity/portable-3ds-view-family-timing-20260826-v3/`.
 - The next reusable 3DS boundary is the provider execution plan and composition
   scheduling input. Shared code may describe PICA dependencies and ordered
   render work; each game adapter must continue to decide which scene, camera,
@@ -1498,7 +1498,7 @@ historical measurements, not the current instrumented layout. See
   Both runs submit 9,233 draws, inspect 4,901 geometry sources, publish 58
   coherent sources and report zero composition mismatch, Vulkan error or NRI
   error. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-composition-schedule-20260826/`.
+  `<oot3d-work>/visual-parity/portable-3ds-composition-schedule-20260826/`.
 - The next reusable 3DS boundary is the capability-driven core of geometry-
   provider authorization. A shared plan may validate PICA scene requirements
   and invocation stage; each title must still define its own effect graph,
@@ -1531,7 +1531,7 @@ historical measurements, not the current instrumented layout. See
   It submits 9,233 draws, performs 4,901 provider source inspections and 58
   publications, with zero unavailable input, schedule rejection, composition
   mismatch, Vulkan error or NRI error. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-provider-authorization-20260826-v3/`.
+  `<oot3d-work>/visual-parity/portable-3ds-provider-authorization-20260826-v3/`.
 - Two earlier captures are retained as harness evidence: each inserted one
   empty diagnostic presentation at a different index and left the final
   176-draw frame pending. Their 58 source-aligned frames still had zero
@@ -1573,7 +1573,7 @@ historical measurements, not the current instrumented layout. See
   Both runs submit 9,233 draws and perform 4,901 geometry-source inspections,
   with zero composition mismatch, unavailable provider input, schedule
   rejection, Vulkan error or NRI error. Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-backend-facade-20260826-v3/`.
+  `<oot3d-work>/visual-parity/portable-3ds-backend-facade-20260826-v3/`.
 - The next Nintendo 3DS reuse boundary is PICA/GSP lifecycle transport still
   mixed into `GfxRenderingAPI`: completion signaling and reset semantics can
   become shared platform contracts, while OOT3D overlay preparation,
@@ -1720,7 +1720,7 @@ historical measurements, not the current instrumented layout. See
   backend-facade baseline at SHA-256
   `4f368098a185480a3fb94eaa0f1505460e4f7e24d47fc4d6a21dad7f4b86eb74`.
   Evidence is under
-  `I:/oot3dre_work/visual-parity/portable-3ds-nri-executor-20260826/`.
+  `<oot3d-work>/visual-parity/portable-3ds-nri-executor-20260826/`.
 - This closes the execution-layer relocation only. A second-title frontend has
   not yet executed draws through this target, and texture decode/upload,
   render-target ownership and display transfer remain separate future
@@ -1758,7 +1758,7 @@ historical measurements, not the current instrumented layout. See
   presentations after 120 warm-up presentations, with VSync, pacing and audio
   disabled and zero dropped guest refreshes. Reproducible inventories, logs,
   diagnostics and framebuffers are under
-  `I:/oot3dre_work/visual-parity/typed-shadow-caster-20260826/`.
+  `<oot3d-work>/visual-parity/typed-shadow-caster-20260826/`.
 - This is the closed restart point. The next renderer task may consume the typed
   caster contract but must not resume cross-title separation or shader-text
   mutation unless a new, explicitly scoped tranche is approved.
@@ -1835,7 +1835,7 @@ reference and new runs. The focused CPU suites passed 292/41/19 tests and
 native-presentation policy checks passed. Two ambient-only world cases failed
 before the fix; all 17 production lighting GPU cases passed afterward.
 Real F1 widgets passed 5,111 assertions. Private captures, isolated profiles
-and receipts remain under `I:/_triaevum_work/native-pbr/`, notably
+and receipts remain under `<work>/native-pbr/`, notably
 `corrected-proof-20260924-224119` and `corrected-copies-20260924-224222`;
 they are not release assets.
 
@@ -2080,7 +2080,7 @@ RGBA5551-expanded floor value 189. Specular, normal sign/zero and base-color
 changes affect their authored surface; all 256 compared native trace records
 remain identical. Every run reports zero Vulkan/NRI errors, zero failed/missing/
 unresolved graph resources or passes, and the same 11 baseline Vulkan warnings.
-Evidence is private under `I:/_triaevum_work/material-editor/`.
+Evidence is private under `<work>/material-editor/`.
 SSSR was not requalified: the pre-existing scenario failure recorded in the F1
 review remains a limit; Hi-Z guide verification is not proof of SSSR execution.
 
@@ -2104,7 +2104,7 @@ pass artifacts were regenerated and checked. The production-kernel
 fractional weights, linear sampling and partial workgroups in both the Hi-Z
 filter and SSSR material resolve. This proves the SSSR resolve consumer, not the
 complete SSSR provider scenario. Private evidence, invocation recipes and
-comparison receipts: `I:/_triaevum_work/material-weights/`.
+comparison receipts: `<work>/material-weights/`.
 
 UV-seam qualification (2026-09-25): `pbr_seam_gpu_tests` executes the production
 PBR shader and geometry cache on Vulkan. It verifies rotated/mirrored normal
@@ -2129,7 +2129,7 @@ all 32 diagnostic frames per run have zero Vulkan/NRI errors and zero failed,
 missing or unresolved graph passes/resources. The 11 baseline Vulkan warnings
 remain. The staged executable matches the qualified enabled framebuffer exactly.
 Evidence, invocation recipes and comparison receipts:
-`I:/_triaevum_work/material-seams/`. This qualification does not extend the
+`<work>/material-seams/`. This qualification does not extend the
 existing full-provider SSSR claim.
 
 Historical global-control qualification, superseded by the editor above:
@@ -2141,7 +2141,7 @@ pipeline. Normal 0→1 changed 280,590 framebuffer pixels, normal 1→4 changed
 302,492, and glossiness 0→1 changed 306,687. All six framebuffers were inspected;
 native-memory RGBA and compared alpha/depth/stencil attachments were identical.
 Evidence stays private under
-`I:/_triaevum_work/kokiri-material-6CD66D0B74E16AEA/controls/`.
+`<work>/kokiri-material-6CD66D0B74E16AEA/controls/`.
 The rebuilt foundation and shader-pipeline suites passed 293/293 and 40/40;
 the shared-renderer boundary passed for 77 files. The real F1 widget fixture
 passed 4,200 assertions, including both live strengths, both diagnostic choices,
@@ -2161,7 +2161,7 @@ the corrected capture retains the terrain and wall textures.
 
 The private fixture contains 194 synthetic materials, not a distributable art
 pack. Captures, inventories, isolated launch profiles and comparison evidence
-remain under `I:/_triaevum_work/pbr-implementation/captures/`, outside public
+remain under `<work>/pbr-implementation/captures/`, outside public
 packages. This checkpoint exercised two real directional source identities
 and no selected point lights. Point transform/attenuation and native
 fragment-lighting/LUT variants were probed separately; their presence in this
@@ -2189,7 +2189,7 @@ The rebuilt runtime completed the real-time reproduction for 45 seconds:
 through presentation 1,500, with no arena-exhaustion or scheduled-presentation
 failure. The final framebuffer was inspected. The private reproduction profile
 and evidence are in
-`I:/_triaevum_work/kokiri-material-6CD66D0B74E16AEA/realtime-probe/`;
+`<work>/kokiri-material-6CD66D0B74E16AEA/realtime-probe/`;
 this GPU smoke requires the external title/checkpoint and is not a standalone
 unit test.
 
@@ -2306,7 +2306,7 @@ Native-memory RGBA and compared alpha/depth/stencil attachments stayed exact.
 The owning caster regression failed before the fix and all 18 scene-frame
 tests passed afterward. Foundation and pipeline suites passed 293/293 and
 40/40; the shared-renderer boundary covered 78 files. Captures and structural
-comparison evidence remain private under `I:/_triaevum_work/scene-environment/`.
+comparison evidence remain private under `<work>/scene-environment/`.
 
 Inactive profiles collapse to one neutral rendering snapshot: editing their
 stored values cannot reset TAA or shadow histories. The actual-widget fixture
@@ -2365,7 +2365,7 @@ receivers/casters. Native-memory RGBA and compared alpha/depth/stencil remain
 identical; all three disabled-profile framebuffer captures exactly match the
 previous binary. These are renderer captures and geometry-relative diagnostics,
 not Windows screenshots or a test against a separately reconstructed camera.
-Private evidence: `I:/_triaevum_work/environment-geometry-anchor/verification.json`
+Private evidence: `<work>/environment-geometry-anchor/verification.json`
 and its `verified` / `verified-off` captures.
 
 #### Material reflectance and amplified shadow strength
@@ -2395,7 +2395,7 @@ Strength 0 vs 1 changes 92,524 pixels; 1 vs 4 changes 96,343, with decreasing
 mean brightness. Disabled-profile framebuffers are identical.
 Native-dependency namespace 1 RGBA and both namespaces' alpha/depth/stencil
 remain exact. Captures and `verification.json` stay private under
-`I:/_triaevum_work/actor-light-shadow/`.
+`<work>/actor-light-shadow/`.
 
 Pipeline, graphics foundation/persistence and scene-frame suites pass
 42/293/18 tests. The real F1 widget fixture passes 4,593 assertions, including
@@ -2501,7 +2501,7 @@ pose quantization is therefore not claimed to be byte-exact.
 CPU regressions cover fixed skinned inputs, world-page retention, uncommitted
 updates and near/far coverage under physical exhaustion. Actual F1 widget smoke
 passes 4,676 assertions. Private evidence:
-`I:/_triaevum_work/virtual-shadow-maps/accepted-verification.json`.
+`<work>/virtual-shadow-maps/accepted-verification.json`.
 Earlier captures preceding `corrected-still` are diagnostic iterations, not
 visual acceptance evidence; the old `baseline-orbit` was stationary.
 
@@ -2576,7 +2576,7 @@ do not establish exclusive causation or justify discarding slower runs.
 No large FPS gain, 60-fps guarantee, or overall CPU reduction is claimed.
 Original30, VSync and user quality settings are restored for the live session;
 AboveNormal priority is confined to the explicitly labelled benchmark runs.
-Private evidence: `I:/_triaevum_work/vsm-stability/accepted-verification.json`.
+Private evidence: `<work>/vsm-stability/accepted-verification.json`.
 
 ### Grass VSM Reception on the Texture-Colour Grid
 
@@ -2642,14 +2642,14 @@ frames per run (358 valid GPU timestamp samples). GPU mean is **8.377 -> 8.879 m
 throughput is **43.061 -> 39.858 fps (-7.44%)**; individual controls range from
 41.794 to 44.407 fps. This is a measured cost, not a free effect or a claim of
 unchanged CPU throughput. The private control was removed after measurement.
-Results and exact invocations: `I:/_triaevum_work/grass-vsm-grid/performance.json`.
+Results and exact invocations: `<work>/grass-vsm-grid/performance.json`.
 The rebuilt binary without that control produces a byte-identical enabled
 framebuffer; its executable hash is recorded in the verification receipt.
 
 The base colour grid intentionally trades per-root shadow edges for spatially
 coarse detail. The bounded actor-local refinement below improves nearby detail
 without changing that base grid. Private evidence for the original coarse path:
-`I:/_triaevum_work/grass-vsm-grid/verification.json`.
+`<work>/grass-vsm-grid/verification.json`.
 
 ### Static VSM Cache and Local Actor Grass Refinement
 
@@ -2730,10 +2730,10 @@ Steady candidate samples re-use all 371 static pages with no static refresh;
 up to 48 final pages are recomposed. The explicit memory tradeoff is
 **64 -> 128 MiB** of atlas depth at 4096 per target.
 Exact invocations, executable hashes and per-run timing distributions:
-`I:/_triaevum_work/actor-shadow-refinement/performance.json`.
+`<work>/actor-shadow-refinement/performance.json`.
 
 Private deterministic captures, exact invocations and structural counters:
-`I:/_triaevum_work/actor-shadow-refinement/verification.json`.
+`<work>/actor-shadow-refinement/verification.json`.
 
 ### Current-Sample Shadow Casters (2026-10-01)
 
@@ -2792,7 +2792,7 @@ opaque receiver of its own sample.
   read. Preparation takes 0.33 s over the run (about 0.8 ms per frame for 53.7
   handed-over draws, including the bounds the ordered draw no longer
   computes); GPU frame time shows no change beyond run-to-run noise.
-  Receipts: `I:/_triaevum_work/perf-levers/qualify/shadow-prepass/`.
+  Receipts: `<work>/perf-levers/qualify/shadow-prepass/`.
 
 ### Alpha-Tested Shadow Casters (2026-10-01)
 
@@ -2855,7 +2855,7 @@ with the same textures and fragment uniforms, up to the native alpha test.
   NRI validation report no error and only the 11 startup warnings of the
   baseline (an exported but unattached colour output had added ten), and the
   validated run is byte-identical to an unvalidated one (12/12 captures).
-  Receipts: `I:/_triaevum_work/perf-levers/qualify/shadow-prepass/`
+  Receipts: `<work>/perf-levers/qualify/shadow-prepass/`
   (`alpha-*`, `crisp-*`, `t-alpha-*`, `crops-alpha/`).
 
 ### Point-Light Shadow Cube Maps (2026-10-01)
@@ -2931,7 +2931,7 @@ own reach: a light's far plane is its lighting radius times the shadow reach.
   startup warnings of the baseline; validated and plain runs are
   byte-identical (12/12). ABBA timing (360 frames, medians): GPU frame
   6.54/6.41 -> 6.97/6.96 ms; shadow anchor CPU 0.41/0.44 -> 0.64/0.68 ms.
-  Receipts: `I:/_triaevum_work/perf-levers/qualify/shadow-prepass/`
+  Receipts: `<work>/perf-levers/qualify/shadow-prepass/`
   (`pt-*`, `t-pt-*`, `crops-pt/`).
 
 ## Per-pixel actor lighting and native UI boundaries (2026-09-24)
@@ -3004,7 +3004,7 @@ The actual F1 widgets pass 5,022 assertions; a 180-frame run preserves the user'
 combined settings and completes without graph failures. These are bounded
 correctness checks, not a new performance benchmark or a claim that every
 optional pass is admissible on a non-contiguous opaque target.
-Private evidence is under `I:/_triaevum_work/surface-lighting/`; no save, capture
+Private evidence is under `<work>/surface-lighting/`; no save, capture
 or extracted title data belongs in a public package.
 
 ## Scene-wide native environment lighting (2026-09-24)
@@ -3052,7 +3052,7 @@ The actual F1 widgets pass 5,077 assertions, including version 1/2 migration
 without rewriting files. Native capture, replay, interpolation, 19 scene-frame,
 41 shader-cache, 292 foundation and 47 graph tests pass. No graph pass failed or
 remained unresolved in the bounded captures. Evidence is private under
-`I:/_triaevum_work/native-scene-lighting/`; no gameplay input was injected.
+`<work>/native-scene-lighting/`; no gameplay input was injected.
 
 ### Screen-Space Contact Shadows (2026-10-09)
 
@@ -3096,7 +3096,7 @@ are off by default and exist only with virtual shadow maps.
   parameter clamps and the three kernels' compilation. The kernels are in the
   built-in pass catalogue (85 artifacts). A depth-debug capture matched the
   geometry, and the contact ratio maps show the fence posts', grass blades' and
-  Link's feet shadows. Evidence is private under `I:/_triaevum_work/contact-shadows/`.
+  Link's feet shadows. Evidence is private under `<work>/contact-shadows/`.
 
 ### Selected-tree commit qualification
 
@@ -3252,7 +3252,7 @@ scripts are replaced by these provider-neutral names. CACAO itself, its
 `THREE_DS_RECOMP_ENABLE_CACAO` build option and its shader generator remain
 supported alongside GTAO.
 Private captures, checkpoints, profiles and measurement reports remain under
-`I:/_triaevum_work/ao-stability/` and must never enter a public package.
+`<work>/ao-stability/` and must never enter a public package.
 
 ### iMMERSE MXAO
 
@@ -3711,7 +3711,7 @@ Kokiri Enhanced (DLSS, grass): `scene_main` against the authored key changes
 outdoor environment pair: the second light, turned to the main light's side,
 coincides with it). Authored cold against warm cache differs by 1.2% (known
 hybrid noise). F1 smoke: 7,988 assertions. Receipts:
-`I:/_triaevum_work/perf-levers/qualify/shadow-prepass/key-*`.
+`<work>/perf-levers/qualify/shadow-prepass/key-*`.
 
 Since 2026-10-02 (animated lighting, docs/TRIAEVUM_ANIMATED_LIGHTING_STRATEGY.md)
 a key that follows the scene (`scene_main`, `scene_ambient`) also takes its main

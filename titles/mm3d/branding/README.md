@@ -13,7 +13,7 @@ title.
 | `masters/forge_background.jpg` (1672x941) | "Clock Town sotto la luna cadente (1).png" | Clock Town under the falling moon | The MM3D Forge window's background, compiled into `TriAevumForge` with `title-mm3d` |
 
 Source hashes (the owner's originals as received, copied under the
-generator's names to `I:/_triaevum_work/mm3d-port/branding-sources-mm3d`,
+generator's names to `W/branding-sources-mm3d`,
 `SOURCES.sha256`):
 
 | Source | SHA-256 |

@@ -6,7 +6,7 @@ Non tutte le tranche del rapporto sono concluse.
 
 ## Candidato aggiornato da usare
 
-`I:\TriAevum-0.5.1-candidate-r2`, prodotto dal commit
+`<local>/TriAevum-0.5.1-candidate-r2`, prodotto dal commit
 `0ecdee0248d1ceead9df44cc611d1ddb094b0788`, sostituisce il primo candidato citato
 nelle prove storiche sotto. Include anche l'identita' del builder come dato
 esplicito nel bundle PyInstaller, senza dipendere da `__file__` di un modulo
@@ -21,7 +21,7 @@ contenuto soltanto nell'archivio Python congelato.
   warm-up in 28,8261 secondi, 59,36 presentazioni/s con VSync/pacing attivi.
 - TopScreen selezionato, x2 attivo, 134.367 draw interpolati; framebuffer
   ispezionato, con 437 colori campionati. Nessun processo di prova lasciato aperto.
-- Evidenze r2: `I:\oot3dre_work\triaevum-release-artifacts-r2\real-clock-x2\`.
+- Evidenze r2: `<oot3d-work>\triaevum-release-artifacts-r2\real-clock-x2\`.
 
 L'installazione transazionale, il sysroot autosufficiente e le restanti voci
 aperte della tabella non vengono dichiarati risolti da queste prove.
@@ -43,7 +43,7 @@ aperte della tabella non vengono dichiarati risolti da queste prove.
 
 ## Artefatto generato
 
-`I:\TriAevum-0.5.1-candidate`
+`<local>/TriAevum-0.5.1-candidate`
 
 - 37 file consentiti, 265.397.309 byte.
 - Manifesto con `qualification=candidate`, sorgenti del commit `10bcc10b8`.
@@ -78,7 +78,7 @@ contenuti originali o salvataggi esistenti. Usa un plugin v2 privato gia'
 disponibile: **non e' una prova della generazione completa da ROM**.
 
 Evidenze locali:
-`I:\oot3dre_work\triaevum-release-artifacts\real-clock-x2-capture\`
+`<oot3d-work>\triaevum-release-artifacts\real-clock-x2-capture\`
 
 | Campo | Riscontro |
 | --- | --- |
@@ -158,7 +158,7 @@ Verifica: **79 test Python superati**, con errore iniettato, processo figlio
 terminato tramite `os._exit`, recupero, target discordanti, esclusione reciproca
 e rifiuto dell'avvio pendente. Forge congelato con PyInstaller compilato in
 circa 24 secondi e smoke test `doctor --inventory` superato:
-`I:\oot3dre_work\triaevum-release-artifacts-r3\forge\TriAevumForge.exe`.
+`<oot3d-work>\triaevum-release-artifacts-r3\forge\TriAevumForge.exe`.
 Questo e' un artefatto di verifica, non un nuovo pacchetto utente completo.
 
 R06 rimane parziale fino al caricatore nativo esplicito con generazioni
@@ -208,8 +208,8 @@ fisso, x2 e TopScreen attivi. Framebuffer non vuoto (447/451 colori campionati);
 ispezione del primo: intro con ambiente, cielo, Link ed Epona. Non e' una
 misura di throughput senza limite ne' una prova interattiva di F1 o parita'
 grafica con Azahar. Evidenze:
-`I:\oot3dre_work\triaevum-release-artifacts-r4\real-clock\` e
-`I:\oot3dre_work\triaevum-release-artifacts-r4\published-real-clock\`.
+`<oot3d-work>\triaevum-release-artifacts-r4\real-clock\` e
+`<oot3d-work>\triaevum-release-artifacts-r4\published-real-clock\`.
 
 Il secondo test ha permesso anche di eliminare una dipendenza residua di
 `publish_private_runtime` dalla cartella dell'istanza Forge: host e resources
@@ -220,7 +220,7 @@ su Windows pulito. Il pacchetto rimane pertanto candidato, non release finale.
 
 ### Candidato aggiornato r5
 
-- `I:\TriAevum-0.5.1-candidate-r5`, sorgenti/binari da `4fefb88a1`:
+- `<local>/TriAevum-0.5.1-candidate-r5`, sorgenti/binari da `4fefb88a1`:
   37 file pubblici, 265.434.990 byte, audit superato.
 - Forge congelato: `doctor` esegue davvero compile/link/run; successo in
   13,365 secondi su questa macchina, ambiente ermetico non dichiarato.
@@ -228,7 +228,7 @@ su Windows pulito. Il pacchetto rimane pertanto candidato, non release finale.
   dopo warm-up, **59,13/s**, 134.268 draw interpolati, x2 e TopScreen attivi.
   Loop richiesto 30 s, processo complessivo 35,64 s, concluso normalmente.
 - Evidenze e installazione privata pronta ad avvio normale:
-  `I:\oot3dre_work\triaevum-release-artifacts-r5\published-real-clock\`.
+  `<oot3d-work>\triaevum-release-artifacts-r5\published-real-clock\`.
   Il suo `private-installation/TriAevum.exe` usa il profilo Forge senza limiti
   temporali; i limiti della verifica erano override soltanto della run di test.
 
@@ -290,7 +290,7 @@ conservazione dei riferimenti esterni. Questa prova Python non certifica ancora
 la gestione Unicode end-to-end del runtime C++.
 
 Run nativa con pubblicazione Forge e profilo relativo:
-`I:/oot3dre_work/triaevum-release-artifacts-r5/portable-profile-check`.
+`<oot3d-work>/triaevum-release-artifacts-r5/portable-profile-check`.
 Host pubblico r5 invariato, DLL privata preesistente, 30 secondi di loop:
 1705 presentazioni in 28.7411 secondi dopo 60 frame di riscaldamento,
 59.3228 fps, VSync/pacing/limiter attivi, TopScreen e x2 attivi,
@@ -317,12 +317,12 @@ carica correttamente il plugin. Resta da ripetere la run dal pacchetto coerente.
 
 ### Candidato r6: run Unicode riuscita
 
-Pacchetto `I:/TriAevum-0.5.1-candidate-r6`, sorgenti e host dal commit
+Pacchetto `<local>/TriAevum-0.5.1-candidate-r6`, sorgenti e host dal commit
 `c9db0ccf1`, 37 file pubblici, 265468890 byte, audit superato. Include Forge
 aggiornato e il manifest Windows UTF-8. Non include il sysroot privato.
 
 Run con `--relocate --unicode-path`, evidenza in
-`I:/oot3dre_work/triaevum-release-artifacts-r6/unicode-relocation-check`:
+`<oot3d-work>/triaevum-release-artifacts-r6/unicode-relocation-check`:
 1713 presentazioni in 28.8879 secondi dopo 60 frame di riscaldamento,
 59.2982 fps, TopScreen e x2 attivi, 134515 draw interpolati. Framebuffer
 ispezionato: paesaggio, Link ed Epona visibili. Gli input privati sono copie
@@ -394,7 +394,7 @@ anticipato. La copertura degli header e' conservativa, non ancora minima.
 
 Test: modifica linker/header invalida la chiave; DLL alterata rifiutata; hit
 anticipato non richiama il builder dell'archivio. Suite completa: 105 test.
-Probe nativo reale in `I:/oot3dre_work/triaevum-native-early-cache-probe`:
+Probe nativo reale in `<oot3d-work>/triaevum-native-early-cache-probe`:
 prima run 56.4336 s (`built`), seconda 29.7287 s (`reused`), tutte e sei le
 verifiche ABI riuscite e DLL con lo stesso SHA della precedente qualificazione.
 I tempi comprendono hash sysroot e compilazione dell'host di prova; non sono
@@ -410,7 +410,7 @@ La compilazione isolata richiede C++20 ed eccezioni MSVC esplicite.
 
 Build isolata locale riuscita in circa 3.5 secondi; probe con l'archivio appena
 prodotto riuscito in 31.3431 secondi, tutte e sei le verifiche ABI superate.
-Evidenza in `I:/oot3dre_work/triaevum-isolated-support-probe`. La DLL sintetica
+Evidenza in `<oot3d-work>/triaevum-isolated-support-probe`. La DLL sintetica
 ha lo stesso SHA-256 delle prove precedenti. Suite Python: 105 test.
 
 La CI Windows ora costruisce questo supporto e la DLL sintetica, esegue il
@@ -500,7 +500,7 @@ ricavato dai metadati VS installati, con provenienza esplicita. Corretto il
 planner che includeva ARM64 nel target x64; conservati gli header condivisi
 denominati x86. Estrattore MSI tollera brevemente errori Windows di condivisione
 durante pubblicazione, senza ignorare errori persistenti. Suite: 121 test passati.
-Ricevuta in `I:/oot3dre_work/triaevum-full-components/components.json`.
+Ricevuta in `<oot3d-work>/triaevum-full-components/components.json`.
 La risoluzione del catalogo remoto e la qualificazione GUI/PC pulito restano aperte.
 
 ## R02: prova nativa del sysroot interamente acquisito
@@ -518,7 +518,7 @@ richiedono ancora qualificazione; la prova sintetica non certifica il titolo.
 
 Il comando completo prepare_windows_toolchain termina con native_probe_passed
 e pubblica la generazione solo dopo compilazione/caricamento reali. Ricevuta:
-`I:/oot3dre_work/triaevum-toolchain-generation-proof/toolchain.json`.
+`<oot3d-work>/triaevum-toolchain-generation-proof/toolchain.json`.
 Collegato sysroot esplicito attraverso build-title fino al backend; il worker
 GUI lo passa identico a preflight e build. Suite: 123 test superati. Restano
 interfaccia acquisizione/consenso, selezione automatica, catalogo pulito e prova
@@ -538,10 +538,10 @@ nel test del worker. Restano UI acquisizione/licenze e qualificazione pacchetto.
 Corretto il probe nativo che usava ancora il percorso sorgente anziche' il root
 del bundle; incluso whole_aot_abi_probe.cpp nei dati PyInstaller. Il comando
 `TriAevumForge.exe verify-toolchain` espone la stessa verifica dal prodotto.
-Costruito EXE in `I:/oot3dre_work/triaevum-forge-toolchain-proof` e avviato il
+Costruito EXE in `<oot3d-work>/triaevum-forge-toolchain-proof` e avviato il
 probe da quella directory, senza usare lo script Python del repo. Sei controlli
 passati in 44,31s, stessa DLL sintetica. Ricevuta e log:
-`I:/oot3dre_work/triaevum-frozen-toolchain-probe`.
+`<oot3d-work>/triaevum-frozen-toolchain-probe`.
 LLVM/support/sysroot sono ancora input privati espliciti; non e' una prova
 su macchina pulita, ne' del titolo completo. UI acquisizione resta aperta.
 
@@ -610,14 +610,14 @@ SYNCHRONIZE. Quando il proprietario termina, il worker esce e il Job Object
 chiude i discendenti: questo copre anche il processo intermedio PyInstaller
 one-file, senza assumere che uccidere il bootloader termini automaticamente
 l'interprete interno. Test reale proprietario/worker superato, suite 134 test.
-Creato `I:/oot3dre_work/triaevum-forge-worker-proof/TriAevumForge.exe`; comando
+Creato `<oot3d-work>/triaevum-forge-worker-proof/TriAevumForge.exe`; comando
 install-worker con owner PID reale restituisce stage/error JSON e termina con
 codice 1 quando il runtime manca, senza traceback. Non e' una prova di build
 titolo: quella e l'interruzione/ripresa nel pacchetto completo restano aperte.
 
 ## Candidate r7: pacchetto aggiornato e avvio reale
 
-Prodotta `I:/TriAevum-0.5.1-candidate-r7` dal commit `c8cddb083`, attraverso il
+Prodotta `<local>/TriAevum-0.5.1-candidate-r7` dal commit `c8cddb083`, attraverso il
 comando prepare_release completo. 337 file pubblici, 281.165.035 byte; audit
 allowlist superato. Include nuovo Forge/worker, probe congelato e header LLVM.
 Non include SDK Microsoft, plugin privato o profilo di acquisizione/licenze.
@@ -630,7 +630,7 @@ del pacchetto: 30 secondi di run richiesta, 37,67 secondi wall complessivi,
 VSync/pacing/limiter attivi: verifica a 60Hz, non throughput massimo.
 TopScreen e x2 attivi, 133.591 draw interpolati. Framebuffer catturato dal runtime
 e ispezionato: title intro con Link/Epona, terreno e cielo visibili.
-Evidenze `I:/oot3dre_work/triaevum-release-artifacts-r7/product-run`.
+Evidenze `<oot3d-work>/triaevum-release-artifacts-r7/product-run`.
 Non certifica F1 interattivo, x3, ROM-to-plugin a freddo, worker interrupt/resume
 o PC pulito. Queste prove restano necessarie per completare il rapporto.
 
@@ -684,7 +684,7 @@ cambio linker/header/support mantiene la cartella, cambia il plugin quando dovut
 errore di compilazione seguito da ripresa, corruzione DLL rifiutata. Suite completa:
 136 test superati in 11,339 secondi.
 
-Probe nativo reale in `I:/oot3dre_work/triaevum-generation-cache-proof`:
+Probe nativo reale in `<oot3d-work>/triaevum-generation-cache-proof`:
 prima run 49,741 s, seconda 29,173 s con build_status=reused; entrambe superano
 aritmetica, memoria, callback, TLS, uscita osservabile e rifiuto ABI incompatibile.
 DLL identica: `85d69baa913c642b5bc01d8e73c9d24a23f2b2513741580896b448f70f27d271`.
@@ -722,7 +722,7 @@ La prova non sostituisce la qualificazione GUI/macchina pulita ancora aperta.
 
 ## Candidate r8: ultime correzioni incluse e avvio verificato
 
-Pacchetto immutabile `I:/TriAevum-0.5.1-candidate-r8`, sorgenti `db241bc5b`:
+Pacchetto immutabile `<local>/TriAevum-0.5.1-candidate-r8`, sorgenti `db241bc5b`:
 337 file pubblici, 281175376 byte. Include separazione della cache di generazione,
 recupero della prova toolchain dopo aggiornamento e metriche cache-hit corrette.
 Build incrementale del runtime (identita' prodotto e relink), nessuna nuova
@@ -732,7 +732,7 @@ L'audit del pacchetto passa; rimane un candidate, non una release qualificata.
 `validate_product_run.py` ha avviato una copia privata con la nuova DLL della
 prova completa da ROM (`106aa7a6...`). Uscita 0, TopScreen/x2 effettivi, 134671
 draw interpolati e framebuffer non uniforme ispezionato (Link/Epona e scena).
-Evidenze in `I:/oot3dre_work/triaevum-release-artifacts-r8/product-run`.
+Evidenze in `<oot3d-work>/triaevum-release-artifacts-r8/product-run`.
 Non usare i tempi di questa run come benchmark controllato: la suite Python si
 e' parzialmente sovrapposta all'esecuzione. I 136 test sono superati; il benchmark
 separato della prova completa r7 rimane il riferimento prestazionale di questa fase.
@@ -753,7 +753,7 @@ null. Nessuna modifica a shader, scheduling, clock, gameplay o formati del titol
 La serializzazione avviene soltanto per le catture richieste.
 
 Build nativa incrementale riuscita. Evidenze private in
-`I:/oot3dre_work/triaevum-temporal-capture-proof`. Prime prove a clock reale:
+`<oot3d-work>/triaevum-temporal-capture-proof`. Prime prove a clock reale:
 il readback sincrono rende quasi ogni cattura un nuovo frame sorgente, anche
 a 400x240; quindi non qualificano le coppie/terne intermedie. La prima prova
 restava a 1280x720 per la configurazione persistita, poi corretta nella sola

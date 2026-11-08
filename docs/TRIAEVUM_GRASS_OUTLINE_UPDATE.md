@@ -1,6 +1,6 @@
 # Grass e outline: controlli e stabilita
 
-Data: 2026-09-06. Worktree: `I:/oot3dre_work/triaevum-release`.
+Data: 2026-09-06. Worktree: `<oot3d-work>/triaevum-release`.
 Baseline: progetto `914d48ef2`, renderer `7092f721`.
 Implementazione renderer: `72562022`.
 
@@ -98,7 +98,7 @@ Runner in `tools/triaevum_release/tests`:
 - `grass_outline_shape_settings.json`: configurazione di stress, non preset
   utente o nuovo default estetico.
 
-Evidenze private: `I:/oot3dre_work/grass-outline-verification/shape-static` e
+Evidenze private: `<oot3d-work>/grass-outline-verification/shape-static` e
 `shape-motion`, a partire da `hudtest.oot3dsav`, con impostazioni dell'ultima
 run utente e overlay di stress. 24 secondi fermi e 30 in movimento, densita
 4096 e sei segmenti, screenshot nativi ogni 180 presentazioni. Dopo la
@@ -116,7 +116,7 @@ Esito finale: **197 test superati** (inclusa compilazione degli shader) e
 identita geometrica in `grass-outline-verification/final-motion`: ancora due
 build iniziali, nessuna ricostruzione successiva durante il movimento.
 
-Eseguibile di sviluppo: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
+Eseguibile di sviluppo: `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
 Il pacchetto installato e il suo catalogo di release non sono sovrascritti.
 
 ## Estensione: segmenti indipendenti e fog nativa
@@ -173,7 +173,7 @@ Codice aggiuntivo: `grass_visibility.*`, `pica_shader_instrumentation.*`,
 - **1388 verifiche sui widget F1**: conteggi 8/2, soglie 120/650 e persistenza.
 - Run Kokiri da `hudtest.oot3dsav`, framebuffer con TAA e MSAA 4x, processi
   terminati normalmente. Evidenze: `native-fog-point-guides` e `native-fog-msaa`
-  sotto `I:/oot3dre_work/grass-outline-verification/`.
+  sotto `<oot3d-work>/grass-outline-verification/`.
 - Inventario MSAA: 41 pipeline osservate, 20 con output fog; 14 shader effettivi
   copiano il fattore nativo, 6 scrivono la guida neutra. Le distanze 120/650
   risultano caricate dal runtime. Le prove con catture non sono benchmark.

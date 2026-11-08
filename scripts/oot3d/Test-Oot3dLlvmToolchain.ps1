@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$LlvmRoot = "I:\oot3dre_tools\llvm-22.1.6",
+    [string]$LlvmRoot = $env:OOT3D_LLVM_ROOT,
     [string]$ExpectedVersion = "22.1.6",
     [switch]$KeepArtifacts
 )

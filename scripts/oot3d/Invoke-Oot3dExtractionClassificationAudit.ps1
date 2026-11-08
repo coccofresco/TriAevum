@@ -1,6 +1,6 @@
 param(
-    [string]$ExtractionRoot = "E:\ppssppvr\oot3d_decomp\work\extract",
-    [string]$Output = "I:\oot3dre_work\extraction_classification\oot3d_extraction_classification.json",
+    [string]$ExtractionRoot = "<ppssppvr>\oot3d_decomp\work\extract",
+    [string]$Output = "<oot3d-work>\extraction_classification\oot3d_extraction_classification.json",
     [switch]$NoRecords,
     [switch]$Verify
 )

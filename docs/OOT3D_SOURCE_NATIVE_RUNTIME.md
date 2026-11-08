@@ -19,7 +19,7 @@ diagnostic tools; canonical OOT3D source owns production gameplay.
 
 ## Pinned producer input
 
-The current producer checkpoint is `I:\oot3decomp` revision
+The current producer checkpoint is `<oot3d-decomp>` revision
 `ded8104e66eabe336b389e6a6a3510cb36ac8b58`. The consumer profile is
 `tools/oot3d/source_native_runtime/decomp_profile.json`.
 

@@ -31,9 +31,9 @@ Vulkan: full-width/occlusion regression and historical guide response, including
 normal-only scene detail, absent coverage, disabled detectors and a secondary
 depth layer that must not create contours. The latter deliberately distinguishes
 the restored response from the total-isolation kernel. 317/317 focused tests pass
-in `I:/oot3dre_work/outline-restore-20260907-final-tests.log`.
+in `<oot3d-work>/outline-restore-20260907-final-tests.log`.
 
-Framebuffer evidence is under `I:/oot3dre_work/outline-restore-20260907-*`:
+Framebuffer evidence is under `<oot3d-work>/outline-restore-20260907-*`:
 `kokiri-final` uses the HUD-test checkpoint with actual user Grass settings;
 `intro-final` boots normally and captures every 240 frames through frame 1440.
 The earlier unsuffixed runs document the rejected raw-depth restoration.
@@ -48,7 +48,7 @@ Existing Vulkan warnings remain (counter 18); this is not a zero-warning claim.
 Framebuffer inspection confirms the rejected minimap outlines are gone and no
 logo-canvas rectangle appears in the inspected late-intro captures. Verification
 processes exited normally. The executable remains in
-`I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
+`<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
 
 Diagnostic 7 remains the independent native reference; diagnostic 5 is the
 restored scene response after visibility. The old strict on/off mask subset
@@ -90,7 +90,7 @@ This is an actual shader readback, not a duplicated CPU formula or string test.
 The standalone CMake target `oot3d_toon_outline_gpu_tests` links just shaderc,
 Vulkan, the contour library and GTest; it needs a Vulkan compute device but no
 game assets/title module. The incremental `run_grass_outline_tests.ps1` suite
-also includes it. Logs are `I:/oot3dre_work/outline-owner-20260907-before-tests.log`
+also includes it. Logs are `<oot3d-work>/outline-owner-20260907-before-tests.log`
 (315 pass, new regression fails) and `...-after-tests.log` (316/316 pass).
 
 Diagnostic investigation before the correction:
@@ -100,7 +100,7 @@ changing guide generation or adding a separate depth buffer. The temporary
 normal-marker diagnostic was removed; it is not an extension-coverage heuristic
 in the production renderer.
 
-Final game evidence: `I:/oot3dre_work/outline-owner-20260907-*`, exact Kokiri
+Final game evidence: `<oot3d-work>/outline-owner-20260907-*`, exact Kokiri
 HUD-test checkpoint, 120 fixed-work presentations, capture 110 at 2560x1440:
 
 - `mode7-on/off`: 146,205 raw contour pixels each, **zero differences**.
@@ -155,7 +155,7 @@ The current user Grass snapshot is saved in the product default and installed
 preserved, including all six mask rules. x2, FOV 1.10, Toon and TopScreen defaults
 remain unchanged. Existing unrelated user settings are not overwritten.
 
-Verification artifacts: `I:/oot3dre_work/grass-outline-occlusion-20260907-*`.
+Verification artifacts: `<oot3d-work>/grass-outline-occlusion-20260907-*`.
 
 - `mode7-on/off`: same binary/checkpoint/sample, 120 fixed-work presentations,
   capture 110, 2560x1440. **146,205 active raw-mask pixels each; zero differences**.
@@ -269,7 +269,7 @@ by native draws; old save files remain readable.
 
 Build uses the existing Clang incremental target `triaevum_public_runtime`,
 three jobs, without regenerating/recompiling title AOT. Executable:
-`I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`, paired with the
+`<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`, paired with the
 installed launch profile, not copied over a catalogued release executable.
 
 Reproduction harness: `tools/triaevum_release/tests/benchmark_gameplay.mjs`.
@@ -277,7 +277,7 @@ It copies user configs/save data privately. `validation=true` explicitly enables
 the Vulkan validation layer for correctness runs; throughput tests default off.
 All images are captured from the framebuffer, not from Windows.
 
-Evidence directories share prefix `I:/oot3dre_work/native-outline-guide-20260907-`.
+Evidence directories share prefix `<oot3d-work>/native-outline-guide-20260907-`.
 `gameplay-v1` / `gameplay-off-v1` are the paired Grass/outline captures; `intro-v1`
 exposed the missing depth-test eligibility in title layers, so it is diagnostic
 evidence, not the final visual result.
@@ -361,7 +361,7 @@ targets are used. Product defaults remain unchanged.
 
 ### Reproduction and evidence
 
-Artifacts: `I:/oot3dre_work/outline-isolation-20260907-*`.
+Artifacts: `<oot3d-work>/outline-isolation-20260907-*`.
 
 - `guides-before`: diagnostic view 6 proves that Grass depth rejected native
   contours and an initializer made the sky a valid contour surface.

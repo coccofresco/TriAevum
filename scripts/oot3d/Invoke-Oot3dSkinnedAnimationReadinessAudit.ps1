@@ -1,6 +1,6 @@
 param(
     [string]$ToolRoot = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$BindPoseManifest = "",
     [string]$CsabTrackManifest = "",
     [int]$SampleLimit = 100,

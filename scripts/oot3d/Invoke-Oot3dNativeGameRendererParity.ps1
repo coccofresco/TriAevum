@@ -2,7 +2,7 @@
 param(
     [switch]$SkipBuild,
     [switch]$ReuseExistingRuns,
-    [string]$OutputRoot = "I:\oot3dre_work\vulkan",
+    [string]$OutputRoot = "<oot3d-work>\vulkan",
     [string]$RunName = "",
     [string]$InputTimeline = "",
     [int]$Frames = 361,

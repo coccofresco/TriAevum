@@ -27,11 +27,11 @@ the temporary fallback and differential oracle while ownership is migrated.
 
 The stable host is:
 
-`F:\oot3dre_build\native-renderer-llvm\oot3d_native_game_source_overlay.exe`
+`<oot3d-build>\native-renderer-llvm\oot3d_native_game_source_overlay.exe`
 
 The hot-reloadable module is:
 
-`I:\oot3dre_work\native_game\source_overlays\oot3d_source_overlay.dll`
+`<oot3d-work>\native_game\source_overlays\oot3d_source_overlay.dll`
 
 Normal owner iteration:
 
@@ -49,7 +49,7 @@ Measured on this machine after initial configuration:
 
 Do not invoke the root build for an owner-only change. The build directory
 retains the Visual Studio environment and Ninja dependency graph at
-`I:\oot3dre_work\source-overlay-fast`.
+`<oot3d-work>\source-overlay-fast`.
 
 Only an ABI or host-dispatch change requires:
 
@@ -69,7 +69,7 @@ exceptional. Compile without linking while iterating on the boundary:
 ```
 
 Its independent CMake tree is
-`I:\oot3dre_work\source-overlay-host-patch`; it cannot alter the hot DLL cache.
+`<oot3d-work>\source-overlay-host-patch`; it cannot alter the hot DLL cache.
 
 ## Migration inventory
 

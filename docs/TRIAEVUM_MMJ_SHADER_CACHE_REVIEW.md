@@ -143,7 +143,7 @@ python -m unittest discover -s tools/oot3d/native_pica_frontend -p test_inspect_
 python tools/oot3d/native_pica_frontend/inspect_mmj_shader_cache.py --input PRIVATE/current/0004000000033500.shader --input PRIVATE/26/0004000000033500.shader --output PRIVATE/mmj-report.json --validator /usr/bin/glslangValidator
 ```
 
-Local evidence: `I:/oot3dre_work/citra-cache-review/mmj/`, including all four
+Local evidence: `<oot3d-work>/citra-cache-review/mmj/`, including all four
 downloaded shader/metadata pairs, `inspection.json`, `validation.json`, and the
 read-only MMJ source references under `source/`.
 Linux evidence: `~/triaevum-android-build/mmj-validation.json`; inputs

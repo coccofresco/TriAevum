@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import os
 import json
 import re
 import subprocess
@@ -40,10 +41,26 @@ DEFAULT_RUNTIME_CONTRACT = {
 }
 
 
+# Provenance records never carry a host-local absolute path: a path under a known
+# root is written as "<label>/relative", anything else by its file name only.
+PROVENANCE_ROOTS: dict[str, Path] = {}
+
+
+def public_path(path: Path) -> str:
+    resolved = path.resolve()
+    for label, root in PROVENANCE_ROOTS.items():
+        try:
+            relative = resolved.relative_to(root.resolve()).as_posix()
+        except ValueError:
+            continue
+        return f"<{label}>" if relative == "." else f"<{label}>/{relative}"
+    return f"<external>/{resolved.name}"
+
+
 def file_identity(path: Path) -> dict[str, Any]:
     payload = path.read_bytes()
     return {
-        "path": path.as_posix(),
+        "path": public_path(path),
         "bytes": len(payload),
         "sha256": hashlib.sha256(payload).hexdigest(),
     }
@@ -57,7 +74,7 @@ def git_identity(root: Path) -> dict[str, Any]:
 
     status = run("status", "--porcelain").splitlines()
     return {
-        "root": root.as_posix(),
+        "root": public_path(root),
         "commit": run("rev-parse", "HEAD"),
         "branch": run("branch", "--show-current"),
         "dirty": bool(status),
@@ -379,7 +396,11 @@ def make_entrance_scenario(
 
 
 def build_catalog(args: argparse.Namespace) -> dict[str, Any]:
+    if args.decomp_root is None:
+        raise SystemExit("--decomp-root (or TRIAEVUM_OOT3D_DECOMP_ROOT) is required")
     decomp_root = args.decomp_root.resolve()
+    PROVENANCE_ROOTS["oot3d-decomp"] = decomp_root
+    PROVENANCE_ROOTS["repo"] = Path(__file__).resolve().parents[3]
     code_path = decomp_root / "work/extract/exefs/code.bin"
     scene_path = decomp_root / "src/code/z_scene_source_table.c"
     setup_path = decomp_root / "src/code/z_scene_setup_source_table.c"
@@ -563,7 +584,12 @@ def build_catalog(args: argparse.Namespace) -> dict[str, Any]:
 def parse_args() -> argparse.Namespace:
     script_dir = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--decomp-root", type=Path, default=Path("I:/oot3decomp"))
+    parser.add_argument(
+        "--decomp-root",
+        type=Path,
+        default=(Path(os.environ["TRIAEVUM_OOT3D_DECOMP_ROOT"])
+                 if os.environ.get("TRIAEVUM_OOT3D_DECOMP_ROOT") else None),
+    )
     parser.add_argument(
         "--reference-catalog",
         type=Path,

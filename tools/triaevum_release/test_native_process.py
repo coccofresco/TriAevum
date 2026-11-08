@@ -63,13 +63,13 @@ class NativeProcessTests(unittest.TestCase):
                 self.assertEqual(native_process.native_process_environment(), dict(os.environ))
 
     def test_frozen_windows_removes_only_bundle_path_entries(self):
-        environment = {"PATH": r"C:\\Windows;I:\\Forge\\_internal;I:\\Forge\\_internal\\bin;I:\\Forge\\_internal-other"}
+        environment = {"PATH": r"C:\\Windows;<local>/Forge\\_internal;<local>/Forge\\_internal\\bin;<local>/Forge\\_internal-other"}
         with patch.dict(os.environ, environment, clear=True), \
              patch.object(native_process.sys, "platform", "win32"), \
              patch.object(native_process.sys, "frozen", True, create=True), \
-             patch.object(native_process.sys, "_MEIPASS", r"I:\\Forge\\_internal", create=True):
+             patch.object(native_process.sys, "_MEIPASS", r"<local>/Forge\\_internal", create=True):
             child = native_process.native_process_environment()
-            self.assertEqual(child["PATH"], r"C:\\Windows;I:\\Forge\\_internal-other")
+            self.assertEqual(child["PATH"], r"C:\\Windows;<local>/Forge\\_internal-other")
             self.assertEqual(dict(os.environ), environment)
 
     def test_native_run_captures_checks_and_times_out(self):
