@@ -27,7 +27,8 @@ const WINDOW_ICON_PNG: &[u8] = include_bytes!("../../../../../titles/mm3d/brandi
 #[cfg(not(feature = "title-mm3d"))]
 const FOCUS: Vec2 = vec2(0.775, 0.45);
 /// The clock tower's face in the MM3D art (the moon is above and left of it):
-/// the crop keeps the clock in view as the OoT3D crop keeps the sword.
+/// the crop keeps the clock in view as the OoT3D crop keeps the sword (anchor
+/// confirmed by the owner 2026-11-08).
 #[cfg(feature = "title-mm3d")]
 const FOCUS: Vec2 = vec2(0.84, 0.40);
 /// Where the sword lands across a window narrower than the art: near the

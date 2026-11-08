@@ -782,7 +782,7 @@ fn updating_from_an_extracted_folder_and_a_legacy_root_profile() {
     // beta.1.2: the new Forge runs from the extracted folder with
     // --update-target; an old launch profile is left in the root.
     let site = Site::new();
-    let legacy = site.activation().join("TriAevum.launch.json");
+    let legacy = site.activation().join(common::launch_profile_name());
     std::fs::write(&legacy, b"{\"legacy\": true}").unwrap();
     run_update(&site, &Run { source: Some(site.new_folder.clone()), ..Run::default() });
     assert_eq!(result(&site)["status"], "updated");

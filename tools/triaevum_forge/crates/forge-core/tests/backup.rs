@@ -142,7 +142,7 @@ fn windows_site_at(root: &Path) -> Site {
 fn populate_windows(site: &Site) {
     let (package, data) = (&site.package, &site.data);
     site.recipes();
-    profile(&data.join("TriAevum.launch.json"), "", "TriAevum.json");
+    profile(&data.join(common::launch_profile_name()), "", "TriAevum.json");
     write(&data.join("savedata/system/save00.bin"), b"save-a");
     write(&data.join("savedata/system/system.dat"), b"system");
     write(&data.join("savedata/crashes/one.dmp"), b"dump");
@@ -193,7 +193,7 @@ fn appimage_site(directory: &tempfile::TempDir) -> Site {
     std::fs::create_dir_all(&site.package).unwrap();
     site.recipes();
     let data = &site.data;
-    profile(&site.activation.join("TriAevum.launch.json"), "data/", "TriAevum.json");
+    profile(&site.activation.join(common::launch_profile_name()), "data/", "TriAevum.json");
     write(&data.join("savedata/system/save00.bin"), b"linux save");
     write_json(&data.join("config/TriAevum.json"), &json!({"linux": true}));
     write(&data.join("config/oot3d_controls.json"), b"{\"gamepad\": true}");

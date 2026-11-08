@@ -15,7 +15,7 @@ from typing import Any, Callable, Sequence
 try:
     from . import TOOL_VERSION
     from .product_contract import ensure_runtime_config, query_product
-    from .release_platform import WINDOWS, for_target, host_platform, place_installed_runtime
+    from .release_platform import WINDOWS, for_target, host_platform, launch_profile_name, place_installed_runtime
     from .host_layout import installation_state
     from .activation_transaction import activation_transaction
     from .installation_context import InstallationContext, resolve_reference
@@ -60,7 +60,7 @@ try:
 except ImportError:
     from __init__ import TOOL_VERSION
     from product_contract import ensure_runtime_config, query_product
-    from release_platform import WINDOWS, for_target, host_platform, place_installed_runtime
+    from release_platform import WINDOWS, for_target, host_platform, launch_profile_name, place_installed_runtime
     from host_layout import installation_state
     from activation_transaction import activation_transaction
     from installation_context import InstallationContext, resolve_reference
@@ -165,7 +165,8 @@ def default_runtime_plugin_path() -> Path:
 
 def default_runtime_launch_profile_path() -> Path:
     activation = installation_layout().activation
-    legacy = activation / "TriAevum.launch.json"
+    # Named after the installed executable, as the runtime looks for it.
+    legacy = activation / launch_profile_name(host_platform())
     # An installation made before the profile moved to data/ keeps it: the
     # runtime prefers a profile beside it, so a second one would go stale.
     if legacy.is_file():

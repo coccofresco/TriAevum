@@ -9,8 +9,12 @@ if (-not [Environment]::Is64BitProcess) {
     throw 'Run this script using 64-bit Windows PowerShell.'
 }
 $root = (Resolve-Path -LiteralPath $Installation).Path
-if (-not (Test-Path -LiteralPath (Join-Path $root 'TriAevum.exe'))) {
-    throw 'Installation must be the folder containing TriAevum.exe.'
+# The installed game executable takes the product name (titles/<title>/product.json);
+# an installation made before the product names still has TriAevum.exe.
+$game = @('Echoes_of_Time.exe', 'Moonfall_Curse.exe', 'TriAevum.exe') |
+    Where-Object { Test-Path -LiteralPath (Join-Path $root $_) } | Select-Object -First 1
+if (-not $game) {
+    throw 'Installation must be the folder containing the game (Echoes_of_Time.exe, Moonfall_Curse.exe or TriAevum.exe).'
 }
 Add-Type @"
 using System;
@@ -97,7 +101,7 @@ $report = [ordered]@{
 # executing their entry points; returned function addresses are NEVER called.
 $previous = [TriAevumLoaderProbe]::SetErrorMode(0x8003)
 try {
-    $files = @((Get-Item -LiteralPath (Join-Path $root 'TriAevum.exe')))
+    $files = @((Get-Item -LiteralPath (Join-Path $root $game)))
     $files += @(Get-ChildItem -LiteralPath $root -Filter '*.dll' -File)
     # The runtime's own DLLs are in runtime/ (SetDllDirectory), searched after its folder.
     $libraries = Join-Path $root 'runtime'

@@ -14,7 +14,7 @@ path = "src/main.rs"
 [features]
 # The per-title MM3D Forge (default: OoT3D): its own branding
 # (titles/mm3d/branding). INTEG's catalog feature uses the same name.
-title-mm3d = []
+title-mm3d = ["forge-core/title-mm3d", "forge-catalog/title-mm3d"]
 
 [dependencies]
 forge-base = { path = "../forge-base" }

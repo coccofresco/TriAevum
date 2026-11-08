@@ -57,7 +57,7 @@ fn bundle_import_uses_external_activation() {
     let runtime = common::FakeRuntime::default();
     fixture.install(&runtime, &mut Vec::new()).unwrap();
     assert_eq!(inventory(&app), before);
-    let profile = activation.join("TriAevum.launch.json");
+    let profile = activation.join(common::launch_profile_name());
     assert!(profile.is_file());
     let data = activation.join("data");
     assert!(data.join("active-title.json").is_file());

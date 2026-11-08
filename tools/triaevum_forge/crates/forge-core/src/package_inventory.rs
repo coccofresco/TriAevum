@@ -451,7 +451,14 @@ pub fn preserved(path: &str) -> bool {
     matches!(top, "data" | "savestates" | "logs" | "private-plugins" | ".forge-update")
         || top.starts_with(".update-")
         || top.starts_with(".forge-activation")
-        || matches!(path, "TriAevum.exe" | "triaevum_title_aot.dll" | "TriAevum.launch.json")
+        || matches!(path, "triaevum_title_aot.dll")
+        || [
+            forge_catalog::platform::LEGACY_WINDOWS_RUNTIME,
+            forge_catalog::platform::WINDOWS_PRODUCT_EXECUTABLE,
+            forge_catalog::platform::LEGACY_LAUNCH_PROFILE,
+        ]
+        .contains(&path)
+        || forge_catalog::platform::launch_profile_name(crate::layout::WINDOWS.installed_runtime) == path
 }
 
 /// The live path of a member under `root`.
@@ -547,6 +554,9 @@ mod tests {
         assert_eq!(parsed.signature_relative(), "docs/release-signature.json");
         assert_eq!(signature_relative("release-manifest.json"), "release-signature.json");
         assert!(preserved("data/savedata/x") && preserved("TriAevum.exe") && preserved(".update-1-2/x"));
+        let product = crate::layout::WINDOWS.installed_runtime;
+        assert!(preserved(product) && preserved(&product.replace(".exe", ".launch.json")));
+        assert!(!preserved("Moonfall_Curse.exe") || !preserved("Echoes_of_Time.exe"));
         assert!(!preserved("runtime/TriAevum.exe"));
     }
 }

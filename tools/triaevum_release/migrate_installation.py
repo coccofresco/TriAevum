@@ -3,14 +3,14 @@
 from pathlib import Path
 
 try:
-    from .release_platform import host_platform, installed_runtime_path
+    from .release_platform import host_platform, installed_runtime_path, launch_profile_name, LEGACY_LAUNCH_PROFILE
     from .host_layout import installation_state
     from .activation_transaction import activation_transaction
     from .common import atomic_write_json, load_json_object, sha256_file
     from .installation_context import InstallationContext, expand_profile_argument, resolve_reference
     from .installed_runtime import validate_installed_runtime
 except ImportError:
-    from release_platform import host_platform, installed_runtime_path
+    from release_platform import host_platform, installed_runtime_path, launch_profile_name, LEGACY_LAUNCH_PROFILE
     from host_layout import installation_state
     from activation_transaction import activation_transaction
     from common import atomic_write_json, load_json_object, sha256_file
@@ -28,9 +28,12 @@ def migrate_installation(installation: Path, title: Path, data_root: Path) -> di
         raise ValueError("Portable migration requires title and data inside the installation")
     context = InstallationContext(installation)
     platform = host_platform()
-    profile = installation_state(installation) / "TriAevum.launch.json"
-    if not profile.is_file() and (installation / profile.name).is_file():
-        profile = installation / profile.name  # installed before the profile moved to data/
+    # The profile is named after the installed executable; an installation
+    # activated before the product names keeps TriAevum.launch.json, and one
+    # installed before the profile moved to data/ keeps it in the root.
+    candidates = [folder / name for name in (launch_profile_name(platform), LEGACY_LAUNCH_PROFILE)
+                  for folder in (installation_state(installation), installation)]
+    profile = next((path for path in candidates if path.is_file()), candidates[0])
     manifest_path = title / "process-manifest.json"
     state_path = title / "forge-state.json"
     index_path = title / "content.tap"

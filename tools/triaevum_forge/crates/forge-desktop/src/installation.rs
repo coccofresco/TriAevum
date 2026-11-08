@@ -81,7 +81,7 @@ mod tests {
         std::fs::write(installation.root.join("recipes").join("oot3d.json"), b"{}").unwrap();
         assert!(installation.recipes().ends_with("recipes/oot3d.json"));
         if cfg!(all(windows, target_arch = "x86_64")) {
-            assert_eq!(installation.runtime_path().unwrap(), installation.root.join("TriAevum.exe"));
+            assert_eq!(installation.runtime_path().unwrap(), installation.root.join(forge_catalog::platform::WINDOWS_PRODUCT_EXECUTABLE));
         }
     }
 }

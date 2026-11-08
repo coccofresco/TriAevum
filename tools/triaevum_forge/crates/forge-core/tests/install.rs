@@ -84,8 +84,7 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     assert_eq!(receipt["target"], host().target);
     assert_eq!(receipt["runtime_sha256"], sha256_hex(b"fake runtime"));
     assert_eq!(receipt["plugin_sha256"], plugin_sha);
-    let profile_reference =
-        if cfg!(windows) { "../../../TriAevum.launch.json" } else { "../../../../TriAevum.launch.json" };
+    let profile_reference = if cfg!(windows) { "../../../" } else { "../../../../" }.to_owned() + &common::launch_profile_name();
     assert_eq!(receipt["launch_profile"], profile_reference);
     assert_eq!(receipt["launch_profile_sha256"], sha256_hex(&std::fs::read(fixture.launch_profile()).unwrap()));
     assert_eq!(receipt["renderer_cache"]["path"], "../../../cache/renderer");
@@ -239,7 +238,8 @@ fn a_rejected_plugin_rolls_the_publication_back() {
     assert_eq!(error.kind, ErrorKind::NativePreflight);
     assert_eq!(error.stage, Some("activate"));
     let data = fixture.data();
-    for created in ["active-title.json", "TriAevum.launch.json", "config/TriAevum.json", "config/topscreen_ui.json"] {
+    let profile = common::launch_profile_name();
+    for created in ["active-title.json", profile.as_str(), "config/TriAevum.json", "config/topscreen_ui.json"] {
         assert!(!data.join(created).exists(), "{created} rolled back");
     }
     assert!(!fixture.launch_profile().exists());

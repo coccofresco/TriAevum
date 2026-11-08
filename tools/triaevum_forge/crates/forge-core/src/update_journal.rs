@@ -343,8 +343,9 @@ pub fn activation_targets(activation: &Path, data_root: &Path) -> Result<Vec<Pat
     let mut targets = vec![
         activation.join(platform.title_module),
         // Both profile places: a legacy root profile and the data/ one.
-        activation.join("TriAevum.launch.json"),
-        crate::layout::installation_state(activation, HostOs::current()).join("TriAevum.launch.json"),
+        activation.join(forge_catalog::platform::launch_profile_name(platform.installed_runtime)),
+        crate::layout::installation_state(activation, HostOs::current())
+            .join(forge_catalog::platform::launch_profile_name(platform.installed_runtime)),
         active.clone(),
         data_root.join("config").join("TriAevum.json"),
         data_root.join("config").join("topscreen_ui.json"),

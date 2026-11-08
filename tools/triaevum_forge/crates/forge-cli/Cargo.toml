@@ -11,6 +11,10 @@ publish.workspace = true
 name = "triaevum-forge"
 path = "src/main.rs"
 
+[features]
+# The MM3D Forge (installed game executable "Moonfall_Curse.exe").
+title-mm3d = ["forge-core/title-mm3d"]
+
 [dependencies]
 forge-core = { path = "../forge-core" }
 forge-native = { path = "../forge-native" }

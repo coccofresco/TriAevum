@@ -110,14 +110,17 @@ def validate_run(package: Path, plugin: Path, process_manifest: Path,
         from . import forge
         from .activation_transaction import activation_transaction
         from .installed_runtime import validate_installed_runtime
+        from .release_platform import host_platform, installed_runtime_path, launch_profile_name
     except ImportError:
         import forge
         from activation_transaction import activation_transaction
         from installed_runtime import validate_installed_runtime
+        from release_platform import host_platform, installed_runtime_path, launch_profile_name
     title = installation / "data/titles/validation"
     title.mkdir(parents=True)
     clone_validation_content(process_manifest, title, copy_inputs=relocate)
-    profile_path = installation / "data/TriAevum.launch.json"
+    platform = host_platform()
+    profile_path = installation / "data" / launch_profile_name(platform)
     active_path = installation / "data/active-title.json"
     with activation_transaction(installation, [
         profile_path, active_path, title / "forge-state.json",
@@ -141,11 +144,12 @@ def validate_run(package: Path, plugin: Path, process_manifest: Path,
         installation = moved
         title = installation / title_relative
         generation = installation / generation_relative
-        profile_path = installation / "data/TriAevum.launch.json"
+        profile_path = installation / "data" / launch_profile_name(platform)
         forge.load_prepared_content(title, required_inputs=("code", "exheader", "romfs"))
-    validate_installed_runtime(installation / "TriAevum.exe", title, installation / "data",
+    runtime = installed_runtime_path(installation, platform)
+    validate_installed_runtime(runtime, title, installation / "data",
                               load_json_object(title / "forge-state.json")["runtime"])
-    receipt = query_product(installation / "TriAevum.exe", plugin=generation)
+    receipt = query_product(runtime, plugin=generation)
     if receipt["product"].get("private_title_loaded") is not True:
         raise ValueError("Validation requires the private whole-AOT v2 plugin")
     config = installation / "data/config/TriAevum.json"

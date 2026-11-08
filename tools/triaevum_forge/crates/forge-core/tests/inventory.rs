@@ -139,7 +139,7 @@ fn windows_portable_resolves_beside_the_executable_and_in_data() {
     let root = resolve(directory.path()).unwrap();
     let package = root.join("TriAevum");
     let data = package.join("data");
-    profile(&data.join("TriAevum.launch.json"), "", "TriAevum.json", &[]);
+    profile(&data.join(common::launch_profile_name()), "", "TriAevum.json", &[]);
     write(&data.join("savedata/system/save.bin"), b"0123456789");
     write(&data.join("savedata/crashes/one.dmp"), b"dump");
     write(&data.join("config/TriAevum.json"), b"{}");
@@ -171,7 +171,7 @@ fn windows_portable_resolves_beside_the_executable_and_in_data() {
     assert_entry(&inventory, "imgui_layout", &data.join("imgui.ini"), Origin::Default, Backup::Include);
     assert_entry(&inventory, "game_logs", &package.join("logs"), Origin::Legacy, Backup::Exclude);
     assert_entry(&inventory, "forge_logs", &data.join("logs"), Origin::Default, Backup::Exclude);
-    assert_entry(&inventory, "launch_profile", &data.join("TriAevum.launch.json"), Origin::Default, Backup::Exclude);
+    assert_entry(&inventory, "launch_profile", &data.join(common::launch_profile_name()), Origin::Default, Backup::Exclude);
     assert_entry(&inventory, "title_plugins", &package.join("private-plugins"), Origin::Default, Backup::Exclude);
     let textures = root.join("AppData/Roaming/Azahar");
     assert_entry(
@@ -209,7 +209,7 @@ fn a_windows_root_profile_is_a_legacy_location_the_runtime_still_reads() {
     let root = resolve(directory.path()).unwrap();
     let package = root.join("TriAevum");
     // An installation from before the profile moved to data/.
-    profile(&package.join("TriAevum.launch.json"), "data/", "TriAevum.json", &[]);
+    profile(&package.join(common::launch_profile_name()), "data/", "TriAevum.json", &[]);
     write(&package.join("data/config/TriAevum.json"), b"{}");
     write(&package.join("imgui.ini"), b"[Window] old");
     let env = env_of(vec![]);
@@ -225,7 +225,7 @@ fn a_windows_root_profile_is_a_legacy_location_the_runtime_still_reads() {
     let inventory = resolved(&root, &installation);
     let launch = entry(&inventory, "launch_profile");
     assert_eq!((launch.origin, launch.active), (Origin::Legacy, true));
-    assert_eq!(launch.resolved_path, package.join("TriAevum.launch.json"));
+    assert_eq!(launch.resolved_path, package.join(common::launch_profile_name()));
     assert_entry(&inventory, "save_data", &package.join("data/savedata"), Origin::Default, Backup::Include);
     // data/ exists, so the runtime writes data/imgui.ini and ignores the old one.
     assert_entry(&inventory, "imgui_layout", &package.join("data/imgui.ini"), Origin::Default, Backup::Include);
@@ -250,7 +250,7 @@ fn appimage_activates_in_xdg_data_with_explicit_external_choices() {
     let home = root.join("home/jdoe");
     let activation = home.join(".local/share/TriAevum");
     let data = activation.join("data");
-    profile(&activation.join("TriAevum.launch.json"), "data/", "TriAevum.json", &[]);
+    profile(&activation.join(common::launch_profile_name()), "data/", "TriAevum.json", &[]);
     let external_states = root.join("external/states");
     let external_pack = root.join("external/pack");
     write_json(&data.join("config/savestates.json"), &json!({"Directory": text(&external_states), "LastState": ""}));
@@ -320,7 +320,7 @@ fn flatpak_activates_in_its_sandbox_and_honours_ship_home_and_environment_overri
     let data = activation.join("data");
     let controls = root.join("elsewhere/controls.json");
     let extra = ["--controls-config".to_string(), text(&controls)];
-    profile(&activation.join("TriAevum.launch.json"), "data/", "TriAevum.json", &extra);
+    profile(&activation.join(common::launch_profile_name()), "data/", "TriAevum.json", &extra);
     let ship_home = root.join("ship-home");
     std::fs::create_dir_all(&ship_home).unwrap();
     let dumps = root.join("dumps");
@@ -477,7 +477,7 @@ fn a_managed_profile_routes_the_data_tree_and_lists_earlier_locations() {
         "--title-id".into(),
         "0004000000033500".into(),
     ];
-    profile(&data.join("TriAevum.launch.json"), "", "TriAevum.json", &extra);
+    profile(&data.join(common::launch_profile_name()), "", "TriAevum.json", &extra);
     write(&data.join("config/TriAevum.json"), b"{}");
     write(&data.join("savedata/crashes/one.dmp"), b"dump");
     write(&package.join("savestates/state-1.oot3dsav"), b"state");
@@ -593,7 +593,7 @@ fn an_explicit_data_folder_makes_its_locations_explicit_and_external() {
     assert_entry(&inventory, "save_data", &elsewhere.join("savedata"), Origin::Explicit, Backup::Include);
     assert_entry(&inventory, "mods", &elsewhere.join("mods"), Origin::Explicit, Backup::Optional);
     assert!(!entry(&inventory, "save_data").managed);
-    assert_entry(&inventory, "launch_profile", &package.join("TriAevum.launch.json"), Origin::Default, Backup::Exclude);
+    assert_entry(&inventory, "launch_profile", &package.join(common::launch_profile_name()), Origin::Default, Backup::Exclude);
 }
 
 #[test]

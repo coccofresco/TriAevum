@@ -33,10 +33,11 @@ def import_fixture(symbols):
 @unittest.skipUnless(sys.platform == "win32" and shutil.which("powershell.exe"),
                      "requires Windows PowerShell")
 class WindowsLoaderDiagnosticTests(unittest.TestCase):
-    def probe(self, image):
+    def probe(self, image, name="TriAevum.exe"):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            (root / "TriAevum.exe").write_bytes(image)
+            if name:
+                (root / name).write_bytes(image)
             output = root / "report.json"
             result = subprocess.run([
                 "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
@@ -51,6 +52,24 @@ class WindowsLoaderDiagnosticTests(unittest.TestCase):
         self.assertEqual(code, 0, report)
         self.assertEqual(report["problems"], [])
         self.assertEqual(report["modules"][0]["imports"][0]["checked"], 1)
+
+    def test_the_product_named_game_is_diagnosed(self):
+        # Owner decision 2026-11-08: the installed game takes the product name.
+        for name in ("Echoes_of_Time.exe", "Moonfall_Curse.exe"):
+            code, report = self.probe(import_fixture(["Sleep", "TriAevumMissingExportFixture"]), name)
+            self.assertEqual(code, 1)
+            self.assertEqual(report["problems"],
+                             [f"{name} requires kernel32.dll!TriAevumMissingExportFixture (not resolved)"])
+
+    def test_a_folder_without_the_game_is_refused(self):
+        with tempfile.TemporaryDirectory() as folder:
+            result = subprocess.run([
+                "powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(Path(__file__).with_name("diagnose_windows_loader.ps1")),
+                "-Installation", folder, "-Output", str(Path(folder) / "report.json"),
+            ], capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Echoes_of_Time.exe, Moonfall_Curse.exe or TriAevum.exe", result.stderr + result.stdout)
 
     def test_missing_export_names_exact_importer_provider_and_symbol(self):
         code, report = self.probe(import_fixture(["Sleep", "TriAevumMissingExportFixture"]))

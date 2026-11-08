@@ -1,0 +1,6 @@
+{
+  "_about": "OoT3D product facts (owner decision 2026-11-08, BRANDING answer 1): the installed game executable takes the product name. The build output stays TriAevum.exe (runtime/TriAevum.exe in the package); Forge's install step renames it (forge-catalog platform.rs WINDOWS_PRODUCT_EXECUTABLE, release_platform.py). Guard words: Echoes of Time, Ocarina of Time 3D.",
+  "title": "oot3d",
+  "product_name": "Echoes of Time",
+  "windows_executable": "Echoes_of_Time.exe"
+}

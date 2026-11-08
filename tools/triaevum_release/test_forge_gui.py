@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from ctr_rom import ExtractedFile, ExtractedTitleInputs
-from release_platform import host_platform
+from release_platform import host_platform, launch_profile_name
 from forge_gui import (
     InstallRequest,
     install_private_title,
@@ -105,7 +105,7 @@ class ForgeGuiTests(unittest.TestCase):
         )
         self.assertEqual(
             build.call_args.kwargs["launch_profile"].name,
-            "TriAevum.launch.json",
+            launch_profile_name(host_platform()),
         )
 
     def test_matches_a_recipe_from_extracted_rom_contents(self) -> None:

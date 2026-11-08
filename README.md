@@ -101,8 +101,9 @@ See [ROM compatibility details](docs/TRIAEVUM_CONTENT_FAMILY_IMPORT.md).
    are downloaded with the preparation unless you turn them off under
    **Enhancements**; if the download fails, select the zip from
    [the mod page](https://gamebanana.com/mods/701929) there yourself.
-3. When preparation finishes, press **Play**. `TriAevum.exe` is then in the
-   same folder as Forge; you can start the game from either one.
+3. When preparation finishes, press **Play**. The game, `Echoes_of_Time.exe`,
+   is then in the same folder as Forge; you can start it from either one.
+   (Installations made before this name had `TriAevum.exe`; Forge replaces it.)
 
 Keep the folder path reasonably short: Windows still has a 259-character path
 limit, and Forge now tells you how many characters to give back instead of

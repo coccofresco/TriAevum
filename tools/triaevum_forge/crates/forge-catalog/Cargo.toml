@@ -7,6 +7,10 @@ license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+# The MM3D Forge: the installed game executable is "Moonfall_Curse.exe".
+title-mm3d = []
+
 [dependencies]
 forge-base = { path = "../forge-base" }
 serde_json.workspace = true

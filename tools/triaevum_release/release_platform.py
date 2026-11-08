@@ -1,6 +1,7 @@
 """Names and ABI targets at the release/installation platform boundary."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+import json
 import os
 from pathlib import Path
 import platform
@@ -26,11 +27,30 @@ class ReleasePlatform:
     installed_runtime: str
 
 
+TITLES_ROOT = Path(__file__).resolve().parents[2] / "titles"
+# The root runtime of Windows installations made before the product names.
+LEGACY_WINDOWS_RUNTIME = "TriAevum.exe"
+LEGACY_LAUNCH_PROFILE = "TriAevum.launch.json"
+
+
+def product_executable(title: str, titles_root: Path = TITLES_ROOT) -> str:
+    """The installed Windows game executable of `title`: the product name
+    (owner decision 2026-11-08), a title fact in titles/<title>/product.json."""
+    facts = json.loads((titles_root / title / "product.json").read_text(encoding="utf-8"))
+    name = facts.get("windows_executable")
+    if facts.get("title") != title or not isinstance(name, str) or not name.endswith(".exe") or "/" in name:
+        raise ValueError(f"Invalid product facts for {title}")
+    return name
+
+
+# The package keeps the build output runtime/TriAevum.exe; installing renames it
+# to the product name ("Echoes_of_Time.exe" for OoT3D, the Python Forge's title;
+# the MM3D Forge is the Rust one built with title-mm3d: for_title("mm3d")).
 WINDOWS = ReleasePlatform("x86_64-pc-windows-msvc", "runtime/TriAevum.exe",
                           "TriAevumForge.exe", "forge/oot3d_game_module.dll",
                           "triaevum_title_aot.dll", "x86_64-windows-thinlto-release-v1",
                           "clang-cl.exe", "llvm-lib.exe", "triaevum_title_whole_aot_support.lib", ".zip",
-                          "TriAevum.exe")
+                          "Echoes_of_Time.exe")
 LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "TriAevumForge", "forge/oot3d_game_module.so",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
@@ -50,6 +70,20 @@ ANDROID = ReleasePlatform("aarch64-linux-android", "lib/arm64-v8a/libTriAevum.so
                           "libtriaevum_title_aot.so", "aarch64-android-release-v1",
                           "clang++", "llvm-ar", "libtriaevum_title_whole_aot_support.a", ".apk",
                           "lib/arm64-v8a/libTriAevum.so")
+
+
+def for_title(title: str, value: ReleasePlatform = None) -> ReleasePlatform:
+    """The Windows platform of `title`'s product (its installed executable name)."""
+    value = WINDOWS if value is None else value
+    if value.target != WINDOWS.target:
+        return value
+    return replace(value, installed_runtime=product_executable(title))
+
+
+def launch_profile_name(value: ReleasePlatform) -> str:
+    """The profile the runtime finds by itself: its executable's stem + .launch.json."""
+    name = value.installed_runtime.rsplit("/", 1)[-1]
+    return (name[:-4] if name.endswith(".exe") else name) + ".launch.json"
 
 
 def installed_runtime_path(root: Path, value: ReleasePlatform) -> Path:
@@ -85,11 +119,15 @@ def place_installed_runtime(root: Path, value: ReleasePlatform) -> Path:
         for library in packaged.parent.glob("*.dll"):
             _remove_shadowing_library(root / library.name)
         os.replace(packaged, installed)
+        # No second, stale game executable under the pre-product name.
+        legacy = root / LEGACY_WINDOWS_RUNTIME
+        if value.target == WINDOWS.target and legacy != installed and legacy.is_file():
+            legacy.unlink()
     return installed
 
 
 def is_windows(value: ReleasePlatform) -> bool:
-    return value == WINDOWS
+    return value.target == WINDOWS.target
 
 
 def for_target(target: str) -> ReleasePlatform:

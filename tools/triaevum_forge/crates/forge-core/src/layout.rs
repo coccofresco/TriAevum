@@ -204,7 +204,8 @@ pub const WINDOWS: ReleasePlatform = ReleasePlatform {
     forge: "TriAevumForge.exe",
     native_module: "forge/oot3d_game_module.dll",
     title_module: "triaevum_title_aot.dll",
-    installed_runtime: "TriAevum.exe",
+    // The product name, a title fact (forge-catalog platform.rs).
+    installed_runtime: forge_catalog::platform::WINDOWS_PRODUCT_EXECUTABLE,
 };
 
 pub const LINUX: ReleasePlatform = ReleasePlatform {
@@ -263,7 +264,12 @@ pub fn installed_runtime_path(root: &Path, platform: &ReleasePlatform) -> PathBu
 /// come only after the long shader preparation (issue #110). Only Windows
 /// can name the processes; elsewhere this always passes.
 pub fn ensure_runtime_closed(root: &Path, platform: &ReleasePlatform) -> Result<()> {
-    for runtime in [root.join(platform.installed_runtime), root.join(platform.runtime)] {
+    let mut runtimes = vec![root.join(platform.installed_runtime), root.join(platform.runtime)];
+    if *platform == WINDOWS {
+        // An installation made before the product names runs its old root runtime.
+        runtimes.push(root.join(forge_catalog::platform::LEGACY_WINDOWS_RUNTIME));
+    }
+    for runtime in runtimes {
         let holders = forge_base::file_holders::processes_using(&runtime);
         if !holders.is_empty() {
             let message = format!(
@@ -313,6 +319,12 @@ pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Resul
             }
         }
         fsutil::replace_file(&packaged, &installed).map_err(|error| file_error("Cannot place", &installed, error))?;
+        // An installation made before the product names keeps no second,
+        // stale game executable under the old name.
+        let legacy = root.join(forge_catalog::platform::LEGACY_WINDOWS_RUNTIME);
+        if *platform == WINDOWS && legacy != installed && legacy.is_file() {
+            fsutil::remove_file(&legacy).map_err(|error| file_error("Cannot remove", &legacy, error))?;
+        }
     }
     Ok(installed)
 }
@@ -432,12 +444,15 @@ mod tests {
         std::fs::write(root.join("unrelated.dll"), b"user").unwrap();
         std::fs::write(root.join(".vcruntime140.dll.1.stale"), b"released").unwrap();
         assert_eq!(installed_runtime_path(root, &WINDOWS), root.join(WINDOWS.runtime));
-        assert_eq!(place_installed_runtime(root, &WINDOWS).unwrap(), root.join("TriAevum.exe"));
-        assert_eq!(std::fs::read(root.join("TriAevum.exe")).unwrap(), b"new runtime");
+        let product = root.join(WINDOWS.installed_runtime);
+        assert_eq!(place_installed_runtime(root, &WINDOWS).unwrap(), product);
+        assert_eq!(std::fs::read(&product).unwrap(), b"new runtime");
+        // The product name replaces the old root runtime (owner decision 2026-11-08).
+        assert!(!root.join("TriAevum.exe").exists(), "the legacy TriAevum.exe is removed");
         assert!(!root.join("SDL2.dll").exists());
         assert!(!root.join(".vcruntime140.dll.1.stale").exists());
         assert!(root.join("unrelated.dll").is_file());
-        assert_eq!(installed_runtime_path(root, &WINDOWS), root.join("TriAevum.exe"));
+        assert_eq!(installed_runtime_path(root, &WINDOWS), product);
     }
 
     fn read_only(path: &Path, contents: &[u8]) {
@@ -458,14 +473,15 @@ mod tests {
         read_only(&root.join("vcruntime140.dll"), b"old");
         read_only(&root.join(".msvcp140.dll.1.stale"), b"released");
         ensure_runtime_closed(root, &WINDOWS).unwrap();
-        assert_eq!(place_installed_runtime(root, &WINDOWS).unwrap(), root.join("TriAevum.exe"));
-        assert_eq!(std::fs::read(root.join("TriAevum.exe")).unwrap(), b"new runtime");
+        let product = root.join(WINDOWS.installed_runtime);
+        assert_eq!(place_installed_runtime(root, &WINDOWS).unwrap(), product);
+        assert_eq!(std::fs::read(&product).unwrap(), b"new runtime");
         let mut names: Vec<String> = std::fs::read_dir(root)
             .unwrap()
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         names.sort();
-        assert_eq!(names, ["TriAevum.exe", "runtime"]);
+        assert_eq!(names, [WINDOWS.installed_runtime, "runtime"]);
     }
 
     /// A copy of the command interpreter stands in for the running game.
@@ -481,6 +497,7 @@ mod tests {
         std::fs::create_dir(root.join("runtime")).unwrap();
         std::fs::write(root.join(WINDOWS.runtime), b"new runtime").unwrap();
         let shell = std::env::var_os("ComSpec").map(PathBuf::from).expect("ComSpec names cmd.exe");
+        // The game of an earlier package still runs under the legacy name.
         let installed = root.join("TriAevum.exe");
         std::fs::copy(&shell, &installed).unwrap();
         let mut game = Command::new(&installed)
@@ -503,6 +520,7 @@ mod tests {
 
         ensure_runtime_closed(root, &WINDOWS).unwrap();
         place_installed_runtime(root, &WINDOWS).unwrap();
-        assert_eq!(std::fs::read(&installed).unwrap(), b"new runtime");
+        assert_eq!(std::fs::read(root.join(WINDOWS.installed_runtime)).unwrap(), b"new runtime");
+        assert!(!installed.exists());
     }
 }
