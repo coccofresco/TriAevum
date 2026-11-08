@@ -46,6 +46,15 @@ inline constexpr std::array kMm3dSyntheticSources{
         {0x428740,0xE5860140},{0x428748,0xE5860144},
         {0x42878C,0x004E2304},{0x428790,0x004E2234},
         {0x428784,0x002D23A8},{0x2D24B0,0x3B83126F},{0x2D23C0,0x0D9F0A3A}}}},
+    // 0xB = En_Dodongo (object_dodongo, update 456A10, draw 456990). Breath
+    // action 55868C (actionFunc +0x9D4, literal 5589BC, compared at 558744)
+    // spawns its fire while the frame (+0x240 = skelAnime+0x48, read 558794)
+    // is within 29.0 (5589C0) .. 43.0 (5589C4), at bodyPartsPos[0] (+0xA20,
+    // read 5587F0). Analysis round5/dodongo_proof.out.
+    Mm3dSyntheticSource{0xB,0x456A10,0x3F9010,{{
+        {0x558740,0xE59F1274},{0x558744,0xE59509D4},
+        {0x5589BC,0x0055868C},{0x5589C0,0x41E80000},
+        {0x5589C4,0x422C0000},{0x558794,0xED950A90},{0x5587F0,0xED961A88}}}},
     Mm3dSyntheticSource{0x10B,0x4B4BE8,0x474070,{{
         {0x47403C,0xEBFD1750},{0x474040,0xE584026C},
         {0x474000,0xE5840264},{0x4B4C6C,0xE594220C}}}},
@@ -146,6 +155,15 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
         if(!(total>0))return;
         for(uint32_t c=0;c<3;++c)position[c]=sum[c]/total;
         radius=400.F*std::clamp(scale[0]/.03F,.1F,2.F);
+    } else if(id==0xB) {
+        // OoT3D policy (En_Dodongo breathing fire): emits while the breath
+        // frame is 29..43, fading by 10 per frame, radius 400. MM's native
+        // fire spawns at the mouth body part, so the light is placed there.
+        uint32_t action=0;float frame=0;
+        if(draw!=0x456990 || !memory.Read32(actor+0x9D4,&action) || action!=0x55868C ||
+           !F(memory,actor+0x240,frame) || !(frame>=29.F) || !(frame<=43.F) ||
+           !V(memory,actor+0xA20,position))return;
+        level=(255.F-10.F*std::trunc(frame-29.F))/255.F;radius=400;
     } else if(id==0x61) {
         // OoT3D policy (oot3d_native_a32_fire_emitters.cpp, En_Honotrap): the
         // flames (params 1, 2) grow from 0.0001 to 0.004 / 0.0048 and shrink

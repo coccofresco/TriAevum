@@ -282,7 +282,7 @@ void TestRoomEmitterPublication() {
 
 void TestSyntheticFireAndFairies() {
     // F02(b): OoT3D's S-candidates present in MM (Honotrap flames) must be rows.
-    for(const uint16_t id:{uint16_t(0x61)})
+    for(const uint16_t id:{uint16_t(0x61),uint16_t(0xB)})
         Require(std::any_of(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
                 [&](const auto& r){return r.Actor==id;}),"OoT3D synthetic fire analogue missing in MM");
     for(const auto& row:kMm3dSyntheticSources) {
@@ -297,6 +297,8 @@ void TestSyntheticFireAndFairies() {
         if(row.Actor==0xB7){draw=0x47C5E4;f.F32(f.Actor+0x224,255);f.F32(f.Actor+0x228,1);f.W32(f.Actor+0x28C,f.Model);}
         if(row.Actor==0xFA){draw=0x483518;for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x2FC+n*4,255);
             for(uint32_t i=0;i<10;++i)for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x22C+i*12+n*4,float(10+n*10));}
+        if(row.Actor==0xB){draw=0x456990;f.W32(f.Actor+0x9D4,0x55868C);f.F32(f.Actor+0x240,31.5F);
+            for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0xA20+n*4,float(100+n));}
         if(row.Actor==0x61){draw=0x4E2234;f.W16(f.Actor+0x1C,2);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0048F);}
         f.W32(f.Actor+0x144,draw);
         CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
@@ -321,6 +323,21 @@ void TestSyntheticFireAndFairies() {
             lights.clear();f.W32(f.Actor+0x30C,0xBAD);
             CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
             Require(lights.empty(),"unknown fire-arrow action emitted");
+        }
+        if(row.Actor==0xB) {
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Radius==400 && lights[0].PositionWorld[0]==100 &&
+                    std::abs(lights[0].Color[0]-235.F/255.F)<1e-5F,"Dodongo breath lost OoT3D frame/alpha policy or mouth position");
+            for(const float frame:{28.F,43.5F}) {
+                lights.clear();f.F32(f.Actor+0x240,frame);
+                CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+                Require(lights.empty(),"Dodongo breath emitted outside frames 29..43");
+            }
+            lights.clear();f.F32(f.Actor+0x240,30.F);f.W32(f.Actor+0x9D4,0x55868C+4);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"Dodongo not breathing emitted");
+            f.W32(f.Actor+0x9D4,0x55868C);
         }
         if(row.Actor==0x61) {
             // Grown drop flame: full level, radius 500*scale/0.004 (OoT3D policy).
