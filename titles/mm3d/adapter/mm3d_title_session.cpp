@@ -591,24 +591,8 @@ public:
 
 private:
   bool EnsureLightOverflow(bool create) {
-    using A = Mm3dLightArena;
-    auto& memory = *mHostMemory;
-    if (!memory.IsMapped(A::MappingBase, A::MappingSize)) {
-      // MapRegion rejects ANY overlap, including partial mappings. Do not unmap
-      // or appropriate another subsystem's range on failure.
-      if (!create || !memory.MapRegion({"mm3d_light_overflow", A::MappingBase,
-                                        A::MappingSize, true, false, {}})) return false;
-      if (!memory.Write32(A::MappingBase, A::Magic0) ||
-          !memory.Write32(A::MappingBase + 4, A::Magic1)) return false;
-    }
-    // Revalidate after savestate restore; host-side booleans are not ownership.
-    bool exact = false;
-    for (const auto& region : memory.RegionInfos())
-      if (region.BaseAddress == A::MappingBase && region.Size == A::MappingSize &&
-          region.Writable && !region.Executable) exact = true;
-    uint32_t magic0=0, magic1=0;
-    return exact && memory.Read32(A::MappingBase,&magic0) && magic0==A::Magic0 &&
-           memory.Read32(A::MappingBase+4,&magic1) && magic1==A::Magic1;
+    // Shared with mm3d_light_overflow_restore_tests (savestate round trip).
+    return EnsureMm3dLightOverflowMapping(*mHostMemory, create);
   }
   NativeA32Memory* mHostMemory = nullptr;
   Mm3dLightArena mLightArena;

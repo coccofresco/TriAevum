@@ -99,4 +99,26 @@ private:
     bool mVerified = false, mEnabled = false;
     Statistics mStats;
 };
+
+// The overflow mapping is guest memory: a savestate carries it (region and
+// bytes) and a restore replaces it. Host-side booleans are not ownership, so
+// every use revalidates the exact region and its identity header. create=false
+// never maps; MapRegion refuses any overlap, so another subsystem's range is
+// never appropriated.
+template<class M> bool EnsureMm3dLightOverflowMapping(M& memory, bool create) {
+    using A = Mm3dLightArena;
+    if (!memory.IsMapped(A::MappingBase, A::MappingSize)) {
+        if (!create || !memory.MapRegion({"mm3d_light_overflow", A::MappingBase,
+                                          A::MappingSize, true, false, {}})) return false;
+        if (!memory.Write32(A::MappingBase, A::Magic0) ||
+            !memory.Write32(A::MappingBase + 4, A::Magic1)) return false;
+    }
+    bool exact = false;
+    for (const auto& region : memory.RegionInfos())
+        if (region.BaseAddress == A::MappingBase && region.Size == A::MappingSize &&
+            region.Writable && !region.Executable) exact = true;
+    uint32_t magic0 = 0, magic1 = 0;
+    return exact && memory.Read32(A::MappingBase, &magic0) && magic0 == A::Magic0 &&
+           memory.Read32(A::MappingBase + 4, &magic1) && magic1 == A::Magic1;
+}
 } // namespace Oot3dNativeGame
