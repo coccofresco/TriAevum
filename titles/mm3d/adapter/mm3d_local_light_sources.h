@@ -96,6 +96,19 @@ inline constexpr std::array kMm3dLocalLightSources{
         {0x4A2F00,0xEBF5122F},{0x4A2F04,0xE5840384},{0x4A3078,0xE5902384},{0x4A308C,0xEBF537FF}}}},
     Mm3dLocalLightSource{0x222,6,0x258,0x254,0x4DC2EC,0x4BECEC,{{
         {0x4BEC68,0xEBF4A2D5},{0x4BEC6C,0xE5840254},{0x4BED08,0xE5942254},{0x4BED14,0xEBF4C8DD}}}},
+    // Round 8 (analysis round8/r8_rows_proof.py, every word asserted): owners
+    // past actor-table index 0x22B and the engine FireObj light were missed.
+    // 0x247 = 3DS-only keep/ITEMACTION light actor (no draw; En_Light-style
+    // params 0x2000 glow switch): init 4A359C inserts +0x200, stores +0x1FC;
+    // destroy 1F1078 loads +0x1FC and falls into RemoveLight; update 4CC950
+    // sets colour/radius through the En_Light setter 213A04.
+    Mm3dLocalLightSource{0x247,7,0x200,0x1FC,0x4CC950,0x1F1078,{{
+        {0x4A3604,0xEBF5106E},{0x4A3608,0xE58401FC},{0x1F107C,0xE59021FC},{0x4CC9EC,0xEBF51C04}}}},
+    // 0xD9 = Bg_Numa_Hana (sole caller of FireObj light init 2E9E5C; FireObj
+    // embedded at +0x20C, node fire+0x88, info fire+0x8C). Destroy 44DFE8 ->
+    // FireObj destroy 2EA030 -> RemoveLight([fire+0x88]).
+    Mm3dLocalLightSource{0xD9,1,0x298,0x294,0x49614C,0x44DFE8,{{
+        {0x44DDE0,0xE2841F83},{0x2E9F24,0xE2847088},{0x2E9FAC,0xEBFBF604},{0x2EA048,0xE5942088}}}},
 };
 
 // Called only after current-frame LightNode -> LightInfo ownership has been

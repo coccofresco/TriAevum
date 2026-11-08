@@ -138,6 +138,21 @@ void TestRoundTwoSourcesConverted() {
     }
 }
 
+void TestRoundEightSourcesConverted() {
+    // Round 8: 0x247 (table index past 0x22B) and 0xD9 Bg_Numa_Hana FireObj
+    // light are native registered sources; each must be one exact row.
+    struct Expected { uint16_t Actor; uint8_t Category; uint32_t Info, Node, Update, Destroy; };
+    for (const Expected e : {Expected{0x247,7,0x200,0x1FC,0x4CC950,0x1F1078},Expected{0xD9,1,0x298,0x294,0x49614C,0x44DFE8}}) {
+        uint32_t rows=0;
+        for (const auto& source : kMm3dLocalLightSources) if (source.Actor==e.Actor) {
+            ++rows;
+            Require(source.Category==e.Category && source.Info==e.Info && source.Node==e.Node &&
+                    source.Update==e.Update && source.Destroy==e.Destroy,"round-8 native light row has the wrong layout");
+        }
+        Require(rows==1,"round-8 native light source (0x247 / Bg_Numa_Hana FireObj) not converted exactly once");
+    }
+}
+
 void TestMultiRowActorOffsets() {
     // Auditor r2: per-row offset assertions for actors with several native
     // lights. Every row of one actor must be a distinct (Info,Node) pair, and
@@ -471,6 +486,7 @@ void TestSceneSnapshots() {
     TestSyntheticFireAndFairies();
     TestLocalSourceGuards();
     TestRoundTwoSourcesConverted();
+    TestRoundEightSourcesConverted();
     TestMultiRowActorOffsets();
     TestEachProvenSourcePublication();
     TestRoomEmitterPublication();
