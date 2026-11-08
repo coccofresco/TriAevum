@@ -107,7 +107,7 @@ void PrintOot3dNativeGameUsage() {
                  "[--quick-state <checkpoint.oot3dsav>] "
                  "[--save-state <checkpoint.oot3dsav> [--save-state-with-settings] "
                  "--save-state-frame <frame>] "
-                 "[--convert-state <new.oot3dsav>] "
+                 "[--convert-state <new.oot3dsav>] [--startup-check] "
                  "[--renderer <nri|opengl>] "
                  "[--config <oot3d_native_game.json>] "
                  "[--frames <count>] [--benchmark-warmup-frames <count>] "
@@ -315,6 +315,8 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.SaveStatePath = argv[++index];
         } else if (arg == "--convert-state" && index + 1 < argc) {
             launch.ConvertStatePath = argv[++index];
+        } else if (arg == "--startup-check") {
+            launch.StartupCheck = true;
         } else if (arg == "--savestate-action" && index + 1 < argc) {
             // FRAME:ACTION[:PATH]; the path may itself contain ':'.
             const std::string value = argv[++index];

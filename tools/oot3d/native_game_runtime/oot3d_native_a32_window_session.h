@@ -266,6 +266,8 @@ private:
   };
 
   void Setup();
+  // The product's whole-AOT crash diagnostics (product Windows builds; once).
+  void InstallProductCrashDiagnostics();
   // One iteration of the frame loop; false when the frame closed the window.
   bool RunFrame();
   // The phases of one guest refresh inside RunFrame() (oot3d_native_a32_window_frame.cpp).
@@ -411,6 +413,7 @@ private:
   Oot3dNativeGame::NativeA32CtrHostConfig hostConfig;
   std::shared_ptr<Oot3dNativeGame::GameLanguageSettings> languageSettings{};
   std::filesystem::path saveDataDirectory{};
+  bool productCrashDiagnosticsInstalled = false;
   std::filesystem::path quickStatePath{};
   std::shared_ptr<Oot3dNativeGame::SavestateLibrary> savestateLibrary{};
   // The save-state move's outcome (oot3d_savestate_migration.h), logged once

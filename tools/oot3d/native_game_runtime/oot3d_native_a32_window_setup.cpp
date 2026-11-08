@@ -109,6 +109,21 @@ bool OpenFolderInFileBrowser(const std::filesystem::path &folder, std::string *e
 
 } // namespace
 
+void NativeA32WindowSession::InstallProductCrashDiagnostics() {
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE) && defined(_WIN32)
+  if (productCrashDiagnosticsInstalled) return;
+  // --crash-directory (D/logs/crashes), else the earlier <save data>/crashes.
+  std::string crashDiagnosticsError;
+  if (!Oot3dNativeGame::InstallWholeAotCrashDiagnostics(
+          launch.Routing.CrashDirectory.empty() ? saveDataDirectory / "crashes" : launch.Routing.CrashDirectory,
+          &crashDiagnosticsError)) {
+    throw std::runtime_error("whole-AOT crash diagnostics failed: " +
+                             crashDiagnosticsError);
+  }
+  productCrashDiagnosticsInstalled = true;
+#endif
+}
+
 void NativeA32WindowSession::Setup() {
   if (launch.Host.Renderer != "opengl" &&
       launch.Host.Renderer != "nri" &&
@@ -1373,6 +1388,24 @@ void NativeA32WindowSession::Setup() {
   Fast::Renderer3ds::InstallTitleShaderPreparation(
       {Oot3dNativeGame::TitlePreparedShaders(titleAdapter, titleSession.get()),
        std::string(Oot3dNativeGame::TitlePipelineCacheNamespace(titleAdapter, titleSession.get()))});
+  if (launch.StartupCheck) {
+    // Every requirement above ran on the mounted image (title module ABI,
+    // the product's block-start sites, the title session's own checks);
+    // the product's crash diagnostics are the last one before the context.
+    InstallProductCrashDiagnostics();
+    std::cout << "TRIAEVUM_STARTUP_CHECK ok title_adapter=" << static_cast<int>(titleAdapter)
+              << " title=\"" << (titleSession ? std::string(titleSession->GameName()) : std::string("OoT3D")) << "\""
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+              << " product_mode=1"
+#else
+              << " product_mode=0"
+#endif
+              << " whole_aot_available=" << (wholeAotAvailable ? 1 : 0)
+              << " whole_aot_enabled=" << (enableWholeAot ? 1 : 0)
+              << " module_entry_points=" << Oot3dNativeGame::Oot3dWholeAotEntryPoints().size()
+              << " ui_profile=" << static_cast<int>(launch.UiProfile) << std::endl;
+    return;
+  }
   InitContextForDemo(hostArgs);
   // What the title itself provides to the graphics settings: the effects
   // that need a scene view, and the scene FOV, stay inactive without it.
@@ -1394,16 +1427,7 @@ void NativeA32WindowSession::Setup() {
 #endif
   if (!savestateMigrationMessage.empty())
     SPDLOG_INFO("oot3d_native_game: {}", savestateMigrationMessage);
-#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE) && defined(_WIN32)
-  // --crash-directory (D/logs/crashes), else the earlier <save data>/crashes.
-  std::string crashDiagnosticsError;
-  if (!Oot3dNativeGame::InstallWholeAotCrashDiagnostics(
-          launch.Routing.CrashDirectory.empty() ? saveDataDirectory / "crashes" : launch.Routing.CrashDirectory,
-          &crashDiagnosticsError)) {
-    throw std::runtime_error("whole-AOT crash diagnostics failed: " +
-                             crashDiagnosticsError);
-  }
-#endif
+  InstallProductCrashDiagnostics();
   windowPointer = &GetActiveFast3dWindowForDemo();
   auto &window = *windowPointer;
   // Interactive presentation is paced by NativeRealtimeRefreshPacer, not by a

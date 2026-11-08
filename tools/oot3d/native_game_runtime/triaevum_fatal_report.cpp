@@ -8,7 +8,7 @@ namespace {
 
 // Options of scripted runs and tool modes (oot3d_native_game_bootstrap.cpp,
 // RunTriAevumToolMode): nobody is there to dismiss a dialog.
-constexpr std::array<std::string_view, 15> kUnattendedOptions{
+constexpr std::array<std::string_view, 16> kUnattendedOptions{
     "--input-timeline",
     "--frames",
     "--max-seconds",
@@ -19,6 +19,7 @@ constexpr std::array<std::string_view, 15> kUnattendedOptions{
     "--throughput-benchmark",
     "--scenario-auto-exit",
     "--convert-state",
+    "--startup-check",
     "--product-info",
     "--game-language-info",
     "--prebuild-interior-sun",

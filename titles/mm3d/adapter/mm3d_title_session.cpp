@@ -231,7 +231,7 @@ public:
       if (mRestoration.has_value()) {
         mRestoration->ApplyDataPatches(process.Memory());
       }
-      mGuestPatches.Verify(process.Memory(), nullptr);
+      const std::size_t enabledSites = mGuestPatches.Verify(process.Memory(), nullptr);
       const auto entries = Oot3dCompiledFunctionEntryPoints(true, false);
       const auto missing = mGuestPatches.MissingProductBoundaries(
           std::vector<uint32_t>(entries.begin(), entries.end()));
@@ -243,6 +243,11 @@ public:
                                  " guest-patch boundary(ies), first at " + pc +
                                  "; rebuild the MM3D title module with the Mm3dGuestPatches boundaries");
       }
+      // The product dispatch receipt (dekui / Project Restoration sites on
+      // the real module), as the developer build's site log.
+      std::fprintf(stderr, "MM3D product: %zu of %zu guest-patch site(s) enabled; every boundary starts a module block
+",
+                   enabledSites, mGuestPatches.Statistics().size());
       process.SetNativeFunctionCallback(&Mm3dGuestPatches::Execute,
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #else

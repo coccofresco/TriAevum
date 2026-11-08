@@ -139,6 +139,8 @@ void RequireRunnableGuest(
 
 void NativeA32WindowSession::Run() {
   Setup();
+  // --startup-check stops before the host context: no window, no frame.
+  if (launch.StartupCheck) return;
   if (!launch.ConvertStatePath.empty()) {
     // The loaded moment, re-saved before any guest frame runs.
     const std::string *settings =
