@@ -411,6 +411,7 @@ public:
             {"max_player_distance",photo.MaxPlayerDistance},{"last_eye",photo.LastEye},
             {"last_native_eye",photo.LastNativeEye}}},
         {"layout_owners", {{"draws",stats.LayoutOwners},{"dropped",stats.LayoutOwnersDropped}}},
+        {"layout_carried_batches", {{"owner_setup",stats.CarriedBatchSpans},{"finisher",stats.CarriedFinisherSpans}}},
         {"quad_objects", {{"draws",stats.QuadObjects},{"dropped",stats.QuadObjectsDropped}}},
         {"scene_projections",std::move(projections)},
         {"scene_projection_segments_discarded",mProjectionHistory.DiscardedSegments()},

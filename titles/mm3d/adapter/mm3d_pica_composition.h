@@ -51,6 +51,15 @@ inline constexpr uint32_t kMm3dSkyboxDrawEntry = 0x005B51D0U;
 inline constexpr uint32_t kMm3dLayoutDrawEntry = 0x001262E0U;
 inline constexpr uint32_t kMm3dLayoutOwnerDrawEntry = 0x00126294U;
 inline constexpr uint32_t kMm3dQuadQueueDrawEntry = 0x0012C6A8U;
+// The layout renderer batches quads (pending counts at renderer+0xC3C and
+// +0xC40) and flushes the batch with 0x00144B70 only when the NEXT owner's
+// setup runs (0x00135000: ldr [r4,#0xC3C] / ldreq [r0,#0xC40] / bl 0x00144B70,
+// returning to 0x00135044) or when the queue's finisher 0x001262E0 runs (same
+// test, bl 0x00144B70). The flushed draws belong to the owner that queued
+// them: the previous owner, not the span they are written in. Without this the
+// last batch of the Hud layout (the clock bar's day marker) is attributed to
+// the following owner or the finisher and survives Hide HUD (G6.04, r7/r8).
+inline constexpr uint32_t kMm3dLayoutBatchFlushReturn = 0x00135044U;
 
 std::span<const uint32_t> Mm3dNativePicaCompositionHookPcs() noexcept;
 
@@ -77,6 +86,10 @@ struct Mm3dNativePicaCompositionStats {
     // queue, vtable, quad count and first-quad position (bounded likewise).
     std::map<std::string, uint64_t> QuadObjects;
     uint64_t QuadObjectsDropped = 0;
+    // Flushed batches attributed to the owner that queued them: at the next
+    // owner's setup, and the finisher spans.
+    uint64_t CarriedBatchSpans = 0;
+    uint64_t CarriedFinisherSpans = 0;
 };
 
 // Records the command-list byte range each native pass writes, with its
@@ -150,6 +163,9 @@ class Mm3dNativePicaCompositionTracker final
     std::optional<ModelScope> mModelScope;
     Mm3dNativeA32LightingProbe mLighting;
     std::optional<ActiveScope> mActive;
+    // The last tagged layout owner of the current queue (see
+    // kMm3dLayoutBatchFlushReturn); cleared by any non-layout scope.
+    std::optional<Oot3dPicaCompositionAttribution> mLayoutCarry;
     // The scene frame's lighting, captured when its opaque pass begins.
     Fast::Renderer3ds::PicaNativeLightBinding mSceneLighting;
     std::vector<RecordedSpan> mSpans; // sorted by BeginAddress, disjoint
