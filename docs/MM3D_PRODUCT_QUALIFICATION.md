@@ -367,3 +367,22 @@ guest-patch supplemental entries, boundary audit, product manifest, selection, b
 under `titles/mm3d`. The MM3D product manifest and selection are the zero-residual product contract (G2) and do not
 exist yet, so the MM3D frontend is refused with their names until G2 lands. Tests: `test_whole_aot_title_frontend.py`
 (10 passed); the negative (the OoT hardwire restored) fails 3 tests. Evidence: `W/analysis/parity/INTEG/r10/forge/`.
+
+## Module window part 2 (2026-11-08, integ round 7)
+
+Merged catalogs a063f16d (F11 probe moved out of the shader decision-policy inputs) and branding 81eb971a (product
+executable names: OoT3D `Echoes_of_Time.exe`, MM3D `Moonfall_Curse.exe`; per-title update helper; MM window icon).
+Both trees rebuilt (exit 0); 42/42 affected C++ suites, the whole-AOT/release Python suites and the Forge suites of both
+titles pass. Per-cut O2 (game sources changed): OoT-only TriAevum.exe bf2cb10e, 3/3 cap-p13 frames identical,
+reproducible=1, uber_draws=0. Defects found on the MM product path and fixed: forge-cli fixtures followed OoT3D only;
+the MM package built the update helper without its title feature (OoT icon); the process library did not own its
+generated-registry link (MM `oot3d_game_module` link failure); the Forge GUI probe's sample path tripped the release
+build-path audit; the reviewed extra-input coverage (OoT3D's) was applied to MM3D. The MM product runtime (developer
+tools OFF, direct plugin, registry `a32_generated_overlay`, `TRIAEVUM_PRODUCT_TITLE=mm3d`) builds and embeds the MM
+icon; the MM Forge and update helper embed the steel-mask icon (offline icon receipt).
+
+F07 Windows row: still **NOT QUALIFIED**. `prepare_release` refuses the MM shader corpus at this tree: two
+decision-policy inputs (`graphics_settings.h`, `gfx_vulkan_pica_draw.cpp`, composition 049bd3ce: the projected-shadow
+omission condition moved into `OmitsNativeProjectedShadowRole`) differ from the corpus recording source. The corpus was
+requalified at the CATALOGS tip, which does not carry 049bd3ce. The gate requires fresh variant recordings; no package
+was produced and no installed run was made. Evidence: `W/analysis/parity/INTEG/module-window/out-r13/`.
