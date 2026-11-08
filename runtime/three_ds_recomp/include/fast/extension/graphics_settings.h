@@ -85,6 +85,15 @@ enum class SurfaceLightingMode : uint8_t { Native, PerPixel, PerPixelPbr, Native
 [[nodiscard]] constexpr bool UsesFullSceneLighting(SurfaceLightingMode mode) noexcept {
     return mode == SurfaceLightingMode::PerPixel || mode == SurfaceLightingMode::PerPixelPbr;
 }
+// Native projected (blob/feet) actor shadows are a typed composition role.
+// Presentation omits that role only where the per-pixel models replace it
+// (Per-pixel, Per-pixel + PBR) outside the Authentic fidelity profile. The
+// native-memory replay and every other mode keep the canonical draw. Shared by
+// every title: a title only decides which packets carry the role.
+[[nodiscard]] constexpr bool OmitsNativeProjectedShadowRole(SurfaceLightingMode mode, bool nativeFidelityProfile,
+                                                            bool nativeMemoryReplay) noexcept {
+    return !nativeMemoryReplay && !nativeFidelityProfile && UsesFullSceneLighting(mode);
+}
 [[nodiscard]] constexpr bool UsesPbrMaterials(SurfaceLightingMode mode) noexcept {
     return mode == SurfaceLightingMode::PerPixelPbr || mode == SurfaceLightingMode::NativePbr;
 }

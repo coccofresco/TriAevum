@@ -734,7 +734,10 @@ set_property(TARGET oot3d_native_pica_vulkan_bridge_tests PROPERTY FOLDER Tests)
 
 if(TRIAEVUM_TITLE_MM3D)
     add_executable(mm3d_native_lighting_tests EXCLUDE_FROM_ALL
-        titles/mm3d/adapter/mm3d_native_lighting_tests.cpp)
+        titles/mm3d/adapter/mm3d_native_lighting_tests.cpp
+        # The shared rigid-motion gate the deformed-pass test exercises.
+        runtime/three_ds_recomp/src/fast/extension/pica_rigid_motion.cpp
+        runtime/three_ds_recomp/src/fast/renderer3ds/pica_vertex_surface.cpp)
     target_link_libraries(mm3d_native_lighting_tests PRIVATE oot3d_mm3d_pica_composition)
     oot3d_target_defaults(mm3d_native_lighting_tests FOLDER Tests)
 endif()

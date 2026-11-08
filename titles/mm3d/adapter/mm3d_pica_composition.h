@@ -91,6 +91,9 @@ struct Mm3dNativePicaCompositionStats {
     // Room slots observed at Play_Draw: changes of the (cur, prev) pair, room
     // lifetime ends (a room left both slots), and the last valid pair (-1 = empty).
     uint64_t RoomSlotChanges = 0, RoomLifetimeEnds = 0, DirectShadowSubmits = 0;
+    // Model spans carrying the native projected-shadow role (shadow-only:
+    // never actor geometry, isolated lighting or atmosphere).
+    uint64_t ProjectedShadowSpans = 0;
     int32_t LastCurrentRoom = -1, LastPreviousRoom = -1;
     uint64_t PrimitiveEntries = 0, PrimitiveSpans = 0, TemporalPrimitiveSpans = 0;
     uint64_t UnownedPrimitives = 0, InvalidPrimitives = 0;

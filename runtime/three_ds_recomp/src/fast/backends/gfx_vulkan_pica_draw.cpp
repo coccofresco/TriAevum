@@ -911,9 +911,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             Renderer3ds::PicaCompositionPurpose::NativeMemory;
 
         const auto& graphicsSettings = mFrameGraphicsSettings;
-        if (!nativeMemoryOnly && !mNativeFidelityProfile && sceneDraw &&
-            draw.Composition.NativeProjectedShadow &&
-            Extension::UsesFullSceneLighting(graphicsSettings.Effects.SurfaceLighting)) {
+        if (sceneDraw && draw.Composition.NativeProjectedShadow &&
+            Extension::OmitsNativeProjectedShadowRole(graphicsSettings.Effects.SurfaceLighting,
+                                                      mNativeFidelityProfile, nativeMemoryOnly)) {
             // Consume native ordering and its graph boundaries, but do not
             // rasterize the legacy projected shadow into presentation or guides.
             // The canonical native-memory replay remains untouched.

@@ -577,6 +577,7 @@ public:
         {"lifecycle_invalidations", stats.LifecycleInvalidations},
         {"room_slot_changes", stats.RoomSlotChanges},
         {"direct_shadow_submits", stats.DirectShadowSubmits},
+        {"projected_shadow_spans", stats.ProjectedShadowSpans},
         {"room_lifetime_ends", stats.RoomLifetimeEnds},
         {"last_current_room", stats.LastCurrentRoom},
         {"last_previous_room", stats.LastPreviousRoom},

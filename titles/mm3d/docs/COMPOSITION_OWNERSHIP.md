@@ -275,3 +275,15 @@ byte-identical, so this is one region sample.
 host_keys, Off/FSR/TAA HUD samples, pause menu and a native dialogue
 (warp prompt) were exercised; the room did not change (room_slot_changes 0,
 room 2 throughout), so live room-crossing identity remains unproved.
+
+## Third scene render list (2026-11-08, offline)
+
+The scene render-list array at `[scene+4]` holds three lists (stride `0x408`).
+The model submit tails (`0x0020A910`, `0x0020A9A0`, guard `e2800e81`) and
+`0x001B30EC` also enqueue into list 2 (`+0x810`) when the scene counter at
+`+0xC` allows it. In `code.bin` only lists 0 and 1 are ever visited
+(`0x0011EF14`, `0x0011EF60`, `0x0011125C`, whose return addresses are the
+existing scopes). List 2 is only initialised and cleared, so it produces no
+native draw and is given no composition owner. Any draw that arrives outside
+every scope keeps the Unknown role; no role is inferred. Overlay (CRO) code
+was not scanned. Receipt: `analysis/parity/COMPOSITION/THIRD_LIST/`.
