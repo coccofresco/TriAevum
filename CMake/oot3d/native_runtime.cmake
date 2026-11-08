@@ -161,6 +161,25 @@ if (EXISTS "${_oot3d_a32_generated_header}" AND
     EXISTS "${_oot3d_a32_generated_registry}" AND
     EXISTS "${_oot3d_a32_generated_true_aot_header}" AND
     EXISTS "${_oot3d_a32_generated_true_aot_source}")
+    # Registry rule (docs/MM3D_PRODUCT_QUALIFICATION.md): a tree carrying MM3D's
+    # guest patch sites needs a registry with a block entry at each of them.
+    set(_mm3d_guest_patch_sites
+        "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/dekui/core_test_sites.h")
+    if (TRIAEVUM_TITLE_MM3D AND EXISTS "${_mm3d_guest_patch_sites}")
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE}
+                "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/a32/check_registry_boundaries.py"
+                --sites "${_mm3d_guest_patch_sites}"
+                --registry "${_oot3d_a32_generated_registry}"
+            RESULT_VARIABLE _mm3d_registry_check
+            OUTPUT_VARIABLE _mm3d_registry_check_out
+            ERROR_VARIABLE _mm3d_registry_check_err)
+        if (NOT _mm3d_registry_check EQUAL 0)
+            message(FATAL_ERROR "MM3D registry rule: ${_mm3d_registry_check_err}")
+        endif()
+        message(STATUS "${_mm3d_registry_check_out}")
+    endif()
     file(GLOB _oot3d_a32_generated_shards CONFIGURE_DEPENDS
         "${OOT3D_A32_AOT_GENERATED_DIR}/shard_*.cpp")
     add_library(oot3d_native_a32_aot STATIC EXCLUDE_FROM_ALL

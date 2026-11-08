@@ -297,3 +297,39 @@ F07 Windows row: still **NOT QUALIFIED**. There is no MM title module to install
   uber_draws=0, watch_exit=0. Evidence: analysis/parity/INTEG/r5/o2/.
 - Still open: MM built-in packs from CATALOGS (prepared=1 then the uber requalification); F07 blocked by the
   owner disk plan; the public form of the Restoration .gar members is owner-deferred.
+
+## Registry rule (coordinator, 2026-11-08, after the round-4 F14 failure)
+
+Every MM3D build whose source contains the integration cut (the dekui/Restoration guest patch sites of
+`titles/mm3d/dekui/core_test_sites.h`, among them the button-emission boundaries 0x134DE4/0x134DE8) is configured
+with the A32 registry `a32_generated_overlay`. `a32_generated_v10` and `a32_generated_v11` predate those
+boundaries: a game built with them dies at startup. They are only for trees without the cut.
+
+Configure enforces the rule. When the build contains MM3D and the site table exists,
+`titles/mm3d/a32/check_registry_boundaries.py` checks that every site PC and PC+4 is a block entry of the chosen
+`registry.cpp`, and configure stops with "MM3D registry rule" otherwise. On the real registries: overlay has all 299
+boundaries (exit 0); v10 and v11 each lack 0x00134DE4 and 0x00134DE8 (exit 1). A configure of the dual tree with
+v10 fails (the recorded negative), and the same configure with overlay succeeds. INTEG's own configure script now
+defaults to the overlay registry. Evidence: `W/analysis/parity/INTEG/r6/registry-rule-*.log`,
+`configure-v10-negative.log`, `configure-overlay.log`.
+
+## MM3D built-in shader packs merged (2026-11-08, integ round 5)
+
+CATALOGS 13bfeaca merged into the integration line (a real merge). The dual tree compiles
+`titles/mm3d/shaders/mm3d_builtin_shader_packs.cpp` with `TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS=1` and the real pack
+paths. Both packs are embedded byte for byte in `oot3d_native_game.exe`: vertex 1580888 bytes (sha 6a0ded23),
+fragment 16 bytes (an empty pack; the fragment families are shared). A one-byte mutation of the vertex pack is not
+found (the negative). Built-in pack tests (present/absent, with `--negative` exit 1), title_shader_preparation and
+renderer_spirv_pack pass. The live prepared=1 line is CATALOGS' single hybrid capture, not repeated here. Evidence:
+`W/analysis/parity/INTEG/r6/embedded-packs.log`, `r6/logs/`.
+
+## Per-title release preparation (2026-11-08, integ round 5)
+
+`prepare_release.py --title mm3d` prepares the MM3D Forge release. It builds the Rust Forge with
+`forge-desktop/title-mm3d,forge-cli/title-mm3d`, packages `titles/mm3d/forge/supported_revisions.json` as
+`recipes/mm3d.json` (recipe `mm3d-eur-local-6eec27b1`), and requires `--restoration-resources`. It bundles
+Project Restoration's members under `resources/mm3d/project-restoration/layout/`, each checked against its pinned
+fingerprint. The two `.gar` archives use the role `restoration_mm3d_asset`, and `Joker.mfpj` is a
+`title_neutral_resource`. The default `--title oot3d` keeps OoT3D's release unchanged: its recipe file, recipe path,
+default recipe, and no Forge feature. The MM3D release still needs the MM whole-AOT title module from the module
+window. The installed run (F07) has not been made.
