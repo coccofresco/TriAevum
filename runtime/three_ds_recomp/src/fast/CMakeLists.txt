@@ -96,6 +96,10 @@ set(Source_Files__Renderer3dsPica
     renderer3ds/pica_shadow_geometry.cpp
     renderer3ds/pica_gi_geometry.cpp
 )
+if(TRIAEVUM_DEVELOPER_TOOLS)
+    # Developer-only F11 read-timing probe; never in a release renderer.
+    list(APPEND Source_Files__Renderer3dsPica renderer3ds/shadow_caster_view_lag_probe.cpp)
+endif()
 add_library(renderer_3ds_pica_core STATIC
     ${Source_Files__Renderer3dsPica})
 add_library(ThreeDsRecomp::Renderer3dsPicaCore ALIAS

@@ -22,6 +22,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <span>
 #include <string>
 #include <unordered_map>
 
@@ -124,5 +125,27 @@ class ShadowCasterViewLagProbe final {
     bool mHasPrevious = false;
     ShadowCasterViewLagCounts mCounts;
 };
+
+// The probe's draw-side adapter (shadow_caster_view_lag_probe.cpp). It is a
+// developer-only translation unit outside the shader decision-policy inputs
+// (tools/triaevum_release/shader_corpus_qualification.py POLICY_PATTERNS), so
+// carrying it never invalidates a recorded shader corpus; the release
+// renderer neither compiles nor calls it.
+struct ShadowCasterViewLagDraw {
+    uint64_t Frame = 0;
+    ShadowMatrix ViewToWorld{};
+    std::span<const uint8_t> FloatUniforms; // packed float4 vertex uniforms
+    uint32_t ViewFirstUniform = 0;
+    uint32_t ModelFirstUniform = 0;
+    uint64_t GeometryIdentity = 0;
+    std::array<uint64_t, 5> TemporalIdentity{}; // owner, instance, part, slot, lifetime
+};
+
+// TRIAEVUM_SHADOW_CASTER_VIEW_LAG set to a value other than "" or "0".
+[[nodiscard]] bool ShadowCasterViewLagRequested() noexcept;
+
+// Feeds one rigid caster draw to the probe; false when its view or model
+// uniform cannot be read (the draw is then not observed).
+bool ObserveShadowCasterViewLagDraw(ShadowCasterViewLagProbe& probe, const ShadowCasterViewLagDraw& draw);
 
 } // namespace Fast::Renderer3ds
