@@ -259,7 +259,7 @@ F07 Windows row: still **NOT QUALIFIED**. There is no MM title module to install
 
 - **Restoration layout archives (Q-INTEG-1).** The LOCAL MM3D package bundles Project Restoration's modified
   Nintendo layout archives `Joker.Main.New.gar` and `Joker.Main.Play.gar` as-is, at
-  `resources/mm3d/project-restoration/layout/`, under the release-policy role `restoration_mm3d_asset`. This follows
+  `resources/mm3d/project-restoration/layout/`, under the release-policy role `restoration_layout_asset`. This follows
   the TopScreen `topscreen_singlescreen_asset` precedent (ctxb/zar): `.gar` is a forbidden extension except for that
   role, the role lists exactly those two paths, and their SHA-256 values are pinned (`pinned_role_sha256`). The
   Forge-side mirror (`forge-core` `package_inventory.rs`) and the Restoration member test (`forge-assets`
@@ -329,7 +329,7 @@ renderer_spirv_pack pass. The live prepared=1 line is CATALOGS' single hybrid ca
 `forge-desktop/title-mm3d,forge-cli/title-mm3d`, packages `titles/mm3d/forge/supported_revisions.json` as
 `recipes/mm3d.json` (recipe `mm3d-eur-local-6eec27b1`), and requires `--restoration-resources`. It bundles
 Project Restoration's members under `resources/mm3d/project-restoration/layout/`, each checked against its pinned
-fingerprint. The two `.gar` archives use the role `restoration_mm3d_asset`, and `Joker.mfpj` is a
+fingerprint. The two `.gar` archives use the role `restoration_layout_asset`, and `Joker.mfpj` is a
 `title_neutral_resource`. The default `--title oot3d` keeps OoT3D's release unchanged: its recipe file, recipe path,
 default recipe, and no Forge feature. The MM3D release still needs the MM whole-AOT title module from the module
 window. The installed run (F07) has not been made.
@@ -420,3 +420,29 @@ put `--screenshot-rgb8` before `--launch-profile`. The runtime only loads a prof
 `--launch-profile` as an unknown option. The harness is fixed, and its dry-run receipt shows argv[1] =
 `--launch-profile`. Under the run budget, no retry or diagnostic run was made, so no realtime product evidence exists yet.
 Evidence: `W/analysis/parity/INTEG/module-window/out-r14/`.
+
+## Module window part 4 (2026-11-08, round 9, INTEG): last granted F07 attempt
+
+Preconditions (coordinator Q-INTEG-R8-1), all met before the run:
+- The launch profile is a per-title fact: `ForgeTitle.topscreen_ui` (true for OoT3D, false for MM3D, whose per-game mod
+  dekui is in the product code). The MM profile carries no `--ui-profile topscreen` or `--topscreen-config`; the runtime
+  refuses that profile for any adapter but OoT3D EUR, so the r14 profile could not have started either. The OoT3D
+  profile bytes are identical before/after (bd3cc9d6). Every option of the installed MM profile is parsed by the runtime.
+- Forge recognition passes the verified code.bin identity to the language probe; the MM preview reports
+  `language_error: null` with five languages.
+- The isolated release Python suite (684 tests, `python -I` with the repository root on `sys.path`) exits 0. The publisher
+  policy names no private title: the Restoration layout archives use the title-neutral role `restoration_layout_asset`
+  (`resources/*/project-restoration/layout/*.gar`, still pinned to their two SHA-256).
+- Package, install, status, badinput, icon (9/9) and dry/precondition receipts pass; no runtime C++ changed since
+  35fe6696 at that point.
+
+The run (out-r15, Moonfall_Curse.exe cae444f4): exit 1 after one second, before guest execution, with
+`TRIAEVUM_FATAL the title module does not start a block at the object bank sites ...`. Cause (offline): the product build
+required OoT3D EUR object-bank extension and SingleScreen rain sites to be block starts of every title's whole-AOT module.
+Fixed in 3a5bad71: those sites are registered and required only for the OoT3D adapter (as the block-entry hooks already
+were). Per-cut O2 of the OoT-only runtime (27f0dcf7): PASS 3/3. The MM product was rebuilt, re-packaged and installed
+(out-r16: Moonfall_Curse.exe 2a470979, status ready, badinput refused, icon 9/9, profile without TopScreen options).
+
+F07 Windows row: still **NOT QUALIFIED**. Under the run budget there was no retry; the next installed run is an owner item.
+No realtime product evidence (F14) exists yet. Evidence: `W/analysis/parity/INTEG/module-window/out-r15/`, `out-r16/`,
+`W/analysis/parity/INTEG/r15/`.
