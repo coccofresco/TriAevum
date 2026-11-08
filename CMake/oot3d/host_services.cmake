@@ -261,7 +261,7 @@ if(TRIAEVUM_TITLE_MM3D)
         titles/mm3d/restoration)
     target_link_libraries(oot3d_mm3d_single_screen PUBLIC
         oot3d_mm3d_guest_patches
-        oot3d_ui_menu oot3d_native_control_config
+        oot3d_ui_menu oot3d_native_control_config oot3d_ui_topscreen
         nlohmann_json::nlohmann_json)
     oot3d_target_defaults(oot3d_mm3d_single_screen FOLDER Tools)
 

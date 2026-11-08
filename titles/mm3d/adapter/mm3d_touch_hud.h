@@ -89,4 +89,34 @@ Mm3dTouchHudPlan PlanMm3dTouchHud(const Mm3dTouchHudGroups& groups,
   return plan;
 }
 
+// Consumer: the plan moves native HUD draws through dekui's HudButtons
+// world-matrix transform (hud_buttons.h, indices a_action_button,
+// icon_item_x_g, icon_item_y_g, b_action_button, icon_item_1_g,
+// icon_item_2_g). The D-pad (HudDpad) has no HudButtons group: it stays
+// native (not relocated) - see OVERLAY RESULTS.
+inline constexpr int Mm3dTouchHudButtonIndex(Mm3dTouchHudElement element) noexcept {
+  switch (element) {
+  case Mm3dTouchHudElement::ActionA: return 0;
+  case Mm3dTouchHudElement::ItemX: return 1;
+  case Mm3dTouchHudElement::ItemY: return 2;
+  case Mm3dTouchHudElement::ActionB: return 3;
+  case Mm3dTouchHudElement::ItemI: return 4;
+  case Mm3dTouchHudElement::ItemII: return 5;
+  default: return -1;
+  }
+}
+
+// The placement as a native 400x240 world mapping (canvas x = native x +
+// 40/3): native' = Scale * native + (X, Y).
+struct Mm3dTouchHudNativeMapping {
+  bool Active = false;
+  float Scale = 1.0F, X = 0.0F, Y = 0.0F;
+};
+inline Mm3dTouchHudNativeMapping Mm3dTouchHudNative(const Mm3dTouchHudPlacement& placement) noexcept {
+  constexpr float pillar = 40.0F / 3.0F;
+  if (!placement.Active) return {};
+  return {true, placement.Scale, placement.ToX - pillar - placement.Scale * (placement.FromX - pillar),
+          placement.ToY - placement.Scale * placement.FromY};
+}
+
 } // namespace Oot3dNativeGame

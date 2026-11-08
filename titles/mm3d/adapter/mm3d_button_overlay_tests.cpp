@@ -334,8 +334,53 @@ void TestDeviceSwitch(){
  Check(!frame(7).empty()&&!overlay.TouchGroups()[size_t(Mm3dTouchHudElement::ItemX)].Known,"back to the pad: labels return, touch groups dropped");
 }
 }
+
+struct WritableFixture:MemoryFixture{void Write(U32 p,U32 v){words[p]=v;}};
+// A HudItemIconSet tree as dekui HudButtons::Hook::Begin walks it.
+WritableFixture HudTree(){
+ WritableFixture m;constexpr U32 lay=0x11000000,res=0x11001000,all=0x11002000,list=0x11003000,names=0x11004000,rootList=0x11005000;
+ m.words[lay+4]=res;m.words[res+0x18]=names;m.Name(names,"HudItemIconSet");
+ m.words[lay+8+0x14]=rootList;m.words[lay+8+0x18]=1;m.words[rootList]=all;
+ m.words[all+0x10]=names+0x40;m.Name(names+0x40,"all");m.words[all+0x14]=list;
+ const char* nodes[]{"icon_item_x_g","icon_item_y_g","icon_item_1_g","icon_item_2_g","btn_x_g","btn_y_g","btn_corner01_g","btn_corner03_g"};
+ m.words[all+0x18]=8;
+ for(U32 i=0;i<8;++i){const U32 n=0x11010000+i*0x200;m.words[list+i*4]=n;m.words[n+0x10]=names+0x80+i*0x20;m.Name(names+0x80+i*0x20,nodes[i]);
+  for(U32 c=0;c<4;++c){m.F(n+0xe0+c*4,c==0?1.f:0.f);m.F(n+0xf0+c*4,c==1?1.f:0.f);}
+  m.F(n+0xec,300.f+i);m.F(n+0xfc,20.f);m.words[n+0x20]=0;m.words[n+0x24]=0xffff;m.words[n+0x18]=0;m.words[n+0x14]=0;}
+ return m;
+}
+void TestTouchHudConsumer(){
+ using ThreeDsRecomp::Input::TouchAnchor;
+ namespace HB=Mm3dDekui::HudButtons;
+ HB::Apply(HB::Options{});
+ auto m=Fixture();Mm3dButtonOverlay touch;touch.Configure(NativeControlDefaults(),NativePromptSet::Touch);
+ (void)touch.Capture(m,layout,node,3);
+ ThreeDsRecomp::Input::TouchAnchorSet anchors{};const float canvas=240.f*16.f/9.f;
+ anchors[size_t(TouchAnchor::X)]={true,.80f,.40f,.88f,.54f};
+ touch.ApplyTouchHud(anchors,canvas,Oot3dNativeGame::ResolveTopScreenTouchControlShape);
+ const auto applied=touch.AppliedTouchHud()[size_t(Mm3dTouchHudElement::ItemX)];
+ Check(applied.Active&&HB::touch[1].active&&HB::touch[1].scale==applied.Scale&&!HB::touch[2].active,"X plan handed to dekui HudButtons slot 1 only");
+ // The real dekui HudButtons transform moves the native X group's world matrix.
+ auto tree=HudTree();constexpr U32 xg=0x11010000;HB::Hook hook;
+ hook.Begin(tree,0x11000000);
+ const float tx=std::bit_cast<float>(tree.words[xg+0xec]),xx=std::bit_cast<float>(tree.words[xg+0xe0]);
+ Check(std::abs(xx-applied.Scale)<1e-5f&&std::abs(tx-(applied.Scale*300.f+applied.X))<1e-3f,"native X draw relocated by touch placement");
+ const float ytx=std::bit_cast<float>(tree.words[xg+0x200+0xec]);
+ Check(ytx==301.f,"unanchored Y group stays at its dekui pose");
+ hook.End(tree);Check(std::bit_cast<float>(tree.words[xg+0xec])==300.f,"End restores native matrix");
+ // Observing through the applied placement gives back the un-moved group: no feedback.
+ const auto before=touch.TouchGroups()[size_t(Mm3dTouchHudElement::ItemX)];
+ auto moved=Fixture();moved.F(node+0xe0,applied.Scale);moved.F(node+0xf4,applied.Scale);
+ moved.F(node+0xec,applied.Scale*300.f+applied.X);moved.F(node+0xfc,applied.Scale*20.f+applied.Y);
+ (void)touch.Capture(moved,layout,node,3);
+ const auto after=touch.TouchGroups()[size_t(Mm3dTouchHudElement::ItemX)];
+ Check(std::abs(after.X-before.X)<1e-3f&&std::abs(after.Y-before.Y)<1e-3f&&std::abs(after.Radius-before.Radius)<1e-3f,"observed group inverted, plan stable");
+ touch.Configure(NativeControlDefaults(),NativePromptSet::Xbox);
+ Check(!HB::touch[1].active,"leaving touch prompts returns the HUD to dekui's layout");
+ auto plain=HudTree();hook.Begin(plain,0x11000000);Check(std::bit_cast<float>(plain.words[xg+0xec])==300.f,"controller HUD unmoved");hook.End(plain);
+}
 int main(int argc,char** argv){try{
- TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSubmissionOwnership();TestInlineAndChordBounds();TestSettings();TestTouchHud();TestDeviceSwitch();
+ TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSubmissionOwnership();TestInlineAndChordBounds();TestSettings();TestTouchHud();TestTouchHudConsumer();TestDeviceSwitch();
  if(argc==2){std::ifstream in(argv[1],std::ios::binary);Check(bool(in),"code image opens");
   for(auto [pc,word]:ButtonEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR emission guard agrees");}
   for(auto [pc,word]:ButtonGlyphEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR glyph renderer guard agrees");}}

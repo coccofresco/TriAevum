@@ -5,6 +5,7 @@
 #include "native_button_overlay.h"
 #include "../dekui/ocarina_prompt.h"
 #include "../dekui/button_emission.h"
+#include "../dekui/hud_buttons.h"
 #include "mm3d_touch_hud.h"
 #include <set>
 #include <tuple>
@@ -30,9 +31,31 @@ public:
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
     mControls = controls; mPrompts = prompts; mActive = active;
     mTouchObserve = prompts == NativePromptSet::Touch;
-    if (!mTouchObserve) mTouchGroups = {};
+    if (!mTouchObserve) { mTouchGroups = {}; ClearTouchHud(); }
     mStyle=std::make_shared<Style>(Style{controls,prompts});
   }
+  // Touch prompts: plan the native HUD groups into their touch controls and
+  // hand the placements to dekui's HudButtons transform (the native draws
+  // move, art and animation stay native). Groups are observed through the
+  // applied placement and inverted, so the plan never feeds back on itself.
+  template<class ShapeResolver>
+  void ApplyTouchHud(const ThreeDsRecomp::Input::TouchAnchorSet& anchors, float canvasWidth, ShapeResolver&& shape) {
+    if (!mTouchObserve) { ClearTouchHud(); return; }
+    const auto plan = PlanMm3dTouchHud(mTouchGroups, anchors, canvasWidth, shape);
+    for (size_t i = 0; i < kMm3dTouchHudElementCount; ++i) {
+      mApplied[i] = Mm3dTouchHudNative(plan[i]);
+      const int button = Mm3dTouchHudButtonIndex(Mm3dTouchHudElement(i));
+      if (button < 0) { mApplied[i] = {}; continue; }
+      auto& target = Mm3dDekui::HudButtons::touch[size_t(button)];
+      target.scale = mApplied[i].Scale; target.x = mApplied[i].X; target.y = mApplied[i].Y;
+      target.active = mApplied[i].Active;
+    }
+  }
+  void ClearTouchHud() {
+    for (auto& placement : Mm3dDekui::HudButtons::touch) placement.active = false;
+    mApplied = {};
+  }
+  const std::array<Mm3dTouchHudNativeMapping, kMm3dTouchHudElementCount>& AppliedTouchHud() const { return mApplied; }
   // Inline prose I/II (ZR+X / ZR+Y) inside the guest's fixed 16-unit text
   // advance. Abbreviated (default): one full-height main glyph with a modifier
   // corner badge. Chord: the "ZR + X" form scaled to fit the same cell.
@@ -265,6 +288,11 @@ private:
       const float gx=*x+*w*.5f,gy=*y+*h*.5f;
       Mm3dTouchHudGroup group{true,*tx+*xx*gx+*xy*gy+40.f/3.f,*ty+*yx*gx+*yy*gy,
           std::max(std::hypot(*xx,*yx)**w,std::hypot(*xy,*yy)**h)*.5f};
+      // Undo this frame's touch placement: the plan is of the dekui pose.
+      if(const auto& applied=mApplied[size_t(element)];applied.Active&&applied.Scale>0) {
+        group.X=(group.X-40.f/3.f-applied.X)/applied.Scale+40.f/3.f;
+        group.Y=(group.Y-applied.Y)/applied.Scale;group.Radius/=applied.Scale;
+      }
       if(std::isfinite(group.X)&&std::isfinite(group.Y)&&std::isfinite(group.Radius)&&group.Radius>0&&group.Radius<128)
         mTouchGroups[size_t(element)]=group;
       return false;
@@ -347,6 +375,7 @@ private:
   bool mActive=false;
   bool mTouchObserve=false;
   Mm3dTouchHudGroups mTouchGroups{};
+  std::array<Mm3dTouchHudNativeMapping, kMm3dTouchHudElementCount> mApplied{};
   InlineChordStyle mInlineChordStyle=InlineChordStyle::Abbreviated;
   struct Style { NativeControlConfig Controls;NativePromptSet Prompts; };
   using Key=std::tuple<uint32_t,uint32_t,float,float>;

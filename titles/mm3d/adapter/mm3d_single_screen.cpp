@@ -1,5 +1,6 @@
 #include "mm3d_single_screen.h"
 #include "mm3d_button_overlay.h"
+#include "oot3d_top_screen_mod_profile.h"
 #include "../dekui/button_glyph_emission.h"
 
 #include "core.h"
@@ -89,6 +90,10 @@ Mm3dSingleScreen::Mm3dSingleScreen(std::function<std::int64_t()> globalTimeUs)
 
 void Mm3dSingleScreen::ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) {
     mButtonOverlay->Configure(config, prompts);
+    // Touch prompts: the native HUD groups move into the anchored touch
+    // controls (OoT3D TopScreen's shape and fill), on the 16:9 MM canvas.
+    mButtonOverlay->ApplyTouchHud(ThreeDsRecomp::Input::OverlayTouchAnchors().Snapshot(), 240.0F * 16.0F / 9.0F,
+                                  ResolveTopScreenTouchControlShape);
 }
 void Mm3dSingleScreen::SubmitButtonOverlayCommandList(uint32_t address,uint32_t bytes) { mButtonOverlay->SubmitCommandList(address,bytes); }
 void Mm3dSingleScreen::ObserveButtonOverlayDraw(uint64_t draw) { mButtonOverlay->ObserveDraw(draw); }
