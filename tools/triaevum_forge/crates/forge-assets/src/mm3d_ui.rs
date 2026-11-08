@@ -306,7 +306,7 @@ mod tests {
             policy[key].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_owned()).collect()
         };
         let (components, extensions) = (list("forbidden_path_components"), list("forbidden_extensions"));
-        let mut used = 0;
+        let (mut used, mut gar) = (0, 0);
         for entry in manifest["files"].as_array().unwrap() {
             let output = entry["output"].as_str().unwrap();
             if entry["input_root"] != "restoration" || !output.starts_with("romfs/") || output.contains(".mm3d-") {
@@ -315,10 +315,26 @@ mod tests {
             let member = restoration_package_member(entry["input"].as_str().unwrap()).unwrap();
             assert!(member.starts_with("resources/mm3d/project-restoration/layout/"), "{member}");
             assert!(!member.split('/').any(|c| components.iter().any(|f| f == c)), "{member}");
-            assert!(!extensions.iter().any(|e| member.ends_with(e.as_str())), "{member}");
+            // A forbidden extension (.gar) is admitted only through its role
+            // exception, for exactly the paths that role lists (Q-INTEG-1:
+            // the local MM3D package bundles the modified layout archives
+            // as-is, pinned, like TopScreen's ctxb/zar).
+            if let Some(extension) = extensions.iter().find(|e| member.ends_with(e.as_str())) {
+                let roles = policy["forbidden_extension_role_exceptions"][extension.as_str()].as_array().unwrap();
+                assert!(
+                    roles.iter().any(|role| policy["allowed_roles"][role.as_str().unwrap()]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|path| path.as_str() == Some(member.as_str()))),
+                    "{member}"
+                );
+                gar += 1;
+            }
             used += 1;
         }
         assert_eq!(used, 3, "Joker.Main.New.gar, Joker.Main.Play.gar, Joker.mfpj");
+        assert_eq!(gar, 2, "both layout archives go through the restoration_mm3d_asset role");
         // Negative: the raw manifest path would violate the policy, and
         // non-romfs or escaping inputs are refused.
         assert!(components.iter().any(|c| c == "romfs"));

@@ -69,18 +69,19 @@ pub const FORBIDDEN_BASENAMES: [&str; 7] = [
 ];
 
 /// `release_policy.json` `forbidden_extensions`.
-pub const FORBIDDEN_EXTENSIONS: [&str; 36] = [
+pub const FORBIDDEN_EXTENSIONS: [&str; 37] = [
     ".3ds", ".7z", ".a", ".bcseq", ".bcwav", ".bin", ".bps", ".cci", ".cia", ".citra", ".cmb", ".csab", ".ctxb",
-    ".cxi", ".dmp", ".ips", ".gz", ".lib", ".map", ".o", ".o3ps", ".o3ro", ".o3tu", ".obj", ".pdb", ".rar", ".sav",
+    ".cxi", ".dmp", ".gar", ".ips", ".gz", ".lib", ".map", ".o", ".o3ps", ".o3ro", ".o3tu", ".obj", ".pdb", ".rar", ".sav",
     ".state", ".tam", ".tap", ".tar", ".xdelta", ".xdelta3", ".zar", ".zsi", ".zst",
 ];
 
 /// `release_policy.json` `forbidden_extension_role_exceptions`.
-pub const EXTENSION_ROLE_EXCEPTIONS: [(&str, &[&str]); 4] = [
+pub const EXTENSION_ROLE_EXCEPTIONS: [(&str, &[&str]); 5] = [
     (".o3ps", &["portable_shader_corpus"]),
     (".lib", &["forge_link_library", "forge_tool_resource"]),
     (".ctxb", &["topscreen_singlescreen_asset"]),
     (".zar", &["topscreen_singlescreen_asset"]),
+    (".gar", &["restoration_mm3d_asset"]),
 ];
 
 /// `release_policy.json` `forbidden_path_components`.

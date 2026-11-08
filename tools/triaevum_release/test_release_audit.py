@@ -270,6 +270,40 @@ class PublicReleaseAuditTests(unittest.TestCase):
             result = audit_release(root)
             self.assertTrue(result.ok, result.errors)
 
+    def test_restoration_layout_archives_are_pinned_to_their_role(self) -> None:
+        # Q-INTEG-1 (2026-11-08): the LOCAL MM3D package bundles Project
+        # Restoration's modified layout archives as-is under their own pinned
+        # role (the TopScreen ctxb/zar precedent); .gar is otherwise forbidden.
+        policy = json.loads(DEFAULT_POLICY.read_text())
+        role = "restoration_mm3d_asset"
+        new_gar = "resources/mm3d/project-restoration/layout/Joker.Main.New.gar"
+        self.assertEqual(policy["forbidden_extension_role_exceptions"][".gar"], [role])
+        self.assertIn(new_gar, policy["allowed_roles"][role])
+        self.assertEqual(len(policy["pinned_role_sha256"][role]), 2)
+
+        def audit_with(relative: str, role_name: str, data: bytes):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                write_clean_package(root)
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                manifest_path = root / MANIFEST
+                manifest = json.loads(manifest_path.read_text())
+                manifest["files"].append({"path": relative, "role": role_name, "bytes": len(data),
+                                          "sha256": sha256_file(path)})
+                atomic_write_json(manifest_path, manifest)
+                return audit_release(root).errors
+
+        # Not the pinned bytes: refused even at the role's own path.
+        errors = audit_with(new_gar, role, b"GAR another archive")
+        self.assertTrue(any(f"not a pinned {role}" in e for e in errors), errors)
+        # Another role cannot carry a .gar, and the role has no other path.
+        errors = audit_with("resources/mm3d/extra.gar", "title_neutral_resource", b"GAR")
+        self.assertTrue(any("forbidden extension" in e for e in errors), errors)
+        errors = audit_with("resources/mm3d/project-restoration/layout/Other.gar", role, b"GAR")
+        self.assertTrue(any(f"not allowed for role {role}" in e for e in errors), errors)
+
     def test_singlescreen_assets_are_pinned_and_hd_graphics_excluded(self) -> None:
         def audit_with(relative: str, role: str, data: bytes):
             with tempfile.TemporaryDirectory() as temporary:

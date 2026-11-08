@@ -254,3 +254,30 @@ translator identity exists to install.
   built: CATALOGS is blocked on the object-cache disk plan, which is an owner question.
 
 F07 Windows row: still **NOT QUALIFIED**. There is no MM title module to install, so no installed run was made.
+
+## Round 4 (2026-11-08): Restoration archives, MM3D shader packs, light-overflow restore
+
+- **Restoration layout archives (Q-INTEG-1).** The LOCAL MM3D package bundles Project Restoration's modified
+  Nintendo layout archives `Joker.Main.New.gar` and `Joker.Main.Play.gar` as-is, at
+  `resources/mm3d/project-restoration/layout/`, under the release-policy role `restoration_mm3d_asset`. This follows
+  the TopScreen `topscreen_singlescreen_asset` precedent (ctxb/zar): `.gar` is a forbidden extension except for that
+  role, the role lists exactly those two paths, and their SHA-256 values are pinned (`pinned_role_sha256`). The
+  Forge-side mirror (`forge-core` `package_inventory.rs`) and the Restoration member test (`forge-assets`
+  `mm3d_ui.rs`) follow the policy. The members stay separate files, so a delta form (a patch against the
+  user's own original archive) remains possible without changing the role's consumers. **The public shipping form
+  is an owner decision, deferred** until MM3D publication is considered; nothing here publishes or exports it.
+  `Joker.mfpj` is not a Nintendo archive and stays an ordinary `title_neutral_resource`.
+- **MM3D prepared shaders (Q-CAT-3, parity with OoT3D).** `Mm3dTitleSession::PreparedShaders()` is true exactly
+  when MM3D's built-in packs, `titles/mm3d/shaders/mm3d_native_vertex.spvpack` and
+  `titles/mm3d/shaders/mm3d_native_fragment.spvpack`, both exist at configure time. They are then embedded
+  (`triaevum_add_mm3d_builtin_shader_packs`, `TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS`). There is no product or developer
+  switch and no runtime pack-identity switch. The window session installs the session's packs before the renderer
+  starts: the vertex family goes through `InstallTitleBuiltInVertexPack`, after OoT3D's embedded programs, and becomes
+  the startup family returned by `AdditionalTitleVertexArtifacts`; the fragment families go through
+  `InstallTitleFragmentPack`. The pipeline cache namespace stays `mm3d`. OoT3D installs nothing, so its families and
+  files are unchanged. The packs are produced by CATALOGS; until they exist, MM3D keeps prepared=0 (complete mode).
+- **Light-arena overflow across a restore.** `EnsureMm3dLightOverflowMapping`, shared by the session and
+  `mm3d_light_overflow_restore_tests`, revalidates the exact region and its identity header after a savestate
+  restore. It runs on the real `NativeA32Memory` Capture/RestoreState. The overflow record is preserved. A state from
+  before the mapping existed is refused until an allocation re-creates the mapping. Corrupt, executable and partial
+  foreign regions are refused.
