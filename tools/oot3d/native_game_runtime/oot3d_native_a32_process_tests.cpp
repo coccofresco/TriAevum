@@ -2070,6 +2070,15 @@ void TestYieldRotatesEqualPriority() {
 
 int main(int argc, char** argv) {
     try {
+        if (argc == 2 && std::string_view(argv[1]) == "--fault-trail-only") {
+            // Title-neutral: runs in a dual tree whose registry is MM3D's.
+            TestFaultTrail();
+#if !defined(OOT3D_NATIVE_A32_PRODUCT_DISPATCH_TESTS)
+            TestFallbackBoundary();
+#endif
+            std::cout << "oot3d_native_a32_process_tests: fault trail ok\n";
+            return 0;
+        }
         if (argc == 2 && std::string_view(argv[1]) == "--memory-only") {
             TestMemoryContract();
             TestMemoryFastBlockEquivalence();

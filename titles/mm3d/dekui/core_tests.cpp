@@ -287,6 +287,8 @@ void PhotoHideHudMinimap() {
         MapMemory m;
         for(unsigned q=0;q<8;++q)m.d[Count(q)]=0;
         m.d[0x6890ec]=0x00400000;m.d[0x6890f0]=0x00500000;m.d[0x727970+0x828]=0x00600000;
+        // S3 (27bfeaae): a hidden map discards its pending quads, valid counts only.
+        m.d[0x00400000+0x2c4]=64;m.d[0x00400000+0x2c8]=12;
         HudAdjustments::photo_hud_hidden=photo;HudAdjustments::hide_minimap=saved;
         Hook hook;const U32 screen=0x00300000;
         hook.Begin(m,screen,true);
