@@ -378,6 +378,9 @@ mod tests {
         let pointer = data.join("prepared/mm3d-ui/current.json");
         let before = std::fs::read(&pointer).unwrap();
         let custom = data.join("imports/mm3d-message-specs.json");
+        // Dump-only preparation creates no imports directory; the reviewed
+        // spec override is the one optional file a user may place there.
+        std::fs::create_dir_all(custom.parent().unwrap()).unwrap();
         std::fs::write(&custom, b"{}").unwrap();
         assert!(prepare(&package, data, &romfs, CODE, &hash, &mut |_, _| {}, &cancel).is_err());
         assert_eq!(std::fs::read(&pointer).unwrap(), before);
