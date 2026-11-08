@@ -125,6 +125,16 @@ void TestLocalSourceGuards() {
     }
 }
 
+void TestRoundTwoSourcesConverted() {
+    // F02a: Dno, Boss_Hakugin and Ot were native-retained; they must now be
+    // selected as converted sources (fails on the 18-row table).
+    for (const uint16_t id : {uint16_t(0x117),uint16_t(0x16E),uint16_t(0x194)}) {
+        bool present = false;
+        for (const auto& source : kMm3dLocalLightSources) present |= source.Actor == id;
+        Require(present,"round-2 native light source not converted");
+    }
+}
+
 void TestEachProvenSourcePublication() {
     for (const auto& source : kMm3dLocalLightSources) {
         Fixture f; Mm3dNativeA32LightingProbe probe;
@@ -285,6 +295,7 @@ void TestSyntheticFireAndFairies() {
 void TestSceneSnapshots() {
     TestSyntheticFireAndFairies();
     TestLocalSourceGuards();
+    TestRoundTwoSourcesConverted();
     TestEachProvenSourcePublication();
     TestRoomEmitterPublication();
     Fixture f; Mm3dNativeA32LightingProbe probe;
