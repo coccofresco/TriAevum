@@ -1,0 +1,12 @@
+{
+  "format": "triaevum_whole_aot_title_frontend_v1",
+  "title": "mm3d",
+  "guard": "MM3D EUR code.bin 6eec27b1 (== USA v1.1); base 0x100000 = exheader text start",
+  "inventory": "titles/mm3d/a32/whole_aot_inventory.csv",
+  "supplemental_entries": "titles/mm3d/a32/guest_patch_supplemental.csv",
+  "boundary_audit": "titles/mm3d/a32/callable_boundary_audit.csv",
+  "product_manifest": "titles/mm3d/a32/whole_aot_product_manifest.json",
+  "selection": "titles/mm3d/a32/whole_aot_functions.json",
+  "default_base": "0x100000",
+  "notes": "inventory = the A32 overlay registry inventory (a32_generated_overlay/inventory_with_process_entry.csv); supplemental = guest_patch_entries.py output (715 guest patch boundaries, whole_aot_r5). product_manifest and selection are the MM zero-residual product contract (G2, CATALOGS): until they exist load_title_frontend refuses the MM frontend."
+}

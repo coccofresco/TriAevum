@@ -87,7 +87,134 @@ def _translator_identity_files() -> tuple[tuple[str, Path], ...]:
     )
 
 
-def load_default_frontend() -> WholeAotFrontend:
+# Per-title whole-AOT frontends (owner decision 2026-11-08: Forge is per title).
+# OoT3D's frontend is the shared A32 tooling's own inputs; every other title
+# names its inputs in titles/<title>/a32/whole_aot_frontend.json (title facts),
+# while the extractor and the product audit stay the shared mechanism.
+FRONTEND_TITLES = ("oot3d", "mm3d")
+TITLE_FRONTEND_DESCRIPTORS = {
+    "mm3d": "titles/mm3d/a32/whole_aot_frontend.json",
+}
+TITLE_FRONTEND_FORMAT = "triaevum_whole_aot_title_frontend_v1"
+_TITLE_FRONTEND_ROLES = (
+    "inventory",
+    "supplemental_entries",
+    "boundary_audit",
+    "product_manifest",
+    "selection",
+)
+
+
+def _shared_frontend_callables() -> tuple[Any, ...]:
+    if str(A32_ROOT) not in sys.path:
+        sys.path.insert(0, str(A32_ROOT))
+    from audit_whole_aot_product import audit_product
+    from generate_aot import add_local_entry_intervals
+    from whole_aot_program import main as extract_program
+
+    return add_local_entry_intervals, extract_program, audit_product
+
+
+def _shared_identity_files() -> set[Path]:
+    """The shared extractor/audit code every title's IR depends on."""
+    return {
+        A32_ROOT / "generate_aot.py",
+        A32_ROOT / "whole_aot_program.py",
+        A32_ROOT / "audit_whole_aot_product.py",
+        Path(__file__).resolve(),
+    }
+
+
+def title_frontend_paths(
+    title: str, descriptor: Path | None = None
+) -> tuple[Path, dict[str, Path], int]:
+    """Resolve a non-OoT3D title's frontend descriptor without requiring the
+    inputs to exist yet (load_title_frontend refuses missing ones)."""
+    if title not in TITLE_FRONTEND_DESCRIPTORS:
+        raise WholeAotSourceError(f"no whole-AOT frontend for title {title!r}")
+    descriptor = (
+        descriptor
+        if descriptor is not None
+        else distribution_path(TITLE_FRONTEND_DESCRIPTORS[title])
+    ).resolve()
+    if not descriptor.is_file() or descriptor.is_symlink():
+        raise WholeAotSourceError(
+            f"{title} whole-AOT frontend descriptor is missing: {descriptor}"
+        )
+    facts = load_json_object(descriptor)
+    if facts.get("format") != TITLE_FRONTEND_FORMAT or facts.get("title") != title:
+        raise WholeAotSourceError(
+            f"{descriptor} is not the {title} whole-AOT frontend descriptor"
+        )
+    title_root = (REPO_ROOT / "titles" / title).resolve()
+    paths: dict[str, Path] = {}
+    for role in _TITLE_FRONTEND_ROLES:
+        relative = facts.get(role)
+        if not isinstance(relative, str) or not relative:
+            raise WholeAotSourceError(f"{descriptor}: role {role} is not named")
+        path = (REPO_ROOT / relative).resolve()
+        if title_root not in path.parents:
+            raise WholeAotSourceError(
+                f"{descriptor}: {role} is not a {title} title input: {relative}"
+            )
+        paths[role] = path
+    base = facts.get("default_base")
+    if isinstance(base, str):
+        base = int(base, 0)
+    if not isinstance(base, int) or base <= 0:
+        raise WholeAotSourceError(f"{descriptor}: default_base is invalid")
+    return descriptor, paths, base
+
+
+def load_title_frontend(
+    title: str, descriptor: Path | None = None
+) -> WholeAotFrontend:
+    """Load a non-OoT3D title's frontend from its descriptor.
+
+    Every role must be a regular file of that title; a missing input (for
+    MM3D the product manifest and selection until its zero-residual product
+    contract exists) is refused here, before any Forge work starts.
+    """
+    descriptor, paths, base = title_frontend_paths(title, descriptor)
+    missing = [
+        f"{role}={path.relative_to(REPO_ROOT.resolve()).as_posix()}"
+        for role, path in paths.items()
+        if not path.is_file() or path.is_symlink()
+    ]
+    if missing:
+        raise WholeAotSourceError(
+            f"{title} whole-AOT frontend inputs are missing: " + ", ".join(missing)
+        )
+    add_local_entry_intervals, extract_program, audit_product = (
+        _shared_frontend_callables()
+    )
+    identity = _shared_identity_files() | set(paths.values()) | {descriptor}
+    return WholeAotFrontend(
+        inventory=paths["inventory"],
+        supplemental_entries=paths["supplemental_entries"],
+        boundary_audit=paths["boundary_audit"],
+        product_manifest=paths["product_manifest"],
+        selection=paths["selection"],
+        default_base=base,
+        identity_files=tuple(
+            (
+                path.resolve().relative_to(REPO_ROOT.resolve()).as_posix(),
+                path.resolve(),
+            )
+            for path in sorted(identity, key=lambda item: item.as_posix())
+        ),
+        add_local_entry_intervals=add_local_entry_intervals,
+        extract_program=extract_program,
+        audit_product=audit_product,
+    )
+
+
+def load_default_frontend(title: str = "oot3d") -> WholeAotFrontend:
+    """The whole-AOT frontend of ``title`` (default OoT3D, unchanged)."""
+    if title not in FRONTEND_TITLES:
+        raise WholeAotSourceError(f"unknown whole-AOT title {title!r}")
+    if title != "oot3d":
+        return load_title_frontend(title)
     if str(A32_ROOT) not in sys.path:
         sys.path.insert(0, str(A32_ROOT))
     from audit_whole_aot_product import audit_product
@@ -293,8 +420,9 @@ def prepare_whole_aot_ir(
     cache_root: Path,
     frontend: WholeAotFrontend | None = None,
     seed_program: Path | None = None,
+    title: str = "oot3d",
 ) -> dict[str, Any]:
-    frontend = frontend or load_default_frontend()
+    frontend = frontend or load_default_frontend(title)
     code = _validate_source("code.bin", code)
     exheader = _validate_source("ExHeader", exheader)
     entrypoint, executable_size = _read_exheader(exheader.path)

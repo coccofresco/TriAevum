@@ -110,6 +110,48 @@ class ForgeError(RuntimeError):
     pass
 
 
+# Per-title recipe catalogs (owner decision 2026-11-08: Forge is per title).
+# A packaged Forge carries only its own title's recipes/<title>.json; the
+# source tree knows both. The prepared content's recipe id selects the title
+# whose whole-AOT frontend builds it.
+TITLE_RECIPE_CATALOGS = {
+    "oot3d": ("recipes/oot3d.json", "tools/triaevum_release/supported_revisions.json"),
+    "mm3d": ("recipes/mm3d.json", "titles/mm3d/forge/supported_revisions.json"),
+}
+
+
+def _catalog_recipe_ids(path: Path) -> set[str]:
+    if not path.is_file():
+        return set()
+    document = load_json_object(path)
+    recipes = document.get("recipes")
+    if not isinstance(recipes, list):
+        raise ForgeError(f"revision recipe catalog is invalid: {path}")
+    return {str(item.get("id")) for item in recipes if isinstance(item, dict)}
+
+
+def recipe_title(recipe_id: object) -> str:
+    """The title whose whole-AOT frontend builds ``recipe_id``.
+
+    A recipe listed in another title's catalog (MM3D's recipes/mm3d.json or
+    titles/mm3d/forge/supported_revisions.json) selects that title; every
+    other recipe keeps the OoT3D frontend, the unchanged default. A recipe
+    listed by two titles is refused."""
+    if not isinstance(recipe_id, str) or not recipe_id:
+        raise ForgeError("content.tap recipe is invalid")
+    owners = []
+    for title, (installed, source) in TITLE_RECIPE_CATALOGS.items():
+        ids = _catalog_recipe_ids(installation_path(installed))
+        ids |= _catalog_recipe_ids(distribution_path(source))
+        if recipe_id in ids:
+            owners.append(title)
+    if len(owners) > 1:
+        raise ForgeError(
+            f"recipe {recipe_id!r} is listed by several title catalogs: {', '.join(owners)}"
+        )
+    return owners[0] if owners else "oot3d"
+
+
 ProcessManifestBuilder = Callable[[Path, Path, Path], dict[str, object]]
 
 
@@ -713,6 +755,7 @@ def prepare_private_aot_ir(
         exheader=SourceImage(exheader.path, exheader.bytes, exheader.sha256),
         cache_root=cache_root,
         seed_program=seed_program,
+        title=recipe_title(recipe),
     )
     prepared.state["translation"] = {
         "status": "ir_ready",
@@ -763,7 +806,7 @@ def build_private_aot_fallback(
 
     generated_directory = generated_directory.expanduser().resolve()
     generated_manifest = generated_directory / "whole_aot_cpp_manifest.json"
-    frontend = load_default_frontend()
+    frontend = load_default_frontend(recipe_title(prepared.index.get("recipe")))
     audit = frontend.audit_product(
         frontend.product_manifest,
         program,
@@ -837,7 +880,7 @@ def build_private_direct_aot(
     ):
         raise ForgeError("prepared structural AOT IR changed before direct AOT")
 
-    frontend = load_default_frontend()
+    frontend = load_default_frontend(recipe_title(prepared.index.get("recipe")))
     try:
         result = build_direct_aot_plugin(
             program_path=program,
@@ -906,7 +949,7 @@ def build_private_whole_aot(
     ):
         raise ForgeError("prepared structural AOT IR changed before whole-AOT")
 
-    frontend = load_default_frontend()
+    frontend = load_default_frontend(recipe_title(prepared.index.get("recipe")))
     try:
         result = build_whole_aot_plugin(
             program_path=program,
