@@ -16,6 +16,13 @@ std::shared_ptr<NativeA32CtrFile> OpenNativeA32HostFileRange(const std::filesyst
                                                              uint64_t offset, uint64_t size,
                                                              std::string* error = nullptr);
 
+class NativeA32RomFsOverlay;
+// Read-only O3RO adapter so a title's required prepared files can coexist
+// with user-enabled mods without materializing another full RomFS image.
+std::shared_ptr<NativeA32CtrFile> ComposeNativeA32RomFsOverlay(
+    std::shared_ptr<NativeA32CtrFile> base,
+    std::shared_ptr<const NativeA32RomFsOverlay> overlay);
+
 struct NativeA32RomFsLayers {
     // The merged RomFS level 3, read-only: what the title's RomFS archive
     // serves in place of the mounted image's.
@@ -25,8 +32,8 @@ struct NativeA32RomFsLayers {
     size_t AddedDirectories = 0;
 };
 
-// Development path (TRIAEVUM_ROMFS_OVERLAY); installed RomFS mods ship as
-// Forge's O3RO overlay (oot3d_native_a32_romfs_overlay.h) instead.
+// Used by Forge's immutable title UI layer and development LayeredFS.
+// Optional user mods use O3RO and can be composed as the base below.
 // A RomFS with files laid over the title's own, as LayeredFS does: base is
 // the mounted RomFS level 3 (its header at offset 0; IVFC levels 1-2 are not
 // served to the title), and each layer is a host directory whose files sit

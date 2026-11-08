@@ -41,6 +41,34 @@ bool NativeHdFontRuntime::Load(const std::filesystem::path& path, std::string* e
     try {
         const auto bytes = ReadZip(zip, "manifest.json");
         const auto manifest = nlohmann::json::parse(bytes);
+        if (manifest.at("format") == "triaevum_static_font_coverage_v1") {
+            const auto& sheets = manifest.at("sheets");
+            if (!sheets.is_array() || sheets.empty() || sheets.size() > 16)
+                throw std::runtime_error("invalid static font sheets");
+            std::vector<StaticAtlas> atlases;
+            for (const auto& sheet : sheets) {
+                for (const auto* key : {"width", "height", "density"})
+                    if (!sheet.at(key).is_number_unsigned())
+                        throw std::runtime_error("static font extent must be an unsigned integer");
+                StaticAtlas atlas;
+                atlas.Width = sheet.at("width").get<std::uint32_t>();
+                atlas.Height = sheet.at("height").get<std::uint32_t>();
+                atlas.Density = sheet.at("density").get<std::uint32_t>();
+                if (!atlas.Width || !atlas.Height || atlas.Width > 1024 || atlas.Height > 1024 ||
+                    atlas.Width % 8 || atlas.Height % 8 || atlas.Density < 2 || atlas.Density > 4)
+                    throw std::runtime_error("invalid static font extent");
+                atlas.Native = ReadZip(zip, sheet.at("native_file").get<std::string>());
+                auto coverage = ReadZip(zip, sheet.at("coverage_file").get<std::string>());
+                const auto pixels = size_t(atlas.Width) * atlas.Height;
+                if (atlas.Native.size() != pixels / 2 || coverage.size() != pixels * atlas.Density * atlas.Density / 2)
+                    throw std::runtime_error("static font coverage extent mismatch");
+                atlas.Hash = HashOot3dPicaSnapshot(coverage);
+                atlas.Coverage = std::make_shared<const std::vector<std::uint8_t>>(std::move(coverage));
+                atlases.push_back(std::move(atlas));
+            }
+            mFonts.clear(); mStaticAtlases = std::move(atlases); Reset();
+            zip_close(zip); return true;
+        }
         if (manifest.at("format") != "oot3d_qbf_coverage_v1" || manifest.at("fonts").size() > 8)
             throw std::runtime_error("invalid HD font manifest");
         std::vector<Font> fonts;
@@ -54,6 +82,7 @@ bool NativeHdFontRuntime::Load(const std::filesystem::path& path, std::string* e
         }
         if (fonts.empty()) throw std::runtime_error("empty HD font pack");
         mFonts = std::move(fonts);
+        mStaticAtlases.clear();
         Reset();
         zip_close(zip);
         return true;
@@ -113,6 +142,21 @@ void NativeHdFontRuntime::Resolve(const Oot3dPicaPhysicalMemoryView& memory,
                                   Oot3dPicaResourceSnapshot& resource) {
     if (mOutputHeight < 480 || texture.Format != 11 || texture.MaxMipLevel != 0) return;
     const auto native = resource.ResolvedBytes();
+    // Static title-native atlases (MM GZFX) need no OoT blit PC or guest
+    // pointer cache. Exact full source bytes bind coverage to the native asset;
+    // address reuse/state restore cannot transfer that identity to other data.
+    for (const auto& atlas : mStaticAtlases) {
+        if (texture.Width != atlas.Width || texture.Height != atlas.Height ||
+            native.size() != atlas.Native.size() ||
+            !std::equal(native.begin(), native.end(), atlas.Native.begin())) continue;
+        resource.SharedBytes = atlas.Coverage; resource.Bytes.clear();
+        resource.ReplacementWidth = static_cast<std::uint16_t>(atlas.Width * atlas.Density);
+        resource.ReplacementHeight = static_cast<std::uint16_t>(atlas.Height * atlas.Density);
+        resource.ContentHash = resource.BaseLevelContentHash = atlas.Hash;
+        resource.ContentHashAvailable = resource.BaseLevelContentHashAvailable = true;
+        ++Replacements;
+        return;
+    }
     const auto guest = memory.Translate(texture.PhysicalAddress, native.size());
     if (!guest) return;
     auto found = mSurfaces.find(*guest);

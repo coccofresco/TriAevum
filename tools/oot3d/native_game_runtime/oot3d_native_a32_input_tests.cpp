@@ -285,11 +285,27 @@ void TestHostKeysTimeline() {
 }
 
 int main(int argc, char** argv) {
+    // Preflight acceptance fixtures with the production parser, before a
+    // renderer/device run consumes its one-attempt budget.
+    if (argc == 3 && std::string_view(argv[1]) == "--validate-timeline") {
+        try {
+            const auto timeline = NativeA32InputTimeline::LoadFile(argv[2]);
+            Require(timeline.Enabled(), "timeline fixture must be enabled");
+            std::cout << "timeline valid: " << timeline.SegmentCount()
+                      << " segments, origin="
+                      << (timeline.FrameOrigin() == NativeA32InputTimelineFrameOrigin::Run
+                              ? "run" : "guest") << '\n';
+            return 0;
+        } catch (const std::exception& error) {
+            std::cerr << "timeline invalid: " << error.what() << '\n';
+            return 1;
+        }
+    }
     if (argc == 4 && std::string_view(argv[1]) == "--emit-mouse-aim") {
         EmitMouseAimTimeline(argv[2], argv[3]);
         return 0;
     }
-    Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw]");
+    Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw | --validate-timeline FILE]");
     TestShoulderMappings();
     TestTitleGameplaySetting();
     TestHostKeysTimeline();
@@ -1131,6 +1147,21 @@ int main(int argc, char** argv) {
                 runTimeline.Sample(3, 2).ScriptSegmentIndex == -1 &&
                 runTimeline.Sample(1003, 3).ScriptSegmentIndex == 0,
             "run-relative input timeline used the guest frame");
+
+    WriteText(path, R"json({
+      "schema": "oot3d.native_game.input_timeline.v1", "frame_origin": "run",
+      "segments": [{"start_frame": 0, "end_frame_exclusive": 2, "circle_y": -1}]
+    })json");
+    Require(NativeA32InputTimeline::LoadFile(path).Sample(4000, 0).Hid.CirclePadY == -154,
+            "normalized down fixture did not reach native HID");
+    WriteText(path, R"json({
+      "schema": "oot3d.native_game.input_timeline.v1", "frame_origin": "run",
+      "segments": [{"start_frame": 0, "end_frame_exclusive": 2, "circle_y": -140}]
+    })json");
+    bool rejectedRawStick = false;
+    try { static_cast<void>(NativeA32InputTimeline::LoadFile(path)); }
+    catch (const std::runtime_error&) { rejectedRawStick = true; }
+    Require(rejectedRawStick, "raw HID units were accepted as normalized timeline input");
 
     WriteText(path, R"json({
       "schema": "oot3d.native_game.input_timeline.v1",

@@ -301,6 +301,22 @@ struct NativeFramePhaseTiming {
 };
 
 struct NativeAudioOutputDiagnostics {
+  // Bounded receipts split live restore tests without erasing cumulative
+  // underruns or confusing an intentional backend Flush with starvation.
+  void Checkpoint(const char* reason, uint32_t hostFrame,
+                  uint64_t pcmFrames, uint64_t underruns, bool flushed = false) {
+    if (Checkpoints.size() < 16U) {
+      Checkpoints.push_back({{"reason", reason}, {"host_frame", hostFrame},
+          {"pcm_stereo_frames", pcmFrames}, {"output_underruns", underruns},
+          {"submit_calls", SubmitCalls}, {"requested_frames", RequestedFrames},
+          {"starvation_observations", StarvationObservations}});
+    }
+    if (flushed) {
+      Primed = false;
+      HasSubmitTime = false;
+    }
+  }
+
   void Observe(uint32_t hostFrame, int32_t before, int32_t after,
                uint64_t requestedFrames, int32_t desiredBuffered) {
     const auto now = std::chrono::steady_clock::now();
@@ -338,12 +354,14 @@ struct NativeAudioOutputDiagnostics {
     }
     if (wasPrimed && before == 0) {
       ++StarvationObservations;
-      StarvationEvents.push_back({
-          {"host_frame", hostFrame},
-          {"buffered_before", before},
-          {"buffered_after", after},
-          {"requested_frames", requestedFrames},
-      });
+      if (StarvationEvents.size() < 128U) {
+        StarvationEvents.push_back({
+            {"host_frame", hostFrame},
+            {"buffered_before", before},
+            {"buffered_after", after},
+            {"requested_frames", requestedFrames},
+        });
+      }
     }
     const uint64_t growth =
         after > before ? static_cast<uint64_t>(after - before) : 0U;
@@ -367,6 +385,7 @@ struct NativeAudioOutputDiagnostics {
   int32_t MaximumBufferedBefore = 0;
   int32_t MinimumBufferedAfter = 0;
   int32_t MaximumBufferedAfter = 0;
+  nlohmann::json Checkpoints = nlohmann::json::array();
   nlohmann::json StarvationEvents = nlohmann::json::array();
   nlohmann::json SubmitGapEvents = nlohmann::json::array();
 };

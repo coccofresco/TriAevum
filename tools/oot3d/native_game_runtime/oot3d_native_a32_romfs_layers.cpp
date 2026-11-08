@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_romfs_layers.h"
+#include "oot3d_native_a32_romfs_overlay.h"
 
 #include <algorithm>
 #include <cstring>
@@ -478,6 +479,35 @@ std::shared_ptr<NativeA32CtrFile> OpenNativeA32HostFileRange(const std::filesyst
         return nullptr;
     }
     return std::make_shared<HostRangeFile>(std::move(stream), offset, size);
+}
+
+std::shared_ptr<NativeA32CtrFile> ComposeNativeA32RomFsOverlay(
+    std::shared_ptr<NativeA32CtrFile> base,
+    std::shared_ptr<const NativeA32RomFsOverlay> overlay) {
+    if (!base || !overlay || base->Size() != overlay->BaseViewSize()) return {};
+    class File final : public NativeA32CtrFile {
+      public:
+        File(std::shared_ptr<NativeA32CtrFile> b, std::shared_ptr<const NativeA32RomFsOverlay> o)
+            : base(std::move(b)), overlay(std::move(o)) {}
+        bool Read(uint64_t offset, std::span<uint8_t> bytes, uint32_t* count) override {
+            if (count) *count = 0;
+            if (offset > Size()) return false;
+            bytes = bytes.first(static_cast<size_t>(std::min<uint64_t>(bytes.size(), Size() - offset)));
+            const bool ok = overlay->Read(offset, bytes, [&](uint64_t at, std::span<uint8_t> out) {
+                uint32_t read = 0;
+                return base->Read(at, out, &read) && read == out.size();
+            });
+            if (ok && count) *count = static_cast<uint32_t>(bytes.size());
+            return ok;
+        }
+        bool Write(uint64_t, std::span<const uint8_t>, uint32_t* count) override { if (count) *count = 0; return false; }
+        bool Resize(uint64_t) override { return false; }
+        uint64_t Size() const noexcept override { return overlay->ViewSize(); }
+      private:
+        std::shared_ptr<NativeA32CtrFile> base;
+        std::shared_ptr<const NativeA32RomFsOverlay> overlay;
+    };
+    return std::make_shared<File>(std::move(base), std::move(overlay));
 }
 
 std::optional<NativeA32RomFsLayers> BuildNativeA32RomFsLayers(

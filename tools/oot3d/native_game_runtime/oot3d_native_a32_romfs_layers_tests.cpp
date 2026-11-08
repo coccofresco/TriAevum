@@ -1,4 +1,5 @@
 #include "oot3d_native_a32_romfs_layers.h"
+#include "oot3d_native_a32_romfs_overlay.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -154,11 +155,33 @@ void TestLayers(const std::filesystem::path& scratch) {
     // Layering the result again keeps every file and replaces in place.
     WriteFile(scratch / "third" / "top.bin", "replaced");
     const std::filesystem::path third[] = {scratch / "third"};
-    auto again = BuildNativeA32RomFsLayers(overlay->File, third, &error);
+    // An independently prepared user mod remains active under required title UI.
+    const auto original = ReadAll(*overlay->File, 0, overlay->File->Size());
+    const auto needle = Bytes("second common, longer");
+    const auto found = std::search(original.begin(), original.end(), needle.begin(), needle.end());
+    Require(found != original.end(), "fixture payload missing");
+    std::vector<uint8_t> o3ro(98, 0);
+    std::memcpy(o3ro.data(), "O3RO", 4);
+    const auto put32 = [&](size_t at, uint32_t value) { std::memcpy(o3ro.data()+at, &value, 4); };
+    const auto put64 = [&](size_t at, uint64_t value) { std::memcpy(o3ro.data()+at, &value, 8); };
+    put32(4,1); put64(8,original.size()); put64(16,original.size()); put32(24,1); put64(32,98);
+    put64(64,static_cast<uint64_t>(found-original.begin())); put32(72,1); put64(80,96); put64(88,97);
+    o3ro[96]='s'; o3ro[97]='S';
+    const auto modPath = scratch / "mod.o3ro";
+    { std::ofstream out(modPath,std::ios::binary); out.write(reinterpret_cast<const char*>(o3ro.data()),o3ro.size()); }
+    auto mod = NativeA32RomFsOverlay::Load(modPath, overlay->File->Size(),
+        [&](uint64_t at, std::span<uint8_t> bytes) { uint32_t read=0; return overlay->File->Read(at,bytes,&read)&&read==bytes.size(); }, &error);
+    Require(mod != nullptr,error);
+    auto composed = ComposeNativeA32RomFsOverlay(overlay->File, mod);
+    Require(composed && Lookup(*composed,u"/layout/common.gar")==Bytes("Second common, longer"),"O3RO composition lost user mod");
+    auto again = BuildNativeA32RomFsLayers(composed, third, &error);
     Require(again.has_value() && again->ReplacedFiles == 1U && again->AddedFiles == 0U, "re-layer: " + error);
     Require(Lookup(*again->File, u"/top.bin") == Bytes("replaced") &&
                 Lookup(*again->File, u"/a/b/c/deep.bin") == Bytes("deep"),
             "re-layered image lost a file");
+    Require(Lookup(*again->File,u"/layout/common.gar")==Bytes("Second common, longer"),"title layer discarded O3RO mod");
+    uint32_t count=99;
+    Require(!composed->Write(0,Bytes("no"),&count)&&count==0&&!composed->Resize(1),"composite writable");
 
     // A malformed base is refused.
     auto broken = EmptyRomFs();
@@ -202,6 +225,22 @@ void TestImage(const char* image, const std::filesystem::path& scratch) {
     Require(ReadAll(*empty->File, data, window) == ReadAll(*base, data, window) &&
                 ReadAll(*empty->File, level3 - window, window) == ReadAll(*base, level3 - window, window),
             "rebuilt file data differs from the image's");
+    if (const char* prepared = std::getenv("TRIAEVUM_TEST_TITLE_LAYER")) {
+        const std::filesystem::path folder(prepared), preparedLayers[]{folder};
+        auto title = BuildNativeA32RomFsLayers(base, preparedLayers, &error);
+        Require(title.has_value(), "prepared title layer: " + error);
+        size_t checked=0;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(folder)) {
+            if (!entry.is_regular_file()) continue;
+            const auto relative = std::filesystem::relative(entry.path(),folder).generic_u16string();
+            std::ifstream stream(entry.path(),std::ios::binary);
+            std::vector<uint8_t> expected((std::istreambuf_iterator<char>(stream)),{});
+            Require(Lookup(*title->File,u"/"+relative)==expected,"prepared title hash-lookup differs");
+            ++checked;
+        }
+        Require(checked>=11,"prepared title layer incomplete");
+        std::cout << "prepared title: " << checked << " files verified through native hash lookup\n";
+    }
     std::cout << "image: " << overlay->File->Size() << " bytes, " << overlay->AddedFiles << " added\n";
 }
 

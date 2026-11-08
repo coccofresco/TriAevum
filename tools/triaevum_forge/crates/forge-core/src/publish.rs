@@ -12,12 +12,12 @@ use std::path::{Path, PathBuf};
 
 use forge_base::fsutil::{self, atomic_write_json, file_error, load_json_object};
 use forge_base::hashing::{hex, sha256_file};
-use forge_base::{legacy_json, CancelToken, ErrorKind, ForgeError, Result};
-use forge_native::{ensure_runtime_config, query_product_at, NativeServices};
+use forge_base::{CancelToken, ErrorKind, ForgeError, Result, legacy_json};
+use forge_native::{NativeServices, ensure_runtime_config, query_product_at};
 use forge_prepare::paths::{expanduser, path_string, resolve};
 use forge_prepare::pyvalue::{objects_eq, py_eq};
-use forge_prepare::{load_prepared_content, InstallationContext};
-use serde_json::{json, Map, Value};
+use forge_prepare::{InstallationContext, load_prepared_content};
+use serde_json::{Map, Value, json};
 
 use crate::layout::{host_platform, place_installed_runtime};
 
@@ -49,7 +49,7 @@ pub const TOPSCREEN_STANDARD_LAYOUT_FIELDS: [&str; 13] = [
 pub const TOPSCREEN_HUD_SIZES: [f64; 2] = [1.0, 0.7];
 
 /// Launch-profile options whose value is a file or directory.
-const PATH_OPTIONS: [&str; 22] = [
+const PATH_OPTIONS: [&str; 24] = [
     "--title-plugin",
     "--a32-process-manifest",
     "--resource-root",
@@ -65,6 +65,8 @@ const PATH_OPTIONS: [&str; 22] = [
     "--scene-light-catalog",
     "--title-program-pack",
     "--romfs-overlay",
+    "--title-romfs-layer",
+    "--title-message-edits",
     "--pica-aot-shader-pack",
     "--renderer-cache-directory",
     "--log-directory",
@@ -169,6 +171,8 @@ pub struct RuntimeAssets {
     pub water_texture_catalog: Option<PathBuf>,
     pub scene_light_catalog: Option<PathBuf>,
     pub romfs_overlay: Option<PathBuf>,
+    pub title_romfs_layer: Option<PathBuf>,
+    pub title_message_edits: Option<PathBuf>,
     pub pica_shader_pack: Option<PathBuf>,
     pub title_program_pack: Option<PathBuf>,
     /// Mutable renderer cache: routed, never pinned by hash.
@@ -467,6 +471,17 @@ pub fn publish_private_runtime(
     if let Some(path) = &overlay {
         route("--romfs-overlay", path)?;
     }
+    if assets.title_romfs_layer.is_some() != assets.title_message_edits.is_some() {
+        return Err(missing("Prepared MM layer and guarded messages must be published together"));
+    }
+    let messages = existing_file(&assets.title_message_edits, "Prepared title messages are missing")?;
+    if let Some(path) = &messages {
+        route("--title-message-edits", path)?;
+    }
+    if let Some(layer) = &assets.title_romfs_layer {
+        forge_assets::mm3d_ui::verify_layer(layer, cancel)?;
+        route("--title-romfs-layer", layer)?;
+    }
     let context = InstallationContext::new(&installation);
     let shader_pack =
         existing_file(&assets.pica_shader_pack, "Prepared PICA shader pack is missing before activation")?;
@@ -569,12 +584,20 @@ pub fn publish_private_runtime(
         ("water_textures", &water),
         ("scene_lights", &lights),
         ("romfs_overlay", &overlay),
+        ("title_message_edits", &messages),
         ("pica_shader_pack", &shader_pack),
         ("title_program_pack", &title_programs),
     ] {
         if let Some(path) = path {
             runtime.insert(key.into(), pinned(path)?);
         }
+    }
+    if let Some(layer) = &assets.title_romfs_layer {
+        runtime.insert(
+            "title_romfs_layer".into(),
+            json!({"path":reference(layer)?,
+            "receipt_sha256":sha256_hex(&layer.with_extension("receipt.json"),cancel)?}),
+        );
     }
     if let Some(directory) = &assets.renderer_cache_directory {
         runtime.insert("renderer_cache".into(), json!({"path": reference(directory)?}));

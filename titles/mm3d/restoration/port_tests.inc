@@ -66,6 +66,39 @@ inline void Schedule() {
     Check(f.calls[before].entry==0x100000&&f.calls[before].args.S[0]==0&&f.calls[before+2].args.StackWords==1&&f.calls[before+2].args.Stack[0]==kScreenContext,"touch callback AAPCS registers");
 }
 inline u64 Hash(const std::vector<u8>& bytes){u64 h=0xcbf29ce484222325ULL;for(auto b:bytes)h=(h^b)*0x100000001b3ULL;return h;}
+inline void PreparedMessages(const char* path) {
+    std::ifstream input(path,std::ios::binary);
+    Check(bool(input),"prepared message input missing");
+    const std::string json((std::istreambuf_iterator<char>(input)),{});
+    std::string error;
+    const auto edits=Mm3dRestorationPort::ReadMessageEdits(json,&error);
+    Check(edits.has_value(),error);
+    Mm3dGuestCalls calls;Mm3dRestorationPort port(calls);
+    Check(port.SetMessageEdits(*edits),"prepared message guards rejected");
+    Check(edits->size()>=795,"five-locale dialogue/price table incomplete");
+    for(const auto& edit:*edits) {
+        Fixture f;auto& g=f.g;f.session.message_edits={edit};
+        const u32 self=0x08001000,base=0x08002000,payload=base+36;
+        g.Write32(self+4,base);g.Write32(self+8,base+16);g.Write32(self+12,36+u32(edit.original.size()));g.Write32(self+16,20);
+        g.Write32(base,0x47534d47);g.Write32(base+4,1);g.Write32(base+8,1);g.Write32(base+12,1u<<edit.language);
+        g.Write16(base+16,edit.id);g.Write32(base+20,edit.original_metadata.value_or(0));
+        g.Write32(base+28,36);g.Write32(base+32,u32(edit.original.size()));
+        for(size_t i=0;i<edit.original.size();++i)g.Write8(payload+u32(i),edit.original[i]);
+        const auto bytesEqual=[&](const std::vector<u8>& expected){for(size_t i=0;i<expected.size();++i)if(g.Read8(payload+u32(i))!=expected[i])return false;return true;};
+        Mm3dDekui::Prices::enabled=false;Mm3dDekui::SingleScreenText::enabled=true;f.e.EditMessage(self,edit.id);
+        Check(bytesEqual(edit.price?edit.original:edit.edited),"price/single-screen toggle independence");
+        Mm3dDekui::Prices::enabled=true;f.e.EditMessage(self,edit.id);f.e.EditMessage(self,edit.id);
+        Check(bytesEqual(edit.edited),"prepared text apply/idempotence");
+        if(edit.edited_metadata)Check(g.Read32(base+20)==*edit.edited_metadata,"prepared metadata apply");
+        Mm3dDekui::Prices::enabled=false;Mm3dDekui::SingleScreenText::enabled=false;f.e.EditMessage(self,edit.id);
+        Check(bytesEqual(edit.original),"prepared text restore");
+        if(edit.original_metadata)Check(g.Read32(base+20)==*edit.original_metadata,"prepared metadata restore");
+        g.Write32(base+12,1u<<((edit.language+1)%14));Mm3dDekui::Prices::enabled=true;Mm3dDekui::SingleScreenText::enabled=true;f.e.EditMessage(self,edit.id);
+        Check(bytesEqual(edit.original),"foreign archive language modified");
+    }
+    Mm3dDekui::Prices::enabled=false;Mm3dDekui::SingleScreenText::enabled=false;
+    std::cout<<"prepared message toggle/apply/restore/language fixtures: "<<edits->size()<<'\n';
+}
 inline void Messages() {
     Fixture f;const u32 self=0x08001000,base=0x08002000,out=0x08003000;auto& g=f.g;
     g.Write32(self+4,base);g.Write32(self+8,base+16);g.Write32(self+12,64);g.Write32(self+16,28);

@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 forge-base = { path = "../forge-base" }
+forge-assets = { path = "../forge-assets" }
 forge-catalog = { path = "../forge-catalog" }
 forge-prepare = { path = "../forge-prepare" }
 serde_json.workspace = true

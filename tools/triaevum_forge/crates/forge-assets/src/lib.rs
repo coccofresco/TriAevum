@@ -14,6 +14,10 @@
 mod catalog_cache;
 mod fnv;
 mod model_catalog;
+mod mm3d_layout;
+mod mm3d_font;
+mod mm3d_messages;
+pub mod mm3d_ui;
 mod pymath;
 mod pyvalue;
 mod romfs;

@@ -48,6 +48,7 @@ struct Oot3dNativeGameLaunch {
     std::filesystem::path TitleProgramPackPath;
     // Caller-owned prepared message data; interpreted only by the title adapter.
     std::filesystem::path TitleMessageEditsPath;
+    std::filesystem::path TitleRomFsLayerPath;
     std::filesystem::path PicaEffectiveShaderInventoryPath;
     std::filesystem::path PicaPipelineInventoryPath;
     std::filesystem::path PicaPipelineManifestPath;

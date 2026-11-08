@@ -15,7 +15,7 @@ use std::hash::{BuildHasher, Hasher};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use forge_assets::interior_sun::{prepare_interior_sun, InteriorSunService, NativeRun, PrebuildCommand};
+use forge_assets::interior_sun::{InteriorSunService, NativeRun, PrebuildCommand, prepare_interior_sun};
 use forge_assets::precomputed_tables::title_tables;
 use forge_assets::scene_lights::prepare_scene_lights;
 use forge_assets::topscreen::{prepare_topscreen_assets, topscreen_link_animations, topscreen_ui_atlas_hd};
@@ -23,29 +23,29 @@ use forge_assets::water::prepare_water_textures;
 use forge_base::fsutil::atomic_write_json;
 use forge_base::hashing::{hex, sha256_file};
 use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Reason, Result};
+use forge_catalog::ReleasePlatform;
 use forge_catalog::family::{self, InputPaths};
 use forge_catalog::precompiled::{
-    artifact_path, checked_file, load_catalog, runtime_record, select_title, set_native_library_directory, MODEL,
+    MODEL, artifact_path, checked_file, load_catalog, runtime_record, select_title, set_native_library_directory,
 };
 use forge_catalog::recipes::load_recipe_options;
-use forge_catalog::ReleasePlatform;
-use forge_catalog::{adapt_extracted_inputs, default_recipes, match_extracted_recipe, InputFile, TitleInputs};
-use forge_mods::{prepare_romfs_mods, prepare_ui_texture_pack, romfs_service_view, ui_atlas_hd};
+use forge_catalog::{InputFile, TitleInputs, adapt_extracted_inputs, default_recipes, match_extracted_recipe};
 use forge_mods::{Catalog, PrepareContext, SystemBsdtar, UiTexturePack};
+use forge_mods::{prepare_romfs_mods, prepare_ui_texture_pack, romfs_service_view, ui_atlas_hd};
 use forge_native::{
-    adopt_existing_cache, installation_cache_directory, prepare_device_pipelines, prepare_renderer_shader_cache,
-    prepare_shader_seed, query_product_at, InteriorSunRequest, NativeServices,
+    InteriorSunRequest, NativeServices, adopt_existing_cache, installation_cache_directory, prepare_device_pipelines,
+    prepare_renderer_shader_cache, prepare_shader_seed, query_product_at,
 };
 use forge_prepare::paths::{expanduser, path_string, resolve};
 use forge_prepare::{
-    activate_prepared_title, check_title_path_length, load_prepared_content, package_private_module, prepare_content,
-    verify_sources, HashCache, SourcePaths,
+    HashCache, SourcePaths, activate_prepared_title, check_title_path_length, load_prepared_content,
+    package_private_module, prepare_content, verify_sources,
 };
 use forge_rom::{ExtractedFile, ExtractedTitleInputs};
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
-use crate::layout::{self, for_package, installation_state, installed_runtime_path, HostOs};
-use crate::publish::{publish_private_runtime, AndroidRuntime, HudLayout, PublishRequest, RuntimeAssets};
+use crate::layout::{self, HostOs, for_package, installation_state, installed_runtime_path};
+use crate::publish::{AndroidRuntime, HudLayout, PublishRequest, RuntimeAssets, publish_private_runtime};
 use crate::transaction::activation_transaction;
 
 /// Progress callback `(stage, message)`, Python's `report`.
@@ -65,11 +65,7 @@ impl InstallSource {
     /// `InstallRequest.rom` as the Python worker received it: a folder is
     /// extracted data, anything else a ROM file.
     pub fn from_path(path: PathBuf) -> Self {
-        if expanduser(&path).is_dir() {
-            Self::ExtractedDirectory(path)
-        } else {
-            Self::Rom(path)
-        }
+        if expanduser(&path).is_dir() { Self::ExtractedDirectory(path) } else { Self::Rom(path) }
     }
 }
 
@@ -217,11 +213,7 @@ fn step(stage: &'static str, operation: Operation) -> impl Fn(ForgeError) -> For
     move |error| {
         let failed = error.kind == ErrorKind::PreparationFailed;
         let error = error.at_stage(stage).during(operation);
-        if failed {
-            error.because(Reason::StepFailed)
-        } else {
-            error
-        }
+        if failed { error.because(Reason::StepFailed) } else { error }
     }
 }
 
@@ -677,7 +669,19 @@ pub fn install_precompiled_title(
     .map_err(&helper)?;
     cancel.check()?;
 
+    let title_ui = forge_assets::mm3d_ui::prepare(
+        root,
+        data_root,
+        &romfs.path,
+        &input("code")?.sha256,
+        &romfs.sha256,
+        report,
+        cancel,
+    )
+    .map_err(&required_assets)?;
     let assets = RuntimeAssets {
+        title_romfs_layer: title_ui.as_ref().map(|ui| ui.layer.clone()),
+        title_message_edits: title_ui.map(|ui| ui.messages),
         topscreen_link_animations: topscreen_link_animations(texture_pack.as_deref()),
         topscreen_ui_atlas_hd: topscreen_ui_atlas_hd(texture_pack.as_deref()),
         topscreen_texture_pack: texture_pack,

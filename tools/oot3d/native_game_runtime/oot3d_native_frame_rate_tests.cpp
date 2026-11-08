@@ -313,6 +313,89 @@ void RunNativeFrameRateTests() {
         throw std::runtime_error(
             "enhanced scheduler protective debt bound mismatch");
     }
+    // A 30 Hz host with alternating short/long frames still averages exactly
+    // 30 Hz. DropExcess loses one native audio refresh per pair forever;
+    // bounded debt must repay it without changing DSP rate or queue latency.
+    for (const auto mode : {
+             Oot3dNativeGame::GameplayTimingMode::Native30Interpolated,
+             Oot3dNativeGame::GameplayTimingMode::Native30NoInterpolation,
+             Oot3dNativeGame::GameplayTimingMode::Enhanced60}) {
+        for (const bool realtimeAudio : {false, true}) {
+            const auto policy = Oot3dNativeGame::ResolveNativeSimulationCatchUpPolicy(
+                mode, realtimeAudio);
+            const bool retains = realtimeAudio ||
+                mode == Oot3dNativeGame::GameplayTimingMode::Enhanced60;
+            if ((policy == Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt) != retains)
+                throw std::runtime_error("audio catch-up policy selection mismatch");
+            Oot3dNativeGame::NativePresentationScheduler jitter(30U, policy);
+            (void)jitter.Advance(0.0);
+            for (unsigned pair = 0; pair < 300; ++pair) {
+                for (double seconds : {1.0 / 40.0, 1.0 / 24.0}) {
+                    const auto step = jitter.Advance(seconds);
+                    if (step.GuestRefreshesDue > 2U || step.DeferredGuestRefreshes > 8U)
+                        throw std::runtime_error("audio catch-up exceeded bounded work");
+                }
+            }
+            const auto pending = jitter.CaptureState();
+            // State load preserves bounded debt; no new format or audio state.
+            Oot3dNativeGame::NativePresentationScheduler replay(30U, policy);
+            if (!replay.Restore(pending))
+                throw std::runtime_error("audio debt state failed to restore");
+            const auto repaid = jitter.Advance(0.0);
+            const auto replayed = replay.Advance(0.0);
+            if (repaid.GuestRefreshesDue != replayed.GuestRefreshesDue ||
+                repaid.GuestRefreshPhase != replayed.GuestRefreshPhase)
+                throw std::runtime_error("restored audio debt differs");
+            if (jitter.Stats().GuestRefreshes != (retains ? 1201U : 901U) ||
+                jitter.Stats().DroppedGuestRefreshes != (retains ? 0U : 300U))
+                throw std::runtime_error("native audio clock lost time to presentation jitter");
+        }
+    }
+#if !defined(__SWITCH__)
+    // A paced 30 Hz host needs recovery capacity beyond two refreshes. Even
+    // a steady 34ms host frame otherwise accumulates debt forever.
+    for (const double period : {0.034, 0.040, 0.045}) {
+        Oot3dNativeGame::NativePresentationScheduler audioClock(30U,
+            Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt,
+            Oot3dNativeGame::NativeAudioRefreshBatchLimit(true));
+        (void)audioClock.Advance(0.0);
+        for (unsigned frame = 0; frame < 1000; ++frame) {
+            const auto step = audioClock.Advance(period);
+            if (step.GuestRefreshesDue > 3U || step.DroppedGuestRefreshes != 0U)
+                throw std::runtime_error("paced audio clock lacks recovery capacity");
+        }
+        const auto expected = 1U + static_cast<uint64_t>(std::llround(period * 60000.0));
+        if (audioClock.Stats().GuestRefreshes != expected)
+            throw std::runtime_error("paced audio clock accumulated permanent drift");
+        const auto stall = audioClock.Advance(1.0);
+        if (stall.GuestRefreshesDue != 3U || stall.DeferredGuestRefreshes != 8U ||
+            stall.DroppedGuestRefreshes != 49U)
+            throw std::runtime_error("audio recovery lost its long-stall safety bound");
+    }
+    for (const uint32_t invalidBatch : {0U, 4U, 1000U}) {
+        bool rejected = false;
+        try {
+            Oot3dNativeGame::NativePresentationScheduler invalid(30U,
+                Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt,
+                invalidBatch);
+        } catch (const std::invalid_argument&) { rejected = true; }
+        if (!rejected) throw std::runtime_error("unbounded audio recovery batch accepted");
+    }
+#endif
+    // Fixed 60 Hz captures retain the exact old scheduling even if debt is on.
+    Oot3dNativeGame::NativePresentationScheduler deterministicOld(30U);
+    Oot3dNativeGame::NativePresentationScheduler deterministicDebt(30U,
+        Oot3dNativeGame::NativeSimulationCatchUpPolicy::PreserveBoundedDebt,
+        Oot3dNativeGame::NativeAudioRefreshBatchLimit(true));
+    for (unsigned frame = 0; frame < 4000; ++frame) {
+        const auto a = deterministicOld.Advance(1.0 / 60.0);
+        const auto b = deterministicDebt.Advance(1.0 / 60.0);
+        if (a.GuestRefreshesDue != b.GuestRefreshesDue ||
+            a.GuestRefreshPhase != b.GuestRefreshPhase ||
+            a.VisualSamplePhase != b.VisualSamplePhase ||
+            a.InterpolationAlpha != b.InterpolationAlpha)
+            throw std::runtime_error("fixed-delta scheduler identity changed");
+    }
     try {
         presentationScheduler.Advance(-0.001);
         throw std::runtime_error(

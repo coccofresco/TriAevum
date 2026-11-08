@@ -259,12 +259,15 @@ NativeVisualSampleCadence::Stats() const noexcept {
 
 NativePresentationScheduler::NativePresentationScheduler(
     uint32_t visualSampleRateHz,
-    NativeSimulationCatchUpPolicy catchUpPolicy)
-    : mVisualSampleRateHz(visualSampleRateHz),
+    NativeSimulationCatchUpPolicy catchUpPolicy,
+    uint32_t maximumRefreshBatch)
+    : mMaximumRefreshBatch(maximumRefreshBatch),
+      mVisualSampleRateHz(visualSampleRateHz),
       mCatchUpPolicy(catchUpPolicy) {
-    if (mVisualSampleRateHz == 0U) {
+    if (mVisualSampleRateHz == 0U || mMaximumRefreshBatch == 0U ||
+        mMaximumRefreshBatch > NativeAudioRefreshBatchLimit(true)) {
         throw std::invalid_argument(
-            "visual sample rate must be positive");
+            "visual sample rate or bounded refresh batch is invalid");
     }
 }
 
@@ -297,7 +300,7 @@ NativePresentationScheduler::Advance(double elapsedSeconds) {
     if (elapsedGuestRefreshes != 0U) {
         step.GuestRefreshesDue = std::min(
             elapsedGuestRefreshes,
-            kMaximumGuestRefreshesPerPresentation);
+            mMaximumRefreshBatch);
         if (mCatchUpPolicy ==
             NativeSimulationCatchUpPolicy::PreserveBoundedDebt) {
             mGuestRefreshPhase -=
