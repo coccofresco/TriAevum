@@ -167,6 +167,11 @@ fn mm3d_real_title_catalog_binds_through_validate_title() {
     assert_eq!(bound["abi_version"], 2);
     let identity = bound["translator_identity_sha256"].as_str().unwrap().to_owned();
     eprintln!("bound mm3d translator_identity_sha256={identity}");
+    // Optional pin: the identity of the module generation the catalog must carry
+    // (round-6 window 2: generation 2020030e, translator dd2ff99a...).
+    if let Some(expected) = std::env::var_os("TRIAEVUM_MM3D_TITLE_IDENTITY") {
+        assert_eq!(identity, expected.to_string_lossy(), "MM3D catalog carries a different module generation");
+    }
     let error = forge_catalog::validate_title(&root, &oot_recipe, None, &cancel).unwrap_err();
     assert_eq!(error.kind, ErrorKind::UnsupportedRevision, "OoT3D recipe bound to the MM3D catalog");
     let text = std::fs::read_to_string(root.join(precompiled::CATALOG)).unwrap();

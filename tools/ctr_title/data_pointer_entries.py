@@ -101,6 +101,20 @@ def decodes_as_function(disassembler: Cs, code: bytes, base: int, address: int,
     return False  # an undecodable word, or no return within the window
 
 
+def is_own_address_table_slot(code: bytes, base: int, target: int,
+                              function: tuple[int, int]) -> bool:
+    """A word inside a function that holds an address of that same function is
+    a slot of its own address table (an LDR-PC jump table, a run of identical
+    pointers), not a second entry: a data pointer that happens to name it
+    names data. A32 code never encodes its own function's address."""
+    offset = target - base
+    if offset < 0 or offset + 4 > len(code):
+        return False
+    value = struct.unpack_from("<I", code, offset)[0]
+    start, end = function
+    return value % 4 == 0 and start <= value < end
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("code", type=Path)
@@ -150,6 +164,8 @@ def main() -> int:
             if not decodes_as_function(disassembler, code, base, target, text_end):
                 continue
             start, end = containing(functions, function_starts, target)
+            if is_own_address_table_slot(code, base, target, (start, end)):
+                continue
             rows.append({
                 "entry": f"0x{target:08X}",
                 "size": str(end - target),

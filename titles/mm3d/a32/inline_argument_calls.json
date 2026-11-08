@@ -1,0 +1,13 @@
+{
+  "format": "a32_inline_argument_calls_v1",
+  "title": "mm3d",
+  "image": "EUR CTR-P-AJRP code.bin (== USA v1.1), sha256 6eec27b1827eab2c87744ac38066d569ffe6fe75790b1eb3300bd91f5099038d",
+  "callees": [
+    {
+      "entry": "0x001D8764",
+      "guard_word": "0xE49E4004",
+      "inline_words": 1,
+      "meaning": "RVCT single-precision compare helper: 'ldr r4, [lr], #4' reads a flags word placed right after each BL and returns through the advanced LR (BL+8). Callers include 0x149724, 0x1DADF8 and 0x61CE68 (r8/classify-residuals.log class A)."
+    }
+  ]
+}
