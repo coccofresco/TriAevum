@@ -1,4 +1,5 @@
 // Native A32 window session: setup (process image, host services, renderer, UI, initial state).
+#include "oot3d_native_compiled_functions.h"
 #include "oot3d_native_a32_window_session.h"
 #include "oot3d_native_a32_romfs_overlay.h"
 #include "oot3d_native_a32_romfs_layers.h"
@@ -1402,7 +1403,7 @@ void NativeA32WindowSession::Setup() {
 #endif
               << " whole_aot_available=" << (wholeAotAvailable ? 1 : 0)
               << " whole_aot_enabled=" << (enableWholeAot ? 1 : 0)
-              << " module_entry_points=" << Oot3dNativeGame::Oot3dWholeAotEntryPoints().size()
+              << " module_entry_points=" << Oot3dNativeGame::Oot3dCompiledFunctionEntryPoints(true, false).size()
               << " ui_profile=" << static_cast<int>(launch.UiProfile) << std::endl;
     return;
   }
