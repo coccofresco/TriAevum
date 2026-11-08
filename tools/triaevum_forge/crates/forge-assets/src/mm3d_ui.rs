@@ -294,6 +294,12 @@ mod tests {
         assert_eq!(package.join(RESTORATION_RESOURCES), Path::new("P/resources/mm3d/project-restoration"));
         assert!(!RESTORATION_RESOURCES.starts_with("imports"));
     }
+    /// A release-policy path pattern (a `*` component matches one component,
+    /// as the audit's fnmatch does for these title-neutral patterns).
+    fn policy_path_matches(pattern: &str, path: &str) -> bool {
+        let (pattern, path): (Vec<&str>, Vec<&str>) = (pattern.split('/').collect(), path.split('/').collect());
+        pattern.len() == path.len() && pattern.iter().zip(&path).all(|(p, c)| *p == "*" || p == c)
+    }
     /// Every Restoration member the preparation reads maps to a package path
     /// the release policy admits: no forbidden component, no forbidden
     /// extension (lists checked against release_policy.json below).
@@ -326,7 +332,7 @@ mod tests {
                         .as_array()
                         .unwrap()
                         .iter()
-                        .any(|path| path.as_str() == Some(member.as_str()))),
+                        .any(|path| policy_path_matches(path.as_str().unwrap(), &member))),
                     "{member}"
                 );
                 gar += 1;
@@ -334,7 +340,7 @@ mod tests {
             used += 1;
         }
         assert_eq!(used, 3, "Joker.Main.New.gar, Joker.Main.Play.gar, Joker.mfpj");
-        assert_eq!(gar, 2, "both layout archives go through the restoration_mm3d_asset role");
+        assert_eq!(gar, 2, "both layout archives go through the restoration_layout_asset role");
         // Negative: the raw manifest path would violate the policy, and
         // non-romfs or escaping inputs are refused.
         assert!(components.iter().any(|c| c == "romfs"));

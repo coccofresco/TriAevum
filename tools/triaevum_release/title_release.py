@@ -15,7 +15,7 @@ MM3D_FINGERPRINTS = ROOT / "titles/mm3d/dekui/setup/setup-fingerprints.json"
 # forge-assets mm3d_ui::RESTORATION_RESOURCES: the members' package folder,
 # without the `romfs` component the release policy forbids.
 RESTORATION_RESOURCES = "resources/mm3d/project-restoration"
-RESTORATION_ROLES = {".gar": "restoration_mm3d_asset"}
+RESTORATION_ROLES = {".gar": "restoration_layout_asset"}
 
 TITLES = {
     "oot3d": {

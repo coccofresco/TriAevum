@@ -81,7 +81,7 @@ pub const EXTENSION_ROLE_EXCEPTIONS: [(&str, &[&str]); 5] = [
     (".lib", &["forge_link_library", "forge_tool_resource"]),
     (".ctxb", &["topscreen_singlescreen_asset"]),
     (".zar", &["topscreen_singlescreen_asset"]),
-    (".gar", &["restoration_mm3d_asset"]),
+    (".gar", &["restoration_layout_asset"]),
 ];
 
 /// `release_policy.json` `forbidden_path_components`.

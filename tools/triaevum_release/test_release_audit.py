@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import json
 import tempfile
 import unittest
@@ -275,10 +276,10 @@ class PublicReleaseAuditTests(unittest.TestCase):
         # Restoration's modified layout archives as-is under their own pinned
         # role (the TopScreen ctxb/zar precedent); .gar is otherwise forbidden.
         policy = json.loads(DEFAULT_POLICY.read_text())
-        role = "restoration_mm3d_asset"
+        role = "restoration_layout_asset"
         new_gar = "resources/mm3d/project-restoration/layout/Joker.Main.New.gar"
         self.assertEqual(policy["forbidden_extension_role_exceptions"][".gar"], [role])
-        self.assertIn(new_gar, policy["allowed_roles"][role])
+        self.assertTrue(any(fnmatch.fnmatchcase(new_gar, pattern) for pattern in policy["allowed_roles"][role]))
         self.assertEqual(len(policy["pinned_role_sha256"][role]), 2)
 
         def audit_with(relative: str, role_name: str, data: bytes):

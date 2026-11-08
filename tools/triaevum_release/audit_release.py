@@ -290,8 +290,8 @@ def _source_archive_errors(
 
 def revision_recipe_path(declared: dict) -> str:
     """The release's own recipe catalog: Forge is per title (owner decision
-    2026-11-08), so a release holds exactly one revision_recipe, which is
-    recipes/oot3d.json for OoT3D and recipes/mm3d.json for MM3D."""
+    2026-11-08), so a release holds exactly one revision_recipe
+    (recipes/<title>.json), whichever title the release prepares."""
     paths = [path for path, item in declared.items() if item.get("role") == "revision_recipe"]
     if len(paths) != 1:
         raise ValueError(f"release must declare exactly one revision_recipe, found {len(paths)}")

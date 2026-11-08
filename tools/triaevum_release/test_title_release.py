@@ -60,7 +60,7 @@ class TitleReleaseTests(unittest.TestCase):
                 (root / "src/romfs" / name).write_bytes(data)
             items = restoration_members(root / "src", fingerprints(root, members))
             self.assertEqual({item["path"]: item["role"] for item in items}, {
-                f"{RESTORATION_RESOURCES}/layout/Joker.Main.New.gar": "restoration_mm3d_asset",
+                f"{RESTORATION_RESOURCES}/layout/Joker.Main.New.gar": "restoration_layout_asset",
                 f"{RESTORATION_RESOURCES}/layout/Joker.mfpj": "title_neutral_resource"})
             for item in items:
                 self.assertFalse(set(item["path"].split("/")) & set(POLICY["forbidden_path_components"]))
@@ -86,7 +86,7 @@ class TitleReleaseTests(unittest.TestCase):
                                "titles/mm3d/dekui/setup/setup-fingerprints.json").read_text(encoding="utf-8"))
         gar = sorted({e["input_sha256"] for e in manifest["files"]
                      if e.get("input_root") == "restoration" and e["input"].endswith(".gar")})
-        self.assertEqual(gar, sorted(POLICY["pinned_role_sha256"]["restoration_mm3d_asset"]))
+        self.assertEqual(gar, sorted(POLICY["pinned_role_sha256"]["restoration_layout_asset"]))
 
     def test_forge_features_reach_cargo(self):
         self.assertEqual(rust_forge_build.feature_arguments(()), [])
