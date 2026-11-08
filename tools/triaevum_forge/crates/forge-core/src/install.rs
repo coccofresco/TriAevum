@@ -33,7 +33,7 @@ use forge_catalog::{InputFile, TitleInputs, adapt_extracted_inputs, default_reci
 use forge_mods::{Catalog, PrepareContext, SystemBsdtar, UiTexturePack};
 use forge_mods::{prepare_romfs_mods, prepare_ui_texture_pack, romfs_service_view, ui_atlas_hd};
 use forge_native::{
-    InteriorSunRequest, NativeServices, adopt_existing_cache, installation_cache_directory, prepare_device_pipelines,
+    InteriorSunRequest, LanguageQuery, NativeServices, adopt_existing_cache, installation_cache_directory, prepare_device_pipelines,
     prepare_renderer_shader_cache, prepare_shader_seed, query_product_at,
 };
 use forge_prepare::paths::{expanduser, path_string, resolve};
@@ -383,7 +383,11 @@ pub fn install_private_title_with(
                 adaptation = adapted.to_value();
             }
         }
-        let languages = forge_native::language::discover(services, &runtime, &extracted.romfs.path)?;
+        // The runtime reads the RomFS with the language layout of the title
+        // whose verified execution code this is (MM3D's differs from OoT3D's).
+        let language_query =
+            LanguageQuery::romfs(&extracted.romfs.path).with_code_sha256(extracted.code.sha256_hex());
+        let languages = forge_native::language::discover_query(services, &runtime, &language_query)?;
         let extracted = forge_rom::publish_extracted_inputs(&extracted, &data_root.join("sources"), cancel)?;
         let mut cache = HashCache::new(output_root.join(".hash-cache.json"), true);
         for (_, item) in extracted.by_kind() {

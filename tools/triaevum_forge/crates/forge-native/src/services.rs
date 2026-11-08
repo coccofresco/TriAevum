@@ -30,22 +30,34 @@ pub struct NativeOutput {
     pub stderr: String,
 }
 
-/// `--game-language-info ROMFS [--romfs-offset N --romfs-size N]`: the
-/// RomFS is the whole file, or the `(offset, size)` extent of a cartridge
-/// image read in place (ROM recognition before extraction).
+/// `--game-language-info ROMFS [CODE_SHA256] [--romfs-offset N --romfs-size N]`:
+/// the RomFS is the whole file, or the `(offset, size)` extent of a cartridge
+/// image read in place (ROM recognition before extraction). `code_sha256` is
+/// the verified execution code.bin identity; the runtime selects the title's
+/// language layout from it (without it the RomFS is read as OoT3D's).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LanguageQuery {
     pub romfs: PathBuf,
     pub extent: Option<(u64, u64)>,
+    pub code_sha256: Option<String>,
 }
 
 impl LanguageQuery {
     pub fn romfs(path: impl Into<PathBuf>) -> Self {
-        Self { romfs: path.into(), extent: None }
+        Self { romfs: path.into(), extent: None, code_sha256: None }
+    }
+
+    /// The query for the title whose verified execution code.bin has this SHA-256.
+    pub fn with_code_sha256(mut self, sha256: impl Into<String>) -> Self {
+        self.code_sha256 = Some(sha256.into());
+        self
     }
 
     pub fn arguments(&self) -> Vec<OsString> {
         let mut arguments: Vec<OsString> = vec!["--game-language-info".into(), self.romfs.clone().into()];
+        if let Some(sha256) = &self.code_sha256 {
+            arguments.push(sha256.into());
+        }
         if let Some((offset, size)) = self.extent {
             arguments.extend([
                 "--romfs-offset".into(),

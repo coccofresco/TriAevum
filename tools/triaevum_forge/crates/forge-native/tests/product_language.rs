@@ -19,6 +19,9 @@ fn fixture_product() -> Map<String, Value> {
     json!({
         "format": "triaevum_product_info_v1",
         "runtime": "oot3d_native_game",
+        // A dual-title runtime (TRIAEVUM_TITLES=oot3d;mm3d) lists both, so the
+        // fixture is valid for the OoT3D Forge and for the title-mm3d Forge.
+        "titles": ["oot3d", "mm3d"],
         "source_commit": "a".repeat(40),
         "whole_aot_plugin_abi": 2,
         "private_title_loaded": false,
@@ -236,7 +239,7 @@ fn reads_a_cartridge_romfs_in_place() {
     let directory = tempfile::tempdir().unwrap();
     let runtime = install_fake(directory.path(), "runtime", &json!({"stdout": document(&["en"]).to_string()}));
     let rom = directory.path().join("game.cci");
-    let query = forge_native::LanguageQuery { romfs: rom.clone(), extent: Some((0x4000, 0x8000)) };
+    let query = forge_native::LanguageQuery { romfs: rom.clone(), extent: Some((0x4000, 0x8000)), code_sha256: None };
     language::discover_query(&DesktopServices, &runtime, &query).unwrap();
     assert_eq!(
         runs(&runtime)[0]["args"],
@@ -344,4 +347,16 @@ fn linux_helper_uses_verified_siblings() {
         environment.iter().find(|(name, _)| name == "LD_LIBRARY_PATH").unwrap().1.to_string_lossy().into_owned();
     let sibling = forge_prepare::paths::resolve(directory.path()).unwrap();
     assert!(value == sibling.to_string_lossy() || value.starts_with(&format!("{}:", sibling.display())));
+}
+
+#[test]
+fn language_query_passes_the_code_identity_before_the_extent() {
+    let sha = "6eec27b1827eab2c87744ac38066d569ffe6fe75790b1eb3300bd91f5099038d";
+    let plain = forge_native::LanguageQuery::romfs("romfs.bin");
+    assert_eq!(plain.arguments(), vec![std::ffi::OsString::from("--game-language-info"), "romfs.bin".into()]);
+    let titled = forge_native::LanguageQuery::romfs("romfs.bin").with_code_sha256(sha);
+    assert_eq!(titled.arguments(), vec![std::ffi::OsString::from("--game-language-info"), "romfs.bin".into(), sha.into()]);
+    let extent = forge_native::LanguageQuery { romfs: "game.cci".into(), extent: Some((16, 32)), code_sha256: Some(sha.into()) };
+    assert_eq!(extent.arguments(), vec![std::ffi::OsString::from("--game-language-info"), "game.cci".into(), sha.into(),
+        "--romfs-offset".into(), "16".into(), "--romfs-size".into(), "32".into()]);
 }

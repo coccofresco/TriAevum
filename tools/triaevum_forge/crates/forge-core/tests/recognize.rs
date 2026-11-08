@@ -163,7 +163,7 @@ fn a_cartridge_is_recognized_in_place_with_its_languages() {
     // The runtime reads the RomFS extent of the cartridge; nothing is extracted.
     assert_eq!(
         runtime.queries.borrow()[0],
-        LanguageQuery { romfs: fixture.rom.clone(), extent: Some((0x2000, 0x1000)) }
+        LanguageQuery { romfs: fixture.rom.clone(), extent: Some((0x2000, 0x1000)), code_sha256: None }
     );
     assert!(!fixture.data.exists());
 }

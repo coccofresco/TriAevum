@@ -233,6 +233,10 @@ impl NativeServices for FakeRuntime {
 
     fn game_language_info(&self, _runtime: &Path, query: &LanguageQuery) -> Result<NativeOutput> {
         assert!(query.romfs.is_file());
+        // Installation names the verified execution code so the runtime reads
+        // the title's own language layout (MM3D differs from OoT3D).
+        let code = query.code_sha256.as_deref().expect("install passes the execution code.bin SHA-256");
+        assert!(code.len() == 64 && code.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()));
         let document = json!({"format": "triaevum_game_language_v1", "selected": "en",
             "available": [{"code": "en", "label": "English", "system_id": 1},
                           {"code": "it", "label": "Italiano", "system_id": 4}]});

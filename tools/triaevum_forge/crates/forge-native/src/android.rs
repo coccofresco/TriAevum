@@ -376,7 +376,7 @@ mod tests {
         assert_eq!(output, NativeOutput { status: 0, stdout: "{\"product\":1}\n".into(), stderr: String::new() });
         let romfs = directory.path().join("romfs.bin");
         services.game_language_info(&library, &LanguageQuery::romfs(&romfs)).unwrap();
-        let rom = LanguageQuery { romfs: directory.path().join("game.cci"), extent: Some((0x1000, 0x2000)) };
+        let rom = LanguageQuery { romfs: directory.path().join("game.cci"), extent: Some((0x1000, 0x2000)), code_sha256: None };
         services.game_language_info(&library, &rom).unwrap();
         let calls = services.tool.calls.lock().unwrap();
         assert_eq!(calls[0], vec![OsString::from("runtime"), "--product-info".into()]);

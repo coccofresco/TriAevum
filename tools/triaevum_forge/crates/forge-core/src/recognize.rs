@@ -47,7 +47,7 @@ fn read_cartridge(mut file: File, image: PathBuf, cancel: &CancelToken) -> Resul
         program_id: layout.program_id,
         exheader,
         code,
-        romfs: LanguageQuery { romfs: image, extent: Some((layout.romfs_offset, layout.romfs_size)) },
+        romfs: LanguageQuery { romfs: image, extent: Some((layout.romfs_offset, layout.romfs_size)), code_sha256: None },
         _document: Some(file),
     })
 }
