@@ -855,6 +855,53 @@ void TestDeferredQueueAndShadowScopes() {
     tracker.TakeCommandListCompositionSpans(0,0,spans);Require(spans.empty(),"disabled observer emitted metadata");
 }
 
+// Custom shadow producers (code.bin receipt COMPOSITION/SHADOW_PRODUCERS):
+// actor overlays call the generic shadow routine 0x0021EC40 directly from
+// their own draw callback (zeldaret-mm ActorShadow_Draw callers), so the blob
+// submit (LR 0x0021EFAC) happens INSIDE the actor draw scope. The feet routine
+// 0x001F2E64 is installed as a shadow function pointer and submits at
+// 0x001F3898/0x001F3AB0. Each blob must be a shadow, never actor geometry.
+void TestCustomShadowProducers() {
+    for (const uint32_t lr : {0x0021EFACU, 0x001F3898U, 0x001F3AB0U, 0x0020A000U}) {
+        Fixture f; Mm3dNativePicaCompositionTracker tracker; auto& s=f.State;
+        Require(tracker.VerifyHooks(f.Memory),"valid signatures rejected");
+        const auto observe=[&](uint32_t pc){return tracker.ObserveBlockEntry(pc,s,f.Memory);};
+        const auto cursor=[&](uint32_t p){f.W32(kMm3dCommandListCursorAddress,p);};
+        s.r[0]=f.Play;observe(0x15E9ECU);
+        s.r[0]=f.Actor;s.r[2]=0x1F8E28U;observe(0x182C44U);
+        s.r[0]=f.Queue;s.r[1]=f.Model;s.r[14]=0x20A8F8U;f.W32(f.Queue+4U,0);observe(0x224104U);
+        f.W32(f.Queue+8U,f.Model);f.W32(f.Queue+4U,1);
+        const uint32_t shadowModel=f.Model+0x400U;
+        f.W32(shadowModel,0x63BED4U);f.W32(shadowModel+0xA0U,f.Renderer);
+        // Still inside the actor's main draw callback.
+        s.r[0]=shadowModel;s.r[14]=lr;observe(0x20A898U);
+        s.r[0]=f.Queue;s.r[1]=shadowModel;s.r[14]=0x20A8F8U;observe(0x224104U);
+        f.W32(f.Queue+12U,shadowModel);f.W32(f.Queue+4U,2);observe(0x223EDCU);
+        observe(0x182C48U);
+        cursor(0x14000000U);s.r[0]=f.Queue;s.r[14]=0x11EF3CU;observe(kMm3dRenderListVisitEntry);
+        const auto consume=[&](uint32_t slot,uint32_t begin,uint32_t end){
+            cursor(begin);Require(f.Memory.Read32(slot,&s.r[0]),"consumer model");s.r[4]=f.Queue;s.r[5]=slot;
+            observe(0x5EF0CCU);cursor(end);observe(0x5EF0D0U);
+        };
+        consume(f.Queue+8U,0x14000008U,0x14000020U);
+        consume(f.Queue+12U,0x14000020U,0x14000038U);
+        cursor(0x14000040U);observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0,0,spans);
+        Require(spans.size()==4,"custom shadow coverage");
+        Require(spans[1].Attribution.NativeActorGeometry && spans[1].Attribution.NativeActorIdentity==f.Actor &&
+                !spans[1].Attribution.NativeProjectedShadow,"custom producer main model lost actor");
+        if (lr==0x0020A000U) {
+            // Negative: an unrelated submit inside the actor scope is the actor's geometry, not a blob.
+            Require(!spans[2].Attribution.NativeProjectedShadow && spans[2].Attribution.NativeActorGeometry,
+                    "non-shadow submit became a blob");
+        } else {
+            Require(spans[2].Attribution.NativeProjectedShadow && !spans[2].Attribution.NativeActorGeometry,
+                    "custom shadow producer blob inherited actor role");
+        }
+    }
+}
+
 // P1.0/P1.1: each selected light's function, and BakedOutdoorRoom from the
 // environment group, with guard words and Unknown fallback.
 void TestLightFunctionsAndGroup() {
@@ -930,7 +977,7 @@ void TestLightFunctionsAndGroup() {
 } // namespace
 int main() {
     TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestUnobservedInPlaceRecycling(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
-    TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
+    TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();TestCustomShadowProducers();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();
     std::cout << "mm3d_native_lighting_tests: ok\n";
