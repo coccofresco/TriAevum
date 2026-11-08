@@ -55,3 +55,20 @@ clamp arithmetic, both counter boundaries, reset-mid-loop and fail-stop memory
 errors. Shared tests compare default OoT guest bytes against its old formulas.
 Live acceptance and the still-required OoT O2 capture gate are tracked in the
 HOOKS lane's external RESULTS.md; unit byte comparisons do not replace O2.
+
+## H10 / OoT3D S18: host stalls and the deadline rebase (parity-equal open item)
+
+The guest VSync counter (`0x6A3A08`, guarded `VsyncIncrement` at `0x115A08`)
+is advanced by the guest's own VSync handler once per refresh event the host
+signals, not by host wall time. `ApplyFramePacingDeadline` rewrites the
+deadline only when `deadline != vsync + rate - 1`, so a slow host delays the
+counter and the guest frame together and cannot put the deadline behind: host
+stalls do not reach the rebase path. The rebase path is reached by state
+discontinuities (restore, cold boot entering mid-loop), covered by the
+offline tests above. Trace receipt over existing captures (no game run):
+guest VSync == host-signaled refresh batches in every run, and +2 refreshes
+per guest frame exactly, including the REAL TIME run with 120 host frames
+stalled by 50 ms (HOOKS `reduce_h10_vsync_receipt.py`, negative check on a
+forged wall-clock counter fails). The slow-host scenario itself stays open,
+equal to OoT3D S18 (D2 "throttled scenario open") in
+`docs/TRIAEVUM_WINDOWS_RELEASE_QUALIFICATION.md`; the limiter is shared.

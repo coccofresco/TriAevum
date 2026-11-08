@@ -464,6 +464,26 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         return Event::None;
     }
 
+    if (pc == kMm3dLayoutBatchFlushReturn) {
+        // The owner setup just flushed the previous owner's batch: the cursor
+        // range written so far in this owner's span is the previous owner's.
+        if (mActive && mActive->Attribution.SourcePc == kMm3dLayoutOwnerDrawEntry && mLayoutCarry) {
+            uint32_t end = 0;
+            if (!memory.Read32(kMm3dCommandListCursorAddress, &end)) {
+                ++mStats.ReadFailures;
+            } else if (end >= mActive->BeginAddress && !(end & 7U) && !(mActive->BeginAddress & 7U) &&
+                       end - mActive->BeginAddress <= 0x00400000U) {
+                if (end != mActive->BeginAddress) {
+                    Record(mActive->BeginAddress, end, *mLayoutCarry, mActive->LightBinding);
+                    ++mStats.CarriedBatchSpans;
+                }
+                mActive->BeginAddress = end;
+            } else {
+                ++mStats.InvalidRanges;
+            }
+        }
+        return Event::None;
+    }
     if (mActive.has_value() && pc == mActive->ReturnPc) {
         mQuadScope.reset();
         mModelScope.reset(); // An unclosed child cannot survive its parent.
@@ -490,6 +510,14 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             !(end & 7U) && !(scope.BeginAddress & 7U)) FlushPrimitives(memory);
         else mPendingPrimitives.clear();
         mPrimitiveScope.reset();
+        // A tagged owner leaves its pending batch to the next flush.
+        // (The finishers return to 0x001269DC / 0x00126AA8 and end the queue.)
+        if (scope.ReturnPc == 0x001269DCU || scope.ReturnPc == 0x00126AA8U) {
+            mLayoutCarry.reset();
+        } else if (scope.Attribution.SourcePc == kMm3dLayoutOwnerDrawEntry) {
+            if ((scope.Attribution.NativeValue & 0xFFFF0000U) == kMm3dUiTag) mLayoutCarry = scope.Attribution;
+            else mLayoutCarry.reset();
+        }
         return Event::None;
     }
     const auto scope = std::find_if(
@@ -540,6 +568,12 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (subsystem != Mm3dUiSubsystem::Unknown)
             mActive->Attribution.NativeValue = kMm3dUiTag | uint32_t(subsystem);
     }
+    if (scope->EntryPc == kMm3dLayoutDrawEntry && mLayoutCarry) {
+        // The finisher only flushes the last owner's batch: it is that owner's.
+        mActive->Attribution = *mLayoutCarry;
+        ++mStats.CarriedFinisherSpans;
+    }
+    if (scope->EntryPc != kMm3dLayoutOwnerDrawEntry && scope->EntryPc != kMm3dLayoutDrawEntry) mLayoutCarry.reset();
     mActive->Attribution.PreserveNativeUiSampling = mActive->Attribution.ExcludeFromPresentationFxaa;
     if (pc == kMm3dQuadQueueDrawEntry) mQuadQueue = state.r[1];
     if (scope->EntryPc == kMm3dQuadQueueDrawEntry) RecordQuadObjects(memory, state.r[1]);

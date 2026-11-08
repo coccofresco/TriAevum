@@ -59,10 +59,31 @@ int main(int argc,char**argv) {
     s.SetExtended(false);const auto off=c.vfp;s.Observe(0x518078,c,m);Check(c.vfp==off);
     s.SetExtended(true);c.vfp[0]=std::bit_cast<uint32_t>(std::numeric_limits<float>::quiet_NaN());
     const auto bad=c.vfp;s.Observe(0x519C24,c,m);Check(c.vfp==bad&&s.Stats.Invalid==3);
+    // F06 census: no id proof -> no census; with it, the actor's id names the
+    // row, a culled->active->culled cycle is one spawn and one retire, an
+    // unknown id is counted as unexpected (negative), never as a Mure.
+    {
+        Memory n;Cpu k;Source t;Proof(n);Check(t.Verify(n,[](uint32_t){return true;})&&!t.IdsVerified());
+        k.r[1]=P;n.bytes[P+0x20BE]=20;constexpr uint32_t A=0x08046000,B=0x08047000;
+        n.Word(A,0x3F);k.r[0]=A;  // the game's id (profile 0x68B7D8)
+        t.Observe(0x526678,k,n);Check(t.Stats.Calls[0]==0);
+        for(const auto&[p,w]:IdProof)n.Word(p,w);
+        Check(t.Verify(n,[](uint32_t){return true;})&&t.IdsVerified());
+        for(const auto&[p,w]:IdProof){const auto keep=n.Word(p);n.Word(p,w^1);t.Verify(n,[](uint32_t){return true;});
+            Check(!t.IdsVerified());n.Word(p,keep);}
+        Check(t.Verify(n,[](uint32_t){return true;})&&t.IdsVerified());
+        t.Observe(0x526678,k,n);t.Observe(0x544ED8,k,n);t.Observe(0x544ED8,k,n);t.Observe(0x526678,k,n);
+        Check(t.Stats.Calls[0]==4&&t.Stats.Actors[0]==1&&t.Stats.Spawned[0]==1&&t.Stats.Retired[0]==1);
+        n.Word(B,0x9D);k.r[4]=B;k.r[5]=B;k.r[13]=0xFFFF000;n.Word(k.r[13],P);
+        t.Observe(0x519C24,k,n);t.Observe(0x518078,k,n);
+        Check(t.Stats.Calls[2]==2&&t.Stats.Actors[2]==1&&t.Stats.Spawned[2]==1&&t.Stats.Retired[2]==0);
+        n.Word(A,0x0123);k.r[0]=A;t.Observe(0x526678,k,n);Check(t.Stats.Unexpected==1&&t.Stats.Calls[0]==4);
+    }
     if(argc==2) {
         Memory rom;std::ifstream f(argv[1],std::ios::binary);Check(bool(f));
         for(const auto&[p,b]:proof){char byte=0;f.seekg(p-0x100000);f.read(&byte,1);Check(bool(f));rom.bytes[p]=uint8_t(byte);}
-        Check(s.Verify(rom,[](uint32_t){return true;}));
+        for(const auto&[p,w]:IdProof)for(unsigned i=0;i<4;++i){char byte=0;f.seekg(p+i-0x100000);f.read(&byte,1);Check(bool(f));rom.bytes[p+i]=uint8_t(byte);}
+        Check(s.Verify(rom,[](uint32_t){return true;})&&s.IdsVerified());
     }
     std::cout<<"MM3D ObjMure / ObjMure3: PASS\n";
 }

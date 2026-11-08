@@ -22,6 +22,9 @@ inline constexpr std::array kMm3dLightingHookSites{
     Mm3dLightingHookSite{0x001269DCU, {0xE320F000U, 0xE320F000U, 0xEA000043U, 0xE59F0148U}},
     Mm3dLightingHookSite{0x00126A64U, {0xE28D0010U, 0xE320F000U, 0xEB000045U, 0xE5951008U}},
     Mm3dLightingHookSite{0x00126AA8U, {0xE320F000U, 0xE320F000U, 0xEB000AD9U, 0xE28730DCU}},
+    // Owner setup 0x00135000 returns here from flushing the layout renderer's
+    // pending quad batch (bl 0x00144B70 when +0xC3C or +0xC40 is set).
+    Mm3dLightingHookSite{0x00135044U, {0xE1A01000U, 0xE5D40D46U, 0xEDDF0A1AU, 0xED9F0A1AU}},
     Mm3dLightingHookSite{0x0012C6A8U, {0xE92D41F0U, 0xE0812081U, 0xE0807101U, 0xE2878A06U}},
     Mm3dLightingHookSite{0x001565ACU, {0xE92D4008U, 0xE59DC008U, 0xE58DC000U, 0xEB000276U}},
     Mm3dLightingHookSite{0x001565BCU, {0xE8BD8008U, 0xE1A03002U, 0xE1A0C001U, 0xE0800103U}},

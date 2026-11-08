@@ -180,6 +180,45 @@ void TestMm3dSceneLighting() {
         Require(tracker.Stats().QuadObjects.size()==1U&&
                 tracker.Stats().QuadObjects.count("q4 vt=006E1234 n=1 at=282,215")==1U,"quad object dump");
     }
+    // G6.04 carried batch: the Hud owner's last quads are flushed by the next
+    // owner's setup (returning to 0x00135044) and by the finisher; both
+    // flushed ranges keep the Hud attribution, the rest of the next owner
+    // (TouchPanel, unclassified) does not.
+    {
+        const auto setName=[&](std::string_view name){
+            for(uint32_t i=0;i<name.size();++i)Require(memory.Write8(nameAddress+i,uint8_t(name[i])),"layout name");
+            Require(memory.Write8(nameAddress+uint32_t(name.size()),0),"name terminator");
+        };
+        const uint32_t base=begin;
+        setName("Hud");state.r[1]=layout;
+        (void)pass(kMm3dLayoutOwnerDrawEntry,0x00126998U,base,base+0x40);
+        setName("TouchPanel");
+        Require(memory.Write32(kMm3dCommandListCursorAddress,base+0x40),"cursor");
+        state.r[14]=0x00126998U;
+        (void)tracker.ObserveBlockEntry(kMm3dLayoutOwnerDrawEntry,state,memory);
+        Require(memory.Write32(kMm3dCommandListCursorAddress,base+0x48),"cursor");
+        (void)tracker.ObserveBlockEntry(kMm3dLayoutBatchFlushReturn,state,memory);  // flushed Hud batch
+        Require(memory.Write32(kMm3dCommandListCursorAddress,base+0x80),"cursor");
+        (void)tracker.ObserveBlockEntry(0x00126998U,state,memory);
+        setName("Hud");
+        (void)pass(kMm3dLayoutOwnerDrawEntry,0x00126998U,base+0x80,base+0xC0);
+        (void)pass(kMm3dLayoutDrawEntry,0x001269DCU,base+0xC0,base+0xC8);       // finisher flush
+        Require(tracker.TakeCommandListCompositionSpans(base,0xC8,spans,&error),error);
+        std::vector<bool> hud;
+        for(const auto& span:spans)
+            if(span.BeginAddress>=base&&span.EndAddress<=base+0xC8)
+                hud.push_back(IsMm3dGameplayHud(span.Attribution.SourcePc,span.Attribution.NativeValue));
+        Require(hud==std::vector<bool>({true,true,false,true,true}),"flushed Hud batches stay Hud");
+        Require(tracker.Stats().CarriedBatchSpans==1&&tracker.Stats().CarriedFinisherSpans==1,"carried batch receipts");
+        // A finisher after an unclassified owner is not Hud (no blanket).
+        setName("TouchPanel");
+        (void)pass(kMm3dLayoutOwnerDrawEntry,0x00126998U,base+0xC8,base+0xD0);
+        (void)pass(kMm3dLayoutDrawEntry,0x001269DCU,base+0xD0,base+0xD8);
+        Require(tracker.TakeCommandListCompositionSpans(base+0xC8,0x10,spans,&error),error);
+        Require(!IsMm3dGameplayHud(spans.back().Attribution.SourcePc,spans.back().Attribution.NativeValue),
+                "a finisher after an unclassified owner stays unclassified");
+        begin=base+0x100;
+    }
     Require(memory.Write32(resource+0x18,0xFFFFFFF0U),"bad name pointer");
     Require(ReadMm3dUiSubsystem(memory,layout)==Mm3dUiSubsystem::Unknown,"bad name bounded");
     // Clear test spans by reinitializing; legacy scope assertions below stand.
