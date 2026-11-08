@@ -93,6 +93,22 @@ def _rustc_release(cargo: str) -> str:
     return match[1]
 
 
+def target_features(target: str, features) -> tuple[str, ...]:
+    """A title's Forge features for the packages `target` builds: the update
+    helper is Windows-only, so its feature is dropped on Linux and macOS (Cargo
+    refuses a feature of a package it does not build). A feature of a package
+    no target builds is an error."""
+    known = {package for packages in TARGET_PACKAGES.values() for package in packages}
+    selected = []
+    for feature in features:
+        package = feature.split("/", 1)[0]
+        if "/" not in feature or package not in known:
+            raise ValueError(f"Not a Forge package feature: {feature}")
+        if package in TARGET_PACKAGES[target]:
+            selected.append(feature)
+    return tuple(selected)
+
+
 def feature_arguments(features) -> list[str]:
     """Cargo arguments for a title's Forge features (none for OoT3D)."""
     return ["--features", ",".join(features)] if features else []
@@ -119,6 +135,7 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
     environment = {**os.environ, "CARGO_TARGET_DIR": str(target_dir),
                    "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target, target_dir))}
     environment.pop("RUSTFLAGS", None)
+    features = target_features(target, features)
     command = [cargo, "build", "--release", "--locked", "--target", target,
                *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)],
                *feature_arguments(features)]
@@ -156,6 +173,7 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
         "source_commit": source_commit,
         "toolchain": channel,
         "packages": list(TARGET_PACKAGES[target]),
+        "features": list(features),
         "static_crt": target == WINDOWS.target,
         "cargo_lock_sha256": sha256_file(FORGE_ROOT / "Cargo.lock"),
         "notices_sha256": sha256_file(rust_forge_notices.NOTICES),
@@ -176,6 +194,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cargo", default="cargo")
     parser.add_argument("--target-dir", type=Path, help="Cargo target folder (default tools/triaevum_forge/target)")
+    parser.add_argument("--title", default="oot3d",
+                        help="the title whose Forge to build (its forge_features, title_release.py; default oot3d)")
     parser.add_argument("--print-rustflags", action="store_true",
                         help="print CARGO_ENCODED_RUSTFLAGS for the target (Android's forge-android build) and exit")
     args = parser.parse_args()
@@ -185,8 +205,13 @@ def main() -> int:
     if args.target == ANDROID.target or args.source_commit is None or args.output is None:
         parser.error("a desktop build needs a desktop --target, --source-commit and --output")
     try:
+        try:
+            from .title_release import title_release
+        except ImportError:
+            from title_release import title_release
         result = build(args.output, target=args.target, source_commit=args.source_commit,
-                       cargo=args.cargo, target_dir=args.target_dir)
+                       cargo=args.cargo, target_dir=args.target_dir,
+                       features=tuple(title_release(args.title)["forge_features"]))
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"Rust Forge build failed: {exc}", file=sys.stderr)
         return 1
