@@ -457,3 +457,28 @@ No realtime product evidence (F14) exists yet. Evidence: `W/analysis/parity/INTE
 - The F07 run (out-r18, the one granted run) FAILED: A exited after about 100 s with run_safe result=stall, exit 12. game.err.log shows the product start chain passed: adapter mm3d, "MM3D product: 341 of 341 guest-patch site(s) enabled", Vulkan/NRI up, the native program preparation started (165 parts). Then: TRIAEVUM_FATAL "native A32 process faulted: native A32 dispatch exited unexpectedly: kind=6 pc=0x00100085 detail=1463897940". kind=6 is ExitKind::MissingBlock and detail 0x57414F54 ('WAOT') is DispatchWholeAotProduct's !handled exit. The first guest code after the process entry branches to 0x00100084 in Thumb state (pc bit 0 set). The MM whole-AOT title module (plugin 3e6ebcd0, kEntryPoints 238478, generation 2020030e) has no entry there and the product build has no interpreter fallback; the developer build's registry interprets it. Second defect: after the fatal the process did not exit and was killed by the stall watchdog (100 s). The --startup-check cannot see this because it is coverage of executed code, not a startup site. B was not started, so no runtime.json, no realtime fields and no settings round trip. No retry and no diagnostic run (run budget).
 
 F07 Windows row: still **NOT QUALIFIED** (owner item). The fix needs a title module that covers the Thumb code reached at boot (generator/catalog work), plus the fatal-exit hang. No F14 realtime product evidence. Evidence: `W/analysis/parity/INTEG/module-window/out-r17/`, `out-r18/`, `W/analysis/parity/INTEG/r16/`.
+
+## Module window part 6 (2026-11-08, round 11, INTEG): G3 module, fatal exit, F07 out-r19
+
+- Fatal path (Q-INTEG-R10-2): an error exit now abandons the renderer's background startup preparation
+  before teardown (`include/fast/backends/gfx_startup_preparation_abandon.h`, 8ff96f06 + 327bb3f1; outside
+  the shader-corpus policy inputs, so corpus c347d0ee stays qualified). Unit contracts 5-6 of
+  pica_preparation_queue_tests pass; the mutant (abandon ignored) fails with prepared=2000/2000, join 10.4 s.
+- Merged: CATALOGS G3 (757f90ae: Thumb decode/lowering, zero residual, entry reachability) and LINUX
+  (c9e3880e). Merge fix 67e0f662: a sealed Linux payload (AppImage/Flatpak) runs and profiles the runtime
+  under its packaged name. Dev link fix 93a63166.
+- OoT3D: generated program identical to 08696784 and C++ shards identical to 8b819acc (G3 is a no-op for
+  OoT3D); per-cut O2 PASS 3/3 (OoT-only exe 37be366a at 93a63166).
+- Package out-r19 (Moonfall_Curse.exe 0d9c257a, plugin 5840a572, generation 1cff87cb): preflight,
+  package, install, status, badinput exit 0. The module table holds {0x00100085, Execute_thumb_00100084}.
+  --startup-check exit 0 (module_entry_points=241676), negatives exit 1.
+- F07 run out-r19 (the one granted run): FAILED, but later than out-r18. Thumb boot passed. After
+  145.8 s, just after the background preparation ended (165 parts, no PICA draw yet), the guest faulted:
+  MemoryFault (kind=4) at pc 0x0015127C, which is `ldr r0,[r0,#0x150]` in FUN_00151270 (192 ARM callers),
+  read address 0x150, so r0 = NULL at entry. The process then EXITED by itself 3 s after the fatal line
+  (run_safe result=exit, exit 1; no watchdog kill). No runtime.json and no realtime evidence. Offline,
+  we cannot tell which caller passed NULL: there is no register/LR trace in the product fault report.
+
+F07 Windows row: still **NOT QUALIFIED** (owner item). The fatal path is fixed (the process exits).
+Next: put the faulting thread's LR and r0-r3 in the product fault line (a runtime diagnostic change) and
+find the NULL source offline, comparing against the interpreter or a donor. Then the run needs a new grant.
