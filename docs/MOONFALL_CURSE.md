@@ -180,6 +180,19 @@ every `titles/mm3d` source, library and test; such a build refuses an MM3D
 image at start instead of running it as a generic title. OoT3D's adapter is
 still part of the window session, so `oot3d` is required.
 
+### Release configure
+
+The Moonfall Curse product configures with `-DTRIAEVUM_PRODUCT_TITLE=mm3d` (the
+MM executable icon and product identity), `-DTRIAEVUM_TITLES=oot3d;mm3d`,
+`-DTRIAEVUM_DEVELOPER_TOOLS=OFF` and the `a32_generated_overlay` registry.
+`TRIAEVUM_PRODUCT_TITLE` defaults to `oot3d` (Echoes of Time); configure refuses
+a product title whose adapter `TRIAEVUM_TITLES` leaves out
+(`CMake/triaevum_product_title.cmake`, test
+`cmake -P CMake/tests/triaevum_product_title_test.cmake`). A product build
+(developer tools OFF) ignores the developer overrides `TRIAEVUM_ROMFS_OVERLAY`,
+`TRIAEVUM_MM3D_PRESENTATION`, `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER` and
+`TRIAEVUM_A32_PC_DUMP` (`triaevum_developer_overrides.h`).
+
 ## Bring-up status
 
 A product-mode build stops at the first instruction: `0x00100000` (the CRT

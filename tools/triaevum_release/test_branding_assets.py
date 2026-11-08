@@ -191,6 +191,11 @@ class MM3DBrandingTests(unittest.TestCase):
         self.assertTrue((MM3D_BRANDING / target[1]).resolve().samefile(MM3D_BRANDING / "windows/triaevum.ico"))
         game = (ROOT / "CMake/oot3d/game.cmake").read_text(encoding="utf-8")
         self.assertIn('set(TRIAEVUM_PRODUCT_TITLE "oot3d" CACHE STRING', game)
+        # G4a-F5: configure refuses a product title the build does not contain,
+        # and the MC release configure names the flag.
+        self.assertIn('triaevum_check_product_title("${TRIAEVUM_PRODUCT_TITLE}" "${TRIAEVUM_TITLES}")', game)
+        mc = (ROOT / "docs/MOONFALL_CURSE.md").read_text(encoding="utf-8")
+        self.assertIn("`-DTRIAEVUM_PRODUCT_TITLE=mm3d`", mc)
         self.assertIn("set(_triaevum_product_rc titles/mm3d/branding/mm3d_windows.rc)", game)
         self.assertIn("titles/mm3d/adapter/mm3d_window_icon.cpp", game)
         icon = (ROOT / "titles/mm3d/adapter/mm3d_window_icon.cpp").read_text(encoding="utf-8")
