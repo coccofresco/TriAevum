@@ -157,10 +157,10 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     SetError(error, "native control config root/output is invalid");
     return false;
   }
-  constexpr std::array<std::string_view, 14> kAllowedFields{
+  constexpr std::array<std::string_view, 15> kAllowedFields{
       "schema", "profile", "devices", "bindings", "analog", "aim",
       "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse", "controller_touchpad",
-      "button_prompts", "rumble"};
+      "button_prompts", "rumble", "title_gameplay"};
   const std::set<std::string_view> allowed(kAllowedFields.begin(),
                                            kAllowedFields.end());
   for (const auto& [key, value] : document.items()) {
@@ -246,6 +246,21 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
   if (!ReadNamedField(document, "rumble", &parsed.Rumble,
                       ThreeDsRecomp::Input::ParseRumbleStrength, error)) {
     return false;
+  }
+
+  if (document.contains("title_gameplay")) {
+    const auto& gameplay = document.at("title_gameplay");
+    if (!gameplay.is_object()) {
+      SetError(error, "title_gameplay must be an object");
+      return false;
+    }
+    for (const auto& [key, value] : gameplay.items()) {
+      if (key != "quick_put_away" || !value.is_boolean()) {
+        SetError(error, "title_gameplay field is unknown or not boolean: " + key);
+        return false;
+      }
+    }
+    parsed.QuickPutAway = gameplay.value("quick_put_away", false);
   }
 
   if (document.contains("controller_touchpad")) {
@@ -733,6 +748,7 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
     document["button_prompts"] = ThreeDsRecomp::Input::ButtonPromptsName(config.ButtonPrompts);
   if (config.Rumble != NativeRumbleStrength::Off)
     document["rumble"] = ThreeDsRecomp::Input::RumbleStrengthName(config.Rumble);
+  if (config.QuickPutAway) document["title_gameplay"] = {{"quick_put_away", true}};
   NativeControlConfig validated;
   if (!DecodeNativeControlConfig(document, &validated, error)) {
     return false;

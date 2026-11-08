@@ -322,6 +322,12 @@ bool NativeA32WindowSession::RunFrame() {
   // the game, in the render order of this frame; false with the menu closed.
   renderStream.Submit([guestHeld] { Fast::Extension::VisualClock::Instance().SetHostHold(guestHeld); });
   ApplyTopScreenConfigSnapshot();
+  // Gameplay rows a title implements itself (MM3D) come from the controls
+  // owner; titles without such rows ignore them (OoT3D: TopScreen runtime).
+  if (titleSession && controlConfigRuntime) {
+    const auto controls = controlConfigRuntime->Snapshot().Config;
+    titleSession->SetGameplayOptions({.QuickPutAway = controls.QuickPutAway});
+  }
   ApplyPhotoModeHud();
   uiLifecycleBridge.BeginHostFrame(
       static_cast<uint32_t>(presentationFrameCount));

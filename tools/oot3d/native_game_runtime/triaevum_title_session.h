@@ -126,6 +126,11 @@ public:
     return {};
   }
 
+  // Gameplay rows a title implements outside a mod-owned profile (OoT3D's
+  // TopScreen runtime owns its own); default none, so no row is shown.
+  virtual void SetGameplayOptions(const TitleGameplayOptions& options) { (void)options; }
+  [[nodiscard]] virtual TitleGameplayOptionSet SupportedGameplayOptions() const { return {}; }
+
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }
   // The process image is mounted: checks it and arms the guest patches.

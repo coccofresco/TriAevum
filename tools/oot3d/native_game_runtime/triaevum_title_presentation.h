@@ -5,6 +5,23 @@
 #include <cstdint>
 #include <optional>
 namespace Oot3dNativeGame {
+// The host's gameplay rows (F1 > Controls > Gameplay and Esc > Game share
+// one store). A title reports which rows it implements; the host shows only
+// those for it and passes their values on every change.
+struct TitleGameplayOptions {
+  bool QuickPutAway = false;
+  bool LandingRoll = false;
+  bool RollDash = false;
+  bool AimingReticle = false;
+};
+struct TitleGameplayOptionSet {
+  bool QuickPutAway = false;
+  bool LandingRoll = false;
+  bool RollDash = false;
+  bool AimingReticle = false;
+  [[nodiscard]] bool Any() const noexcept { return QuickPutAway || LandingRoll || RollDash || AimingReticle; }
+};
+
 // Resolved renderer/window settings, never independent title preferences.
 struct TitlePresentationSettings {
   float FovMultiplier=1.0F;

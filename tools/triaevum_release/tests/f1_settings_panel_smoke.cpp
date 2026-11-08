@@ -390,6 +390,31 @@ void CheckControlPersistence() {
     Check(blockedTop->Snapshot().Config.HudScale == kTopScreenHudScaleNative &&
               loggedPanelText.find("could not be saved") != std::string::npos,
           "a failed HUD size save was not visible");
+    // MM3D: no TopScreen owner; the rows the title implements itself (quick
+    // put away) are the controls owner's, previewed live and saved with it,
+    // the same state the Esc menu's Game > Gameplay row shows.
+    auto mmControls = std::make_shared<NativeControlConfigRuntime>(root / "mm3d-controls.json", NativeControlDefaults());
+    const auto labelVisible = [&](const char* label) {
+        Frame();
+        for (const auto& [id, item] : items) if (item.Label == label) return true;
+        return false;
+    };
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mmControls, nullptr, {.QuickPutAway = true})});
+    size = ImVec2(760, 680);
+    Frame(); Frame();
+    Click("Controls");
+    if (!labelVisible("Quick put away")) Click("Gameplay");
+    Check(!mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away does not start off");
+    Click("Quick put away");
+    Check(mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away did not preview through the controls owner");
+    Click("Save controls");
+    NativeControlConfig mmSaved;
+    Check(LoadNativeControlConfig(root / "mm3d-controls.json", &mmSaved) && mmSaved.QuickPutAway,
+          "Save controls did not persist MM3D quick put away");
+    // A title without such rows (OoT3D outside TopScreen) shows none.
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mmControls, nullptr)});
+    Frame(); Frame();
+    Check(!labelVisible("Quick put away"), "a title without gameplay rows showed quick put away");
     InstallGraphicsSettingsPanelTabs({});
 }
 

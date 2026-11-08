@@ -140,6 +140,32 @@ void TestRumbleSetting() {
 }
 
 
+// Title gameplay rows (MM3D quick put away) belong to the controls owner: off
+// by default and not written (OoT3D files are unchanged), on survives save and
+// reload, a wrong type or unknown key is refused, a preset never chooses it.
+void TestTitleGameplaySetting() {
+    auto config = NativeControlDefaults();
+    std::string json, error;
+    NativeControlConfig loaded;
+    Require(!config.QuickPutAway, "quick put away starts off");
+    Require(SerializeNativeControlConfigText(config, &json, &error) && json.find("title_gameplay") == std::string::npos,
+            "off is not written");
+    config.QuickPutAway = true;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("\"quick_put_away\": true") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
+            "quick put away survives save and reload");
+    auto document = nlohmann::json::parse(json);
+    document["title_gameplay"]["quick_put_away"] = 1;
+    Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
+                error.find("title_gameplay") != std::string::npos, "a non-boolean value is refused");
+    document["title_gameplay"] = {{"roll_dash", true}};
+    Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error), "an unknown title gameplay row is refused");
+    for (const auto profile : {NativeControlProfile::Keyboard, NativeControlProfile::KeyboardMouse,
+                               NativeControlProfile::Controller})
+        Require(!NativeControlPreset(profile).QuickPutAway, "a preset chose quick put away");
+}
+
 // The controls owner keeps the "Button prompts" choice and resolves the
 // prompts from the device activity the host poll reports.
 void TestButtonPromptsOwner() {
@@ -228,6 +254,7 @@ int main(int argc, char** argv) {
     }
     Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw]");
     TestShoulderMappings();
+    TestTitleGameplaySetting();
     TestButtonPromptsOwner();
     TestRumbleSetting();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);

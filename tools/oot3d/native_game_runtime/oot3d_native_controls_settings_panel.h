@@ -3,6 +3,7 @@
 #include "fast/extension/graphics_settings_window.h"
 #include "oot3d_native_control_config.h"
 #include "oot3d_top_screen_config.h"
+#include "triaevum_title_presentation.h"
 
 #include <memory>
 
@@ -11,6 +12,7 @@ namespace Oot3dNativeGame {
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateNativeControlsSettingsPanel(
     std::shared_ptr<NativeControlConfigRuntime> controls,
-    std::shared_ptr<TopScreenUiConfigRuntime> topScreen);
+    std::shared_ptr<TopScreenUiConfigRuntime> topScreen,
+    TitleGameplayOptionSet titleGameplay = {});
 
 } // namespace Oot3dNativeGame

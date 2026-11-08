@@ -95,6 +95,10 @@ struct NativeControlConfig {
   // hard landings). Off by default: the 3DS has none. Not part of a preset
   // ("rumble", written only when not Off).
   NativeRumbleStrength Rumble = NativeRumbleStrength::Off;
+  // Gameplay rows a title implements outside a mod-owned profile (MM3D; OoT3D's
+  // TopScreen keeps its own). Off by default, as native; not part of a preset
+  // ("title_gameplay", written only when a value is on).
+  bool QuickPutAway = false;
 
   bool operator==(const NativeControlConfig&) const = default;
 };

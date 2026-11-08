@@ -15,6 +15,7 @@
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
 #include "../gameplay/mm3d_rumble_events.h"
+#include "../gameplay/mm3d_gameplay_options.h"
 #include "../gameplay/mm3d_light_arena.h"
 #include "../gameplay/mm3d_actor_visibility.h"
 #include "../gameplay/mm3d_foliage_distance.h"
@@ -83,6 +84,14 @@ public:
       oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
     return mRumble.Poll(memory, enabled);
   }
+  // The host's one gameplay settings store (F1 and Esc share it): the rows
+  // MM3D implements reach the title-owned sites; the rest stay inert.
+  void SetGameplayOptions(const TitleGameplayOptions& options) override {
+    mGameplay.Set({options.QuickPutAway});
+  }
+  [[nodiscard]] TitleGameplayOptionSet SupportedGameplayOptions() const override {
+    return {.QuickPutAway = true};
+  }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {
     // MM3D's perspective frustum builder: the scene widens to the output
@@ -124,6 +133,7 @@ public:
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
       RegisterMm3dPhotoCamera(mGuestPatches, mPhotoCamera, setup.FreeCamera);
+      mGameplay.Register(mGuestPatches);
       mGuestCalls.Install(mGuestPatches);
       mRestoration.emplace(mGuestCalls);
       mRestoration->Register(mGuestPatches);
@@ -494,6 +504,7 @@ private:
   Mm3dGuestPatches mGuestPatches;
   Mm3dRumble::Source mRumble;
   Mm3dPhotoCamera mPhotoCamera;
+  Mm3dGameplay::GameplayOptions mGameplay;
   Mm3dTiming::Observer mTiming;
   Mm3dTiming::FramePacing mFramePacing;
   bool mImageMounted = false;
