@@ -711,6 +711,62 @@ class WholeAotCppTests(unittest.TestCase):
             self.assertIn("Oot3dAotCallExternal(context, 0x00001008U", source)
             self.assertIn("std::array<uint32_t, 2>", source)
 
+    def _inline_argument_program(self, root: Path, bl: int) -> tuple[Path, Path, Path]:
+        # bl helper (external 0x100C); .word inline argument; bx lr.
+        code = words(bl, 0x3EFFFFED, 0xE12FFF1E, 0xE49E4004)
+        code_path = root / "code.bin"
+        program_path = root / "program.json"
+        selection_path = root / "selection.json"
+        code_path.write_bytes(code)
+        condition = None if bl >> 28 == 0xE else "eq"
+        resume = {"site": 0x1000, "kind": "resume", "target": 0x1008}
+        if condition:
+            resume["condition"] = condition
+        program_path.write_text(json.dumps({
+            "format": PROGRAM_FORMAT,
+            "base": 0x1000,
+            "code_sha256": hashlib.sha256(code).hexdigest(),
+            "blocks": [
+                {"id": 0, "pc": 0x1000, "end_pc": 0x1004, "successors": [
+                    {"site": 0x1000, "kind": "direct_call", "target": 0x100C},
+                    resume,
+                ]},
+                {"id": 1, "pc": 0x1008, "end_pc": 0x100C,
+                 "successors": [{"site": 0x1008, "kind": "return"}]},
+            ],
+            "functions": [{
+                "entry": 0x1000, "name": "Caller", "blocks": [0, 1],
+                "closed_static_cfg": True,
+                "direct_calls": [{"site": 0x1000, "target": 0x100C}],
+                "tail_calls": [], "indirect_sites": [],
+            }],
+        }), encoding="utf-8")
+        selection_path.write_text(json.dumps({
+            "format": SELECTION_FORMAT,
+            "functions": [{"entry": 0x1000}],
+            "external_functions": [{"entry": 0x100C}],
+        }), encoding="utf-8")
+        return program_path, selection_path, code_path
+
+    def test_inline_argument_call_links_bl_plus_4_and_resumes_past_the_word(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self._inline_argument_program(root, 0xEB000001)
+            manifest = generate(*paths, root / "output")
+            source = (root / "output" / SOURCE_NAME).read_text(encoding="utf-8")
+        self.assertIn("= 0x00001004U;", source)
+        self.assertIn("callFlow.Pc != 0x00001008U", source)
+        self.assertNotIn("callFlow.Pc != 0x00001004U", source)
+        self.assertIn("goto block_00001008;", source)
+        self.assertEqual(manifest["functions"][0]["resume_entries"], [0x1008])
+
+    def test_negative_conditional_inline_argument_call_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            paths = self._inline_argument_program(root, 0x0B000001)
+            with self.assertRaisesRegex(LoweringError, "conditional inline-argument"):
+                generate(*paths, root / "output")
+
     def _blx_program(self, root: Path, successors: list[dict]) -> tuple[Path, Path, Path]:
         code = words(0xFB000001, 0xE12FFF1E, 0, 0x47704770)
         code_path = root / "code.bin"

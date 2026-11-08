@@ -398,6 +398,7 @@ def _successors(
     item: DecodedInstruction,
     explicit_lr_calls: dict[int, int],
     switch_targets: dict[int, tuple[int, ...]],
+    inline_argument_returns: dict[int, int] | None = None,
 ) -> tuple[AotEdge, ...]:
     pc = item.pc
     fallthrough = pc + 4
@@ -421,7 +422,8 @@ def _successors(
             edges.append(_edge_target(pc, "thumb_call", thumb, None))
         elif item.target is not None:
             edges.append(_edge_target(pc, "direct_call", item.target, condition))
-        edges.append(_edge_target(pc, "resume", fallthrough, condition))
+        resume = (inline_argument_returns or {}).get(pc, fallthrough)
+        edges.append(_edge_target(pc, "resume", resume, condition))
         return tuple(edges)
     if item.kind == "indirect_branch":
         if _is_return(item):
@@ -486,6 +488,7 @@ def _make_blocks(
     block_starts: set[int],
     explicit_lr_calls: dict[int, int],
     switch_targets: dict[int, tuple[int, ...]],
+    inline_argument_returns: dict[int, int] | None = None,
 ) -> tuple[AotBlock, ...]:
     groups: list[list[int]] = []
     current: list[int] = []
@@ -515,7 +518,8 @@ def _make_blocks(
             body_digest.update(item.raw.to_bytes(4, "little"))
         terminal = decoder.get(pcs[-1])
         successors = _successors(
-            terminal, explicit_lr_calls, switch_targets
+            terminal, explicit_lr_calls, switch_targets,
+            inline_argument_returns,
         )
         blocks.append(
             AotBlock(
@@ -753,6 +757,53 @@ def load_observed_sites(path: Path, code: bytes) -> frozenset[int]:
     return frozenset(int(site["pc"], 16) for site in catalog["sites"])
 
 
+INLINE_ARGUMENT_FORMAT = "a32_inline_argument_calls_v1"
+
+
+def load_inline_argument_calls(path: Path | None, code: bytes,
+                               base: int = DEFAULT_BASE) -> dict[int, int]:
+    """Load a title fact: callees that consume argument words placed after BL.
+
+    Each entry carries the guard word at the callee entry; a mismatch means the
+    fact belongs to another image and is refused instead of applied.
+    """
+    if path is None:
+        return {}
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if document.get("format") != INLINE_ARGUMENT_FORMAT:
+        raise ValueError(f"{path}: format is not {INLINE_ARGUMENT_FORMAT}")
+    calls: dict[int, int] = {}
+    for record in document.get("callees", []):
+        entry = int(str(record["entry"]), 0)
+        guard = int(str(record["guard_word"]), 0)
+        words = int(record["inline_words"])
+        offset = entry - base
+        if entry % 4 or offset < 0 or offset + 4 > len(code):
+            raise ValueError(f"{path}: callee 0x{entry:08X} is outside the code image")
+        actual = int.from_bytes(code[offset:offset + 4], "little")
+        if actual != guard:
+            raise ValueError(
+                f"{path}: guard word at 0x{entry:08X} is 0x{actual:08X}, "
+                f"expected 0x{guard:08X}"
+            )
+        if words <= 0 or entry in calls:
+            raise ValueError(f"{path}: invalid or duplicate callee 0x{entry:08X}")
+        calls[entry] = words
+    return calls
+
+
+def load_thumb_ranges(path: Path | None) -> tuple[tuple[int, int], ...]:
+    """Title Thumb code ranges (CSV kind,start,end with an inclusive end)."""
+    if path is None:
+        return ()
+    with path.open(newline="", encoding="utf-8-sig") as source:
+        return tuple(
+            (int(row["start"], 0), int(row["end"], 0) + 1)
+            for row in csv.DictReader(source)
+            if row.get("kind", "range") == "range"
+        )
+
+
 def build_program(
     code: bytes,
     inventory_path: Path,
@@ -761,6 +812,8 @@ def build_program(
     base: int = DEFAULT_BASE,
     executable_size: int | None = None,
     observed_sites: Iterable[int] = (),
+    inline_argument_calls: dict[int, int] | None = None,
+    thumb_ranges: Iterable[tuple[int, int]] = (),
 ) -> AotProgram:
     if executable_size is None:
         executable_size = len(code)
@@ -771,11 +824,19 @@ def build_program(
     )
     decoder = pinned._Decoder(code, base)
     flow_slots = slots | set(range(base, base + executable_size, 4))
+    # A data word naming an address inside the title's Thumb code is not an
+    # A32 entry pointer (the runtime executes Thumb from guest memory).
+    thumb_slots = {
+        pc for start, end in thumb_ranges
+        for pc in range(start - start % 4, end, 4)
+    }
+    pointer_root_domain = flow_slots - thumb_slots
     flow, literal_data, literal_sources, iterations = pinned._address_aware_flow(
         decoder,
         flow_slots,
         (function.entry for function in callable_functions),
-        flow_slots,
+        pointer_root_domain,
+        inline_argument_calls=inline_argument_calls,
     )
     # "Not an independent callable" does not mean "not executable". Audited
     # switch cases retain the caller's registers and may use relative tables
@@ -794,10 +855,17 @@ def build_program(
         flow, literal_data, literal_sources, extra_iterations = pinned._address_aware_flow(
             decoder, flow_slots,
             (*[function.entry for function in callable_functions], *sorted(internal_cases)),
-            flow_slots,
+            pointer_root_domain,
+            inline_argument_calls=inline_argument_calls,
         )
         iterations += extra_iterations
     reachable = flow.decoded_reachable | flow.unknown_stops
+    if flow.inline_argument_words & reachable:
+        overlap = ", ".join(
+            f"0x{pc:08X}" for pc in sorted(flow.inline_argument_words & reachable)
+        )
+        raise ValueError(f"inline argument words are also reached as code: {overlap}")
+    literal_data = set(literal_data) | flow.inline_argument_words
     observed = frozenset(observed_sites)
     if observed - flow.decoded_reachable:
         missing = ", ".join(f"0x{pc:08X}" for pc in sorted(observed - flow.decoded_reachable))
@@ -809,6 +877,7 @@ def build_program(
         flow.block_starts | observed,
         flow.explicit_lr_returns,
         dynamic_targets,
+        flow.inline_argument_returns,
     )
     entry_to_block = {block.pc: block.index for block in blocks}
     if len(entry_to_block) != len(blocks):
@@ -965,8 +1034,11 @@ def _cache_key(args: argparse.Namespace) -> str:
         UPSTREAM_SRC / "oot3d_pack/arm_decode.py",
         UPSTREAM_SRC / "oot3d_pack/arm_ir.py",
     )
+    extra = tuple(
+        path for path in (args.inline_argument_calls, args.thumb_ranges) if path
+    )
     for path in (*sources, args.code, args.inventory, args.boundary_audit,
-                 args.observed_sites):
+                 args.observed_sites, *extra):
         digest.update(str(path.resolve()).encode("utf-8"))
         digest.update(b"\0")
         digest.update(bytes.fromhex(_sha256_path(path)))
@@ -1016,6 +1088,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--include-instructions", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--observed-sites", type=Path, default=DEFAULT_OBSERVED_SITES)
+    parser.add_argument(
+        "--inline-argument-calls", type=Path, default=None,
+        help="title fact JSON (a32_inline_argument_calls_v1)",
+    )
+    parser.add_argument(
+        "--thumb-ranges", type=Path, default=None,
+        help="title Thumb code ranges; data pointers into them are not A32 roots",
+    )
     return parser
 
 
@@ -1042,6 +1122,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         base=args.base,
         executable_size=args.executable_size,
         observed_sites=load_observed_sites(args.observed_sites, code),
+        inline_argument_calls=load_inline_argument_calls(
+            args.inline_argument_calls, code, args.base
+        ),
+        thumb_ranges=load_thumb_ranges(args.thumb_ranges),
     )
     manifest = program.to_manifest(args.include_instructions)
     contents = (

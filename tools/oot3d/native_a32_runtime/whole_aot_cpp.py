@@ -1839,10 +1839,22 @@ def _emit_terminal(
                 raise LoweringError(
                     f"direct call target 0x{target:08X} is not selected or external"
                 )
-            return_pc = pc + 4
+            link_pc = pc + 4
+            # The resume normally equals the link value.  A title fact may
+            # declare a callee that consumes inline argument words after the
+            # BL and returns past them; the program records that resume.
+            resumes = [
+                int(edge["target"]) for edge in block.successors
+                if edge.get("kind") == "resume" and "target" in edge
+            ]
+            return_pc = resumes[0] if len(resumes) == 1 else link_pc
+            if return_pc != link_pc and ((raw >> 28) & 0xF) != 0xE:
+                raise LoweringError(
+                    f"conditional inline-argument call at 0x{pc:08X}"
+                )
             body = [
                 "++context.Stats.DirectCalls;",
-                f"state.R[14] = 0x{return_pc:08X}U;",
+                f"state.R[14] = 0x{link_pc:08X}U;",
                 *call_prefix,
                 f"const Oot3dWholeAotFlow callFlow = {call};",
                 *call_suffix,

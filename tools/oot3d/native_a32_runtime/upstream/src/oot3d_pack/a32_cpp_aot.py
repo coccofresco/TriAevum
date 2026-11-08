@@ -104,6 +104,10 @@ class FlowResult:
     pointer_sources: dict[int, tuple[int, ...]] = field(default_factory=dict)
     explicit_lr_calls: set[int] = field(default_factory=set)
     explicit_lr_returns: dict[int, int] = field(default_factory=dict)
+    # BL sites whose callee consumes inline argument words after the BL
+    # (it post-increments LR past them): call site -> resume pc.
+    inline_argument_returns: dict[int, int] = field(default_factory=dict)
+    inline_argument_words: set[int] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -309,7 +313,11 @@ def _walk_cfg(
     entries: Iterable[int],
     literal_data: set[int],
     follow_explicit_lr_calls: bool = True,
+    inline_argument_calls: dict[int, int] | None = None,
 ) -> FlowResult:
+    inline_argument_calls = inline_argument_calls or {}
+    inline_argument_returns: dict[int, int] = {}
+    inline_argument_words: set[int] = set()
     queue = deque(sorted(set(entries)))
     visited: set[int] = set()
     reachable: set[int] = set()
@@ -362,6 +370,15 @@ def _walk_cfg(
                 # audited internal destinations that are not standalone roots.
                 control_targets.add(item.target)
                 enqueue(item.target, block_start=True)
+            words = inline_argument_calls.get(item.target, 0)
+            if words and _is_always(item) and not item.thumb_target:
+                # Title fact: the callee reads its argument words through
+                # LR and returns past them.  The words are data, never code.
+                resume = fallthrough + 4 * words
+                inline_argument_returns[pc] = resume
+                inline_argument_words.update(range(fallthrough, resume, 4))
+                enqueue(resume, block_start=True)
+                continue
             enqueue(fallthrough, block_start=True)
             continue
         if item.kind == "indirect_branch":
@@ -402,6 +419,8 @@ def _walk_cfg(
         block_starts,
         explicit_lr_calls=explicit_lr_calls,
         explicit_lr_returns=explicit_lr_returns,
+        inline_argument_returns=inline_argument_returns,
+        inline_argument_words=inline_argument_words,
     )
 
 
@@ -859,6 +878,7 @@ def _address_aware_flow_fixed_point(
     entries: Iterable[int],
     follow_explicit_lr_calls: bool = True,
     classify_embedded_data: bool = True,
+    inline_argument_calls: dict[int, int] | None = None,
 ) -> tuple[FlowResult, set[int], dict[int, tuple[int, ...]], int]:
     stable_entries = tuple(sorted(set(entries)))
     literal_data: set[int] = set()
@@ -873,6 +893,7 @@ def _address_aware_flow_fixed_point(
             (*stable_entries, *sorted(dynamic_entries)),
             literal_data,
             follow_explicit_lr_calls,
+            inline_argument_calls,
         )
         targets, sources, jump_targets = _literal_targets(
             decoder,
@@ -941,6 +962,7 @@ def _address_aware_flow(
     pointer_root_domain: set[int] | None = None,
     follow_explicit_lr_calls: bool = True,
     classify_embedded_data: bool = True,
+    inline_argument_calls: dict[int, int] | None = None,
 ) -> tuple[FlowResult, set[int], dict[int, tuple[int, ...]], int]:
     stable_entries = tuple(sorted(set(entries)))
     flow, literal_data, literal_sources, iterations = (
@@ -950,6 +972,7 @@ def _address_aware_flow(
             stable_entries,
             follow_explicit_lr_calls,
             classify_embedded_data,
+            inline_argument_calls,
         )
     )
     pointer_roots, pointer_sources = _pointer_entry_roots(
@@ -967,6 +990,7 @@ def _address_aware_flow(
                 (*stable_entries, *sorted(pointer_roots)),
                 follow_explicit_lr_calls,
                 classify_embedded_data,
+                inline_argument_calls,
             )
         )
     flow.pointer_roots = pointer_roots

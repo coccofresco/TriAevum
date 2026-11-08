@@ -10,7 +10,13 @@ from pathlib import Path
 
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from whole_aot_program import build_program, load_observed_sites, pinned
+from whole_aot_program import (
+    build_program,
+    load_inline_argument_calls,
+    load_observed_sites,
+    load_thumb_ranges,
+    pinned,
+)
 
 
 BASE = 0x1000
@@ -310,6 +316,68 @@ class WholeAotProgramTest(unittest.TestCase):
         self.assertIn((0x1000, "resume", 0x1004), edges)
         self.assertNotIn(0x1010, {block.pc for block in program.blocks})
 
+    def _inline_argument_image(self) -> bytes:
+        # caller 0x1000: push {r4, lr}; bl helper; .word 0x3EFFFFED (inline
+        # argument, decodes as CDPLO); pop {r4, pc}.  helper 0x1010:
+        # ldr r4, [lr], #4; bx lr (returns past the argument word).
+        words = [0] * 6
+        words[0] = 0xE92D4010
+        words[1] = branch(0x1004, 0x1010, link=True)
+        words[2] = 0x3EFFFFED
+        words[3] = 0xE8BD8010
+        words[4] = 0xE49E4004
+        words[5] = 0xE12FFF1E
+        return b"".join(word.to_bytes(4, "little") for word in words)
+
+    def test_inline_argument_call_resumes_past_its_data_word(self) -> None:
+        code = self._inline_argument_image()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory, audit = self._inputs(
+                root, [(0x1000, 0x10, "caller"), (0x1010, 0x08, "helper")]
+            )
+            fact = root / "inline.json"
+            fact.write_text(json.dumps({
+                "format": "a32_inline_argument_calls_v1",
+                "callees": [{"entry": "0x1010", "guard_word": "0xE49E4004",
+                             "inline_words": 1}]}), encoding="utf-8")
+            calls = load_inline_argument_calls(fact, code, BASE)
+            program = build_program(code, inventory, audit, base=BASE,
+                                    executable_size=len(code),
+                                    inline_argument_calls=calls)
+            # Negative: without the title fact the data word is decoded as
+            # an instruction on the call's fallthrough.
+            plain = build_program(code, inventory, audit, base=BASE,
+                                  executable_size=len(code))
+            # A guard word from another image refuses the fact.
+            other = bytearray(code)
+            other[16:20] = (0xE5904000).to_bytes(4, "little")
+            with self.assertRaisesRegex(ValueError, "guard word"):
+                load_inline_argument_calls(fact, bytes(other), BASE)
+        self.assertEqual(calls, {0x1010: 1})
+        caller = {f.entry: f for f in program.functions}[0x1000]
+        self.assertTrue(caller.closed_static_cfg)
+        resumes = [
+            (edge.site, edge.target)
+            for block in program.blocks
+            for edge in block.successors
+            if edge.kind == "resume"
+        ]
+        self.assertEqual(resumes, [(0x1004, 0x100C)])
+        self.assertIn(0x1008, program.literal_data)
+        reached = {
+            block.pc + 4 * index
+            for block in program.blocks
+            for index in range(len(block.instructions))
+        }
+        self.assertNotIn(0x1008, reached)
+        plain_reached = {
+            block.pc + 4 * index
+            for block in plain.blocks
+            for index in range(len(block.instructions))
+        }
+        self.assertIn(0x1008, plain_reached)
+
     def test_negative_bl_to_unknown_a32_code_still_opens_the_cfg(self) -> None:
         # The Thumb rule must not hide a genuinely unresolved A32 call.
         words = [0] * 2
@@ -448,6 +516,30 @@ class WholeAotProgramTest(unittest.TestCase):
         self.assertTrue(functions[0x1040].closed_static_cfg)
         self.assertEqual(program.unclaimed_blocks, ())
 
+
+    def test_data_pointer_into_thumb_range_is_not_an_a32_root(self) -> None:
+        words = [0] * 18
+        words[0] = 0xE12FFF1E
+        words[8] = 0x1040  # pointer word naming 0x1040
+        words[16] = 0xE0039001  # decodes as A32 "and r9, r3, r1"
+        words[17] = 0xE12FFF1E
+        code = b"".join(word.to_bytes(4, "little") for word in words)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory, audit = self._inputs(root, [(0x1000, 0x04, "root")])
+            ranges = root / "thumb.csv"
+            ranges.write_text("kind,start,end" + chr(10) + "range,0x1030,0x1047" + chr(10),
+                              encoding="utf-8")
+            thumb = load_thumb_ranges(ranges)
+            excluded = build_program(code, inventory, audit, base=BASE,
+                                     executable_size=len(code), thumb_ranges=thumb)
+            # Negative: without the Thumb fact the pointer promotes 0x1040.
+            plain = build_program(code, inventory, audit, base=BASE,
+                                  executable_size=len(code))
+        self.assertEqual(thumb, ((0x1030, 0x1048),))
+        self.assertNotIn(0x1040, excluded.pointer_roots)
+        self.assertNotIn(0x1040, {f.entry for f in excluded.functions})
+        self.assertIn(0x1040, plain.pointer_roots)
 
 if __name__ == "__main__":
     unittest.main()
