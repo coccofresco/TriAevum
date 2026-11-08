@@ -9,6 +9,8 @@
 namespace Oot3dNativeGame::Mm3dRumble {
 enum class CallKind:uint8_t{Request,Override,Player};
 enum class Category:uint8_t{PlayerDamage,PlayerLanding,PlayerAction,Menu,Cutscene,GameOver,ActorShared,Boss,Horse,Minigame,Environment,Enemy};
+// OpenNoSampler == "beyond OoT3D, not a parity gap" (coordinator 2026-11-08): OoT3D
+// rumbles only on Damage and HardLanding, so these rows are catalogued only.
 enum class Disposition:uint8_t{SampledDamage,SampledHardLanding,OpenNoSampler,ExcludedMenuNoGameRumble};
 struct DonorRumbleSite{std::string_view File;uint32_t Line;std::string_view Function;CallKind Kind;Category Cat;Disposition Disp;std::string_view Call;};
 inline constexpr std::array<DonorRumbleSite,102> DonorRumbleSites{{
