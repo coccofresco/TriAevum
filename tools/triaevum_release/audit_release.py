@@ -288,6 +288,16 @@ def _source_archive_errors(
         yield f"corresponding-source ZIP cannot be audited: {exc}"
 
 
+def revision_recipe_path(declared: dict) -> str:
+    """The release's own recipe catalog: Forge is per title (owner decision
+    2026-11-08), so a release holds exactly one revision_recipe, which is
+    recipes/oot3d.json for OoT3D and recipes/mm3d.json for MM3D."""
+    paths = [path for path, item in declared.items() if item.get("role") == "revision_recipe"]
+    if len(paths) != 1:
+        raise ValueError(f"release must declare exactly one revision_recipe, found {len(paths)}")
+    return paths[0]
+
+
 def audit_release(
     package_root: Path,
     *,
@@ -610,7 +620,7 @@ def audit_release(
             validate_precomputed_tables(root, catalog, declared)
             if catalog_platform(catalog) != platform:
                 raise ValueError("Catalog target differs from release target")
-            recipes = load_json_object(root / "recipes/oot3d.json")["recipes"]
+            recipes = load_json_object(root / revision_recipe_path(declared))["recipes"]
             require_coverage(catalog, {"recipes": recipes})
             expected_title_paths = {CATALOG}
             for title in catalog["titles"]:

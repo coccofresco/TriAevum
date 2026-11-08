@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from audit_release import DEFAULT_POLICY, _matches_any, audit_release
+from audit_release import DEFAULT_POLICY, _matches_any, audit_release, revision_recipe_path
 from common import atomic_write_json, sha256_file
 from package_release import package_release
 from test_vulkan_imports import pe_import_fixture
@@ -600,6 +600,22 @@ class PublicReleaseAuditTests(unittest.TestCase):
                     source_commit="0" * 40,
                     readiness_path=readiness,
                 )
+
+
+class RevisionRecipePathTests(unittest.TestCase):
+    """Forge is per title: the precompiled audit reads the release's own recipe."""
+
+    def test_each_title_release_uses_its_declared_recipe(self) -> None:
+        for path in ("recipes/oot3d.json", "recipes/mm3d.json"):
+            declared = {path: {"role": "revision_recipe"}, "runtime/TriAevum.exe": {"role": "runtime_executable"}}
+            self.assertEqual(revision_recipe_path(declared), path)
+
+    def test_missing_or_ambiguous_recipe_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "exactly one revision_recipe, found 0"):
+            revision_recipe_path({"runtime/TriAevum.exe": {"role": "runtime_executable"}})
+        with self.assertRaisesRegex(ValueError, "found 2"):
+            revision_recipe_path({"recipes/oot3d.json": {"role": "revision_recipe"},
+                                  "recipes/mm3d.json": {"role": "revision_recipe"}})
 
 
 if __name__ == "__main__":
