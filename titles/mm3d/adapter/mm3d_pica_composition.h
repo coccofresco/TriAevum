@@ -5,6 +5,7 @@
 #include "mm3d_native_a32_lighting.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -73,12 +74,20 @@ struct Mm3dNativePicaCompositionStats {
     uint64_t IsolatedModelSpans = 0;
     uint64_t AtmosphereModelSpans = 0;
     uint64_t LifecycleInvalidations = 0;
+    // Room slots observed at Play_Draw: changes of the (cur, prev) pair, room
+    // lifetime ends (a room left both slots), and the last valid pair (-1 = empty).
+    uint64_t RoomSlotChanges = 0, RoomLifetimeEnds = 0;
+    int32_t LastCurrentRoom = -1, LastPreviousRoom = -1;
     uint64_t PrimitiveEntries = 0, PrimitiveSpans = 0, TemporalPrimitiveSpans = 0;
     uint64_t UnownedPrimitives = 0, InvalidPrimitives = 0;
     uint64_t AtmosphereQuadSpans = 0, UiQuadSpans = 0, InvalidQuadOwners = 0;
     uint64_t QuadQueueMoves = 0, NativeUiQuadMoves = 0;
     std::array<uint64_t, 8> UnknownQuadSpans{};
     std::array<uint64_t, 8> PrimitiveCallerEntries{};
+    // P17 owner dump: draws per layout resource name at the owner draw entry
+    // (bounded; later names count in LayoutOwnersDropped).
+    std::map<std::string, uint64_t> LayoutOwners;
+    uint64_t LayoutOwnersDropped = 0;
 };
 
 // Records the command-list byte range each native pass writes, with its

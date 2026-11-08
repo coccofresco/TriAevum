@@ -148,6 +148,8 @@ void NativeA32WindowSession::Setup() {
   std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
             << " code_sha256=" << manifest->CodeBinSha256 << '\n';
   titleSession = Oot3dNativeGame::CreateTitleSession(titleAdapter);
+  if (titleSession) picaPresentationScheduler.SetGameplayHudClassifier(
+      [title=titleSession.get()](uint32_t pc,uint32_t value) { return title->IsGameplayHud(pc,value); });
   // Before any settings load: configurations older than schema 15 take the
   // title's shipped grass source and mask rules. OoT3D's rules are keyed by
   // its own textures; another title's configuration drops an unedited copy
@@ -1233,7 +1235,8 @@ void NativeA32WindowSession::Setup() {
           launch.UiProfile ==
                   Oot3dNativeGame::Oot3dUiProfile::TopScreen
               ? topScreenConfigRuntime
-              : nullptr));
+              : nullptr,
+          titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{}));
   if (launch.UiProfile ==
       Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
     applicationSettingsTabs.push_back(
@@ -1444,7 +1447,8 @@ void NativeA32WindowSession::Setup() {
       controlConfigRuntime,
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen ? topScreenConfigRuntime : nullptr,
       languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode, std::move(menuHost),
-      Oot3dNativeGame::HostAudioOutputPolicy()});
+      Oot3dNativeGame::HostAudioOutputPolicy(),
+      titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{}});
   // The first-play help card belongs to sessions a person plays: scripted
   // runs (captures, fixed steps, replays, the developer lab) never see it.
   // TRIAEVUM_HELP_CARD=1 or 0 overrides that, for qualification.
@@ -1938,6 +1942,7 @@ void NativeA32WindowSession::ApplyPhotoModeHud() {
   // the TopScreen compositor does not draw, follow render_hud as well.
   picaPresentationScheduler.SetNativeGameplayHudVisible(
       !hidden && (!nativeCandidateDispatch.TopScreenUiProfile || activeTopScreenConfig.RenderHud));
+  if (titleSession) titleSession->SetGameplayHudVisible(!hidden);
 }
 
 void NativeA32WindowSession::ApplySelectedUiProfile() {
@@ -1982,6 +1987,12 @@ void NativeA32WindowSession::UpdateScenePresentation() {
           std::max<uint32_t>(1, presentationPicture.Width),
           std::max<uint32_t>(1, presentationPicture.Height));
   widescreenProjection.Projection.FovMultiplier = graphics.FovMultiplier;
+  widescreenProjection.Projection.TitleOwnsSceneProjection = titleSession && titleSession->OwnsSceneProjection();
+  if (titleSession) {
+    const auto& presentation = widescreenProjection.Projection.Presentation;
+    titleSession->SetPresentation({graphics.FovMultiplier, presentation.HorizontalFovExpansion,
+                                   presentation.VerticalFovExpansion, graphics.ExtendedDrawDistance});
+  }
   auto &visibility = widescreenProjection.ActorVisibility;
   visibility.ExtendedDrawDistance = graphics.ExtendedDrawDistance;
   visibility.Presentation = widescreenProjection.Projection.Presentation;

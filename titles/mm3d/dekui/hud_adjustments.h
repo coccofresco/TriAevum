@@ -19,6 +19,10 @@ inline float Unit(float v,float fallback){return std::isfinite(v)?std::clamp(v,0
 inline float Opacity(){return Unit(opacity.load(),1.f);}
 inline float BannerBrightness(){return 1.f-Unit(banner_darkness.load(),0.f);}
 inline std::atomic<bool> hide_menu_prompts{false},hide_minimap{false};
+// TriAevum: photo mode Hide HUD (host session state, not a dekui setting).
+// The saved hide_minimap stays the user's; this only overlays it.
+inline std::atomic<bool> photo_hud_hidden{false};
+inline bool MinimapHidden(){return hide_minimap.load()||photo_hud_hidden.load();}
 // CPU shortcut updates visibility immediately; the render/UI thread consumes
 // the request to synchronize its checkbox and persist the ordinary HUD setting.
 inline std::atomic<int> minimap_visibility_request{-1};

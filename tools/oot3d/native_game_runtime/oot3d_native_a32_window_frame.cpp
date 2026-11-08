@@ -322,6 +322,12 @@ bool NativeA32WindowSession::RunFrame() {
   // the game, in the render order of this frame; false with the menu closed.
   renderStream.Submit([guestHeld] { Fast::Extension::VisualClock::Instance().SetHostHold(guestHeld); });
   ApplyTopScreenConfigSnapshot();
+  // Gameplay rows a title implements itself (MM3D) come from the controls
+  // owner; titles without such rows ignore them (OoT3D: TopScreen runtime).
+  if (titleSession && controlConfigRuntime) {
+    const auto controls = controlConfigRuntime->Snapshot().Config;
+    titleSession->SetGameplayOptions({.QuickPutAway = controls.QuickPutAway, .RollDash = controls.RollDash});
+  }
   ApplyPhotoModeHud();
   uiLifecycleBridge.BeginHostFrame(
       static_cast<uint32_t>(presentationFrameCount));
@@ -1445,9 +1451,20 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     devSurfaceTraceFrame = 0U;
   }
 #endif
-  // Rumble (Controls > Rumble): the OoT3D adapter's events from the native
-  // game state, handed to Input, which plays them on the active pad at the
-  // next poll. Off reads nothing; reading never writes the guest.
+  // Rumble facts belong to the title; Input owns strength and playback.
+  // Keep the existing OoT reader/sequence unchanged. Optional producers reset
+  // without guest reads while Off, disconnected, unfocused or in the host menu.
+  if (titleSession) {
+    const auto& admission = nativeControlPollingState.RumbleAdmission;
+    if (titleRumbleContextRevision != admission.Revision) {
+      (void)titleSession->RumblePulses(process.Memory(), false);
+      titleRumbleContextRevision = admission.Revision;
+    }
+    const bool enabled = admission.Allowed && SDL_GetKeyboardFocus() != nullptr &&
+                         (!inGameMenuStorage || !inGameMenuStorage->IsOpen());
+    for (const auto& pulse : titleSession->RumblePulses(process.Memory(), enabled))
+      nativeControlPollingState.Rumble.Request(pulse);
+  }
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
       nativeControlPollingState.RumbleStrength != ThreeDsRecomp::Input::RumbleStrength::Off) {
     Oot3dNativeGame::Oot3dRumbleSample rumbleSample;
@@ -3141,7 +3158,16 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   const Uint8 *keys = SDL_GetKeyboardState(nullptr);
   const auto &io = ImGui::GetIO();
   const bool keyboard = keys != nullptr && !io.WantCaptureKeyboard;
-  const bool toggle = keyboard && keys[SDL_SCANCODE_F6] != 0U;
+  // A scripted run holds the same host keys through its timeline's
+  // "host_keys" (oot3d_native_a32_input.h), so acceptance does not depend on
+  // window focus; they reach only these host features, never the guest.
+  const uint32_t hostKeys = inputFrame.HostKeys;
+  const bool toggle = (keyboard && keys[SDL_SCANCODE_F6] != 0U) ||
+      (hostKeys & Oot3dNativeGame::kNativeHostKeyPhotoCamera) != 0U;
+  const bool hideHud = (hostKeys & Oot3dNativeGame::kNativeHostKeyHideHud) != 0U;
+  if (hideHud && !scriptedHideHudHeld && photoMode)
+    photoMode->HideHud.store(!photoMode->HideHud.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  scriptedHideHudHeld = hideHud;
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   const bool cameraAvailable = !devToolsTitle || devToolsTitle->CameraAvailable();
 #else
@@ -3161,8 +3187,16 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   const float mouseY = static_cast<float>(sources.DevMouseDeltaY);
   sources.DevMouseDeltaX = sources.DevMouseDeltaY = 0;
   if (!freeCamera.Active()) return;
+  const auto productOwns = titleSession
+      ? titleSession->PhotoCameraOwnsInput(processStorage->Memory()) : std::nullopt;
+  if (productOwns) {
+    const bool owns = *productOwns;
+    if (!owns && devFreeCameraOwnedInput) freeCamera.ResetToGame();
+    devFreeCameraOwnedInput = owns;
+    if (!owns) return;
+  }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-  if (devToolsTitle) {
+  if (!productOwns && devToolsTitle) {
     if (!devWarpGuest) devWarpGuest = Oot3dNativeGame::MakeDevWarpProcessGuest(*processStorage);
     const bool owns = devToolsTitle->CameraOwnsInput(*devWarpGuest);
     if (!owns && devFreeCameraOwnedInput) freeCamera.ResetToGame();
@@ -3185,6 +3219,13 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
     up += (keys[SDL_SCANCODE_E] ? 1.0F : 0.0F) - (keys[SDL_SCANCODE_Q] ? 1.0F : 0.0F);
     if (keys[SDL_SCANCODE_LSHIFT] || keys[SDL_SCANCODE_RSHIFT]) multiplier = 4.0F;
     if (keys[SDL_SCANCODE_LCTRL] || keys[SDL_SCANCODE_RCTRL]) multiplier = 0.25F;
+  }
+  {
+    using namespace Oot3dNativeGame;
+    const auto held = [&](uint32_t key) { return (hostKeys & key) != 0U ? 1.0F : 0.0F; };
+    forward += held(kNativeHostKeyCameraForward) - held(kNativeHostKeyCameraBack);
+    right += held(kNativeHostKeyCameraRight) - held(kNativeHostKeyCameraLeft);
+    up += held(kNativeHostKeyCameraUp) - held(kNativeHostKeyCameraDown);
   }
   // Left or right mouse button held: drag to look (0.15 degrees per pixel).
   // Not io.WantCaptureMouse: the full-window "Main Game" ImGui surface always

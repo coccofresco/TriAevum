@@ -29,10 +29,26 @@ using NativeFreeCameraInputSample = ThreeDsRecomp::Input::AxisInputSample;
 using NativeFreeCameraInputAccumulator =
     ThreeDsRecomp::Input::AxisInputAccumulator;
 
+// Host keys a scripted run holds, as the keyboard would (F6, the photo
+// camera's WASD/QE, the photo HUD toggle). Read by the host features
+// themselves, never passed to the guest; a timeline's "host_keys" names them.
+enum NativeA32HostKey : uint32_t {
+    kNativeHostKeyPhotoCamera = 1U << 0,   // F6
+    kNativeHostKeyCameraForward = 1U << 1, // W
+    kNativeHostKeyCameraBack = 1U << 2,    // S
+    kNativeHostKeyCameraLeft = 1U << 3,    // A
+    kNativeHostKeyCameraRight = 1U << 4,   // D
+    kNativeHostKeyCameraDown = 1U << 5,    // Q
+    kNativeHostKeyCameraUp = 1U << 6,      // E
+    kNativeHostKeyHideHud = 1U << 7,       // Photo mode > Hide HUD (toggle)
+};
+uint32_t NativeA32HostKeyMask(const std::string& name);
+
 struct NativeA32InputFrame : ThreeDsRecomp::Input::InputFrame {
     bool Exit = false;
     bool Scripted = false;
     int32_t ScriptSegmentIndex = -1;
+    uint32_t HostKeys = 0;
 };
 
 bool ResolveNativeGameplayMouseOwnership(
@@ -261,6 +277,7 @@ class NativeA32InputTimeline {
     struct Segment : ThreeDsRecomp::Input::InputFrame {
         uint32_t StartFrame = 0;
         uint32_t EndFrameExclusive = 0;
+        uint32_t HostKeys = 0;
     };
 
     std::filesystem::path mSourcePath;

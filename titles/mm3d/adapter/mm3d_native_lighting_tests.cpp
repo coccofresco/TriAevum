@@ -160,14 +160,20 @@ void TestCompositionTemporalLifetimes() {
         // Two-room transition: room 0 stays loaded in prevRoom while room 1
         // loads into curRoom; both are drawn, so history must survive.
         const auto before = bgEnqueue();
+        const auto changes0 = tracker.Stats().RoomSlotChanges, ends0 = tracker.Stats().RoomLifetimeEnds;
         rooms(1, 0);
         Require(bgEnqueue().Lifetime == before.Lifetime, "two-room transition dropped loaded room history");
+        Require(tracker.Stats().RoomSlotChanges == changes0 + 1U && tracker.Stats().RoomLifetimeEnds == ends0 &&
+                tracker.Stats().LastCurrentRoom == 1 && tracker.Stats().LastPreviousRoom == 0,
+                "two-room transition miscounted room slot statistics");
         rooms(0, 1);
         Require(bgEnqueue().Lifetime == before.Lifetime, "slot swap of loaded rooms dropped history");
         // Transition end: room 1 leaves both slots.
         rooms(0, 0xFF);
         const auto afterUnload = bgEnqueue();
         Require(afterUnload.Lifetime != before.Lifetime, "room unload kept room model lifetime");
+        Require(tracker.Stats().RoomLifetimeEnds == ends0 + 1U && tracker.Stats().RoomSlotChanges == changes0 + 3U &&
+                tracker.Stats().LastPreviousRoom == -1, "room unload miscounted room slot statistics");
         // Invalid room number (>127, not the empty marker) is unknown.
         rooms(0x80, 0xFF);
         const auto invalid = bgEnqueue();

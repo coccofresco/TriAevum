@@ -13,6 +13,8 @@
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
 #include "fast/extension/grass_types.h"
+#include "gameplay_rumble.h"
+#include "triaevum_title_presentation.h"
 
 #include <nlohmann/json.hpp>
 
@@ -102,6 +104,35 @@ public:
     (void)memory; (void)sourceFrame;
     return {};
   }
+
+  [[nodiscard]] virtual bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const {
+    (void)sourcePc; (void)nativeValue; return false;
+  }
+  virtual void SetPresentation(const TitlePresentationSettings& settings) { (void)settings; }
+  // Photo mode Hide HUD for HUD a title draws host-side (outside the PICA
+  // layout owners IsGameplayHud classifies). Default: nothing to hide.
+  virtual void SetGameplayHudVisible(bool visible) { (void)visible; }
+  // A title may apply the renderer/window policy at its native scene projection
+  // loads. Its unrelated stereo/base-frustum helper must then stay untouched.
+  [[nodiscard]] virtual bool OwnsSceneProjection() const { return false; }
+
+  // Optional product photo-camera input gate. nullopt preserves legacy title
+  // handling; false releases gameplay input to menus/cutscenes/transitions.
+  [[nodiscard]] virtual std::optional<bool> PhotoCameraOwnsInput(
+      oot3d::recomp::a32::MemoryBus& memory) const { (void)memory; return std::nullopt; }
+
+  // Input owns admission/strength/playback. Disabled must reset history without
+  // reading guest memory; absent producers return no events.
+  [[nodiscard]] virtual std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) {
+    (void)memory; (void)enabled;
+    return {};
+  }
+
+  // Gameplay rows a title implements outside a mod-owned profile (OoT3D's
+  // TopScreen runtime owns its own); default none, so no row is shown.
+  virtual void SetGameplayOptions(const TitleGameplayOptions& options) { (void)options; }
+  [[nodiscard]] virtual TitleGameplayOptionSet SupportedGameplayOptions() const { return {}; }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }

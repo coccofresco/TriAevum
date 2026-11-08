@@ -170,7 +170,7 @@ struct Hook {
                 m.NativeQuadQueueCommitted(moves);
             }
         };
-        if(HudAdjustments::hide_minimap) {
+        if(HudAdjustments::MinimapHidden()) {
             // Remove only this gameplay call's map/radar entries. Full map menus
             // use their own routing; unrelated lower-screen objects remain.
             for(unsigned i=0;i<retained.size();++i) {

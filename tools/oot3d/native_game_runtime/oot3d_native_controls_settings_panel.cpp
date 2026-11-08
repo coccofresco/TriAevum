@@ -197,8 +197,9 @@ class NativeControlsSettingsPanel final
  public:
   NativeControlsSettingsPanel(
       std::shared_ptr<NativeControlConfigRuntime> controls,
-      std::shared_ptr<TopScreenUiConfigRuntime> topScreen)
-      : mControls(std::move(controls)), mTopScreen(std::move(topScreen)) {}
+      std::shared_ptr<TopScreenUiConfigRuntime> topScreen,
+      TitleGameplayOptionSet titleGameplay)
+      : mControls(std::move(controls)), mTopScreen(std::move(topScreen)), mTitleGameplay(titleGameplay) {}
 
   [[nodiscard]] const char* Label() const noexcept override {
     return "Controls";
@@ -241,7 +242,18 @@ class NativeControlsSettingsPanel final
       });
       section("Gameplay", [&] {
         if (mTopScreen) DrawTopScreenGameplay(mTopDraft);
-        else ImGui::TextDisabled("TopScreen profile is not active");
+        else if (mTitleGameplay.Any()) {
+          if (mTitleGameplay.QuickPutAway) {
+            if (ImGui::Checkbox("Quick put away", &mControlDraft.QuickPutAway)) mControlDirty = true;
+            if (ImGui::IsItemHovered())
+              ImGui::SetTooltip("Items can be put away immediately instead of after the native cooldown.");
+          }
+          if (mTitleGameplay.RollDash) {
+            if (ImGui::Checkbox("Roll dash", &mControlDraft.RollDash)) mControlDirty = true;
+            if (ImGui::IsItemHovered())
+              ImGui::SetTooltip("Holding A after a roll keeps running at the faster dash speed.");
+          }
+        } else ImGui::TextDisabled("TopScreen profile is not active");
       });
       section("Touch", [&] { DrawTouch(); });
       ImGui::EndTabBar();
@@ -337,6 +349,8 @@ class NativeControlsSettingsPanel final
         mControlDraft.ControllerTouchpadIndex = previous.ControllerTouchpadIndex;
         mControlDraft.ButtonPrompts = previous.ButtonPrompts;
         mControlDraft.Rumble = previous.Rumble;
+        mControlDraft.QuickPutAway = previous.QuickPutAway;
+        mControlDraft.RollDash = previous.RollDash;
         mControlDirty = true;
         ImGui::CloseCurrentPopup();
       }
@@ -831,6 +845,9 @@ class NativeControlsSettingsPanel final
 
   std::shared_ptr<NativeControlConfigRuntime> mControls;
   std::shared_ptr<TopScreenUiConfigRuntime> mTopScreen;
+  // Gameplay rows the title implements itself (MM3D), kept in the controls
+  // draft so the Esc menu's Game > Gameplay rows show the same state.
+  TitleGameplayOptionSet mTitleGameplay;
   NativeControlConfig mControlDraft;
   TopScreenUiConfig mTopDraft;
   NativeControlConfig mSavedControls;
@@ -855,9 +872,10 @@ class NativeControlsSettingsPanel final
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateNativeControlsSettingsPanel(
     std::shared_ptr<NativeControlConfigRuntime> controls,
-    std::shared_ptr<TopScreenUiConfigRuntime> topScreen) {
+    std::shared_ptr<TopScreenUiConfigRuntime> topScreen,
+    TitleGameplayOptionSet titleGameplay) {
   return std::make_shared<NativeControlsSettingsPanel>(
-      std::move(controls), std::move(topScreen));
+      std::move(controls), std::move(topScreen), titleGameplay);
 }
 
 } // namespace Oot3dNativeGame

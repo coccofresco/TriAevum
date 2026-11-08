@@ -394,8 +394,13 @@ NativePresentationScheduler::Stats() const {
     return mStats;
 }
 
-NativeFrameRatePolicy::NativeFrameRatePolicy(NativeFrameRateContract contract)
-    : mContract(contract), mGameplayClock(contract) {
+NativeFrameRatePolicy::NativeFrameRatePolicy(NativeFrameRateContract contract,
+                                           NativeFramePacingLayout pacingLayout)
+    : mContract(contract), mPacingLayout(pacingLayout), mGameplayClock(contract) {
+    if (pacingLayout.CounterModulus < 2U ||
+        pacingLayout.CounterModulus > (uint64_t{1} << 32U)) {
+        throw std::invalid_argument("invalid native frame counter modulus");
+    }
     if (!mContract.A32UpdateRateExact) {
         throw std::invalid_argument(
             "requested simulation rate cannot be represented exactly by the "
@@ -470,15 +475,15 @@ bool NativeFrameRatePolicy::ApplyFramePacingInterval(
     uint32_t deadline = 0;
     uint32_t vsyncCounter = 0;
     if (!memory.Read32(framePacingStateAddress +
-                           kOot3dFramePacingMaximumIntervalOffset,
+                           mPacingLayout.MaximumIntervalOffset,
                        &maximumInterval) ||
         !memory.Read32(framePacingStateAddress +
-                           kOot3dFramePacingIntervalOffset,
+                           mPacingLayout.IntervalOffset,
                        &interval) ||
         !memory.Read32(framePacingStateAddress +
-                           kOot3dFramePacingDeadlineOffset,
+                           mPacingLayout.DeadlineOffset,
                        &deadline) ||
-        !memory.Read32(kOot3dVsyncCounterAddress, &vsyncCounter)) {
+        !memory.Read32(mPacingLayout.VsyncCounterAddress, &vsyncCounter)) {
         ++mStats.ReadFailures;
         mLastError = "could not read the native frame-pacing state";
         return false;
@@ -494,7 +499,7 @@ bool NativeFrameRatePolicy::ApplyFramePacingInterval(
         static_cast<uint32_t>(mContract.A32UpdateRate);
     if (maximumInterval != requestedInterval &&
         !memory.Write32(framePacingStateAddress +
-                            kOot3dFramePacingMaximumIntervalOffset,
+                            mPacingLayout.MaximumIntervalOffset,
                         requestedInterval)) {
         ++mStats.WriteFailures;
         mLastError = "could not write the native maximum frame interval";
@@ -506,7 +511,7 @@ bool NativeFrameRatePolicy::ApplyFramePacingInterval(
 
     if (interval > requestedInterval &&
         !memory.Write32(framePacingStateAddress +
-                            kOot3dFramePacingIntervalOffset,
+                            mPacingLayout.IntervalOffset,
                         requestedInterval)) {
         ++mStats.WriteFailures;
         mLastError = "could not clamp the native frame interval";
@@ -533,9 +538,9 @@ bool NativeFrameRatePolicy::ApplyFramePacingDeadline(
     uint32_t deadline = 0;
     uint32_t vsyncCounter = 0;
     if (!memory.Read32(framePacingStateAddress +
-                           kOot3dFramePacingDeadlineOffset,
+                           mPacingLayout.DeadlineOffset,
                        &deadline) ||
-        !memory.Read32(kOot3dVsyncCounterAddress, &vsyncCounter)) {
+        !memory.Read32(mPacingLayout.VsyncCounterAddress, &vsyncCounter)) {
         ++mStats.ReadFailures;
         mLastError = "could not read the native frame-pacing deadline";
         return false;
@@ -559,15 +564,14 @@ bool NativeFrameRatePolicy::ApplyFramePacingDeadline(
     // This block runs after the mandatory presentation VSync. The native
     // 30 Hz path leaves one additional refresh in its deadline. A 60 Hz step
     // must leave none; lower exact rates retain the corresponding remainder.
-    constexpr uint64_t kCounterModulus = 0x7FFFFFFFULL;
     const uint64_t remainingRefreshes =
         static_cast<uint32_t>(mContract.A32UpdateRate - 1);
     const uint32_t requestedDeadline = static_cast<uint32_t>(
         (static_cast<uint64_t>(vsyncCounter) + remainingRefreshes) %
-        kCounterModulus);
+        mPacingLayout.CounterModulus);
     if (deadline != requestedDeadline &&
         !memory.Write32(framePacingStateAddress +
-                            kOot3dFramePacingDeadlineOffset,
+                            mPacingLayout.DeadlineOffset,
                         requestedDeadline)) {
         ++mStats.WriteFailures;
         mLastError = "could not write the native frame-pacing deadline";

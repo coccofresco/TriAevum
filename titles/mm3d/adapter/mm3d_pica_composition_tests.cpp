@@ -2,6 +2,7 @@
 #include "mm3d_lighting_hook_sites.h"
 #include "mm3d_pica_composition.h"
 #include "mm3d_title_contracts.h"
+#include "mm3d_ui_subsystems.h"
 
 #include "oot3d_native_a32_memory.h"
 #include "recomp/a32_runtime.h"
@@ -141,6 +142,34 @@ void TestMm3dSceneLighting() {
     Require(tracker.TakeCommandListCompositionSpans(0x14000000U, 0x300U, spans, &error), error);
     Require(spans.size() == 3U && !spans[2].LightBinding.WorldToView && !spans[2].LightBinding.SceneDirectionals,
             "a frame without a current View carried lighting");
+
+    // Bounded, exact resource-name classification: only known HUD owners.
+    constexpr uint32_t layout=0x08040000,resource=0x08040100,nameAddress=0x08040200;
+    Require(memory.Write32(layout+4,resource)&&memory.Write32(resource+0x18,nameAddress),"layout fixture");
+    uint32_t begin=0x15000000;
+    for(std::string_view name:{"Hud","Hud2","HudItemIconSet","Telop","MessageWindow","MenuItem","MenuMask","MenuCollect","FileSelect","MenuSchedule","MenuOcarina","MenuStartup","HudUnknown"}) {
+        for(uint32_t i=0;i<name.size();++i)Require(memory.Write8(nameAddress+i,uint8_t(name[i])),"layout name");
+        Require(memory.Write8(nameAddress+uint32_t(name.size()),0),"name terminator");
+        state.r[1]=layout;
+        (void)pass(kMm3dLayoutOwnerDrawEntry,0x00126998U,begin,begin+0x40);
+        Require(tracker.TakeCommandListCompositionSpans(begin,0x40,spans,&error),error);
+        const auto& attribution=spans.back().Attribution;
+        const bool hud=name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop";
+        Require(IsMm3dGameplayHud(attribution.SourcePc,attribution.NativeValue)==hud,"HUD-only attribution");
+        begin+=0x40;
+    }
+    // P17 owner dump: every owner draw's resource name is counted, known or not.
+    Require(tracker.Stats().LayoutOwners.size()==13&&tracker.Stats().LayoutOwners.at("HudUnknown")==1&&
+            tracker.Stats().LayoutOwners.at("Hud")==1&&tracker.Stats().LayoutOwnersDropped==0,"layout owner dump");
+    Require(!IsMm3dGameplayHud(kMm3dQuadQueueDrawEntry,kMm3dUiTag|1U),"mixed sprites never blanket HUD");
+    Require(memory.Write32(resource+0x18,0xFFFFFFF0U),"bad name pointer");
+    Require(ReadMm3dUiSubsystem(memory,layout)==Mm3dUiSubsystem::Unknown,"bad name bounded");
+    // Clear test spans by reinitializing; legacy scope assertions below stand.
+    tracker.Reset();
+    state.r[1]=0;
+    (void)pass(kMm3dSkyboxDrawEntry,0x00110DF8U,0x14000000U,0x14000040U);
+    (void)pass(kMm3dRenderListVisitEntry,0x0011EF3CU,0x14000100U,0x14000180U);
+    (void)pass(kMm3dRenderListVisitEntry,0x0011EF3CU,0x14000200U,0x14000240U);
 
     // A 2D layout queue (its owners, from either loop, and its finishers)
     // and the top screen's sprite queues are the interface.

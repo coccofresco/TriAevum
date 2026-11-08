@@ -140,6 +140,23 @@ uint32_t ReadButtons(const nlohmann::json& segment) {
     return mask;
 }
 
+uint32_t ReadHostKeys(const nlohmann::json& segment) {
+    if (!segment.contains("host_keys")) return 0U;
+    const auto& keys = segment.at("host_keys");
+    if (!keys.is_array())
+        throw std::runtime_error("native input timeline host_keys must be an array");
+    uint32_t mask = 0U;
+    for (const auto& key : keys) {
+        if (!key.is_string())
+            throw std::runtime_error("native input timeline host key names must be strings");
+        const auto bit = NativeA32HostKeyMask(key.get<std::string>());
+        if (bit == 0U)
+            throw std::runtime_error("unknown native input timeline host key: " + key.get<std::string>());
+        mask |= bit;
+    }
+    return mask;
+}
+
 bool ReadOptionalBool(const nlohmann::json& segment, const char* key) {
     if (!segment.contains(key)) {
         return false;
@@ -590,12 +607,25 @@ NativeA32InputTimeline NativeA32InputTimeline::LoadFile(
         ReadTouch(source, segment.Hid);
         segment.Hid.GyroscopeValid = ReadMotionVector(source, "gyroscope_dps", segment.Hid.GyroscopeDegreesPerSecond);
         segment.Hid.AccelerometerValid = ReadMotionVector(source, "accelerometer_g", segment.Hid.Accelerometer);
+        segment.HostKeys = ReadHostKeys(source);
         timeline.mSegments.push_back(segment);
         previousEnd = segment.EndFrameExclusive;
         first = false;
     }
     timeline.mSourcePath = std::filesystem::absolute(path).lexically_normal();
     return timeline;
+}
+
+uint32_t NativeA32HostKeyMask(const std::string& name) {
+    if (name == "photo_camera") return kNativeHostKeyPhotoCamera;
+    if (name == "camera_forward") return kNativeHostKeyCameraForward;
+    if (name == "camera_back") return kNativeHostKeyCameraBack;
+    if (name == "camera_left") return kNativeHostKeyCameraLeft;
+    if (name == "camera_right") return kNativeHostKeyCameraRight;
+    if (name == "camera_down") return kNativeHostKeyCameraDown;
+    if (name == "camera_up") return kNativeHostKeyCameraUp;
+    if (name == "hide_hud") return kNativeHostKeyHideHud;
+    return 0U;
 }
 
 bool NativeA32InputTimeline::Enabled() const {
@@ -632,6 +662,7 @@ NativeA32InputFrame NativeA32InputTimeline::Sample(uint32_t guestFrame,
         static_cast<ThreeDsRecomp::Input::InputFrame&>(result) =
             static_cast<const ThreeDsRecomp::Input::InputFrame&>(segment);
         result.ScriptSegmentIndex = static_cast<int32_t>(index);
+        result.HostKeys = segment.HostKeys;
         break;
     }
     return result;

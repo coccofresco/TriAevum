@@ -1,6 +1,7 @@
 #include "mm3d_pica_composition.h"
 
 #include "mm3d_title_contracts.h"
+#include "mm3d_ui_subsystems.h"
 #include "mm3d_scene_environment.h"
 #include "mm3d_lighting_hook_sites.h"
 #include "recomp/a32_runtime.h"
@@ -188,7 +189,11 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             for (auto it = mModelLifetimes.begin(); it != mModelLifetimes.end();) {
                 if (it->second.Owner & (1ULL << 63U)) it = mModelLifetimes.erase(it); else ++it;
             }
-            if (mRooms.Valid) ++mStats.LifecycleInvalidations;
+            if (mRooms.Valid) { ++mStats.LifecycleInvalidations; ++mStats.RoomLifetimeEnds; }
+        }
+        if (rooms.Valid && (!mRooms.Valid || rooms.Current != mRooms.Current || rooms.Previous != mRooms.Previous)) {
+            if (mRooms.Valid) ++mStats.RoomSlotChanges;
+            mStats.LastCurrentRoom = rooms.Current; mStats.LastPreviousRoom = rooms.Previous;
         }
         mRooms = rooms;
         mPlay = valid ? play : 0U; mScene = scene; mPlayFrame = frame;
@@ -485,6 +490,19 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     mActive->Attribution.ExcludeFromPresentationFxaa = scope->Layer == Oot3dPicaCompositionLayer::Ui;
     mActive->Attribution.PreserveNativeUiSampling = mActive->Attribution.ExcludeFromPresentationFxaa;
     if (pc == kMm3dQuadQueueDrawEntry) mQuadQueue = state.r[1];
+    if (scope->EntryPc == kMm3dLayoutOwnerDrawEntry) {
+        std::string name;
+        const auto subsystem = ReadMm3dLayoutName(memory, state.r[1], &name)
+            ? ClassifyMm3dLayout(name) : Mm3dUiSubsystem::Unknown;
+        if (!name.empty()) {
+            auto owner = mStats.LayoutOwners.find(name);
+            if (owner != mStats.LayoutOwners.end()) ++owner->second;
+            else if (mStats.LayoutOwners.size() < 64U) mStats.LayoutOwners.emplace(std::move(name), 1U);
+            else ++mStats.LayoutOwnersDropped;
+        }
+        if (subsystem != Mm3dUiSubsystem::Unknown)
+            mActive->Attribution.NativeValue = kMm3dUiTag | uint32_t(subsystem);
+    }
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         ++mStats.SceneFrames;
         const uint64_t frame = mStats.SceneFrames;
