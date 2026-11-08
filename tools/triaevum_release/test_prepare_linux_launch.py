@@ -31,6 +31,19 @@ class LinuxLaunchTests(unittest.TestCase):
         self.assertEqual(result["arguments"], ["--title-plugin", str(self.plugin.resolve()),
                                               "--ui-profile", "topscreen"])
 
+    def test_prefers_the_product_named_profile(self):
+        # Owner decision 2026-11-08 (Linux names): the profile is named after
+        # the installed product executable; the legacy one is a fallback only.
+        self.save()
+        product = dict(self.profile, arguments=["--title-plugin", "product.dll"])
+        (self.root / "Echoes_of_Time.launch.json").write_text(json.dumps(product), encoding="utf-8")
+        result = json.loads(prepare(self.root, self.plugin).read_text())
+        self.assertEqual(result["arguments"], ["--title-plugin", str(self.plugin.resolve())])
+
+    def test_rejects_an_installation_without_a_profile(self):
+        with self.assertRaises(FileNotFoundError):
+            prepare(self.root, self.plugin)
+
     def test_rejects_duplicate_plugin(self):
         self.profile["arguments"] += ["--title-plugin", "other.dll"]
         self.save()

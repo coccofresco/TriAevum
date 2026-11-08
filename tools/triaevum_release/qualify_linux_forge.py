@@ -9,11 +9,11 @@ import time
 
 try:
     from .common import atomic_write_json, sha256_file
-    from .release_platform import LINUX, host_platform
+    from .release_platform import LINUX, host_platform, installed_runtime_path, launch_profile_name
     from .linux_desktop import check_display_power
 except ImportError:
     from common import atomic_write_json, sha256_file
-    from release_platform import LINUX, host_platform
+    from release_platform import LINUX, host_platform, installed_runtime_path, launch_profile_name
     from linux_desktop import check_display_power
 
 
@@ -97,8 +97,8 @@ def qualify(installation: Path, rom: Path, output: Path, *, seconds: int):
         report["reinstall_preserved_config_and_save"] = True
         # Capture only two early frames. This is a visual boot check, not an
         # FPS benchmark: readback and cold first-run caches affect these timings.
-        elapsed = run_logged([str(installation / LINUX.runtime), "--launch-profile",
-                              str(installation / "TriAevum.launch.json"), "--frames", "0",
+        elapsed = run_logged([str(installed_runtime_path(installation, LINUX)), "--launch-profile",
+                              str(installation / launch_profile_name(LINUX)), "--frames", "0",
                               "--max-seconds", str(seconds), "--output", str(output / "runtime.json"),
                               "--screenshot", str(output / "framebuffer.bmp"),
                               "--screenshot-start-frame", "120", "--screenshot-interval", "600",

@@ -13,14 +13,14 @@ try:
     from .precompiled_title_layout import artifact
     from .product_contract import query_product
     from .shader_release_layout import bind_renderer_compiler
-    from .release_platform import LINUX, host_platform
+    from .release_platform import LINUX, host_platform, installed_runtime_path
 except ImportError:
     from common import atomic_write_json, sha256_file
     from precompiled_titles import load_catalog, checked_file, CATALOG
     from precompiled_title_layout import artifact
     from product_contract import query_product
     from shader_release_layout import bind_renderer_compiler
-    from release_platform import LINUX, host_platform
+    from release_platform import LINUX, host_platform, installed_runtime_path
 
 
 def require_elf(path: Path, *, shared: bool):
@@ -40,7 +40,8 @@ def create_catalog(reference_root: Path, installation: Path, plugin: Path, *, so
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("Platform source commit must be a full Git commit ID")
     reference = load_catalog(reference_root)
-    runtime = installation / LINUX.runtime
+    # Installed under the product name; the catalog records the package path.
+    runtime = installed_runtime_path(installation, LINUX)
     native = installation / LINUX.native_module
     for path, shared in ((runtime, False), (native, True), (plugin, True)):
         require_elf(path, shared=shared)

@@ -109,6 +109,7 @@ TITLES = {
         "inc_source": ("masters/game_icon.png (artwork supplied by the project owner, see",
                        "tools/triaevum_release/branding/README.md)"),
         "linux": True,
+        "app_id": APP_ID,
         "android": True,
     },
     "mm3d": {
@@ -117,7 +118,10 @@ TITLES = {
         "window_icon_inc": MM3D_BRANDING / "mm3d_window_icon_rgba.inc",
         "inc_source": ("titles/mm3d/branding/masters/game_icon.png (artwork supplied by the project owner",
                        "2026-11-08, see titles/mm3d/branding/README.md)"),
-        "linux": False,
+        # Linux hicolor icons under the MM product's application ID (forge-catalog
+        # title.rs MM3D.package_identity), beside the OoT3D ones.
+        "linux": True,
+        "app_id": "io.github.coccofresco.TriAevum.MM3D",
         "android": False,
     },
 }
@@ -339,20 +343,19 @@ def generate(title: str = "oot3d") -> list[Path]:
     path = outputs / "forge/forge_window_icon.png"
     write_png(path, emblem(forge, FORGE_WINDOW_ICON_SIZE, padding=0.02))
     written.append(path)
-    if not facts["linux"]:
-        write_window_icon_inc(facts["window_icon_inc"], game, facts["inc_source"])
-        written.append(facts["window_icon_inc"])
-        return written
-    for size in LINUX_SIZES:
-        for name, master in ((APP_ID, game), (FORGE_ICON_NAME, forge)):
-            path = BRANDING / f"linux/hicolor/{size}x{size}/apps/{name}.png"
-            # freedesktop icons keep a little room around a round emblem.
-            write_png(path, emblem(master, size, padding=0.03))
-            written.append(path)
-    write_window_icon_inc(WINDOW_ICON_INC, game, facts["inc_source"])
-    written.append(WINDOW_ICON_INC)
-    write_android(game)
-    written.append(ANDROID_RES)
+    if facts["linux"]:
+        app_id = facts["app_id"]
+        for size in LINUX_SIZES:
+            for name, master in ((app_id, game), (f"{app_id}.Forge", forge)):
+                path = outputs / f"linux/hicolor/{size}x{size}/apps/{name}.png"
+                # freedesktop icons keep a little room around a round emblem.
+                write_png(path, emblem(master, size, padding=0.03))
+                written.append(path)
+    write_window_icon_inc(facts["window_icon_inc"], game, facts["inc_source"])
+    written.append(facts["window_icon_inc"])
+    if facts["android"]:
+        write_android(game)
+        written.append(ANDROID_RES)
     return written
 
 

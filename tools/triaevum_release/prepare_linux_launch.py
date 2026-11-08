@@ -6,8 +6,10 @@ from pathlib import Path
 
 try:
     from .common import atomic_write_json, load_json_object
+    from .release_platform import LEGACY_LAUNCH_PROFILE, LINUX, launch_profile_name
 except ImportError:
     from common import atomic_write_json, load_json_object
+    from release_platform import LEGACY_LAUNCH_PROFILE, LINUX, launch_profile_name
 
 
 def prepare(installation: Path, plugin: Path) -> Path:
@@ -15,7 +17,12 @@ def prepare(installation: Path, plugin: Path) -> Path:
     plugin = plugin.resolve(strict=True)
     if not plugin.is_file() or plugin.suffix != ".so":
         raise ValueError("Expected a Linux title shared library")
-    profile = load_json_object(installation / "TriAevum.launch.json")
+    # Named after the installed product executable; an installation made
+    # before the Linux product names keeps TriAevum.launch.json.
+    source = installation / launch_profile_name(LINUX)
+    if not source.is_file():
+        source = installation / LEGACY_LAUNCH_PROFILE
+    profile = load_json_object(source)
     if profile.get("format") != "oot3d_native_game_launch_profile_v1":
         raise ValueError("Unsupported launch profile")
     arguments = profile.get("arguments")

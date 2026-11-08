@@ -74,14 +74,30 @@ def rustflags(target: str, target_dir: Path | None = None) -> list[str]:
     glutin's EGL/GLX bindings)."""
     config = tomllib.loads((FORGE_ROOT / ".cargo/config.toml").read_text(encoding="utf-8"))
     flags = [str(flag) for flag in config.get("target", {}).get(target, {}).get("rustflags", [])]
+    flags += [f"--remap-path-prefix={source}={replacement}" for source, replacement in _remaps(target_dir)]
+    if target == WINDOWS.target:
+        flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/PDBALTPATH:%_PDB%"]
+    return flags
+
+
+def _remaps(target_dir: Path | None) -> list[tuple[Path, str]]:
     remaps = [(_home("RUSTUP_HOME", ".rustup"), "/rustup"), (_home("CARGO_HOME", ".cargo"), "/cargo"),
               (REPO_ROOT, "/triaevum")]
     if target_dir is not None:
         remaps.append((target_dir.resolve(), "/target"))
-    flags += [f"--remap-path-prefix={source}={replacement}" for source, replacement in remaps]
+    return remaps
+
+
+def c_flags(target: str, target_dir: Path | None, inherited: str = "") -> str:
+    """CFLAGS/ASMFLAGS for crates that compile C or assembly through `cc`
+    (ring): the same prefixes are remapped, because a build with debug line
+    tables (CARGO_PROFILE_RELEASE_DEBUG) records their source paths, which
+    --remap-path-prefix does not reach. GCC and Clang only: MSVC has no
+    equivalent, and the Windows build records no C debug paths."""
     if target == WINDOWS.target:
-        flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/PDBALTPATH:%_PDB%"]
-    return flags
+        return inherited
+    maps = [f"-ffile-prefix-map={source}={replacement}" for source, replacement in _remaps(target_dir)]
+    return " ".join(part for part in (inherited, *maps) if part)
 
 
 def _rustc_release(cargo: str) -> str:
@@ -91,6 +107,22 @@ def _rustc_release(cargo: str) -> str:
     if match is None:
         raise ValueError("rustc -vV did not report its release")
     return match[1]
+
+
+def target_features(target: str, features) -> tuple[str, ...]:
+    """A title's Forge features for the packages `target` builds: the update
+    helper is Windows-only, so its feature is dropped on Linux and macOS (Cargo
+    refuses a feature of a package it does not build). A feature of a package
+    no target builds is an error."""
+    known = {package for packages in TARGET_PACKAGES.values() for package in packages}
+    selected = []
+    for feature in features:
+        package = feature.split("/", 1)[0]
+        if "/" not in feature or package not in known:
+            raise ValueError(f"Not a Forge package feature: {feature}")
+        if package in TARGET_PACKAGES[target]:
+            selected.append(feature)
+    return tuple(selected)
 
 
 def feature_arguments(features) -> list[str]:
@@ -119,6 +151,11 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
     environment = {**os.environ, "CARGO_TARGET_DIR": str(target_dir),
                    "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target, target_dir))}
     environment.pop("RUSTFLAGS", None)
+    for variable in ("CFLAGS", "ASMFLAGS"):
+        flags = c_flags(target, target_dir, environment.get(variable, ""))
+        if flags:
+            environment[variable] = flags
+    features = target_features(target, features)
     command = [cargo, "build", "--release", "--locked", "--target", target,
                *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)],
                *feature_arguments(features)]
@@ -156,6 +193,7 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
         "source_commit": source_commit,
         "toolchain": channel,
         "packages": list(TARGET_PACKAGES[target]),
+        "features": list(features),
         "static_crt": target == WINDOWS.target,
         "cargo_lock_sha256": sha256_file(FORGE_ROOT / "Cargo.lock"),
         "notices_sha256": sha256_file(rust_forge_notices.NOTICES),
@@ -176,6 +214,8 @@ def main() -> int:
     parser.add_argument("--output", type=Path)
     parser.add_argument("--cargo", default="cargo")
     parser.add_argument("--target-dir", type=Path, help="Cargo target folder (default tools/triaevum_forge/target)")
+    parser.add_argument("--title", default="oot3d",
+                        help="the title whose Forge to build (its forge_features, title_release.py; default oot3d)")
     parser.add_argument("--print-rustflags", action="store_true",
                         help="print CARGO_ENCODED_RUSTFLAGS for the target (Android's forge-android build) and exit")
     args = parser.parse_args()
@@ -185,8 +225,13 @@ def main() -> int:
     if args.target == ANDROID.target or args.source_commit is None or args.output is None:
         parser.error("a desktop build needs a desktop --target, --source-commit and --output")
     try:
+        try:
+            from .title_release import title_release
+        except ImportError:
+            from title_release import title_release
         result = build(args.output, target=args.target, source_commit=args.source_commit,
-                       cargo=args.cargo, target_dir=args.target_dir)
+                       cargo=args.cargo, target_dir=args.target_dir,
+                       features=tuple(title_release(args.title)["forge_features"]))
     except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f"Rust Forge build failed: {exc}", file=sys.stderr)
         return 1

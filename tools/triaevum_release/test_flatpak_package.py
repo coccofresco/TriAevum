@@ -52,6 +52,16 @@ class FlatpakPackageTests(unittest.TestCase):
             state = json.loads((root / "build/flatpak-staging.json").read_text())
             self.assertFalse(state["flatpak_qualified"])
 
+    def test_mm3d_flatpak_rejects_the_pyinstaller_forge(self):
+        # Negative: MM3D has only the title-mm3d Rust Forge; a PyInstaller
+        # (OoT3D) package is refused and nothing stays staged.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_linux_package(root / "source")
+            with self.assertRaisesRegex(ValueError, "requires the title's Rust Forge"):
+                stage_flatpak(root / "source", root / "build", title="mm3d")
+            self.assertFalse((root / "build").exists())
+
     def test_rejects_windows_private_files_and_existing_destination(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -49,6 +49,17 @@ manifest. Older explicit absolute references remain readable; use
 
 ## Linux and Steam Deck: First Deliverable
 
+Product names on Linux (owner decision 2026-11-08): the installed game binary
+takes the product name, `linux_executable` of `titles/<title>/product.json`
+(`Echoes_of_Time`, `Moonfall_Curse`); Forge keeps the name `TriAevumForge`.
+The package keeps the build output `TriAevum` at its root and Forge's install
+step renames it in place (`release_platform.for_title`, forge-catalog
+`LINUX_PRODUCT_EXECUTABLE` per title feature); the launch profile is then
+`Echoes_of_Time.launch.json`. The read-only AppImage and Flatpak payloads keep
+`TriAevum`, like the signed macOS bundle; their desktop entries name the
+product. The MM3D product uses app ID `io.github.coccofresco.TriAevum.MM3D`
+(`appimage_package.py --title mm3d`, icons in `titles/mm3d/branding/linux`).
+
 Use app ID `io.github.coccofresco.TriAevum` and Freedesktop Platform/SDK 25.08
 as the first qualification baseline. This supersedes the earlier tar.gz plus
 Steam Runtime launcher proposal. A tar.gz remains useful for developer staging,
