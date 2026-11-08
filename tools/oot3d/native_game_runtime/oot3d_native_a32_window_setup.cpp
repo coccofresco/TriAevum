@@ -950,9 +950,12 @@ void NativeA32WindowSession::Setup() {
                                   topScreenSourcePortBlocks.begin(),
                                   topScreenSourcePortBlocks.end());
   }
-  {
+  if (oot3dAdapter) {
     // Object bank extension, in every UI profile: its entries leave compiled
-    // execution (while active) and reach the native-block dispatch.
+    // execution (while active) and reach the native-block dispatch. Its sites
+    // (and SingleScreen's rain) name OoT3D EUR code: another title has none,
+    // as for the block-entry hooks above (MM3D product F07 r15: the product
+    // required them as MM title-module block starts and refused to start).
     const auto hooks = Oot3dNativeGame::ObjectBankExtension::HookPcs();
     wholeAotObservableExitBlocks.insert(wholeAotObservableExitBlocks.end(), hooks.begin(),
                                         hooks.end());
