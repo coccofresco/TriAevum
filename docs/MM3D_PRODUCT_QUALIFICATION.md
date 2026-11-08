@@ -281,3 +281,19 @@ F07 Windows row: still **NOT QUALIFIED**. There is no MM title module to install
   restore. It runs on the real `NativeA32Memory` Capture/RestoreState. The overflow record is preserved. A state from
   before the mapping existed is refused until an allocation re-creates the mapping. Corrupt, executable and partial
   foreign regions are refused.
+
+## Round-4 final integration cut (2026-11-08)
+- Base 1fb565f9. Real merges: langaudio 28c47234 (clean), catalogs 75e1cc84 (clean; vertex-family regenerator,
+  no built-in MM packs yet), hooks 542c1233, composition e5418a69, dl 9ad748e7 (dl lane = TriAevum-parity).
+- Conflicts resolved keeping both intents: mm3d_pica_composition.{cpp,h} (integ primitive/quad-span stats and quad
+  index + hooks P17b quad-object census + composition room-slot/direct-shadow stats); title session Reset and dekui
+  core_tests keep integ's superset hunks; scene_emitters.py keeps forge_profile/unreferencedRooms with dl's
+  generatorRevision 3.
+- 46f546ff fixes a boundary violation from cd495617 (a title token in a shared renderer header comment), caught by
+  verify_renderer_3ds_cross_title_boundary in the first cut build.
+- Affected suites (dual tree): 37/37 exit 0, plus the boundary check. Python: scene_emitters 11 passed; tools/mm3d 9 OK.
+  Forge sources are unchanged by the cut; the full Forge suites stay as evidenced at 1fb565f9 (245/245 per title).
+- O2 on the OoT-only tree at 46f546ff (TriAevum.exe sha256 43b7317f...): 3/3 frames match cap-p13, reproducible=1,
+  uber_draws=0, watch_exit=0. Evidence: analysis/parity/INTEG/r5/o2/.
+- Still open: MM built-in packs from CATALOGS (prepared=1 then the uber requalification); F07 blocked by the
+  owner disk plan; the public form of the Restoration .gar members is owner-deferred.
