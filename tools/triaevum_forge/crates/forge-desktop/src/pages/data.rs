@@ -887,6 +887,14 @@ pub fn probe(app: &mut ForgeApp, screen: &str) {
     }
 }
 
+/// The probe's long external texture-pack path. Not under a "<drive>:\\Users\\"
+/// folder: the release audit refuses a Forge binary holding such a string
+/// (release_policy.json binary_host_path_markers), as it would a build path.
+const PROBE_PACK_WINDOWS: &str =
+    r"D:\Emulation\Player Name With A Long Name\Azahar\load\textures\0004000000033600";
+const PROBE_PACK_UNIX: &str =
+    "/home/Player Name With A Long Name/.local/share/azahar/load/textures/0004000000033600";
+
 fn probe_inventory(root: &Path) -> Inventory {
     use forge_core::inventory::{Entry, Roots};
     use Backup::{Exclude, Include, Optional};
@@ -907,11 +915,7 @@ fn probe_inventory(root: &Path) -> Inventory {
         files: 1,
         backup,
     };
-    let pack = PathBuf::from(if cfg!(windows) {
-        r"D:\Users\Player Name With A Long Name\AppData\Roaming\Azahar\load\textures\0004000000033600"
-    } else {
-        "/home/Player Name With A Long Name/.local/share/azahar/load/textures/0004000000033600"
-    });
+    let pack = PathBuf::from(if cfg!(windows) { PROBE_PACK_WINDOWS } else { PROBE_PACK_UNIX });
     let mut entries = vec![
         entry(C::Saves, "save_data", data.join("savedata"), Directory, Origin::Default, Include, 1_200_000),
         entry(
@@ -971,6 +975,15 @@ mod tests {
         // The language's unit and decimal separator.
         assert_eq!(size_text(&Texts::new("fr"), 3_400_000_000), "3,4 Go");
         assert_eq!(size_text(&Texts::new("it"), 1_200), "1,2 KB");
+    }
+
+    #[test]
+    fn the_probe_pack_path_is_no_build_machine_path() {
+        // release_policy.json marker "[A-Za-z]:[\\\\/]Users[\\\\/]" (TriAevumForge.exe is audited).
+        let lower = PROBE_PACK_WINDOWS.to_ascii_lowercase().replace('/', "\\");
+        assert!(!lower.contains(":\\users\\"), "{PROBE_PACK_WINDOWS}");
+        // A space ends the "/home/<user>/" marker's name.
+        assert!(PROBE_PACK_UNIX.starts_with("/home/Player "));
     }
 
     #[test]
