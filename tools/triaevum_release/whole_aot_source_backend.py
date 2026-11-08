@@ -61,6 +61,9 @@ class WholeAotFrontend:
     add_local_entry_intervals: Callable[[Path, Path, Path, int], Path]
     extract_program: Callable[[Sequence[str] | None], int]
     audit_product: Callable[..., Any]
+    # Optional title extraction facts (MM3D: inline-argument calls and Thumb
+    # ranges); empty for OoT3D, whose extraction command is unchanged.
+    extraction_inputs: tuple[tuple[str, Path], ...] = ()
 
 
 def _translator_identity_files() -> tuple[tuple[str, Path], ...]:
@@ -103,6 +106,11 @@ _TITLE_FRONTEND_ROLES = (
     "product_manifest",
     "selection",
 )
+# Optional per-title extractor inputs: descriptor role -> extractor flag.
+_TITLE_FRONTEND_OPTIONAL_ROLES = {
+    "inline_argument_calls": "--inline-argument-calls",
+    "thumb_ranges": "--thumb-ranges",
+}
 
 
 def _shared_frontend_callables() -> tuple[Any, ...]:
@@ -148,8 +156,10 @@ def title_frontend_paths(
         )
     title_root = (REPO_ROOT / "titles" / title).resolve()
     paths: dict[str, Path] = {}
-    for role in _TITLE_FRONTEND_ROLES:
+    for role in (*_TITLE_FRONTEND_ROLES, *_TITLE_FRONTEND_OPTIONAL_ROLES):
         relative = facts.get(role)
+        if role in _TITLE_FRONTEND_OPTIONAL_ROLES and relative is None:
+            continue
         if not isinstance(relative, str) or not relative:
             raise WholeAotSourceError(f"{descriptor}: role {role} is not named")
         path = (REPO_ROOT / relative).resolve()
@@ -206,6 +216,11 @@ def load_title_frontend(
         add_local_entry_intervals=add_local_entry_intervals,
         extract_program=extract_program,
         audit_product=audit_product,
+        extraction_inputs=tuple(
+            (flag, paths[role])
+            for role, flag in _TITLE_FRONTEND_OPTIONAL_ROLES.items()
+            if role in paths
+        ),
     )
 
 
@@ -477,6 +492,11 @@ def prepare_whole_aot_ir(
                         hex(frontend.default_base),
                         "--executable-size",
                         hex(executable_size),
+                        *(
+                            item
+                            for flag, path in frontend.extraction_inputs
+                            for item in (flag, str(path))
+                        ),
                         "--output",
                         str(program),
                         "--force",

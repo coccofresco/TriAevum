@@ -92,18 +92,54 @@ class TitleFrontendTests(unittest.TestCase):
         for role in ("inventory", "supplemental_entries", "boundary_audit"):
             self.assertTrue(paths[role].is_file(), role)
 
-    def test_mm3d_frontend_loads_or_names_missing_contract(self) -> None:
-        _, paths, _ = title_frontend_paths("mm3d")
-        contract = ("product_manifest", "selection")
-        if all(paths[role].is_file() for role in contract):
-            frontend = load_default_frontend("mm3d")
-            self.assertEqual(frontend.product_manifest, paths["product_manifest"])
-            self.assertEqual(frontend.default_base, 0x100000)
-            roles = {role for role, _ in frontend.identity_files}
-            self.assertIn("titles/mm3d/a32/whole_aot_frontend.json", roles)
-        else:
-            with self.assertRaisesRegex(WholeAotSourceError, "product_manifest"):
-                load_default_frontend("mm3d")
+    def test_mm3d_frontend_loads_the_product_contract(self) -> None:
+        # The descriptor's inputs are the CATALOGS product contract (OoT3D's
+        # shape): selection, boundary audit and the Forge-built inventory carry
+        # exactly the SHA-256 values the manifest pins.
+        import hashlib
+
+        frontend = load_default_frontend("mm3d")
+        self.assertEqual(frontend.default_base, 0x100000)
+        manifest = json.loads(frontend.product_manifest.read_text(encoding="utf-8"))
+        sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+        self.assertEqual(
+            (REPO_ROOT / manifest["selection"]["path"]).resolve(), frontend.selection
+        )
+        self.assertEqual(sha(frontend.selection), manifest["selection"]["sha256"])
+        self.assertEqual(
+            sha(frontend.boundary_audit), manifest["frontend"]["boundary_audit_sha256"]
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            built = Path(temporary) / "inventory.csv"
+            frontend.add_local_entry_intervals(
+                frontend.inventory, frontend.supplemental_entries, built, 0x100000
+            )
+            self.assertEqual(sha(built), manifest["frontend"]["inventory_sha256"])
+        self.assertEqual(
+            [flag for flag, _ in frontend.extraction_inputs],
+            ["--inline-argument-calls", "--thumb-ranges"],
+        )
+        for _, path in frontend.extraction_inputs:
+            self.assertIn(MM3D_TITLE, path.parents)
+        self.assertEqual(load_default_frontend("oot3d").extraction_inputs, ())
+        roles = {role for role, _ in frontend.identity_files}
+        self.assertIn("titles/mm3d/a32/whole_aot_frontend.json", roles)
+        self.assertIn("titles/mm3d/a32/thumb_ranges.csv", roles)
+
+    def test_negative_missing_selection_or_empty_optional_role(self) -> None:
+        facts = json.loads(
+            (MM3D_TITLE / "a32/whole_aot_frontend.json").read_text(encoding="utf-8")
+        )
+        with tempfile.TemporaryDirectory(dir=MM3D_TITLE / "a32") as temporary:
+            descriptor = Path(temporary) / "frontend.json"
+            missing = dict(facts, selection="titles/mm3d/a32/absent_functions.json")
+            descriptor.write_text(json.dumps(missing), encoding="utf-8")
+            with self.assertRaisesRegex(WholeAotSourceError, "selection="):
+                load_title_frontend("mm3d", descriptor)
+            empty = dict(facts, thumb_ranges="")
+            descriptor.write_text(json.dumps(empty), encoding="utf-8")
+            with self.assertRaisesRegex(WholeAotSourceError, "thumb_ranges is not named"):
+                title_frontend_paths("mm3d", descriptor)
 
     def test_mm3d_frontend_with_complete_inputs(self) -> None:
         # A descriptor whose contract files exist (stand-ins inside titles/mm3d)

@@ -8,5 +8,7 @@
   "product_manifest": "titles/mm3d/a32/whole_aot_product_manifest.json",
   "selection": "titles/mm3d/a32/whole_aot_functions.json",
   "default_base": "0x100000",
-  "notes": "inventory = the A32 overlay registry inventory (a32_generated_overlay/inventory_with_process_entry.csv); supplemental = guest_patch_entries.py output (715 guest patch boundaries, whole_aot_r5). product_manifest and selection are the MM zero-residual product contract (G2, CATALOGS): until they exist load_title_frontend refuses the MM frontend."
+  "notes": "inventory = W/whole_aot_r5/inventory_pruned.csv (whole_aot_inventory.py over the A32 overlay registry inventory); the Forge adds the 715 guest-patch local entries (supplemental), giving the contract's inventory_with_process_entry d3367268. selection = W/whole_aot_r5/whole_aot_functions.json (d05303e5) copied into the title tree, as OoT3D keeps tools/oot3d/native_a32_runtime/whole_aot_functions.json. inline_argument_calls/thumb_ranges are the MM extraction facts passed to whole_aot_program.py (same command as CATALOGS r9/regen_whole_aot.sh).",
+  "inline_argument_calls": "titles/mm3d/a32/inline_argument_calls.json",
+  "thumb_ranges": "titles/mm3d/a32/thumb_ranges.csv"
 }
