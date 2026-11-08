@@ -19,27 +19,39 @@ struct Options {
 };
 inline std::atomic<bool> enabled{true};
 inline std::atomic<float> stone_spacing{0.f};
+inline std::atomic<float> entrance_ease{2.f};
+inline std::atomic<float> header_x{0},header_y{0},header_scale_x{1},header_scale_y{1};
+inline std::atomic<float> title_x{0},title_y{0},title_scale{1};
 inline std::array<GearMenu::AtomicPose,Count> poses;
 inline void Apply(const Options& o) {
-    enabled=o.enabled;stone_spacing=o.stone_spacing;
+    enabled=o.enabled;stone_spacing=o.stone_spacing;entrance_ease=o.entrance_ease;
+    header_x=o.header.x;header_y=o.header.y;header_scale_x=o.header.scale_x;header_scale_y=o.header.scale_y;
+    title_x=o.title.x;title_y=o.title.y;title_scale=o.title.scale;
     for(unsigned i=0;i<Count;++i){poses[i].x=o.poses[i].x;poses[i].y=o.poses[i].y;poses[i].scale=o.poses[i].scale;}
 }
 struct Hook {
     NativeInventory::Hook helper;
     U32 panel=0,summary=0,popup=0,pass=~0u;
+    unsigned selected_slot=3;
     bool active=false,wide=false;
+    bool header_active=false;
     const char* route_status="not observed";
     const char* last_route_status=nullptr;
     float visibility=1.f,frame_spacing=0;
     float prompt_opacity=1.f;
     std::array<float,3> stone_y{},stone_native_x{};
     bool presentation=false,stone_anchors=false;
+    bool entrance_active=false,entrance_pending=false;
+    U32 entrance_panel=0;
+    float entrance_first_time=0,entrance_last_time=-1;
+    std::array<float,3> stone_slide{};
     float detail_progress=0,files_slide=0,summary_slide=0,actions_slide=0,start_native_x=0;
     std::array<GearMenu::Pose,Count> frame{};
     using Write=NativeInventory::Hook::Write;
     std::vector<std::vector<Write>> frames;
     template<class M> void ReadPresentation(M& m) {
         presentation=false;detail_progress=files_slide=summary_slide=actions_slide=start_native_x=0;
+        entrance_active=entrance_pending=false;stone_slide={};
         auto widgets=m.Read(panel+0x154),count=m.Read(panel+0x158);
         if(!widgets||!count||*count>512||!Pointer(*widgets,*count*4))return;
         bool cards_hidden=false;
@@ -56,7 +68,7 @@ struct Hook {
                 if(!Named(m,*node,names[slot]))continue;
                 if(cards_hidden){stone_native_x[slot]=-320;found|=1u<<slot;continue;}
                 auto wx=m.Read(*node+0xec);if(!wx)return;
-                float x=std::bit_cast<float>(*wx);if(!std::isfinite(x)||x< -306.1f||x>14.1f)return;
+                float x=std::bit_cast<float>(*wx);if(!std::isfinite(x)||x< -306.1f||x>334.1f)return;
                 stone_native_x[slot]=x-14;found|=1u<<slot;
             }
             if(Named(m,*node,"start_g")) {
@@ -70,13 +82,17 @@ struct Hook {
         // Endpoint fallback also handles an inactive/unbound choose-file player.
         detail_progress=std::clamp(-stone_native_x[0]/320.f,0.f,1.f);
         bool entrance=false,selection=false;
+        float entrance_time=0;
         auto players=m.Read(panel+0x14c),n=m.Read(panel+0x150);
         if(players&&n&&*n<=64&&Pointer(*players,*n*4))for(unsigned i=0;i<*n;++i) {
             auto player=m.Read(*players+4*i);if(!player||!Pointer(*player,0x18))continue;
             auto anim=m.Read(*player+0xc),time=m.Read(*player+0x10);
             if(!anim||!time||!Pointer(*anim,0x18))continue;
             auto name=m.Read(*anim+8);if(!name)continue;
-            entrance|=DialogueScale::Name(m,*name,"in_menu_fileselect_ani");
+            if(DialogueScale::Name(m,*name,"in_menu_fileselect_ani")) {
+                const float f=std::bit_cast<float>(*time);
+                if(std::isfinite(f)&&f>=0&&f<=10) {entrance=true;entrance_time=f;}
+            }
             for(unsigned slot=0;slot<3;++slot) {
                 const char* ins[]={"in_f1_to_start","in_f2_to_start","in_f3_to_start"};
                 const char* outs[]={"out_f1_to_start","out_f2_to_start","out_f3_to_start"};
@@ -85,11 +101,31 @@ struct Hook {
                 const float f=std::bit_cast<float>(*time),duration=enter&&slot==0?7.f:6.f;
                 if(!std::isfinite(f)||f<0||f>duration)continue;
                 const float t=std::clamp(f/duration,0.f,1.f),ease=1-(1-t)*(1-t)*(1-t);
+                selected_slot=slot;
                 selection=true;detail_progress=enter?ease:1-ease;
             }
         }
-        // Initial stone arrival is not a file selection. Keep its native motion.
-        if(entrance&&!selection){detail_progress=0;return;}
+        if(entrance&&!selection) {
+            entrance_active=true;detail_progress=0;
+            // The original three tracks run at frames 0..6, 2..8 and 4..10.
+            // Seed the first submitted pose offscreen even when the guest has
+            // already advanced its animation before the first draw.
+            if(entrance_panel!=panel||entrance_last_time<0||entrance_time<entrance_last_time)
+                entrance_first_time=std::min(entrance_time,5.f);
+            entrance_panel=panel;entrance_last_time=entrance_time;
+            float ease=entrance_ease.load();
+            ease=std::isfinite(ease)?std::clamp(ease,1.f,3.f):2.f;
+            const auto& p=frame[Files];
+            // Includes the widened right edge and margin for the plate rim.
+            // Travel is independent of the user-scaled native 320px movement.
+            const float distance=std::max(0.f,448.f-p.x+32.f*p.scale);
+            for(unsigned i=0;i<3;++i) {
+                const float begin=entrance_first_time+2*i,end=6.f+2*i;
+                const float t=std::clamp((entrance_time-begin)/(end-begin),0.f,1.f);
+                stone_slide[i]=distance*std::pow(1-t,ease);
+            }
+            entrance_pending=entrance_time<10;
+        } else {entrance_panel=0;entrance_last_time=-1;}
         files_slide=-(32+std::max(0.f,frame[Files].x+320*frame[Files].scale))*detail_progress;
         summary_slide=-(32+std::max(0.f,frame[Summary].x+400*frame[Summary].scale))*(1-detail_progress);
         actions_slide=(459-std::min(0.f,frame[Actions].x))*(1-detail_progress);
@@ -132,6 +168,7 @@ struct Hook {
             auto child=m.Read(*list+i*4);if(!child)return false;
             auto pose=Mapping(Files);pose.ty+=i*frame_spacing*pose.yy;
             if(presentation)pose.tx-=pose.xx*stone_native_x[i];
+            if(entrance_active)pose.tx+=stone_slide[i];
             if(!helper.Transform(m,*child,writes,seen,pose))return false;
         }
         return true;
@@ -168,6 +205,11 @@ struct Hook {
             auto child=m.Read(*list+i*4);if(!child)return false;
             int role=-1;for(unsigned j=0;j<4;++j)if(Named(m,*child,names[j]))role=j;
             if(role<0||(found&(1u<<role)))return false;found|=1u<<role;
+            if(role==3&&entrance_pending) {
+                auto flags=m.Read(*child+0xd4);
+                if(!flags||!helper.Stage(m,writes,*child+0xd4,*flags&~1u))return false;
+                continue;
+            }
             auto pose=Mapping(role==3?Files:Actions);
             if(role==3&&frame_spacing>0&&stone_anchors) {
                 auto y=m.Read(*child+0xfc);if(!y)return false;
@@ -277,6 +319,20 @@ struct Hook {
         return found==1023;
     }
     template<class Memory> void Pass(Memory& m,U32 manager,U32 screen) {
+        // The title strip is shared by gameplay menus. Resolve ownership from
+        // this frame's queues on every pass, including the first frame on exit.
+        header_active=false;
+        if(screen<4&&Pointer(manager,0x20)) {
+            auto bottom=m.Read(manager+28);NativeInventory::Hook::Buckets entries;
+            if(bottom&&helper.ReadQueue(m,*bottom,entries)) {
+                bool file=false,options=false;
+                for(const auto& bucket:entries)for(U32 entry:bucket) {
+                    file|=LayoutNamed(m,entry,"FileSelect");
+                    options|=LayoutNamed(m,entry,"MenuOption");
+                }
+                header_active=file&&!options;
+            }
+        }
         pass=screen;if(screen!=5)return;
         route_status="disabled / invalid manager";
         active=false;panel=summary=popup=0;if(!enabled.load()||!Pointer(manager,0x20))return;
@@ -291,7 +347,7 @@ struct Hook {
         route_status="draw queues";
         auto bottom=m.Read(manager+28),top=m.Read(manager+20),detail=m.Read(manager+16);
         NativeInventory::Hook::Buckets from,to,up;
-        if(!bottom||!top||!detail||*bottom==*top||!helper.ReadQueue(m,*bottom,from)||
+        if(!bottom||!top||!detail||*bottom==*top||*detail==*top||*detail==*bottom||!helper.ReadQueue(m,*bottom,from)||
            !helper.ReadQueue(m,*top,to)||!helper.ReadQueue(m,*detail,up))return;
         route_status="file panel missing or duplicate";
         unsigned priority=0;
@@ -299,46 +355,90 @@ struct Hook {
             if(panel)return;panel=entry;priority=i;
         }
         if(!panel)return;
-        route_status="top queue capacity";if(to[priority].size()>=32)return;
         route_status="panel already on top";
         for(const auto& bucket:to)if(std::find(bucket.begin(),bucket.end(),panel)!=bucket.end())return;
         route_status="duplicate summary";
         for(const auto& bucket:up)for(auto entry:bucket)if(LayoutNamed(m,entry,"UpPlateDetail")) {
             if(summary)return;summary=entry;
         }
+        if(summary)for(const auto& bucket:to)
+            if(std::find(bucket.begin(),bucket.end(),summary)!=bucket.end())return;
+        const unsigned added=summary?2:1;
+        route_status="top queue capacity";if(to[priority].size()+added>32)return;
         route_status="duplicate popup";
         for(const auto& bucket:from)for(auto entry:bucket)if(LayoutNamed(m,entry,"PopupWindow")) {
             if(popup)return;popup=entry;
         }
         route_status="popup queue";
         if(popup) {
-            if(to[15].size()+(priority==15?1:0)>=32)return;
+            if(to[15].size()+(priority==15?added:0)>=32)return;
             for(const auto& bucket:to)if(std::find(bucket.begin(),bucket.end(),popup)!=bucket.end())return;
         }
         ReadPresentation(m);
         visibility=NativeStartup::BottomVisibility(m);
         std::vector<Write> preview;
         if(!Prepare(m,panel,3,preview))return;
-        if(summary&&!Prepare(m,summary,2,preview))return;
+        if(summary&&!Prepare(m,summary,3,preview))return;
         if(popup&&!Prepare(m,popup,3,preview))return;
         route_status="queue destination";
-        const U32 popup_at=*top+4+15*0x80+U32(to[15].size()+(priority==15?1:0))*4;
-        if(popup&&!m.Read(popup_at))return;
-        // Keep bottom instances for Back and native input; hide the popup there during drawing.
-        const U32 at=*top+4+priority*0x80+U32(to[priority].size())*4;
-        if(!m.Read(at))return;
-        m.Write(at,panel);m.Write(*top+0x804+priority*4,U32(to[priority].size()+1));
-        auto total=m.Read(*top+0x844);m.Write(*top+0x844,*total+1);
-        if(popup) {
-            m.Write(popup_at,popup);
-            m.Write(*top+0x804+15*4,U32(to[15].size()+(priority==15?1:0)+1));
-            m.Write(*top+0x844,*total+2);
+        // Draw the summary after the stones so it covers them throughout the
+        // selection transition. Keep bottom instances for Back/native input.
+        to[priority].push_back(panel);
+        if(summary) {
+            to[priority].push_back(summary);
+            for(auto& bucket:up)std::erase(bucket,summary);
         }
+        if(popup)to[15].push_back(popup);
+        std::vector<Write> queue_writes;
+        const auto stage_queue=[&](U32 queue,const NativeInventory::Hook::Buckets& buckets) {
+            U32 total=0;
+            for(unsigned p=0;p<16;++p) {
+                const auto& bucket=buckets[p];total+=U32(bucket.size());
+                for(unsigned i=0;i<bucket.size();++i)
+                    if(!helper.Stage(m,queue_writes,queue+4+p*0x80+i*4,bucket[i]))return false;
+                if(!helper.Stage(m,queue_writes,queue+0x804+p*4,U32(bucket.size())))return false;
+            }
+            return helper.Stage(m,queue_writes,queue+0x844,total);
+        };
+        if(!stage_queue(*top,to)||(summary&&!stage_queue(*detail,up)))return;
+        for(const auto& w:queue_writes)m.Write(w.address,w.after);
         active=true;route_status="active";
     }
     template<class Memory> void Begin(Memory& m,U32 layout,bool widescreen=false) {
         wide=widescreen;
         frames.emplace_back();
+        if(header_active&&LayoutNamed(m,layout,"SubMenuTitle")) {
+            const HeaderBackground p{header_x.load(),header_y.load(),header_scale_x.load(),header_scale_y.load()};
+            const HeaderTitle t{title_x.load(),title_y.load(),title_scale.load()};
+            for(float v:{p.x,p.y,p.scale_x,p.scale_y,t.x,t.y,t.scale})if(!std::isfinite(v))return;
+            if(std::abs(p.x)>512||std::abs(p.y)>512||p.scale_x<.01f||p.scale_x>3||p.scale_y<.01f||p.scale_y>3||
+               std::abs(t.x)>512||std::abs(t.y)>512||t.scale<.01f||t.scale>3)return;
+            if(p.x==0&&p.y==0&&p.scale_x==1&&p.scale_y==1&&t.x==0&&t.y==0&&t.scale==1)return;
+            auto list=m.Read(layout+0x154),count=m.Read(layout+0x158);
+            if(!list||!count||*count>256||!Pointer(*list,*count*4))return;
+            std::vector<Write> writes;std::vector<U32> seen;unsigned found=0;
+            for(unsigned i=0;i<*count;++i) {
+                auto node=m.Read(*list+4*i);if(!node)return;
+                const bool plate=Named(m,*node,"menu_title_base"),shadow=Named(m,*node,"ber_shadow");
+                const bool title=Named(m,*node,"title_text")||Named(m,*node,"title_text_shadow")||
+                    Named(m,*node,"title_text_hint_menu");
+                if(!plate&&!shadow&&!title)continue;
+                if(plate) { if(found&1)return; found|=1; }
+                if(shadow) { if(found&2)return; found|=2; }
+                // Scale around the screen's horizontal center and top edge.
+                // The shadow follows the plate; title and prompt are siblings.
+                const bool is_title=Named(m,*node,"title_text")||Named(m,*node,"title_text_shadow")||
+                    Named(m,*node,"title_text_hint_menu");
+                const float sx=is_title?p.scale_x*t.scale:p.scale_x;
+                const float sy=is_title?p.scale_y*t.scale:p.scale_y;
+                const float tx=is_title?200*(1-sx)+p.x+t.x:200*(1-p.scale_x)+p.x;
+                const float ty=is_title?p.y+t.y:p.y;
+                if(!helper.Transform(m,*node,writes,seen,{sx,0,0,sy,tx,ty}))return;
+            }
+            if((found&3)!=3)return;
+            for(const auto& w:writes)m.Write(w.address,w.after);frames.back()=std::move(writes);
+            return;
+        }
         if(!active||!(((layout==panel||(popup&&layout==popup))&&(pass==3||pass==5))||(summary&&layout==summary&&pass<4)))return;
         std::vector<Write> writes;if(!Prepare(m,layout,pass,writes))return;
         for(const auto& w:writes)m.Write(w.address,w.after);frames.back()=std::move(writes);

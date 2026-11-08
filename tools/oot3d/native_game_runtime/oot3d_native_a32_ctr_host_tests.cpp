@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <span>
 #include <sstream>
 #include <string>
@@ -1121,8 +1122,33 @@ void TestSharedPageDateTime() {
             "host clock RTC is not the local wall clock");
 }
 
+void TestSystemTimeMicroseconds() {
+    constexpr uint64_t kTicksPerSecond = 268111856ULL;
+    Require(CtrTicksToMicroseconds(0) == 0 &&
+                CtrTicksToMicroseconds(kTicksPerSecond) == 1000000U &&
+                CtrTicksToMicroseconds(kTicksPerSecond / 2U) == 500000U &&
+                CtrTicksToMicroseconds(kTicksPerSecond - 1U) == 999999U,
+            "ARM11 ticks are not converted to microseconds");
+    // A whole-second split keeps the conversion exact past 2^64 / 10^6 ticks.
+    constexpr uint64_t kLarge = kTicksPerSecond * 100000000ULL + 268111U;
+    Require(CtrTicksToMicroseconds(kLarge) == 100000000ULL * 1000000ULL + 999U,
+            "large tick counts overflow the microsecond conversion");
+    Require(CtrTicksToMicroseconds(std::numeric_limits<uint64_t>::max()) ==
+                (std::numeric_limits<uint64_t>::max() / kTicksPerSecond) * 1000000ULL +
+                    (std::numeric_limits<uint64_t>::max() % kTicksPerSecond) * 1000000ULL /
+                        kTicksPerSecond,
+            "maximum tick count is not converted");
+    // The guest clock follows emulated ticks only: sleeping the guest for a
+    // vblank advances it, presenting host frames does not.
+    NativeA32CtrHostServices host(MakeConfig());
+    Require(host.SystemTimeMicroseconds() == 0, "guest clock does not start at zero");
+    host.AdvanceSystemTicks(kTicksPerSecond * 3U / 2U);
+    Require(host.SystemTimeMicroseconds() == 1500000U, "guest clock does not follow system ticks");
+}
+
 int main() {
     TestSharedPageDateTime();
+    TestSystemTimeMicroseconds();
     TestQueryMemory();
     TestOutputDebugString();
     TestIrstService();

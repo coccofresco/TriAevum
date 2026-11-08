@@ -288,7 +288,7 @@ void UpdateSchema(const fs::path& defaults,const fs::path& scratch) {
     Check(settings.Load(defaults),"updated defaults load");
     const auto shipped=Json::parse(Read(defaults));
     const auto saved=Saved(settings,scratch/"update-defaults.json");
-    Check(shipped.size()==588,"tip has 588 shipped keys");
+    Check(shipped.size()==608,"tip 4f2692ed has 608 shipped keys");
     for(const auto& [key,value]:shipped.items()) {
         Check(saved.contains(key),("shipped key retained: "+key).c_str());
         if(key=="accurate_hle_audio") {
@@ -333,6 +333,95 @@ void UpdateSchema(const fs::path& defaults,const fs::path& scratch) {
     Check(Saved(settings,scratch/"update-migration-again.json")==once,"update migration stable on second load");
     std::cout<<"PASS update defaults coverage, independent poses, audio migration and new bounds\n";
 }
+// S2: tip 4f2692ed HUD layout versions, padding/base scale/magic width/mirror keys, the dungeon
+// prompt fallback and the parser-only roundtrip keys.
+void HudLayoutSchema(const fs::path& defaults,const fs::path& scratch) {
+    const auto shipped=Json::parse(Read(defaults));
+    Check(shipped.size()==608,"tip has 608 shipped keys");
+    for(const char* key:{"dungeon_map_arrows_scale","dungeon_map_arrow_up_x","dungeon_map_arrow_up_y",
+        "dungeon_map_arrow_down_x","dungeon_map_arrow_down_y","dungeon_map_arrow_left_x","dungeon_map_arrow_left_y",
+        "dungeon_map_arrow_right_x","dungeon_map_arrow_right_y","dungeon_map_prompts_x","dungeon_map_prompts_y",
+        "dungeon_map_prompts_scale","dungeon_map_prompts_icon_scale","dungeon_map_prompts_spacing",
+        "player_hud_base_scale","player_hud_layout_version","player_hud_left_padding","player_hud_right_padding",
+        "player_hud_magic_width","player_hud_mirror_item_buttons"})
+        Check(shipped.contains(key),(std::string("tip key shipped: ")+key).c_str());
+    // Fresh install: the shipped file is layout version 2 (FreshDefaults).
+    Settings fresh;
+    Check(fresh.Load(defaults),"fresh defaults load");
+    const auto f=HudAdjustments::FreshDefaults();
+    Check(fresh.player_hud.layout_version==2&&fresh.player_hud.mirror_item_buttons,"fresh: layout 2, mirrored buttons");
+    Check(fresh.player_hud.base_scale==f.base_scale&&fresh.player_hud.heart_spacing==f.heart_spacing&&
+        fresh.player_hud.magic_height_steps==f.magic_height_steps,"fresh: base scale, heart spacing, magic height");
+    for(unsigned i=0;i<HudAdjustments::Count;++i)
+        Check(fresh.player_hud.elements[i]==f.elements[i]&&fresh.player_hud.x[i]==f.x[i]&&fresh.player_hud.y[i]==f.y[i],
+            (std::string("fresh element equals FreshDefaults: ")+HudAdjustments::Keys[i]).c_str());
+    Near(fresh.player_hud.magic_width,f.magic_width);
+    Near(fresh.minimap_opacity,HudAdjustments::DefaultMinimapOpacity(fresh.player_hud));
+    Check(fresh.stick_click_controls,"fresh install ships stick-click controls on");
+    // Parser-only keys: absent from the shipped file, always saved, roundtrip exactly.
+    const auto saved=Saved(fresh,scratch/"hud-fresh.json");
+    for(const char* key:{"dungeon_map_buttons_x","dungeon_map_buttons_y","dungeon_map_buttons_scale",
+        "dungeon_map_buttons_icon_scale","dungeon_map_zoom_prompt_x","dungeon_map_zoom_prompt_y",
+        "dungeon_map_zoom_prompt_scale","dungeon_map_move_prompt_x","dungeon_map_move_prompt_y",
+        "dungeon_map_move_prompt_scale"}) {
+        Check(!shipped.contains(key),(std::string("parser-only key not shipped: ")+key).c_str());
+        Check(saved.contains(key),(std::string("parser-only key saved: ")+key).c_str());
+    }
+    Settings parser;
+    Check(parser.LoadFromString(R"({"version":1,"dungeon_map_buttons_x":12,"dungeon_map_buttons_y":-7,
+        "dungeon_map_buttons_scale":1.5,"dungeon_map_buttons_icon_scale":0.75,"dungeon_map_zoom_prompt_x":3,
+        "dungeon_map_zoom_prompt_y":-30,"dungeon_map_zoom_prompt_scale":0.5,"dungeon_map_move_prompt_x":-4,
+        "dungeon_map_move_prompt_y":-50,"dungeon_map_move_prompt_scale":1.25})"),"parser-only fixture");
+    const auto p=Saved(parser,scratch/"hud-parser.json");
+    Near(p["dungeon_map_buttons_x"].get<float>(),12);Near(p["dungeon_map_buttons_y"].get<float>(),-7);
+    Near(p["dungeon_map_buttons_scale"].get<float>(),1.5f);Near(p["dungeon_map_buttons_icon_scale"].get<float>(),.75f);
+    Near(p["dungeon_map_zoom_prompt_y"].get<float>(),-30);Near(p["dungeon_map_move_prompt_scale"].get<float>(),1.25f);
+    Check(parser.Load(scratch/"hud-parser.json")&&Saved(parser,scratch/"hud-parser-again.json")==p,"parser-only roundtrip");
+    // Legacy (version 0) profile: no layout version key. It keeps its own sizes: no base
+    // scale, no padding, magic width 1, mirror off, its own minimap opacity and controls.
+    Settings legacy;
+    Check(legacy.LoadFromString(R"({"version":1,"player_hud_scale":3,"player_hud_hearts_scale":0,
+        "player_hud_heart_spacing":0,"player_hud_magic_height":0,"minimap_opacity":0.85,"stick_click_controls":false,
+        "notebook_buttons_scale":1.3,"notebook_buttons_icon_scale":0.8,"notebook_prompt_y":10,"notebook_map_prompt_y":-15})"),
+        "legacy profile loads");
+    Check(legacy.player_hud.layout_version==0&&!legacy.player_hud.mirror_item_buttons,"legacy stays layout 0, no mirror");
+    Check(legacy.player_hud.base_scale==0&&legacy.player_hud.left==0&&legacy.player_hud.right==0&&
+        legacy.player_hud.overall==3,"legacy keeps its own scale, no base scale or padding");
+    Near(legacy.player_hud.magic_width,1);Near(legacy.minimap_opacity,.85f);
+    Check(!legacy.stick_click_controls,"legacy keeps its controls");
+    // Missing dungeon prompt keys fall back to the Notebook values the old hints borrowed.
+    Near(legacy.dungeon_map.prompts.scale,1.3f);Near(legacy.dungeon_map.prompts.icon_scale,.8f);
+    Near(legacy.dungeon_map.prompts.spacing,25);Near(legacy.dungeon_map.prompts.x,0);
+    const auto l=Saved(legacy,scratch/"hud-legacy.json");
+    Check(l["player_hud_layout_version"]==0&&l["player_hud_mirror_item_buttons"]==false,"legacy saves layout 0");
+    Settings legacy_again;
+    Check(legacy_again.Load(scratch/"hud-legacy.json")&&Saved(legacy_again,scratch/"hud-legacy-again.json")==l,"legacy roundtrip stable");
+    // Present dungeon prompt keys win over the Notebook fallback.
+    Check(legacy.LoadFromString(R"({"version":1,"notebook_buttons_scale":1.3,"dungeon_map_prompts_scale":0.9,
+        "dungeon_map_prompts_spacing":-5})"),"explicit dungeon prompt keys");
+    Near(legacy.dungeon_map.prompts.scale,.9f);Near(legacy.dungeon_map.prompts.spacing,-5);
+    // Version 1 is kept; out-of-range versions fall back to 0; bounds clamp.
+    Check(legacy.LoadFromString(R"({"version":1,"player_hud_layout_version":1})")&&legacy.player_hud.layout_version==1,"layout 1 kept");
+    for(const char* v:{"3","-1","1.5","true"}) {
+        Check(legacy.LoadFromString(std::string(R"({"version":1,"player_hud_layout_version":)")+v+"}"),"invalid layout loads");
+        Check(legacy.player_hud.layout_version==0,"invalid layout version becomes 0");
+    }
+    Check(legacy.LoadFromString(R"({"version":1,"player_hud_left_padding":500,"player_hud_right_padding":-500,
+        "player_hud_top_padding":-99,"player_hud_bottom_padding":99,"player_hud_magic_width":9,"player_hud_base_scale":-30})"),"bounds fixture");
+    Check(legacy.player_hud.left==100&&legacy.player_hud.right==-100&&legacy.player_hud.top==-40&&
+        legacy.player_hud.bottom==40&&legacy.player_hud.base_scale==-10,"padding and base scale bounds");
+    Near(legacy.player_hud.magic_width,3);
+    // Application: padding moves the left column right and the right column left.
+    ApplySettings(legacy);
+    Check(HudAdjustments::HorizontalPadding(HudAdjustments::Hearts)==100,"left padding moves hearts");
+    Check(HudAdjustments::HorizontalPadding(HudAdjustments::Buttons)==100,"negative right padding mirrors to buttons");
+    Check(HudAdjustments::HorizontalPadding(HudAdjustments::Clock)==0,"centred clock keeps its position");
+    Near(HudAdjustments::magic_width,3);
+    ApplySettings(fresh);
+    Check(HudAdjustments::mirror_item_buttons.load(),"fresh applies mirrored backgrounds");
+    Near(HudAdjustments::OverallScale(),HudAdjustments::Factor(f.base_scale)*HudAdjustments::Factor(fresh.player_hud.overall));
+    std::cout<<"PASS HUD layout versions 0/1/2, padding/base scale/magic width/mirror, dungeon prompt fallback, parser-only keys\n";
+}
 } // namespace
 
 int main(int argc,char** argv) {
@@ -341,7 +430,7 @@ int main(int argc,char** argv) {
         const fs::path scratch=argv[2];
         Check(fs::is_directory(scratch) && fs::is_empty(scratch),"scratch must be an existing empty directory");
         Shipped(argv[1],scratch);DefaultsAndMigration(scratch);DrawRules(scratch);
-        InvalidAndPersistence(scratch);Application();UpdateSchema(argv[1],scratch);
+        InvalidAndPersistence(scratch);Application();UpdateSchema(argv[1],scratch);HudLayoutSchema(argv[1],scratch);
         std::cout << "PASS " << checks << " settings checks\n";
         return 0;
     } catch(const std::exception& error) {

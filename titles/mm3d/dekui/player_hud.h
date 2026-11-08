@@ -8,6 +8,8 @@ using namespace NativeInventory;
 using namespace HudAdjustments;
 // Developer baseline, independent of player-facing HUD preferences.
 inline AtomicButtonPose rupee_keys,carrots;
+inline std::atomic<float> dpad_x{0},dpad_y{0};
+inline void ApplyDpadPosition(float x,float y){dpad_x=x;dpad_y=y;}
 inline std::atomic<float> magic_height{0}; // Zero leaves the installed layout unchanged.
 inline void ApplyMagicHeight(float height){magic_height=height;}
 inline void ApplyCarrots(const ButtonPose& p){carrots.x=p.x;carrots.y=p.y;carrots.scale=p.scale;}
@@ -81,7 +83,8 @@ struct Hook {
         std::vector<Write> writes;std::vector<U32> seen;
         for(unsigned i=0;i<6;++i) {
             if(actions!=(i>=4))continue;
-            const int dx=button_x[i].load(),dy=button_y[i].load();if(!dx&&!dy)continue;
+            const auto slot=i; // StickControls::ItemLayoutIndex(i,2) arrives in S5 (identity while it is off)
+            const int dx=button_x[slot].load(),dy=button_y[slot].load();if(!dx&&!dy)continue;
             for(auto n:nodes)if(Named(m,n,icons[i])||(i<4&&Named(m,n,bases[i])))
                 if(!helper.Transform(m,n,writes,seen,{1,0,0,1,float(dx),float(dy)}))return;
         }
@@ -118,6 +121,16 @@ struct Hook {
                     }
                 }
             }
+            const float width=MagicWidth(magic_width.load());
+            if(width!=1.f&&bar.Valid()) {
+                // Anchor to the visible frame, not the changing green fill.
+                // Transform the entire meter before MagicBorder clones its
+                // frame/shadow so every layer follows the same right edge.
+                std::vector<Write> width_writes;std::vector<U32> seen;
+                if(!helper.Transform(m,meter,width_writes,seen,{width,0,0,1,bar.left*(1-width),0}))return;
+                for(auto w:width_writes)m.Write(w.address,w.after);
+                frames.back().insert(frames.back().end(),width_writes.begin(),width_writes.end());
+            }
         }
         struct Group {std::vector<U32> roots;Part part;Anchor anchor;bool bottom=false;U32 anchor_node=0;};
         std::vector<Group> groups;
@@ -127,8 +140,14 @@ struct Hook {
             add("heart_status",Hearts,Anchor::TopLeft);
             add("magic_gauge_g",Magic,Anchor::TopLeft,false,"gauge_base");
             add("hud_dpad",Dpad,Anchor::TopLeft);
-            add("rupee_g",Rupees,Anchor::BottomLeft,true);
-            add("key_g",Rupees,Anchor::BottomLeft,true);
+            // The native digit columns already align. Scale both rows around
+            // the rupee row's fixed anchor: their differently shaped icons must
+            // not give each row a separate pivot (or counts drift at larger sizes).
+            std::vector<U32> counters;
+            const auto rupees=find("rupee_g");
+            if(rupees)counters.push_back(rupees);
+            if(auto keys=find("key_g"))counters.push_back(keys);
+            if(!counters.empty())groups.push_back({counters,Rupees,Anchor::BottomLeft,true,rupees});
             add("carrot_status",Carrots,Anchor::Center,true);
             std::vector<U32> roots;for(const char* name:{"item_icon_set","icon_item_oca_g"})if(auto n=find(name))roots.push_back(n);
             if(!roots.empty())groups.push_back({roots,Buttons,Anchor::TopRight});
@@ -183,7 +202,7 @@ struct Hook {
         }
         Bounds upper;
         for(const auto& b:upper_bounds)upper.Add(b);
-        const float global=Factor(overall.load());
+        const float global=OverallScale();
         std::vector<Write> writes;
         for(unsigned i=0;i<groups.size();++i){
             const auto& g=groups[i];auto b=measured[i];
@@ -222,8 +241,9 @@ struct Hook {
                 mapping.tx=upper.left*(1-global)+global*b.left*(1-local);
                 mapping.ty=upper.top*(1-global)+global*(b.top*(1-local)+push)+padding;
             }
+            if(g.part==Dpad){mapping.tx+=dpad_x.load();mapping.ty+=dpad_y.load();}
             // User offsets are screen-space pixels, after scale and padding.
-            mapping.tx+=X(g.part);mapping.ty+=Y(g.part);
+            mapping.tx+=HorizontalPadding(g.part)+X(g.part);mapping.ty+=Y(g.part);
             if(mapping.xx==1&&mapping.yy==1&&mapping.tx==0&&mapping.ty==0)continue;
             std::vector<U32> seen;
             for(auto n:g.roots)if(!helper.Transform(m,n,writes,seen,mapping))return;
@@ -232,6 +252,25 @@ struct Hook {
         frames.back().insert(frames.back().end(),writes.begin(),writes.end());
         MoveButtons(m,nodes,hud);
         if(hud2)SpaceHearts(m,nodes);
+        // Multiply the resolved native alpha, retaining cutscene/transition
+        // fades. Restrict this to gameplay groups, not screen covers or menus.
+        const float alpha=Opacity();
+        if(alpha!=1.f) {
+            std::vector<Write> fades;std::vector<U32> faded;
+            for(const auto& group:groups)for(U32 root:group.roots) {
+                std::vector<Write> unused;std::vector<U32> children;
+                if(!helper.Transform(m,root,unused,children,{1,0,0,1,0,0}))return;
+                for(U32 node:children) {
+                    if(std::find(faded.begin(),faded.end(),node)!=faded.end())continue;
+                    faded.push_back(node);
+                    const auto bits=m.Read(node+0x134);if(!bits)return;
+                    const float native=std::bit_cast<float>(*bits);if(!std::isfinite(native))return;
+                    fades.push_back({node+0x134,*bits,std::bit_cast<U32>(native*alpha)});
+                }
+            }
+            for(auto w:fades)m.Write(w.address,w.after);
+            frames.back().insert(frames.back().end(),fades.begin(),fades.end());
+        }
     }
     template<class M> void End(M& m){if(frames.empty())return;
         for(auto i=frames.back().rbegin();i!=frames.back().rend();++i)m.Write(i->address,i->before);

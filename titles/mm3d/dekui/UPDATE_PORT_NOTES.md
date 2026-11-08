@@ -92,7 +92,7 @@ strings are not used.
 - `prompt_text.h` (new): consumers receive `PromptLanguage`; `Language(m) == 2` and
   `Translate(2, ...)` do not compile (negative `try_compile` in `host_services.cmake`, and the
   standalone runner). The German and Italian columns are TriAevum's own, written with the
-  game's own German/Italian terms (Inventar/Strumenti, Karte/Mappa, Zeitplan/programma,
+  game's own German/Italian terms (Inventar, Karte/Mappa, Zeitplan/programma,
   Fall/evento, Wecker/Sveglia, Melodien/Melodie, Zoom +/-, Abbrechen/Annulla). Three labels the
   current consumers draw and upstream later renamed (`Song list`, `Zoom In`, `Zoom Out`) carry
   TriAevum French/Spanish too. Unknown labels and empty cells fall back to English.
@@ -119,6 +119,138 @@ strings are not used.
   notebook pages) that check the drawn glyphs, the English/translated branches and that guest
   memory is restored.
 
+## S2: shared UI at tip 4f2692ed (2026-11-06)
+
+Method: each module is a three-way merge (`git merge-file`) of our port onto the upstream tip,
+with the upstream version our port was made from as the base (beta.1 source or 6e36dfb4) and
+both upstream files normalised the way our port names things (namespace `Mm3dDekui`, local
+includes). Our translated v1.1 PCs and guard words therefore stay in place; every hex literal
+the merge introduced was listed and checked (W/tools/dekui/s2_merge.py, s2_resolve.py).
+
+Shared UI modules now at tip (6e36dfb4 slice 3 plus the tip delta): banners, dialogue_scale,
+hud_buttons, inventory_shadow, item_preview, menu_page_switch, menu_tabs, native_file_select,
+native_inventory, native_item_present, native_notebook, notebook_rows, notebook_scrollbar,
+ocarina_prompt (group transform, button_v, width_label, icon_scale, dungeon_alignment, 32-glyph
+flat rows), schedule_rows (TextNew badge repair), song_list, and the new song_header and
+song_panel. notebook_prompt, file_select_prompt and items_map_prompt were already at tip.
+No new native PC: these modules reuse the existing sites.
+
+Deliberate differences from tip, until their owning slice:
+- native_inventory: the HD Gear photo (PhotoCapture) arrives with MenuBackdrop in S4; a local
+  inert `PhotoCapture` (enabled false, no layout) keeps the Gear photo layout and border off.
+  Its data reads 0x656B0C / 0x63A270 are only reached through that path and are unproved.
+- native_item_present: `ItemSlideInterpolation::Offset` is the renderer's (class b); the same
+  six-frame linear offset is computed inline.
+- hud_buttons / player_hud: `StickControls::ItemLayoutIndex` (S5) is the identity while stick
+  controls are off, so the slot index is used directly.
+- song_list: `OcarinaInput::Observe` (S5 host input filter) is not called yet.
+- ocarina_prompt: English arrow labels keep the native 12-pixel size; only translated labels
+  shrink to the 36-pixel slot (S1 decision, kept over the tip's unconditional fit).
+- Not ported in S2: menu_help (tip conflicts and a new PC 0x5A58F4), world_map_prompt (its tip
+  version needs DungeonMap's tip backgrounds, S3), file_select_input (host input, class c).
+
+Tip HUD (second S2 commit):
+- Settings: 588 -> 608 shipped keys (defaults/README.md) plus 10 parser-only keys
+  (`dungeon_map_buttons_*`, `dungeon_map_{zoom,move}_prompt_*`). A profile without
+  `player_hud_layout_version` stays version 0: no base scale, no padding, magic width 1,
+  mirror off, its own minimap opacity and controls. Missing dungeon prompt keys fall back to
+  the Notebook values. The dungeon-map arrow/prompt fields are parsed and saved in
+  `DungeonMap::Options` now and consumed in S3. `stick_click_controls` keeps a false Load
+  default; device routing belongs to our Input owner (S5).
+- hud_adjustments and player_hud at tip: base scale, left/right padding (+-100) and
+  top/bottom (+-40), magic width before MagicBorder clones the frame, one rupee/key pivot,
+  layout versions 0/1/2 with FreshDefaults / VersionOneDefaults, HUD opacity.
+- hud_item_background.h (new): mirrored X/Y/I/II backgrounds, last Root of the layout-draw
+  Root case and first End of its End case (upstream places it after DoubleTime's ShadeRoot,
+  which this port does not have). It needs no PC; the panes come from the Restoration HUD
+  layout the RomFS layer mounts. Its 0x1200-byte scratch sits under the same layout-draw SP
+  as OcarinaPrompt's 0x2400-byte scratch, which already runs there.
+  Proofs (S2): the layer's `Joker.Main.New.gar` (setup fingerprint e08af793...) holds `Hud2`
+  (`all`/`item_button_g`/`item_icon_set`), `HudItemIconSet` (`all`, the four `icon_item_*_g`
+  groups, each with its `icon_*_base`) and `ItemIconBase` (one pane `bb00_ybtn`); the vanilla
+  RomFS has no such archive (work-tree checker `tools/dekui/prove_hud_item_panes.py`). Stack:
+  the developer probe `TRIAEVUM_MM3D_SP_PROBE=<file>` (adapter `mm3d_layout_stack_probe.h`)
+  logs, at the Root/End PCs 0x1262C8/0x1262D4, SP before/after the Root chain, the mapped stack
+  range and the native draw's depth below the lowered SP (pattern fill, untouched words
+  restored). Cold boot to gameplay: every layout is drawn on the main thread (TLS 0x1FF82000,
+  stack 0x0FFC0000-0x10000000, exheader 0x40000); `Hud2` committed 348/348 times, SP at Root
+  0x0FFFF448, largest chain 0x3600 (MagicBorder 0x2400 + HudItemBackground 0x1200), deepest
+  native draw 0x428 bytes, least headroom left 0x3BA20 bytes. A savestate restores no
+  Restoration session, so `Hud2` (and these buttons) only appear after a cold boot.
+- native_minimap at tip: the pending-quad discard for removed radar objects (stale icons in
+  the next full map draw), the suppress argument (always false until MenuBackdrop, S4), side
+  padding, HUD opacity, and the small-map overview marker rebuild from 6e36dfb4. Vanilla
+  v1.1 proof for the fields, now guard words: 0x5E8C24 `ldr r0,[r5,#0x2c8]` and 0x5E8F84
+  `str r6,[r5,#0x2c8]` in the radar prepare/draw (upstream's "retail 5E8F84"), 0x5F0C48
+  `str r1,[r0,#0x2c4]` / 0x5F0C4C `ldr r6,[r0,#0x2c8]` in the reserve routine.
+- Owner decisions (2026-11-06): no dekui FOV, widescreen or draw-distance control is added;
+  the renderer FOV multiplier, the window host and one renderer draw-distance setting own
+  those, and dekui's values stay internal bases (cutscene FOV 49).
+- Tests: `hud_tests.cpp` (`oot3d_mm3d_dekui_hud_tests`, standalone target `hud`), adapted from
+  tip player_hud_check/native_inventory_check: mirrored halves, all-or-nothing commit,
+  byte-for-byte End, nested and invalid inputs; pending quads under the hide option and the
+  transient suppression, no partial discard; small-map overview and restore. Settings tests
+  add the layout-version matrix, bounds, the dungeon prompt fallback and the parser-only keys.
+
+## S3: dungeon map at tip 4f2692ed (2026-11-06)
+
+Modules at tip: `dungeon_map.h`, `world_map_prompt.h` (deferred from S2: it needs the tip
+DungeonMap backgrounds) and the new `message_layout.h` (the read-only description-plate reader;
+the `Panel` value type is declared there because `message_interpolation.h` is the renderer's).
+`dungeon_map.h` was rebuilt from the normalised tip file with every code address translated
+through `v110_address.h`; `world_map_prompt.h` by three-way merge (`W/tools/dekui/s2_merge.py`).
+
+- Sites (vanilla, no Restoration code): 5 = 0x594644 (ref 0x5944D4, relocated BL SetZoom,
+  EUR word ebf07902: RememberZoom, then SetZoom 0x1B2A54); 6 = 0x597774 (ref 0x597604, MOVEQ
+  r0,#1: EntryZoom, the SVC keeps EQ and the native BLEQ SetZoom follows); 7 = 0x594D98 (ref
+  0x594C28, displaced ADD r0,r5,#0x35C: OverviewCursorNext, OverviewCursorEnd 0x594CD8 only in
+  mode 3 on the dungeon page). The 14 ZoomGuards and 12 OverviewCursorGuards are the original
+  EUR words (relocated BLs re-encoded: 0x597778 0bf06cb5, 0x594CB4 ebf07627, 0x594CDC
+  ebf0761d), including the pools 0x1B2A74 = 0x6890F4 and 0x1B2A78 / 0x1B2570 = 0x7781D8.
+  New boundaries (registry v11): the six site/PC+4 words plus AddTargets SetZoom and
+  OverviewCursorEnd.
+- Data: 0x7781D8 (+0x520 mode word, mode = top byte) and 0x727970 (Radar) are identity
+  addresses proved by literals (0x1B2A78, 0x1B2570, 0x1AEBDC, 0x36E268 for the state; getter
+  literal 0x188348 for Radar). Upstream's 0x36E2A0 literal is 0x36E268 on v1.1; 0x6B36F8+0x2C is
+  0x6B3700+0x2C (message manager, as in file_select_prompt).
+- Behaviour: arrow scale and per-arrow offsets about each arrow's centre; the red arrow branch
+  drawn in the early pass before MessageWindow (layout 2), the rest in the late pass; the border
+  inserted first in layout 2 (queue scan now includes screen 2); side shadows split around the
+  map description plate (DescriptionBounds, remembered from the DialogueScale After site);
+  inner `bb_map_area_g` shadows hidden while zoomed (modes 1/2); A no longer filtered on the
+  dungeon page (still filtered on the world map), with the native touch Zoom buttons hidden and
+  the dungeon zoom prompt plus "Move map" drawn by `world_map_prompt.h`.
+- Marker style (+0x834, byte +0x837): contract guards `MarkerStyleGuards` (getter 0x188338/
+  0x188348, MapTransformUpdate 0x1AEB18..0x1AECB4 with pool 0x1AEBDC, the three `bl 0x1882F8`
+  calls that give each store its r0 (0x1AEBA8, 0x1AEC00, 0x1AECAC) and the other-mode branches
+  0x1AEB40/0x1AEB44, reader 0x59C624, the 0x36E268 literal: 22 words). The write is gated by
+  `MarkerStyleConfirmed`, set after the required T5 confirmation of `+0x837 = (mode == 3) ? 0 :
+  1` (W/tools/dekui/s3_marker_probe.py): mode 1 -> 1 in four Woodfall Temple states (entrance
+  and Map page), mode 3 -> 0 in two (after the A toggle and after re-entry), all decoded offline
+  from states taken with the write disabled; the 23 kept states in W/saves/states agree too
+  (mode 1 -> 1 in 20, mode 3 -> 0 in the three file-select states). Mode 2 was never observed
+  (site 6 turns it into mode 1 on Map entry): its value 1 rests on the guarded static proof
+  (0x1AEC00 bl getter, 0x1AEC04 mov r1,#1, 0x1AEC08 strb). The write keeps upstream's 1..3 bound.
+- Guest clock: `Core::GlobalTimeUs()` (upstream CoreTiming `GetGlobalTimeUs`, emulated time)
+  is the session's `GuestClock`, the CTR system ticks in microseconds
+  (`NativeA32CtrHostServices::SystemTimeMicroseconds`). It advances with guest time only; the
+  earlier presentation clock (presentation frames x 1/60 s) is gone. Consumers: the dungeon
+  "Move map" ZoomFade (150 ms ramp, 500 ms reset), the ItemsMapPrompt bob and fades.
+- The donor's `LogInput` diagnostic (upstream: fopen("/tmp/mm3d-map-input.txt") written and
+  flushed on every Map-page input frame) goes to `HostLog`: no file, no static FILE.
+- Not ported (class b): `InterpolationIdentity` / `dungeon_map_interpolation.h` (map pan
+  identity for 60 Hz interpolation), the `EffectCapture::MapShadow` diagnostic.
+- Tests: `dungeon_map_tests.cpp` (`oot3d_mm3d_dekui_dungeon_map_tests [code.bin]`, standalone
+  target `dungeon`): v110 translation of every address, branch targets, guard mutation against
+  the original image, the marker contract, sites 5/6/7 through `Core::CallSvc` (register
+  preservation, same game+scene recall vs a new scene or game, mode 2 never remembered, overview
+  skip only for mode 3 on the dungeon page, A filter), and the tip dungeon_side_panels_check
+  scenarios (side panels, screen-2 routing, early arrows, hidden zoom buttons and inner shadows,
+  marker restore on early exits, description exclusion, arrows), plus the `world_map_prompt`
+  dungeon branch (label from the mode byte behind the 0x1B2570 literal, Move map chained under
+  the zoom prompt's scratch, its guest-time fade, End order, declined frames). core_tests'
+  code.bin manifest has 153 sites. The ctr host tests cover the tick-to-microsecond clock.
+
 ## Renderer and frontend handoff
 
 Class (b) implementations remain with the title renderer: 60 Hz interpolation
@@ -139,7 +271,7 @@ per-file class (b)/(c) ledger is in `W/analysis/dekui/UPDATE_6e36dfb4.md`.
 
 ## Standalone validation
 
-`I:/Python/python.exe -B W/analysis/dekui/test_update_port.py settings|core|update|language`
+`I:/Python/python.exe -B W/analysis/dekui/test_update_port.py settings|core|update|language|hud|dungeon`
 runs one component; append `--clang-cl` for the application's clang-cl 22.1.6.
 Each invocation acquires the shared exclusive mkdir build lock and releases
 only its own lock. Outputs stay in `W/analysis/dekui/settings_build_update`;

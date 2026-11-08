@@ -3,7 +3,10 @@
 #include "mm3d_restoration.h"
 #include "mm3d_single_screen.h"
 #include "../dekui/button_glyph_emission.h"
+#include "mm3d_layout_stack_probe.h"
 
+#include <cstdio>
+#include <string>
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -208,6 +211,51 @@ void TestInlineGlyphAbi() {
     memory.Words[record]=pixels+8;a32::ExecutionResult result;
     Require(!Mm3dGuestPatches::Execute(G::Pc,prose,memory,&result,&patches),"ordinary font invokes original renderer");
 }
+
+// The developer stack probe measures the draw's depth below the lowered SP
+// and leaves every word the draw did not write as it was.
+void TestStackProbe() {
+    std::FILE* out = std::tmpfile();
+    Require(out != nullptr, "tmpfile");
+    Mm3dLayoutStackProbe probe(out);
+    WordMemory memory;
+    constexpr std::uint32_t kLow = 0x0FFC0000U, kHigh = 0x10000000U;
+    for (std::uint32_t at = kLow; at < kHigh; at += 4U) {
+        memory.Words[at] = at ^ 0x1234U;
+    }
+    const auto before = memory.Words;
+    a32::GuestState state;
+    state.r[13] = 0x0FFFE000U;
+    state.r[4] = 0;
+    probe.BeforeRoot(state, memory);
+    state.r[13] = 0x0FFFE000U - 0x1200U; // a committed 0x1200 scratch
+    probe.AfterRoot(state, memory, 0x0FFFE000U);
+    const std::uint32_t lowered = state.r[13];
+    Require(memory.Words[lowered - 4U] == Mm3dLayoutStackProbe::Pattern(lowered - 4U),
+            "the probe did not fill below the lowered SP");
+    Require(memory.Words[lowered] == before.at(lowered), "the probe touched the scratch");
+    // The draw writes two words, the deeper 0x300 bytes under the lowered SP.
+    memory.Words[lowered - 0x300U] = 7U;
+    memory.Words[lowered - 0x10U] = 9U;
+    probe.BeforeEnd(state, memory);
+    for (const auto& [at, value] : before) {
+        const std::uint32_t expected =
+            at == lowered - 0x300U ? 7U : at == lowered - 0x10U ? 9U : value;
+        Require(memory.Words.at(at) == expected, "the probe changed a word the draw did not write");
+    }
+    std::rewind(out);
+    char line[512]{};
+    std::string text;
+    while (std::fgets(line, sizeof(line), out) != nullptr) {
+        text += line;
+    }
+    Require(text.find("hib=1") != std::string::npos, "the probe did not record the commit");
+    Require(text.find("stack_low=0FFC0000 stack_high=10000000") != std::string::npos,
+            "the probe did not find the mapped stack range");
+    Require(text.find("draw_bytes=300 ") != std::string::npos, "the probe missed the draw depth");
+    Require(text.find("headroom=3CE00 ") != std::string::npos, "the probe headroom is wrong");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -242,6 +290,7 @@ int main(int argc, char** argv) {
     TestStateSettings();
     TestRestoreReset();
     TestInlineGlyphAbi();
+    TestStackProbe();
     std::cout << "mm3d_single_screen_tests: ok\n";
     return 0;
 }

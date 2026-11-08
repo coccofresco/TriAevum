@@ -305,6 +305,24 @@ if(TRIAEVUM_TITLE_MM3D)
         oot3d_mm3d_single_screen)
     oot3d_target_defaults(oot3d_mm3d_dekui_update_tests FOLDER Tests)
 
+    # Tip 4f2692ed HUD fixtures (dekui S2): mirrored item-button backgrounds and the
+    # minimap's pending-quad discard. Header-only modules, no arguments.
+    add_executable(oot3d_mm3d_dekui_hud_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/hud_tests.cpp
+    )
+    target_include_directories(oot3d_mm3d_dekui_hud_tests PRIVATE titles/mm3d/dekui)
+    oot3d_target_defaults(oot3d_mm3d_dekui_hud_tests FOLDER Tests)
+
+    # Tip 4f2692ed dungeon map (dekui S3): sites 5/6/7, routing, arrows, marker style.
+    # Optional argument: the user's code.bin, to compare the guard words with original EUR v1.1.
+    add_executable(oot3d_mm3d_dekui_dungeon_map_tests EXCLUDE_FROM_ALL
+        titles/mm3d/dekui/dungeon_map_tests.cpp
+    )
+    target_link_libraries(oot3d_mm3d_dekui_dungeon_map_tests PRIVATE
+        oot3d_mm3d_single_screen)
+    target_include_directories(oot3d_mm3d_dekui_dungeon_map_tests PRIVATE titles/mm3d/dekui)
+    oot3d_target_defaults(oot3d_mm3d_dekui_dungeon_map_tests FOLDER Tests)
+
     # Message-archive language contract and prompt consumers (dekui S1). Optional argument:
     # the user's code.bin, to compare the guard words with original EUR v1.1.
     add_executable(oot3d_mm3d_dekui_language_tests EXCLUDE_FROM_ALL

@@ -62,8 +62,9 @@ struct TitleSessionHookSetup {
   uint32_t &PerspectiveFrustumEntry;
   bool &FrustumIsSceneView;
   NativeA32SceneViewProbe &SceneView;
-  // The deterministic presentation clock (microseconds).
-  std::function<int64_t()> PresentationClock;
+  // The emulated guest clock (microseconds of CTR system ticks): advances
+  // with guest time, never with host presentation frames.
+  std::function<int64_t()> GuestClock;
   // Developer builds: the title's guest ABI for the shared developer tools,
   // and the free camera its hooks drive.
   std::shared_ptr<DevWarpTitleAbi> *DevToolsTitle = nullptr;

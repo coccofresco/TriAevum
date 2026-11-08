@@ -482,15 +482,18 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                  if(root!=regs[4]+8)regs[2]=root;}
                 {const auto root=dungeon_map_hook.PromptRoot(guest,regs[4],regs[13],WidescreenActive());
                  if(root!=regs[4]+8)regs[2]=root;}
-                {const auto root=dungeon_map_hook.PanelRoot(guest,regs[4],regs[13]);
-                 if(root!=regs[4]+8)regs[2]=root;}
-                {const auto root=dungeon_map_hook.ShadowRoot(guest,regs[4],regs[13]);
-                 if(root!=regs[4]+8)regs[2]=root;}
+                {const auto content=regs[2];
+                 regs[2]=dungeon_map_hook.PanelRoot(guest,regs[4],
+                     content!=regs[4]+8?content:regs[13],content);}
+                {const auto content=regs[2];
+                 regs[2]=dungeon_map_hook.ShadowRoot(guest,regs[4],
+                     content!=regs[4]+8?content:regs[13],content);}
                 regs[2]=map_items_prompt_hook.MapRoot(guest,dungeon_map_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive(),
                     GlobalTimeUs());
                 regs[2]=world_map_prompt_hook.Root(guest,dungeon_map_hook,regs[4],
-                    regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive());
+                    regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive(),
+                    GlobalTimeUs());
                 regs[2]=menu_tabs_hook.Root(guest,inventory_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2]);
                 menu_help_hook.source.ResolveDescription(guest,item_preview_hook.owner,inventory_hook.panel);
@@ -501,12 +504,19 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],&item_present_hook);
                 regs[2]=file_select_prompt_hook.Root(guest,file_select_hook,options_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive());
+                // Tip 4f2692ed: mirrored X/Y/I/II item-button backgrounds, the last Root
+                // (upstream: after DoubleTime's ShadeRoot, which our port does not have yet).
+                regs[2]=hud_item_background_hook.Root(guest,regs[4],regs[2],
+                    regs[2]!=regs[4]+8?regs[2]:regs[13]);
+                // TriAevum: the composition's button-emission pass (per open layout).
                 if(overlay_layouts.size()==64)overlay_layouts.clear();
                 overlay_layouts.emplace_back(regs[4],inventory_hook.pass);
                 if(regs[2]!=regs[4]+8)regs[13]=regs[2];
                 break;
             case 3:
                 if(!overlay_layouts.empty())overlay_layouts.pop_back();
+                // Innermost scratch first: the last Root's frame is restored first.
+                if(const auto sp=hud_item_background_hook.scratch.End(guest))regs[13]=sp;
                 if(const auto sp=file_select_prompt_hook.End(guest))regs[13]=sp;
                 if(const auto sp=select_help_hook.scratch.End(guest))regs[13]=sp;
                 if(const auto sp=menu_help_hook.scratch.End(guest))regs[13]=sp;
@@ -549,6 +559,7 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                     options_description?&options_hook.frame.description:reset_description?&reset_pose:map_description?&map_pose:present_description?&description_pose:nullptr);
                 cpu.Regs()[0]=layout+8; // displaced ADD r0,r4,#8
             } else {
+                dungeon_map_hook.RememberDescription(pose,layout);
                 dialogue_hook.End(pose,layout);
                 cpu.Regs()[13]+=8; // displaced ADD sp,sp,#8
             }
@@ -572,6 +583,17 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                 regs[0]=memory.Read32(regs[4]+0x1c);
                 if(dungeon_map_hook.SkipWorld(guest,regs[4]))regs[15]=Mm3dDekui::DungeonMap::WorldEnd;
                 break;
+            case 5: // relocated BL SetZoom: the accepted native A toggle (r0 = new mode, r9 = game)
+                dungeon_map_hook.RememberZoom(guest,regs[4],regs[9],regs[0]);
+                regs[14]=Mm3dDekui::DungeonMap::PCs[5]+4;regs[15]=Mm3dDekui::DungeonMap::SetZoom;
+                break;
+            case 6: // MOVEQ r0,#1 (the SVC keeps its EQ condition); the native BLEQ follows
+                regs[0]=dungeon_map_hook.EntryZoom(guest,regs[5]);
+                break;
+            case 7:
+                regs[0]=regs[5]+0x35c; // displaced ADD r0,r5,#860
+                regs[15]=Mm3dDekui::DungeonMap::OverviewCursorNext(guest,regs[4]);
+                break;
             }
             return;
         }
@@ -586,7 +608,10 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
             auto& map_memory=memory;
             const auto screen=cpu.Regs()[4];
             if (swi==Mm3dDekui::NativeMinimap::BeforeSVC) {
-                minimap_hook.Begin(map_memory,screen,Mm3dDekui::Minimap::enabled.load());
+                // r0 = the game (PlayState) at the Before site, as upstream 6e36dfb4 passes it:
+                // the small gameplay map rebuilds the player marker from it and stays native
+                // (zoomed) without it. The suppress argument waits for MenuBackdrop (S4).
+                minimap_hook.Begin(map_memory,screen,Mm3dDekui::Minimap::enabled.load(),cpu.Regs()[0]);
             } else {
                 minimap_hook.End(map_memory,screen,Mm3dDekui::Minimap::enabled.load(),
                     Mm3dDekui::Minimap::scale.load(),Mm3dDekui::Minimap::opacity.load(),
@@ -887,11 +912,14 @@ std::vector<U32> Core::CandidatePcs() {
         0x0056dea0U, // update 6e36dfb4
         0x0056e290U, // update 6e36dfb4
         0x005945f0U, // ref 0x00594480; dungeon_map
+        0x00594644U, // ref 0x005944d4; dungeon_map (tip 4f2692ed)
+        0x00594d98U, // ref 0x00594c28; dungeon_map (tip 4f2692ed)
         0x00596d94U, // ref 0x00596c24; dungeon_map
         0x00596e28U, // ref 0x00596cb8; dungeon_map
         0x00596e2cU, // ref 0x00596cbc; dungeon_map
         0x00596e5cU, // ref 0x00596cec; dungeon_map
         0x0059747cU, // ref 0x0059730c; menu_page_switch
+        0x00597774U, // ref 0x00597604; dungeon_map (tip 4f2692ed)
         0x00599a00U, // ref 0x00599890; menu_close
         0x0059b4b4U, // ref 0x0059b344; native_minimap
         0x0059b4bcU, // ref 0x0059b34c; native_minimap

@@ -10,8 +10,10 @@
 // - french, spanish: upstream 4f2692ed's strings for its 21 entries. Labels upstream does not
 //   have (marked "TriAevum") carry our own French and Spanish.
 // - german, italian: written for TriAevum (not taken from dekui-pal), using the terms of the
-//   game's own German and Italian text (Inventar/Strumenti, Karte/Mappa, Zeitplan/programma,
+//   game's own German and Italian text (Inventar, Karte/Mappa, Zeitplan/programma,
 //   Fall/evento, Wecker/Sveglia, Melodie, Zoom +/-, Abbrechen/Annulla).
+//   Italian "Items" is "Oggetti" (owner decision 2026-11-06): the game's "Strumenti" was visibly
+//   compressed in the 36-pixel arrow slot. The numeral "I" keeps the native font glyph.
 // An empty cell falls back to English. Length budgets (glyphs) of the consumers that draw them:
 // notebook A label <= 16, notebook map/alarm <= 9, notebook schedule/events <= 18,
 // notebook back <= 8, menu help label <= 16, ocarina/pair prompt label <= 16.
@@ -31,7 +33,7 @@ inline constexpr std::array Entries{
     Entry{"Return", "Retour", "Volver", "Zurück", "Indietro"},
     Entry{"Equip to I", "Assigner I", "Asignar a I", "Auf I legen", "Assegna a I"},
     Entry{"Equip to II", "Assigner II", "Asignar a II", "Auf II legen", "Assegna a II"},
-    Entry{"Items", "Inventaire", "Inventario", "Inventar", "Strumenti"},
+    Entry{"Items", "Inventaire", "Inventario", "Inventar", "Oggetti"},
     Entry{"Map", "Carte", "Mapa", "Karte", "Mappa"},
     Entry{"Zoom in", "Zoom +", "Acercar", "Zoom +", "Zoom +"},
     Entry{"Zoom out", "Zoom -", "Alejar", "Zoom -", "Zoom -"},

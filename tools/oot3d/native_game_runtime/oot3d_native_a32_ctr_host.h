@@ -265,6 +265,10 @@ struct NativeA32CtrHostConfig {
     std::optional<uint64_t> FixedDateTimeMilliseconds;
 };
 
+// ARM11 system ticks (268111856 per second) to microseconds, without
+// overflowing for any 64-bit tick count.
+uint64_t CtrTicksToMicroseconds(uint64_t ticks);
+
 class NativeA32CtrHostServices final : public NativeA32HostServices {
   public:
     static constexpr uint64_t DspAudioFrameTicks = 160ULL * 4096ULL * 2ULL;
@@ -315,6 +319,9 @@ class NativeA32CtrHostServices final : public NativeA32HostServices {
     bool IrstServiceEnabled() const noexcept { return mConfig.IrstService; }
     bool WriteIrstSample(NativeA32Memory& memory, int16_t x, int16_t y, uint32_t buttons);
     uint64_t SystemTicks() const;
+    // The emulated guest clock: SystemTicks() in microseconds, the value
+    // Azahar's CoreTiming GetGlobalTimeUs reports at the same tick.
+    uint64_t SystemTimeMicroseconds() const;
     // The CTR RTC (ms since 1900-01-01, local) at the current system tick.
     uint64_t CtrDateTimeMilliseconds() const;
     // Publishes the RTC into the shared page like the kernel/PTM: writes the

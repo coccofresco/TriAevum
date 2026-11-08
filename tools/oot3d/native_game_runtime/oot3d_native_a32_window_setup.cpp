@@ -660,8 +660,10 @@ void NativeA32WindowSession::Setup() {
         .PerspectiveFrustumEntry = widescreenProjection.Projection.PerspectiveFrustumEntry,
         .FrustumIsSceneView = widescreenProjection.Projection.FrustumIsSceneView,
         .SceneView = sceneViewProbe,
-        .PresentationClock = [this] {
-          return static_cast<std::int64_t>(presentationFrameCount) * 1000000 / 60;
+        .GuestClock = [this] {
+          return hostServicesStorage
+                     ? static_cast<std::int64_t>(hostServicesStorage->SystemTimeMicroseconds())
+                     : std::int64_t{0};
         },
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
         .DevToolsTitle = &devToolsTitle,

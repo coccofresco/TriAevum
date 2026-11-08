@@ -97,6 +97,16 @@ uint64_t HostLocalDateTimeMilliseconds() {
 
 } // namespace
 
+uint64_t CtrTicksToMicroseconds(uint64_t ticks) {
+    return (ticks / kCtrArm11TicksPerSecond) * 1000000ULL +
+           (ticks % kCtrArm11TicksPerSecond) * 1000000ULL /
+               kCtrArm11TicksPerSecond;
+}
+
+uint64_t NativeA32CtrHostServices::SystemTimeMicroseconds() const {
+    return CtrTicksToMicroseconds(mSystemTicks);
+}
+
 uint64_t NativeA32CtrHostServices::CtrDateTimeMilliseconds() const {
     if (mConfig.FixedDateTimeMilliseconds.has_value()) {
         return *mConfig.FixedDateTimeMilliseconds +

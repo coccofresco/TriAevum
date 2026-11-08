@@ -176,9 +176,9 @@ public:
         // Development: dekui's damage multiplier until the F1 owns it.
         Mm3dSingleScreen::SetDamageMultiplier(std::atoi(multiplier));
       }
-      // dekui animates with the emulated clock: here the deterministic
-      // presentation clock (a 60 Hz frame each).
-      mSingleScreen.emplace(setup.PresentationClock);
+      // dekui animates with the emulated clock (upstream CoreTiming
+      // GetGlobalTimeUs): the guest's CTR system ticks.
+      mSingleScreen.emplace(setup.GuestClock);
       mSingleScreen->SetQuadQueueObserver([this](auto moves, auto& memory) {
         mComposition.CommitQuadQueueMoves(moves, memory);
       });

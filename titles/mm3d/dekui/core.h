@@ -38,6 +38,7 @@
 #include "double_time.h"
 #include "song_reset.h"
 #include "hud_buttons.h"
+#include "hud_item_background.h"
 #include "banners.h"
 #include "song_effect.h"
 #include "native_item_present.h"
@@ -69,6 +70,12 @@ public:
     static std::vector<U32> CandidatePcs();
     void ResetButtonEmission() { overlay_layouts.clear(); }
     U32 ButtonEmissionPass() const { return overlay_layouts.empty()?~0u:overlay_layouts.back().second; }
+    // Diagnostics: the SP HudItemBackground's innermost open Root committed
+    // its scratch under, 0 when that Root did not commit (read-only).
+    U32 HudItemBackgroundScratchSp() const {
+        const auto& frames=hud_item_background_hook.scratch.frames;
+        return frames.empty()?0:frames.back().sp;
+    }
     HostFacts host;
 private:
     std::int64_t GlobalTimeUs() const { return host.global_time_us ? host.global_time_us() : 0; }
@@ -113,6 +120,7 @@ private:
     Mm3dDekui::DoubleTime::Hook double_time_hook;
     Mm3dDekui::SongReset::Hook song_reset_hook;
     Mm3dDekui::HudButtons::Hook hud_buttons_hook;
+    Mm3dDekui::HudItemBackground::Hook hud_item_background_hook;
     Mm3dDekui::Banners::Hook banner_hook;
     Mm3dDekui::NativeItemPresent::Hook item_present_hook;
     Mm3dDekui::NativeStartup::Hook startup_hook;

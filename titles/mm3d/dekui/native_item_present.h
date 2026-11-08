@@ -11,10 +11,23 @@ inline AtomicButtonPose help_pose{280,180,.8f};
 inline std::atomic<float> help_spacing{6};
 inline std::atomic<bool> enabled{true},horizontal{false};
 inline std::array<GearMenu::AtomicPose,Count> poses;
+inline AtomicButtonPose mask_help_pose{280,180,.8f};
+inline std::atomic<float> mask_help_spacing{6};
+inline std::atomic<bool> mask_enabled{true};
+inline std::array<GearMenu::AtomicPose,Count> mask_poses;
+template<class M> bool PresentLayout(M& m,U32 layout) {
+    return LayoutNamed(m,layout,"MenuItemPresen")||LayoutNamed(m,layout,"MenuMaskPresen");
+}
 inline void Apply(const Options& o) {
     help_pose.x=o.help_pose.x;help_pose.y=o.help_pose.y;help_pose.scale=o.help_pose.scale;help_spacing=o.help_spacing;
     enabled=o.enabled;horizontal=o.horizontal;
     for(unsigned i=0;i<Count;++i){poses[i].x=o.poses[i].x;poses[i].y=o.poses[i].y;poses[i].scale=o.poses[i].scale;}
+}
+inline void ApplyMask(const Options& o) {
+    mask_enabled=o.enabled;
+    mask_help_pose.x=o.help_pose.x;mask_help_pose.y=o.help_pose.y;mask_help_pose.scale=o.help_pose.scale;
+    mask_help_spacing=o.help_spacing;
+    for(unsigned i=0;i<Count;++i){mask_poses[i].x=o.poses[i].x;mask_poses[i].y=o.poses[i].y;mask_poses[i].scale=o.poses[i].scale;}
 }
 // Exact Restoration v110 Give Item instruction-dismissal call, not global dialogue input.
 constexpr U32 IntroPC=0x005bc900,IntroWord=0xebefc422,IntroSVC=0xffffb7; // ref 0x5bc790, 0xebefc4fe
@@ -39,34 +52,99 @@ struct Hook {
     U32 panel=0,owner=0,background=0,cursor=0,touch=0,pass=~0u;
     unsigned background_draw=0;
     bool transitioning=false;
-    float transition_x=0;
+    float transition_x=0,transition_time=0,transition_travel=0;
+    bool transition_opening=false;
     bool upper_background=false;
-    std::array<U32,20> icons{};
+    bool mask_menu=false;
+    bool Enabled() const {return mask_menu?mask_enabled.load():enabled.load();}
+    unsigned icon_count=0;
+    std::array<U32,24> icons{};
     unsigned cursor_part=Panel,cursor_slot=0;
     bool frame_horizontal=false;
     std::array<GearMenu::Pose,Count> frame{};
     std::vector<U32> routed;
     std::vector<std::vector<Write>> frames;
+    std::vector<std::vector<Write>> prompt_pose_frames;
+    template<class M> bool ShowMaskTitle(M& m,U32 prompt,std::vector<Write>& writes) {
+        const auto children=m.Read(prompt+0x14),n=m.Read(prompt+0x18);
+        if(!children||n!=std::optional<U32>(2)||!Pointer(*children,8))return false;
+        bool found=false;
+        for(unsigned i=0;i<2;++i) {
+            const auto child=m.Read(*children+4*i);if(!child)return false;
+            if(!Named(m,*child,"e_mask_presen_g"))continue;
+            if(found)return false;
+            found=true;
+            const auto visible=m.Read(*child+0xd4);if(!visible)return false;
+            writes.push_back({*child+0xd4,*visible,*visible|1u});
+        }
+        return found;
+    }
+    // LayoutBase has evaluated animation tracks, but has not yet calculated
+    // inherited matrices/colors. Hold the Select Item/Mask group at full size
+    // and opacity here so its children (including text shadows) inherit it.
+    template<class M> void BeginPromptPose(M& m,U32 layout) {
+        prompt_pose_frames.emplace_back();
+        if(!PresentLayout(m,layout))return;
+        const bool masks=LayoutNamed(m,layout,"MenuMaskPresen");
+        if(!(masks?mask_enabled.load():enabled.load()))return;
+        auto list=m.Read(layout+8+0x14),count=m.Read(layout+8+0x18);
+        if(!list||count!=std::optional<U32>(1)||!Pointer(*list,4))return;
+        auto all=m.Read(*list);
+        if(!all||!Named(m,*all,"all"))return;
+        list=m.Read(*all+0x14);count=m.Read(*all+0x18);
+        if(!list||count!=std::optional<U32>(4)||!Pointer(*list,16))return;
+        U32 prompt=0;
+        for(unsigned i=0;i<4;++i) {
+            auto child=m.Read(*list+4*i);if(!child)return;
+            if(Named(m,*child,masks?"disp_mask_name":"disp_item_name")) {if(prompt)return;prompt=*child;}
+        }
+        if(!prompt||!Pointer(prompt,0x140))return;
+        std::vector<Write> writes;
+        for(U32 offset:{0x98u,0x9cu,0xd0u}) {
+            auto bits=m.Read(prompt+offset);if(!bits)return;
+            const float value=std::bit_cast<float>(*bits);
+            if(!std::isfinite(value)||value<0||value>1.001f)return;
+            writes.push_back({prompt+offset,*bits,std::bit_cast<U32>(1.f)});
+        }
+        const auto flags=m.Read(prompt+0xd4),defaults=m.Read(prompt+0xd8);
+        if(!flags||!defaults)return;
+        // Scale X/Y and alpha dirty/default bits, as consumed by Widget::calc.
+        constexpr U32 mask=0x04001800;
+        writes.push_back({prompt+0xd4,*flags,*flags|mask});
+        writes.push_back({prompt+0xd8,*defaults,*defaults|mask});
+        // The native mask title waits until frame six. Enable it for both
+        // calculation and drawing so it travels with the shared slide.
+        if(masks&&!ShowMaskTitle(m,prompt,writes))return;
+        for(const auto& w:writes)m.Write(w.address,w.after);
+        prompt_pose_frames.back()=std::move(writes);
+    }
+    template<class M> void EndPromptPose(M& m) {
+        if(prompt_pose_frames.empty())return;
+        for(auto i=prompt_pose_frames.back().rbegin();i!=prompt_pose_frames.back().rend();++i)
+            m.Write(i->address,i->before);
+        prompt_pose_frames.pop_back();
+    }
     template<class M> void ReadTransition(M& m) {
         transitioning=false;transition_x=0;
-        auto player=m.Read(owner+0x34);
+        auto player=m.Read(owner+(mask_menu?0x30:0x34));
         if(!player||!Pointer(*player,0x18))return;
         auto anim=m.Read(*player+0xc),time=m.Read(*player+0x10);
         if(!anim||!time||!Pointer(*anim,0x18))return;
         auto name=m.Read(*anim+8);if(!name)return;
-        const bool opening=DialogueScale::Name(m,*name,"in_item_presen_anim");
-        if(!opening&&!DialogueScale::Name(m,*name,"out_item_presen_anim"))return;
+        const bool opening=DialogueScale::Name(m,*name,mask_menu?"in_mask_presen_anim":"in_item_presen_anim");
+        if(!opening&&!DialogueScale::Name(m,*name,mask_menu?"out_mask_presen_anim":"out_item_presen_anim"))return;
         const float f=std::bit_cast<float>(*time);
         if(!std::isfinite(f)||f<0||f>6)return;
         float right=0;
         for(unsigned i=0;i<Count;++i) {
             if(i==Description)continue;
+            if(mask_menu&&(i==Background||i==Right))continue;
             const auto& p=frame[i];
             // Screen-space rest bounds. Off-screen buttons must not accelerate
             // the visible panel merely because the user parked them far away.
             float x0=0,x1=320,y0=0,y1=240;
             if(i==Background){y0=-240;x1+=16*NativeInventory::shadow_width.load();}
-            else if(i==Panel){x1=256;y1=200;}
+            else if(i==Panel){x1=mask_menu?320:256;y1=200;}
             else if(i==Right){
                 if(frame_horizontal){x1=200;y1=56;}
                 else{x0=262;x1=318;y1=200;}
@@ -77,7 +155,9 @@ struct Hook {
             if(top>=240||bottom<=0||l>=427||r<=0)continue;
             right=std::max(right,r);
         }
-        transition_x=-(32+right)*(opening?1-f/6.f:f/6.f);
+        // Keep the original six-frame linear motion in both directions.
+        transition_time=f;transition_travel=32+right;transition_opening=opening;
+        transition_x=-transition_travel*(opening?1.f-f/6.f:f/6.f); // ItemSlideInterpolation::Offset (class b: renderer note)
         transitioning=true;
     }
     template<class M> bool Move(M& m,U32 node,unsigned part,std::vector<Write>& writes,std::vector<U32>& seen,int slot=-1) {
@@ -112,18 +192,23 @@ struct Hook {
         list=m.Read(*all+0x14);count=m.Read(*all+0x18);
         if(!list||count!=std::optional<U32>(4)||!Pointer(*list,16))return false;
         unsigned found=0;
-        constexpr std::array<const char*,4> names{"presen_item_collect","disp_item_name","btn_return_l","btn_decide_g"};
+        const std::array<const char*,4> names{mask_menu?"presen_mask":"presen_item_collect",mask_menu?"disp_mask_name":"disp_item_name","btn_return_l","btn_decide_g"};
         for(unsigned i=0;i<4;++i) {
             auto child=m.Read(*list+4*i);if(!child)return false;
             int role=-1;for(unsigned j=0;j<4;++j)if(Named(m,*child,names[j]))role=j;
             if(role<0||(found&(1u<<role)))return false;found|=1u<<role;
-            if(role) {if(!Move(m,*child,role==1?Prompt:role==2?Return:Confirm,writes,seen))return false;continue;}
+            if(role) {
+                if(role==1&&mask_menu&&!ShowMaskTitle(m,*child,writes))return false;
+                if(!Move(m,*child,role==1?Prompt:role==2?Return:Confirm,writes,seen))return false;
+                continue;
+            }
             auto sub=m.Read(*child+0x14),n=m.Read(*child+0x18);
-            if(!sub||n!=std::optional<U32>(3)||!Pointer(*sub,12))return false;
+            const unsigned part_count=mask_menu?2:3;
+            if(!sub||n!=std::optional<U32>(part_count)||!Pointer(*sub,4*part_count))return false;
             unsigned parts=0;
-            for(unsigned k=0;k<3;++k) {
+            for(unsigned k=0;k<part_count;++k) {
                 auto node=m.Read(*sub+4*k);if(!node)return false;
-                const int part=Named(m,*node,"item_set_pos_g")?0:Named(m,*node,"item_panel_g")?1:Named(m,*node,"right_base_g")?2:-1;
+                const int part=Named(m,*node,mask_menu?"mask_set_pos_g":"item_set_pos_g")?0:Named(m,*node,mask_menu?"mask_panel_g":"item_panel_g")?1:!mask_menu&&Named(m,*node,"right_base_g")?2:-1;
                 if(part<0||(parts&(1u<<part)))return false;parts|=1u<<part;
                 if(part==2&&frame_horizontal) {
                     auto list=m.Read(*node+0x14),count=m.Read(*node+0x18);
@@ -143,37 +228,41 @@ struct Hook {
     }
     template<class M> void Discover(M& m,U32 manager) {
         panel=owner=background=cursor=touch=0;background_draw=0;transitioning=false;transition_x=0;helper.brown_shadow_steps=0;icons.fill(0);routed.clear();
-        if(!enabled||!Pointer(manager,32))return;
+        mask_menu=false;icon_count=0;
+        if(!Pointer(manager,32))return;
         auto q=m.Read(manager+28);NativeInventory::Hook::Buckets entries;
         if(!q||!helper.ReadQueue(m,*q,entries))return;
-        for(auto& bucket:entries)for(auto entry:bucket)if(LayoutNamed(m,entry,"MenuItemPresen")) {
+        for(auto& bucket:entries)for(auto entry:bucket)if(PresentLayout(m,entry)) {
             if(panel){panel=0;return;}panel=entry;
         }
         if(!panel)return;
+        mask_menu=LayoutNamed(m,panel,"MenuMaskPresen");icon_count=mask_menu?24:20;
+        if(!Enabled()){panel=0;return;}
         for(auto& bucket:entries)for(auto entry:bucket)if(LayoutNamed(m,entry,"ItemIconButton")) {
             auto binding=m.Read(entry+0x184);
             if(binding&&*binding>=0x100024&&m.Read(*binding+4)==std::optional<U32>(panel)){owner=*binding-0x24;break;}
         }
         if(!owner){panel=0;return;}
-        for(unsigned i=0;i<20;++i) {
-            auto icon=m.Read(owner+0x5c+4*i);
+        for(unsigned i=0;i<icon_count;++i) {
+            auto icon=m.Read(owner+(mask_menu?0x50:0x5c)+4*i);
             if(!icon||!LayoutNamed(m,*icon,"ItemIconButton")){panel=0;return;}icons[i]=*icon;
         }
         auto c=m.Read(owner+8);if(c&&LayoutNamed(m,*c,"CursorItemCollect"))cursor=*c;
         auto t=m.Read(owner+0xc);if(t&&LayoutNamed(m,*t,"CursorItemCollect"))touch=*t;
         auto state=m.Read(owner+0x18);if(!state){panel=0;return;}
-        cursor_part=(*state&255)<5?Panel:Right;cursor_slot=(*state>>8)&255;
-        frame_horizontal=horizontal.load();
+        cursor_part=mask_menu||(*state&255)<5?Panel:Right;cursor_slot=(*state>>8)&255;
+        frame_horizontal=!mask_menu&&horizontal.load();
         if(cursor_part==Right&&cursor_slot>=4){panel=0;return;}
         for(unsigned i=0;i<Count;++i) {
-            auto& p=frame[i];p={poses[i].x.load(),poses[i].y.load(),poses[i].scale.load()};
+            const auto& source=(mask_menu?mask_poses:poses)[i];
+            auto& p=frame[i];p={source.x.load(),source.y.load(),source.scale.load()};
             if(i==Background){p.y=background_pose.y.load();p.scale=background_pose.scale.load();}
             if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.scale)||p.scale<.1f||p.scale>2.f){panel=0;return;}
         }
         ReadTransition(m);
         std::vector<Write> preview;
         if(!Prepare(m,panel,preview)){panel=0;return;}
-        for(auto icon:icons){preview.clear();if(!Prepare(m,icon,preview)){panel=0;return;}}
+        for(unsigned i=0;i<icon_count;++i){preview.clear();if(!Prepare(m,icons[i],preview)){panel=0;return;}}
     }
     template<class M> void Pass(M& m,U32 manager,U32 screen) {
         pass=screen;if(screen==4)Discover(m,manager);
@@ -188,6 +277,9 @@ struct Hook {
                 const bool move=screen==4?(m.Read(owner+4)==std::optional<U32>(entry)&&LayoutNamed(m,entry,"CommonBottomBg")):
                     entry==panel||entry==cursor||entry==touch||std::find(icons.begin(),icons.end(),entry)!=icons.end();
                 if(!move){keep.push_back(entry);continue;}
+                // Only the mask panel/title/controls belong on top. Remove its
+                // bottom-screen backdrop from this draw queue without copying it.
+                if(mask_menu&&screen==4)continue;
                 for(auto& bucket:to)if(std::find(bucket.begin(),bucket.end(),entry)!=bucket.end())return;
                 if(screen==4){if(background)return;background=entry;}
                 std::vector<Write> preview;if(!Prepare(m,entry,preview))return;
@@ -211,10 +303,10 @@ struct Hook {
         routed.insert(routed.end(),selected.begin(),selected.end());
     }
     template<class M> bool IsDescription(M& m,U32 layout) const {
-        if(!enabled.load()||!panel||!owner||
+        if(!Enabled()||!panel||!owner||
            std::find(routed.begin(),routed.end(),panel)==routed.end()||
            m.Read(owner+0x28)!=std::optional<U32>(panel)||
-           !LayoutNamed(m,panel,"MenuItemPresen")||!LayoutNamed(m,layout,"MessageWindow"))return false;
+           !PresentLayout(m,panel)||!LayoutNamed(m,layout,"MessageWindow"))return false;
         auto id=m.Read(layout+0x3f4);
         // Item descriptions only; the NPC's instruction and conversation stay put.
         return id&&*id>=0x1700&&*id<0x1800;

@@ -6,19 +6,23 @@
 
 namespace Mm3dDekui::OcarinaPrompt {
 using namespace NativeInventory;
+struct Group { float x=0,y=0,scale=1,icon_scale=1; };
 struct Options { bool enabled=true; float x=0,y=0,scale=1,icon_scale=1,spacing=22; };
 inline std::atomic<bool> enabled{true};
 inline std::atomic<float> x{0},y{0},scale{1},icon_scale{1},spacing{22};
 inline std::atomic<unsigned> status{0};
 inline void Apply(const Options& o){enabled=o.enabled;x=o.x;y=o.y;scale=o.scale;icon_scale=o.icon_scale;spacing=o.spacing;}
-struct SinglePrompt { ButtonPose pose; U32 content_root; U32 arrow_texture=0; std::array<ButtonPose,3> elements{}; bool reverse=false; std::string_view label{}; U32 button_u=144; };
+struct SinglePrompt { ButtonPose pose; U32 content_root; U32 arrow_texture=0; std::array<ButtonPose,3> elements{}; bool reverse=false; std::string_view label{}; U32 button_u=144,button_v=0; std::string_view width_label{}; float icon_scale=1; bool dungeon_alignment=false; };
 struct PairPrompt { Options options; U32 content_root; std::array<std::string_view,2> labels; std::array<U32,2> buttons; };
 struct Hook {
     NotebookPrompt::Hook scratch;
     U32 pass=~0u,panel=0,icon=0,text=0,texture=0;
     std::chrono::steady_clock::time_point opened{};
     float native_alpha=0;
-    bool map_mode=false;
+    bool map_mode=false,list_mode=false;
+    Options map_options{true,0,0,1,1,20};
+    Group group;
+    U32 instrument_layout=0;
     // Main package, group0 resource11 is the localized parts atlas. Resolve the
     // live record each frame; never retain a resource across package unloading.
     template<class M> U32 Parts(M& m,U32 id=11) {
@@ -61,12 +65,23 @@ struct Hook {
         auto bottom=m.Read(manager+28),top=m.Read(manager+20);
         NativeInventory::Hook helper;NativeInventory::Hook::Buckets from,to;
         if(!bottom||!top||*bottom==*top||!helper.ReadQueue(m,*bottom,from)||!helper.ReadQueue(m,*top,to))return;
-        U32 candidate=0;
+        U32 candidate=0,list=0;list_mode=false;
+        for(const auto* buckets:{&from,&to})for(const auto& bucket:*buckets)for(U32 layout:bucket)
+            if(LayoutNamed(m,layout,"MenuMusicList"))list=layout;
         for(const auto& bucket:from)for(U32 layout:bucket)if(LayoutNamed(m,layout,"MenuOcarina")) {
             if(candidate)return;candidate=layout;
         }
+        if(candidate)instrument_layout=candidate;
+        if(list&&!candidate&&LayoutNamed(m,instrument_layout,"MenuOcarina"))candidate=instrument_layout;
         if(!candidate)return;status=1;
         if(!Templates(m,candidate)||to[15].size()>=32)return;
+        if(list) {
+            const auto all=scratch.Child(m,list+8,"all"),music=scratch.Child(m,all,"btn_music_g");
+            const auto alpha=m.Read(music+0x134),flags=m.Read(music+0xd4);
+            if(!alpha||!flags)return;
+            const float a=std::bit_cast<float>(*alpha);if(!std::isfinite(a)||a<0||a>1)return;
+            list_mode=true;native_alpha=(*flags&1)?a:0.f;
+        }
         for(const auto& bucket:to)if(std::find(bucket.begin(),bucket.end(),candidate)!=bucket.end())return;
         const U32 at=*top+4+15*0x80+U32(to[15].size())*4;
         auto total=m.Read(*top+0x844);if(!total||!m.Read(at))return;
@@ -84,9 +99,9 @@ struct Hook {
         if(!map_mode&&!single&&!pair){frame.writes.push_back({root+0xd4,*flags,*flags&~1u});m.Write(root+0xd4,*flags&~1u);}
         constexpr U32 Size=0x2400;
         if(sp<0x104000||(sp&7))return root;
-        const float s=pair?pair->options.scale:single?single->pose.scale:map_mode?NotebookPrompt::pose.scale.load():scale.load(),
-            is=pair?pair->options.icon_scale:single?1.f:map_mode?NotebookPrompt::icon_scale.load():icon_scale.load(),dx=pair?pair->options.x:single?single->pose.x:map_mode?0:x.load(),dy=pair?pair->options.y:single?single->pose.y:map_mode?0:y.load(),
-            gap=pair?pair->options.spacing:single?0:map_mode?NotebookPrompt::pose.y.load()-NotebookPrompt::map_pose.y.load():spacing.load();
+        const float s=pair?pair->options.scale:single?single->pose.scale:map_mode?map_options.scale:scale.load(),
+            is=pair?pair->options.icon_scale:single?single->icon_scale:map_mode?map_options.icon_scale:icon_scale.load(),dx=pair?pair->options.x:single?single->pose.x:map_mode?map_options.x:x.load(),dy=pair?pair->options.y:single?single->pose.y:map_mode?map_options.y:y.load(),
+            gap=pair?pair->options.spacing:single?0:map_mode?map_options.spacing:spacing.load();
         if(!std::isfinite(s)||s<(single?.25f:.5f)||s>2||!std::isfinite(is)||is<.5f||is>2||!std::isfinite(dx)||!std::isfinite(dy)||!std::isfinite(gap)||gap<0||gap>60)return root;
         const float fade=std::clamp(std::chrono::duration<float>(std::chrono::steady_clock::now()-opened).count()/.2f,0.f,1.f);
         const float alpha=((map_mode||single||pair)?1.f:fade)*native_alpha;if(alpha<=0)return root;
@@ -95,15 +110,47 @@ struct Hook {
         auto ig=m.Read(icon+0x28),tg=m.Read(text+0x28);if(!ig||!tg)return root;
         auto font=m.Read(*tg+0x28);if(!font||!Pointer(*font,0x14))return root;
         const std::array<std::string_view,2> labels=pair?pair->labels:single?std::array<std::string_view,2>{flat?single->label:single->reverse?"Items":"Map",""}:map_mode?
-            std::array<std::string_view,2>{"Move cursor","Return"}:std::array<std::string_view,2>{"Song list","Back"};
+            std::array<std::string_view,2>{"Move cursor","Return"}:std::array<std::string_view,2>{"Songs",list_mode?"Back":"Cancel"};
         std::array<std::vector<NotebookFont::Glyph>,2> glyphs;
         float height=0,width=0;
         for(unsigned row=0;row<(single?1u:2u);++row) {
             float pen=0;
-            // Labels follow the active message archive (PromptText, S1); UTF-8 -> code points.
             for(char32_t c:PromptText::Codes(PromptText::Get(m,labels[row]))) {auto g=NotebookFont::Lookup(m,*font,unsigned(c),pen);if(!g)return root;glyphs[row].push_back(*g);pen+=g->advance;height=std::bit_cast<float>(g->words[9]);}
-            if(!labels[row].empty()&&glyphs[row].empty())return root;
+            // Flat single prompts can use the unused second row for longer labels.
+            if(glyphs[row].empty()||glyphs[row].size()>(flat?32u:16u))return root;
             width=std::max(width,pen);
+        }
+        if(map_mode||(flat&&single->dungeon_alignment)) {
+            // Reserve the same width for every dungeon row, including both
+            // zoom labels and the hidden Move map row. Nothing shifts on fade.
+            for(const auto label:{"Move cursor","Return","Zoom in","Zoom out","Move map"}) {
+                float pen=0;
+                for(char32_t c:PromptText::Codes(PromptText::Get(m,label))) {
+                    auto glyph=NotebookFont::Lookup(m,*font,unsigned(c),pen);if(!glyph)return root;
+                    pen+=glyph->advance;
+                }
+                width=std::max(width,pen);
+            }
+        }
+        if(flat&&!single->width_label.empty()) {
+            float pen=0;
+            for(char32_t c:PromptText::Codes(PromptText::Get(m,single->width_label))) {
+                auto glyph=NotebookFont::Lookup(m,*font,unsigned(c),pen);if(!glyph)return root;
+                pen+=glyph->advance;
+            }
+            width=std::max(width,pen);
+        }
+        if(!map_mode&&!single&&!pair) {
+            // Reserve the widest label in either instrument view. Changing
+            // Cancel to Back must not move icons or the text's left anchor.
+            for(const auto label:{"Songs","Cancel","Back"}) {
+                float pen=0;
+                for(char32_t c:PromptText::Codes(PromptText::Get(m,label))) {
+                    auto glyph=NotebookFont::Lookup(m,*font,unsigned(c),pen);if(!glyph)return root;
+                    pen+=glyph->advance;
+                }
+                width=std::max(width,pen);
+            }
         }
         if(height<=0||!std::isfinite(height))return root;
         const bool translated=PromptText::Language(m)!=PromptText::PromptLanguage::English;
@@ -135,7 +182,7 @@ struct Hook {
             // panes. Foregrounds must precede their shadow copies.
             put(0x140+row*16,base+offset);put(0x144+row*16,base+txt);
             put(0x148+row*16,base+icon_shadow);put(0x14c+row*16,base+shadow);
-            const float cy=228+dy-(single&&!flat?18*s:row==0?gap*s:0);
+            const float cy=228+dy-(single&&!flat?18*s:row==0?gap*s*(map_mode?2:1):0);
             const float text_x=single&&!flat?left+(36-width*font_scale)*.5f*s:left+(icon_width+4)*s;
             const float text_y=single&&!flat?cy+14*s:cy-6*s;
             node(offset,base+igoff,left,cy-8*is*s,s*is);
@@ -143,7 +190,7 @@ struct Hook {
             for(U32 at:{0x14u,0x18u,0x1cu})number(igoff+at,0);
             number(igoff+0x20,16);number(igoff+0x24,16);
             // Localized parts.ctxb: START208,0,16x16; B128,0,16x16.
-            number(igoff+0x28,float(pair?pair->buttons[row]:single?(flat?single->button_u:single->reverse?176:192):row?128:map_mode?96:208)/256);number(igoff+0x2c,map_mode&&!single&&!row?16.f/128.f:0.f);
+            number(igoff+0x28,float(pair?pair->buttons[row]:single?(flat?single->button_u:single->reverse?176:192):row?128:map_mode?96:208)/256);number(igoff+0x2c,single&&flat?float(single->button_v)/128:map_mode&&!single&&!row?16.f/128.f:0.f);
             number(igoff+0x30,16.f/256);number(igoff+0x34,16.f/128);put(igoff+0x38,0);
             for(unsigned i=0;i<16;++i)number(igoff+0x3c+4*i,1);
             node(txt,base+tgoff,text_x,text_y,s*font_scale);
@@ -198,6 +245,29 @@ struct Hook {
                         const float shadow_shift=at==nodes[i][1]?2*s*p.scale:0;
                         number(at+0xec,400-get(0xec)-w+shadow_shift);
                     }
+                }
+            }
+        }
+        if(!std::isfinite(group.x)||!std::isfinite(group.y)||!std::isfinite(group.scale)||
+           !std::isfinite(group.icon_scale)||group.scale<.5f||group.scale>2||group.icon_scale<.5f||group.icon_scale>2)return root;
+        if(group.x!=0||group.y!=0||group.scale!=1||group.icon_scale!=1) {
+            // Transform only this prompt's generated panes, never its wrapped
+            // content. Each dungeon hint uses the same screen-space anchor.
+            const float anchor_x=(wide?400.f+(240.f*16/9-400)/2:400.f)-12;
+            const auto get=[&](U32 at){return std::bit_cast<float>(words[at/4]);};
+            for(unsigned row=0;row<(single?1u:2u);++row) {
+                const U32 icon_at=0x180+row*0xa00;
+                const float cx=get(icon_at+0xec)+8*get(icon_at+0xe0);
+                const float cy=get(icon_at+0xfc)+8*get(icon_at+0xf4);
+                for(const U32 at:{icon_at,icon_at+0x1c0,0x2000+row*0x1c0,0x1600+row*0x500}) {
+                    const bool icon_pane=at==icon_at||at==0x2000+row*0x1c0;
+                    const float factor=icon_pane?group.icon_scale:1.f;
+                    const float px=icon_pane?cx+(get(at+0xec)-cx)*factor:get(at+0xec);
+                    const float py=icon_pane?cy+(get(at+0xfc)-cy)*factor:get(at+0xfc);
+                    number(at+0xec,anchor_x+(px-anchor_x)*group.scale+group.x);
+                    number(at+0xfc,228+(py-228)*group.scale+group.y);
+                    number(at+0xe0,get(at+0xe0)*group.scale*factor);
+                    number(at+0xf4,get(at+0xf4)*group.scale*factor);
                 }
             }
         }
