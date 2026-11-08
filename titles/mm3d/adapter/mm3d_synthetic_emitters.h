@@ -46,6 +46,15 @@ inline constexpr std::array kMm3dSyntheticSources{
         {0x428740,0xE5860140},{0x428748,0xE5860144},
         {0x42878C,0x004E2304},{0x428790,0x004E2234},
         {0x428784,0x002D23A8},{0x2D24B0,0x3B83126F},{0x2D23C0,0x0D9F0A3A}}}},
+    // 0x61 params 4 = Honotrap flame group (init branch 4285C8, r8=+0x2F0;
+    // update 4EA120 / draw 4E9FD4 literals 428774/428778, stored 4286CC and
+    // via 4286D4 -> 428748). Group header +0x2F0, six elements of 0x14 at
+    // +0x2FC: pos +0, scale unkC +0xC (<= 0.006), isDrawn +0x12 (draw reads
+    // ldrb [elem-0xC+0x1E] 4EA030, vldr +0xC 4EA040). DL/round7/honotrap_group_proof.out.
+    Mm3dSyntheticSource{0x61,0x4EA120,0x428794,{{
+        {0x4286CC,0xE5860140},{0x4286D4,0xEA00001B},
+        {0x428774,0x004EA120},{0x428778,0x004E9FD4},
+        {0x4E9FDC,0xE2807E2F},{0x4EA030,0xE5D0001E},{0x4EA040,0xED940A03}}}},
     // 0xB = En_Dodongo (object_dodongo, update 456A10, draw 456990). Breath
     // action 55868C (actionFunc +0x9D4, literal 5589BC, compared at 558744)
     // spawns its fire while the frame (+0x240 = skelAnime+0x48, read 558794)
@@ -103,9 +112,11 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
     std::vector<Fast::Renderer3ds::PicaScenePointLight>& lights) {
     using namespace Fast::Renderer3ds;using namespace Mm3dEmitterDetail;
     if(activeNativePoint || actor>UINT32_MAX-0x1000)return;
+    // An actor id may have several proved phases (rows); the live update
+    // callback selects exactly one, so no actor is published twice.
     const auto row=std::find_if(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
-        [&](const auto& r){return r.Actor==id;});
-    if(row==kMm3dSyntheticSources.end() || !Proved(memory,actor,*row))return;
+        [&](const auto& r){return r.Actor==id && Proved(memory,actor,r);});
+    if(row==kMm3dSyntheticSources.end())return;
     uint32_t draw=0;if(!memory.Read32(actor+0x144,&draw))return;
     std::array<float,3> position{},scale{},colour{1,.6F,.25F};
     if(!V(memory,actor+0x24,position)||!V(memory,actor+0x58,scale))return;
@@ -199,6 +210,28 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
         if(draw!=0x4CE20C || !memory.Read8(actor+0x266,&alpha) || !alpha || !(scale[0]>0))return;
         level=float(alpha)/255.F;
         radius=1000.F*std::sqrt(level)*std::clamp(scale[0]/.0348F,.3F,2.F);position[1]+=40.F*level;
+    } else if(id==0x61 && row->Update==0x4EA120) {
+        // Flame group (MM-only Honotrap kind): each drawn element is the same
+        // flame as params 1/2, so the OoT3D flame policy applies per element
+        // with its native scale (grown = 0.006). Hidden/killed elements emit
+        // nothing; identities carry the element index.
+        uint16_t params=0;
+        if(draw!=0x4E9FD4 || !memory.Read16(actor+0x1C,&params) || params!=4)return;
+        for(uint32_t i=0;i<6;++i) {
+            const uint32_t element=actor+0x2FC+i*0x14;uint8_t drawn=0;float s=0;std::array<float,3> p{};
+            if(!memory.Read8(element+0x12,&drawn)||!drawn)continue;
+            if(!F(memory,element+0xC,s)||!V(memory,element,p))return;
+            const float lv=std::clamp((s-.0001F)/(.006F-.0001F),0.F,1.F);
+            if(!(lv>0))continue;
+            const float size=s/.004F;
+            PicaScenePointLight light;
+            light.SourceIdentity=(uint64_t{0xB7}<<56)|(uint64_t{id}<<40)|(uint64_t{actor}<<8)|(0x80U|i);
+            light.PositionWorld=p;light.PositionWorld[1]+=20.F*size;light.Radius=500.F*size;
+            light.Group=group;light.IndependentEmission=true;
+            for(uint32_t c=0;c<3;++c)light.Color[c]=colour[c]*lv;
+            lights.push_back(light);
+        }
+        return;
     } else if(id==0x61) {
         // OoT3D policy (oot3d_native_a32_fire_emitters.cpp, En_Honotrap): the
         // flames (params 1, 2) grow from 0.0001 to 0.004 / 0.0048 and shrink
