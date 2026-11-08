@@ -10,7 +10,7 @@ execution section is historical; its O2 pass does not qualify the newer runtime.
 
 | Platform | MM installed/Forge status | Evidence boundary |
 |---|---|---|
-| Windows x64 | Not yet qualified | The local dual-title registry runtime and its tools-OFF build are not an approved whole-AOT MM title module. |
+| Windows x64 | Not yet qualified (installed product); developer registry build exercised | No installed MM product exists to launch: no MM recipe in `supported_revisions.json`, and the MM session refuses whole-AOT product mode while dekui/Restoration guest patches are active (`ImageMounted`: "guest patch sites need the A32 registry dispatch"). Round-2 evidence on the dual-title developer registry build (not an installed product): state+settings save with MM settings, quit, restart and load-with-settings ("Title settings: applied"), truncated-state rejection ("savestate container header is invalid"). Compiler-free installed launch, installed settings persistence, update/repair preservation: open. |
 | Linux / handheld | Not yet qualified | Shared packaging/ELF infrastructure and OoT qualification do not qualify MM. |
 | macOS | Not yet qualified | Shared bundle/privacy policy and synthetic tests are not an MM import/install/launch receipt. |
 | Android | Not yet qualified | Runtime/mobile infrastructure is not an approved MM Forge package or device acceptance. |
