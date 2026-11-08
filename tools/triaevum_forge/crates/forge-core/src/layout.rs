@@ -406,7 +406,9 @@ mod tests {
             for_package(Path::new("/tmp/.mount_x/usr/lib/triaevum"), &env_of(&[("HOME", "/home/u")]), HostOs::Linux)
                 .unwrap();
         // resolve(): /home is a firmlink to /System/Volumes/Data/home on macOS.
-        assert_eq!(layout.activation, resolve(Path::new("/home/u/.local/share/TriAevum")).unwrap());
+        // The title's data namespace (TriAevum, or TriAevum-MM3D with title-mm3d).
+        let namespace = forge_catalog::title::ACTIVE.data_namespace;
+        assert_eq!(layout.activation, resolve(&Path::new("/home/u/.local/share").join(namespace)).unwrap());
         let flatpak = for_package(
             Path::new("/app/lib/triaevum"),
             &env_of(&[("FLATPAK_ID", FLATPAK_ID), ("XDG_DATA_HOME", "/home/u/.var/app/x/data")]),
@@ -425,7 +427,8 @@ mod tests {
         let package = Path::new("/Applications/TriAevum.app/Contents/Resources");
         assert_eq!(macos_bundle_root(package), Some(PathBuf::from("/Applications/TriAevum.app")));
         let layout = for_package(package, &env_of(&[("HOME", "/Users/u")]), HostOs::MacOs).unwrap();
-        assert_eq!(layout.activation, Path::new("/Users/u/Library/Application Support/TriAevum"));
+        let namespace = forge_catalog::title::ACTIVE.data_namespace;
+        assert_eq!(layout.activation, Path::new("/Users/u/Library/Application Support").join(namespace));
         assert!(!layout.use_file_portal);
         let redirected = for_package(
             package,
