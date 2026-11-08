@@ -122,7 +122,7 @@ Routine Engine::Bosses() {
             if(s.twin->red_life>g.Signed8(red+A::life))g.Write8(red+A::life,u8(g.Signed8(red+A::life)-8));
             const auto hit=g.Read16(red+T::hit_counter);if(hit==8)s.twin->sane=true;
             if(s.twin->sane&&hit==9&&s.twin->hit_counter!=9&&g.Read16(red+T::status)!=15)g.Write16(red+T::hit_counter,s.twin->hit_counter);
-        }else s.twin.emplace();
+        }else s.twin=Session::Twin{};
         s.twin->red_life=g.Signed8(red+A::life);if(s.twin->sane)s.twin->hit_counter=g.Read16(red+T::hit_counter);
     }else s.twin.reset();co_return 0;
 }
