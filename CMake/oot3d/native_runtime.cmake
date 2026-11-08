@@ -344,6 +344,11 @@ if (TARGET oot3d_native_a32_aot)
         ${OOT3D_A32_AOT_GENERATED_DIR})
     target_compile_definitions(oot3d_native_a32_process PRIVATE
         OOT3D_NATIVE_GENERATED_TRUE_AOT=1)
+    # The process library calls the generated registry under that definition,
+    # so it owns the link: every consumer (the game and the module host
+    # oot3d_game_module of a direct-plugin product with a registry) resolves it.
+    target_link_libraries(oot3d_native_a32_process PUBLIC
+        oot3d_native_a32_aot)
 endif()
 set(_oot3d_whole_aot_generated_header
     "${OOT3D_WHOLE_AOT_GENERATED_DIR}/oot3d_whole_aot_generated.h")
