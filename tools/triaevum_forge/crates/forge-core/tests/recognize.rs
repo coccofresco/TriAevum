@@ -153,6 +153,10 @@ fn a_cartridge_is_recognized_in_place_with_its_languages() {
     let fixture = Fixture::new();
     let runtime = FakeRuntime::default();
     let result = fixture.recognize(InstallSource::Rom(fixture.rom.clone()), &runtime).unwrap();
+    // Receipt hook: the recognition output for a before/after comparison.
+    if let Some(dump) = std::env::var_os("TRIAEVUM_FORGE_RECOGNIZE_DUMP") {
+        std::fs::write(dump, serde_json::to_vec_pretty(&result).unwrap()).unwrap();
+    }
     assert_eq!(result["recipe"], "fixture-eur");
     assert_eq!(result["label"], "Fixture (EUR)");
     assert_eq!(result["program_id"], "0004000000033500");
@@ -161,9 +165,15 @@ fn a_cartridge_is_recognized_in_place_with_its_languages() {
     assert_eq!(choices, [("en".into(), "English".into()), ("it".into(), "Italiano".into())]);
     assert_eq!(selected.as_deref(), Some("en"));
     // The runtime reads the RomFS extent of the cartridge; nothing is extracted.
+    // Like installation, recognition names the verified code.bin (the title's
+    // language layout: MM3D's differs from OoT3D's).
     assert_eq!(
         runtime.queries.borrow()[0],
-        LanguageQuery { romfs: fixture.rom.clone(), extent: Some((0x2000, 0x1000)), code_sha256: None }
+        LanguageQuery {
+            romfs: fixture.rom.clone(),
+            extent: Some((0x2000, 0x1000)),
+            code_sha256: Some(fixture_code_sha256(&fixture)),
+        }
     );
     assert!(!fixture.data.exists());
 }
@@ -185,7 +195,15 @@ fn extracted_data_is_recognized_from_its_files() {
     let runtime = FakeRuntime::default();
     let result = fixture.recognize(InstallSource::ExtractedDirectory(fixture.extracted.clone()), &runtime).unwrap();
     assert_eq!(result["recipe"], "fixture-eur");
-    assert_eq!(runtime.queries.borrow()[0], LanguageQuery::romfs(fixture.extracted.join("romfs.bin")));
+    assert_eq!(
+        runtime.queries.borrow()[0],
+        LanguageQuery::romfs(fixture.extracted.join("romfs.bin")).with_code_sha256(fixture_code_sha256(&fixture))
+    );
+}
+
+/// The SHA-256 of the fixture's verified code.bin.
+fn fixture_code_sha256(fixture: &Fixture) -> String {
+    forge_base::hashing::sha256_hex(&std::fs::read(fixture.extracted.join("code.bin")).unwrap())
 }
 
 #[test]

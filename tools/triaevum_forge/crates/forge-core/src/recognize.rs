@@ -176,8 +176,18 @@ fn recognize_stages(
 
     *stage = "languages";
     report("languages", "Reading the game languages...");
+    // Like installation (install.rs): the runtime reads the RomFS with the
+    // language layout of the title whose verified code.bin this is (MM3D's
+    // differs from OoT3D's). An adapted revision executes another code.bin,
+    // which installation names after adapting; recognition then leaves the
+    // runtime's default.
+    let adapted = recipes.iter().any(|recipe| !recipe.get("input_adapter").unwrap_or(&Value::Null).is_null());
+    let mut query = executable.romfs.clone();
+    if !adapted {
+        query = query.with_code_sha256(forge_base::hashing::sha256_hex(&executable.code));
+    }
     let languages = target_runtime(&package_root, &request.target)
-        .and_then(|runtime| forge_native::language::discover_query(services, &runtime, &executable.romfs));
+        .and_then(|runtime| forge_native::language::discover_query(services, &runtime, &query));
     let (languages, language_error) = match languages {
         Ok(detected) => {
             let detected = Value::Object(detected);
