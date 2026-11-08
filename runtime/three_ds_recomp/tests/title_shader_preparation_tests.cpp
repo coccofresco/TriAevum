@@ -20,6 +20,15 @@ int main() {
         require(!ResolveTitleShaderPreparationPlan({false, "mm3d"}).AlwaysAvailablePrograms,
                 "an unprepared title keeps always-available programs");
 
+        // Frame-reproducible sessions never let compile timing pick the
+        // program: the specialized one completes (O2 cache-state independence).
+        require(DrawsUseAlwaysAvailablePrograms(true, false), "interactive hybrid loses uber programs");
+        require(!DrawsUseAlwaysAvailablePrograms(true, true),
+                "a reproducible session renders timing-dependent uber programs");
+        require(!DrawsUseAlwaysAvailablePrograms(false, false), "an unprepared title gains uber programs");
+        require(!DrawsUseAlwaysAvailablePrograms(false, true), "an unprepared title gains uber programs");
+        static_assert(!DrawsUseAlwaysAvailablePrograms(true, true));
+
         // A host that installs nothing runs as a prepared title with the
         // original cache file names (OoT3D's before titles declared theirs).
         require(InstalledTitleShaderPreparation().Prepared, "default installation is not prepared");

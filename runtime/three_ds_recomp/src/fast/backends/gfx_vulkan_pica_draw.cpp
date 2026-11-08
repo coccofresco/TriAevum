@@ -1,5 +1,6 @@
 // Native PICA on Vulkan: draw submission, composition anchors, interactive grass and shadow maps.
 #ifdef ENABLE_OOT3D_VULKAN
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "gfx_vulkan_pica_internal.h"
 #include "fast/renderer3ds/pica_exclude_scissor.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
@@ -2215,7 +2216,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 backgroundAcquisition, &specializedPending);
             if (specializedPending) selectedPipeline = nullptr;
         }
-        if (selectedPipeline == nullptr && UsesAlwaysAvailablePrograms()) {
+        if (selectedPipeline == nullptr &&
+            Renderer3ds::DrawsUseAlwaysAvailablePrograms(UsesAlwaysAvailablePrograms(),
+                                                         mFrameReproducibleProgramSelection)) {
             auto unavailable = NativePicaUberUnavailable::NoParametricProgram;
             if (!draw.UberFragmentShaderSource.empty()) {
                 // The always-available program executes the specialized

@@ -165,6 +165,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     ~GfxRenderingAPIVulkan() override;
     void PrepareNativePicaPrograms(std::span<const Renderer3ds::PicaVertexArtifact> vertices) override;
     [[nodiscard]] bool UsesAlwaysAvailablePrograms() const override;
+    void SetFrameReproducibleProgramSelection(bool reproducible) override {
+        mFrameReproducibleProgramSelection = reproducible;
+    }
     void RegisterTitlePassPrograms(std::span<const Renderer::PassShaderArtifact> programs) override;
     [[nodiscard]] Renderer3ds::PicaPreparationStatus PreparationStatus() const override;
     void SetNativeTopScreenExtendsToOutput(bool extends) noexcept override {
@@ -1186,6 +1189,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // not), so the library policy no longer switches NRI's pipeline path.
     bool mExtendedDynamicStateEnabled = false;
     NativePicaPreparationMode mNativePicaPreparationMode = NativePicaPreparationMode::Synchronous;
+    bool mFrameReproducibleProgramSelection = false;
     bool mNativePicaProgramsPrepared = false;
     // Startup preparation progress (PrepareNativePicaPrograms parts).
     std::atomic<size_t> mStartupParts{0};

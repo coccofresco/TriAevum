@@ -1375,6 +1375,10 @@ void NativeA32WindowSession::Setup() {
   alwaysAvailablePrograms =
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
+  if (programPreparation != nullptr) {
+    programPreparation->SetFrameReproducibleProgramSelection(
+        hostArgs.FrameReproducible());
+  }
   // The title pass programs serve the shared renderer passes (shadow
   // casters among them) of every title: registering them is a lookup table,
   // and MM3D's draws hit them.

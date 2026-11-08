@@ -340,7 +340,7 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
             "complete_ms=%.3f max_complete_ms=%.3f program_tasks=%llu uber_programs=%llu "
             "uber_unavailable=%llu/%llu/%llu/%llu/%llu/%llu pipeline_tasks=%llu pipeline_created=%llu "
             "pipeline_completions=%llu pending=%zu uber_acquire_ms=%.3f max_uber_acquire_ms=%.3f "
-            "uber_effects=surface:%llu,pbr:%llu,relief:%llu,toon:%llu\n",
+            "uber_effects=surface:%llu,pbr:%llu,relief:%llu,toon:%llu reproducible=%d\n",
             static_cast<unsigned long long>(counters.SpecializedDraws),
             static_cast<unsigned long long>(counters.UberDraws),
             static_cast<unsigned long long>(counters.CompletedDraws),
@@ -361,7 +361,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
             static_cast<unsigned long long>(counters.UberSurfaceDraws),
             static_cast<unsigned long long>(counters.UberPbrDraws),
             static_cast<unsigned long long>(counters.UberReliefDraws),
-            static_cast<unsigned long long>(counters.UberToonDraws));
+            static_cast<unsigned long long>(counters.UberToonDraws),
+            mFrameReproducibleProgramSelection ? 1 : 0);
     }
 }
 
