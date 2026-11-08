@@ -64,9 +64,15 @@ mandatory; native RGB, signed radius and flicker remain the inputs.
 
 `tools/scene_emitters.py` generates an explicitly `mm3d`-namespaced catalog
 from the user's EUR code and RomFS. It reads CMB v10 geometry/material names,
-uses encoded texture hashes and reuses placement/clustering policies without
-pixel statistics. Torch stands, unknown/fullbright materials, water and shadows
-are excluded. The room reader normalises the native ZSI relocation fields;
+uses encoded texture hashes and reuses placement/clustering policies. Pixels are
+read only for OoT3D's two offline texel-colour rules, ported with the same
+thresholds (coordinator decision F02(c), 2026-11-08): a plain white additive
+material's doorway-shaped volumes become daylight doorways, and fire found by
+loose name stems (now including `mgm`) must look like fire. No scene is tuned
+from runtime brightness. Torch stands, unknown/fullbright materials, water
+(including white `mizukemuri` spray) and shadows are excluded. Generator
+revision 3 (EUR: 326 emitters; fire/lava 4 -> 15 from `*_mgm_01`; one doorway,
+`tenmon_white_01`). The room reader normalises the native ZSI relocation fields;
 offline Clock Town/Inn/Woodfall ROM/native/catalog identities agree. The local
 EUR survey currently finds 145 emitters in 310 rooms, no rejected rooms, but
 only four populated categories: windows, lamps, shafts and fire/lava. Magic

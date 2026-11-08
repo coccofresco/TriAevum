@@ -37,6 +37,50 @@ inline constexpr std::array kMm3dSyntheticSources{
     Mm3dSyntheticSource{0xFA,0x483C88,0x435704,{{
         {0x483544,0xE1D602F2},{0x483594,0xEDD40A16},
         {0x4841F8,0xE2840FBF},{0x48420C,0xE1D511F6}}}},
+    // 0x61 = En_Honotrap (gameplay_dangeon_keep, init 428270 branches on params
+    // 0/3/4). Flame kinds 1/2: init installs update 4E2304 / draw 4E2234
+    // (literals 42878C/428790, stored at 428740/428748); FlameGrow 2D23A8
+    // (init literal 428784) grows scale.x(+0x58) to 0.004 (params 1, literal
+    // 2D24B0 via vldreq at 2D23C0) or 0.0048. Analysis round5/honotrap_proof.out.
+    Mm3dSyntheticSource{0x61,0x4E2304,0x428794,{{
+        {0x428740,0xE5860140},{0x428748,0xE5860144},
+        {0x42878C,0x004E2304},{0x428790,0x004E2234},
+        {0x428784,0x002D23A8},{0x2D24B0,0x3B83126F},{0x2D23C0,0x0D9F0A3A}}}},
+    // 0x61 params 4 = Honotrap flame group (init branch 4285C8, r8=+0x2F0;
+    // update 4EA120 / draw 4E9FD4 literals 428774/428778, stored 4286CC and
+    // via 4286D4 -> 428748). Group header +0x2F0, six elements of 0x14 at
+    // +0x2FC: pos +0, scale unkC +0xC (<= 0.006), isDrawn +0x12 (draw reads
+    // ldrb [elem-0xC+0x1E] 4EA030, vldr +0xC 4EA040). DL/round7/honotrap_group_proof.out.
+    Mm3dSyntheticSource{0x61,0x4EA120,0x428794,{{
+        {0x4286CC,0xE5860140},{0x4286D4,0xEA00001B},
+        {0x428774,0x004EA120},{0x428778,0x004E9FD4},
+        {0x4E9FDC,0xE2807E2F},{0x4EA030,0xE5D0001E},{0x4EA040,0xED940A03}}}},
+    // 0xB = En_Dodongo (object_dodongo, update 456A10, draw 456990). Breath
+    // action 55868C (actionFunc +0x9D4, literal 5589BC, compared at 558744)
+    // spawns its fire while the frame (+0x240 = skelAnime+0x48, read 558794)
+    // is within 29.0 (5589C0) .. 43.0 (5589C4), at bodyPartsPos[0] (+0xA20,
+    // read 5587F0). Analysis round5/dodongo_proof.out.
+    Mm3dSyntheticSource{0xB,0x456A10,0x3F9010,{{
+        {0x558740,0xE59F1274},{0x558744,0xE59509D4},
+        {0x5589BC,0x0055868C},{0x5589C0,0x41E80000},
+        {0x5589C4,0x422C0000},{0x558794,0xED950A90},{0x5587F0,0xED961A88}}}},
+    // 0xFD = Obj_Fireshield (MM fire wall; keep, init 4A8618 scales x by
+    // 0.0348 literal 4A88A0). Update 4CE284 stores alpha = rise(+0x258)*255
+    // (vldr 4CE5B4, 255.0 at 4CE6A0, strb +0x266 at 4CE5EC); draw 4CE20C reads
+    // it (4CE224). Analysis round5/fireshield_proof.out.
+    Mm3dSyntheticSource{0xFD,0x4CE284,0x4A88C4,{{
+        {0x4CE5B4,0xED940A96},{0x4CE5B8,0xED9F1A38},
+        {0x4CE6A0,0x437F0000},{0x4CE5EC,0xE5C40266},
+        {0x4CE224,0xE5D40266},{0x4A88A0,0x3D0E8A72},{0,0}}}},
+    // 0x145 = En_Elforg (stray fairy; keep, size 0x690, draw 424D18). Its
+    // sparkle spawner 47C080 (called from the init-installed actions) reads
+    // area s16 +0x674 (literal 47C1C8, ldrsh 47C170, >=5 -> 0 at 47C174/178)
+    // and the authored per-area env colours at 675708 (literal 47C1CC).
+    // No LightContext record: a draw-only glow, lit in the fairy group.
+    Mm3dSyntheticSource{0x145,0x424D48,0x3CE078,{{
+        {0x47C158,0xE59F0068},{0x47C1C8,0x00000674},
+        {0x47C170,0xE19000F4},{0x47C174,0xE3500005},
+        {0x47C178,0x23A00000},{0x47C1CC,0x00675708},{0x675708,0xFF0096FF}}}},
     Mm3dSyntheticSource{0x10B,0x4B4BE8,0x474070,{{
         {0x47403C,0xEBFD1750},{0x474040,0xE584026C},
         {0x474000,0xE5840264},{0x4B4C6C,0xE594220C}}}},
@@ -68,14 +112,26 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
     std::vector<Fast::Renderer3ds::PicaScenePointLight>& lights) {
     using namespace Fast::Renderer3ds;using namespace Mm3dEmitterDetail;
     if(activeNativePoint || actor>UINT32_MAX-0x1000)return;
+    // An actor id may have several proved phases (rows); the live update
+    // callback selects exactly one, so no actor is published twice.
     const auto row=std::find_if(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
-        [&](const auto& r){return r.Actor==id;});
-    if(row==kMm3dSyntheticSources.end() || !Proved(memory,actor,*row))return;
+        [&](const auto& r){return r.Actor==id && Proved(memory,actor,r);});
+    if(row==kMm3dSyntheticSources.end())return;
     uint32_t draw=0;if(!memory.Read32(actor+0x144,&draw))return;
     std::array<float,3> position{},scale{},colour{1,.6F,.25F};
     if(!V(memory,actor+0x24,position)||!V(memory,actor+0x58,scale))return;
-    float level=1,radius=300;
-    if(id==0xC) {
+    float level=1,radius=300;uint32_t group=2;
+    if(id==0x145) {
+        // Stray fairy: visible while its draw callback is installed (enemy-
+        // held/collider kinds have none), in its area's authored colour,
+        // fading as the native collect shrink lowers scale below 0.01.
+        int16_t area=0;std::array<uint8_t,3> rgb{};
+        if(draw!=0x424D18 || !memory.Read16(actor+0x674,reinterpret_cast<uint16_t*>(&area)))return;
+        const uint32_t index=area<0||area>=5?0U:uint32_t(area);
+        for(uint32_t c=0;c<3;++c)if(!memory.Read8(0x675708U+index*4U+c,&rgb[c]))return;
+        for(uint32_t c=0;c<3;++c)colour[c]=float(rgb[c])/255.F;
+        level=std::clamp(scale[0]/.01F,0.F,1.F);radius=100;group=1;
+    } else if(id==0xC) {
         uint8_t aura=0,invisible=0;
         if(draw!=0x457638 || !memory.Read8(actor+0x768,&aura)||aura!=1 ||
            !memory.Read8(actor+0x76A,&invisible) || (invisible && !nativeDrawObserved))return;
@@ -137,6 +193,55 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
         if(!(total>0))return;
         for(uint32_t c=0;c<3;++c)position[c]=sum[c]/total;
         radius=400.F*std::clamp(scale[0]/.03F,.1F,2.F);
+    } else if(id==0xB) {
+        // OoT3D policy (En_Dodongo breathing fire): emits while the breath
+        // frame is 29..43, fading by 10 per frame, radius 400. MM's native
+        // fire spawns at the mouth body part, so the light is placed there.
+        uint32_t action=0;float frame=0;
+        if(draw!=0x456990 || !memory.Read32(actor+0x9D4,&action) || action!=0x55868C ||
+           !F(memory,actor+0x240,frame) || !(frame>=29.F) || !(frame<=43.F) ||
+           !V(memory,actor+0xA20,position))return;
+        level=(255.F-10.F*std::trunc(frame-29.F))/255.F;radius=400;
+    } else if(id==0xFD) {
+        // OoT3D fire-wall policy (Bg_Hidan_Firewall): level follows the
+        // wall's rise (here its native alpha), radius 1000*sqrt(level), raised
+        // 40*level; MM's wall width (scale.x / 0.0348) scales the radius.
+        uint8_t alpha=0;
+        if(draw!=0x4CE20C || !memory.Read8(actor+0x266,&alpha) || !alpha || !(scale[0]>0))return;
+        level=float(alpha)/255.F;
+        radius=1000.F*std::sqrt(level)*std::clamp(scale[0]/.0348F,.3F,2.F);position[1]+=40.F*level;
+    } else if(id==0x61 && row->Update==0x4EA120) {
+        // Flame group (MM-only Honotrap kind): each drawn element is the same
+        // flame as params 1/2, so the OoT3D flame policy applies per element
+        // with its native scale (grown = 0.006). Hidden/killed elements emit
+        // nothing; identities carry the element index.
+        uint16_t params=0;
+        if(draw!=0x4E9FD4 || !memory.Read16(actor+0x1C,&params) || params!=4)return;
+        for(uint32_t i=0;i<6;++i) {
+            const uint32_t element=actor+0x2FC+i*0x14;uint8_t drawn=0;float s=0;std::array<float,3> p{};
+            if(!memory.Read8(element+0x12,&drawn)||!drawn)continue;
+            if(!F(memory,element+0xC,s)||!V(memory,element,p))return;
+            const float lv=std::clamp((s-.0001F)/(.006F-.0001F),0.F,1.F);
+            if(!(lv>0))continue;
+            const float size=s/.004F;
+            PicaScenePointLight light;
+            light.SourceIdentity=(uint64_t{0xB7}<<56)|(uint64_t{id}<<40)|(uint64_t{actor}<<8)|(0x80U|i);
+            light.PositionWorld=p;light.PositionWorld[1]+=20.F*size;light.Radius=500.F*size;
+            light.Group=group;light.IndependentEmission=true;
+            for(uint32_t c=0;c<3;++c)light.Color[c]=colour[c]*lv;
+            lights.push_back(light);
+        }
+        return;
+    } else if(id==0x61) {
+        // OoT3D policy (oot3d_native_a32_fire_emitters.cpp, En_Honotrap): the
+        // flames (params 1, 2) grow from 0.0001 to 0.004 / 0.0048 and shrink
+        // as they vanish; the eyes (0, 3) and the flame group (4) are not this.
+        uint16_t params=0;
+        if(draw!=0x4E2234 || !memory.Read16(actor+0x1C,&params) || (params!=1 && params!=2))return;
+        const float grown=params==1?.004F:.0048F;
+        level=std::clamp((scale[0]-.0001F)/(grown-.0001F),0.F,1.F);
+        const float size=scale[0]/.004F;
+        position[1]+=20.F*size;radius=500.F*size;
     } else {
         // A wall's native phase installs its draw callback; hidden phases do
         // not emit. The spout controller can delegate the visual to child2.
@@ -155,7 +260,7 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
     if(!(level>0)||!(radius>0))return;
     PicaScenePointLight light;
     light.SourceIdentity=(uint64_t{0xB7}<<56)|(uint64_t{id}<<40)|(uint64_t{actor}<<8);
-    light.PositionWorld=position;light.Radius=radius;light.Group=2;light.IndependentEmission=true;
+    light.PositionWorld=position;light.Radius=radius;light.Group=group;light.IndependentEmission=true;
     for(uint32_t c=0;c<3;++c)light.Color[c]=colour[c]*level;
     lights.push_back(light);
 }

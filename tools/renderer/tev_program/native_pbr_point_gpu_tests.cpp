@@ -136,5 +136,47 @@ bool pbr_valid_frame=false;vec4 combiner_output=vec4(.5,.5,.5,.37);
         }
     }
     std::cout<<"Native unlit PBR: "<<cases.size()<<" production GPU cases, failures="<<unlitFailed<<'\n';
-    return failed||unlitFailed?1:0;
+    // PerPixelPBR (renderer-lit, NativeFragmentLighting=false) conservation of an
+    // IndependentEmission source: the receiver's emissive factor appears exactly
+    // once whatever the scene-point state, and the scene point illuminates the
+    // receiver as a separate, positive term. Difference assertions on the
+    // production body; no tuned constants.
+    options.PreserveNativeUnlit=false;
+    const auto perPixel=BuildPicaPbrShader(hooks,options);
+    if(!perPixel)throw std::runtime_error("PerPixelPBR contract rejected");
+    auto ppBody=perPixel->ShadingBody;
+    ppBody=std::regex_replace(ppBody,std::regex("dFdx\\("),"test_dx(");
+    ppBody=std::regex_replace(ppBody,std::regex("dFdy\\("),"test_dy(");
+    ppBody=std::regex_replace(ppBody,std::regex("textureGrad\\("),"test_texture_grad(");
+    ppBody=std::regex_replace(ppBody,std::regex("texture\\("),"test_texture(");
+    shader.replace(bodyAt,unlitBody.size(),ppBody);
+    std::array<Case,4> pp{};std::array<V4,4> ppOut{};
+    const std::array<float,3> emission{.2F,.1F,.05F};
+    for(size_t i=0;i<pp.size();++i){
+        pp[i]=cases[0];
+        PicaPbrMaterialParameters parameters;parameters.RoughnessFactor=1;parameters.MinimumRoughness=1;
+        if(i&2)parameters.EmissiveFactor={emission[0],emission[1],emission[2]};
+        PicaLightingProgram lp;lp.Control[0]=1;lp.Lights[0][0]=0;
+        pp[i].Pbr=BuildPicaPbrUniforms(parameters,0,lp);
+        auto& s=pp[i].Lighting.Surface;
+        s.Control[1]=(i&1)?1U:0U; // the independent emitter's scene point present/absent
+        s.Control[0]=0;           // no native slot: the emitter is the only light
+        auto& b=pp[i].Lighting.Balance;b.Control[0]=0;b.Gains[0]={1,1,1,0}; // unmatched (independent) row
+        pp[i].Parameters={1,0,0,0};
+    }
+    RunComputeTest(shader,std::as_bytes(std::span(pp)),std::as_writable_bytes(std::span(ppOut)),pp.size());
+    unsigned ppFailed=0;
+    for(size_t k=0;k<3;++k){
+        for(size_t lit=0;lit<2;++lit){
+            const float once=ppOut[2+lit][k]-ppOut[lit][k];
+            if(!std::isfinite(once)||std::abs(once-emission[k])>3e-5F){
+                std::cerr<<"PerPixelPBR emission not exactly once lit="<<lit<<" channel "<<k<<" delta="<<once<<'\n';++ppFailed;}
+        }
+        const float lightTerm=ppOut[1][k]-ppOut[0][k];
+        if(!(lightTerm>1e-3F)){std::cerr<<"PerPixelPBR emitter does not illuminate receiver channel "<<k<<" delta="<<lightTerm<<'\n';++ppFailed;}
+        if(std::abs((ppOut[3][k]-ppOut[2][k])-lightTerm)>3e-5F){
+            std::cerr<<"PerPixelPBR illumination depends on emission channel "<<k<<'\n';++ppFailed;}
+    }
+    std::cout<<"PerPixelPBR independent emission: "<<pp.size()<<" production GPU cases, failures="<<ppFailed<<'\n';
+    return failed||unlitFailed||ppFailed?1:0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

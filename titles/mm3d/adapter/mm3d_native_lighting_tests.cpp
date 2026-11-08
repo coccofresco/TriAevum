@@ -9,6 +9,7 @@
 #include "oot3d_native_a32_memory.h"
 #include "fast/renderer3ds/pica_resolved_draw_stream.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstdlib>
@@ -612,10 +613,74 @@ void TestLocalSourceGuards() {
 void TestRoundTwoSourcesConverted() {
     // F02a: Dno, Boss_Hakugin and Ot were native-retained; they must now be
     // selected as converted sources (fails on the 18-row table).
-    for (const uint16_t id : {uint16_t(0x117),uint16_t(0x16E),uint16_t(0x194),uint16_t(0x15F),uint16_t(0x197)}) {
+    for (const uint16_t id : {uint16_t(0x117),uint16_t(0x16E),uint16_t(0x194),uint16_t(0x15F),uint16_t(0x197),
+                              uint16_t(0x18F),uint16_t(0x122),uint16_t(0x17B)}) {
         bool present = false;
         for (const auto& source : kMm3dLocalLightSources) present |= source.Actor == id;
         Require(present,"round-2 native light source not converted");
+    }
+}
+
+void TestRoundEightSourcesConverted() {
+    // Round 8: 0x247 (table index past 0x22B) and 0xD9 Bg_Numa_Hana FireObj
+    // light are native registered sources; each must be one exact row.
+    struct Expected { uint16_t Actor; uint8_t Category; uint32_t Info, Node, Update, Destroy; };
+    for (const Expected e : {Expected{0x247,7,0x200,0x1FC,0x4CC950,0x1F1078},Expected{0xD9,1,0x298,0x294,0x49614C,0x44DFE8}}) {
+        uint32_t rows=0;
+        for (const auto& source : kMm3dLocalLightSources) if (source.Actor==e.Actor) {
+            ++rows;
+            Require(source.Category==e.Category && source.Info==e.Info && source.Node==e.Node &&
+                    source.Update==e.Update && source.Destroy==e.Destroy,"round-8 native light row has the wrong layout");
+        }
+        Require(rows==1,"round-8 native light source (0x247 / Bg_Numa_Hana FireObj) not converted exactly once");
+    }
+}
+
+void TestMultiRowActorOffsets() {
+    // Auditor r2: per-row offset assertions for actors with several native
+    // lights. Every row of one actor must be a distinct (Info,Node) pair, and
+    // wiring all of them at once must publish each exactly once at its own
+    // identity (no merged/duplicated rows).
+    struct Expected { uint16_t Actor; uint32_t Count, Info0, InfoStride, Node0, NodeStride; };
+    for (const Expected e : {Expected{0x197,3,0x950,0x28,0x94C,0x28},Expected{0x122,2,0x508,0x1C,0x504,0x1C},
+                             Expected{0x17B,3,0x271C,0x18,0x2764,4}}) {
+        uint32_t row=0;
+        for (const auto& source : kMm3dLocalLightSources) if (source.Actor==e.Actor) {
+            Require(row<e.Count && source.Info==e.Info0+row*e.InfoStride && source.Node==e.Node0+row*e.NodeStride,
+                    "multi-row actor offset is not base + i*stride (Bigpo/Test6/Hanabi)");
+            ++row;
+        }
+        Require(row==e.Count,"multi-row actor has the wrong number of rows");
+    }
+    for (const auto& first : kMm3dLocalLightSources) {
+        std::vector<const Mm3dLocalLightSource*> rows;
+        for (const auto& source : kMm3dLocalLightSources)
+            if (source.Actor==first.Actor && source.Update==first.Update) rows.push_back(&source);
+        if (rows.size()<2 || rows.front()!=&first) continue;
+        for (size_t i=0;i<rows.size();++i) for (size_t j=i+1;j<rows.size();++j)
+            Require(rows[i]->Info!=rows[j]->Info && rows[i]->Node!=rows[j]->Node,"multi-row actor repeats an offset");
+        Fixture f; Mm3dNativeA32LightingProbe probe;
+        f.W16(f.Actor,first.Actor); f.W8(f.Actor+2,first.Category); f.W16(f.Actor+0x1C,1);
+        f.W32(f.Actor+0x140,first.Update); f.W32(f.Actor+0x13C,first.Destroy);
+        f.W32(f.Play+0x20C0+first.Category*12,1); f.W32(f.Play+0x20C4+first.Category*12,f.Actor);
+        f.W32(f.Play+0xA88,f.Nodes);
+        for (size_t i=0;i<rows.size();++i) {
+            for (const auto& guard : rows[i]->Guards) f.W32(guard[0],guard[1]);
+            const uint32_t node=f.Nodes+uint32_t(i)*0x10U;
+            f.Link(node,f.Actor+rows[i]->Info,i+1<rows.size()?node+0x10U:0U);
+            f.W32(f.Actor+rows[i]->Node,node); f.Point(f.Actor+rows[i]->Info+4,int16_t(100+i));
+        }
+        probe.CaptureSceneLights(f.Play,f.Memory);
+        const auto binding=probe.CaptureRenderer(0,f.Memory);
+        Require(binding.ScenePoints && binding.ScenePoints->Count==rows.size(),"multi-row actor not published once per row");
+        for (size_t i=0;i<rows.size();++i) {
+            uint32_t hits=0;
+            for (uint32_t k=0;k<binding.ScenePoints->Count;++k) {
+                const auto& light=binding.ScenePoints->Lights[k];
+                if (light.SourceIdentity==f.Actor+rows[i]->Info+4) { ++hits; Require(light.Radius==100+i,"row published with another row's radius"); }
+            }
+            Require(hits==1,"multi-row actor row identity missing or duplicated");
+        }
     }
 }
 
@@ -716,6 +781,12 @@ void TestRoomEmitterPublication() {
 }
 
 void TestSyntheticFireAndFairies() {
+    // F02(b): OoT3D's S-candidates present in MM (Honotrap flames) must be rows.
+    for(const uint16_t id:{uint16_t(0x61),uint16_t(0xB),uint16_t(0xFD),uint16_t(0x145)})
+        Require(std::any_of(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
+                [&](const auto& r){return r.Actor==id;}),"OoT3D synthetic fire analogue missing in MM");
+    Require(std::any_of(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
+            [](const auto& r){return r.Actor==0x61 && r.Update==0x4EA120;}),"Honotrap flame group (params 4) has no proved row");
     for(const auto& row:kMm3dSyntheticSources) {
         Fixture f;std::vector<PicaScenePointLight> lights;
         f.W16(f.Actor,row.Actor);f.W32(f.Actor+0x140,row.Update);f.W32(f.Actor+0x13C,row.Destroy);
@@ -728,10 +799,22 @@ void TestSyntheticFireAndFairies() {
         if(row.Actor==0xB7){draw=0x47C5E4;f.F32(f.Actor+0x224,255);f.F32(f.Actor+0x228,1);f.W32(f.Actor+0x28C,f.Model);}
         if(row.Actor==0xFA){draw=0x483518;for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x2FC+n*4,255);
             for(uint32_t i=0;i<10;++i)for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x22C+i*12+n*4,float(10+n*10));}
+        if(row.Actor==0xB){draw=0x456990;f.W32(f.Actor+0x9D4,0x55868C);f.F32(f.Actor+0x240,31.5F);
+            for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0xA20+n*4,float(100+n));}
+        if(row.Actor==0xFD){draw=0x4CE20C;f.W8(f.Actor+0x266,255);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0348F);}
+        if(row.Actor==0x145){draw=0x424D18;f.W16(f.Actor+0x674,2);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.01F);
+            const uint8_t env[]={255,150,0,255,255,0,0,255,0,255,0,255,0,0,255,255,255,255,0,255};
+            for(uint32_t i=0;i<sizeof(env);++i)f.W8(0x675708+i,env[i]);}
+        const bool flameGroup=row.Actor==0x61 && row.Update==0x4EA120;
+        if(row.Actor==0x61 && !flameGroup){draw=0x4E2234;f.W16(f.Actor+0x1C,2);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0048F);}
+        if(flameGroup){draw=0x4E9FD4;f.W16(f.Actor+0x1C,4);
+            // Element 2 only: drawn, grown (0.006) at (300,40,500).
+            f.W8(f.Actor+0x2FC+2*0x14+0x12,1);f.F32(f.Actor+0x2FC+2*0x14+0xC,.006F);
+            for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x2FC+2*0x14+n*4,float(300+n*100)-(n==1?160.F:0.F));}
         f.W32(f.Actor+0x144,draw);
         CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
         Require(lights.size()==1 && lights[0].IndependentEmission && !lights[0].ReplacesNativeLocal &&
-                lights[0].Group==2 && lights[0].Radius>0,"proved native fire phase not published");
+                lights[0].Group==(row.Actor==0x145?1U:2U) && lights[0].Radius>0,"proved native fire phase not published");
         lights.clear();CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,true,false,lights);
         Require(lights.empty(),"registered source gained a synthetic duplicate");
         for(const auto& g:row.Guards)if(g[0]){f.W32(g[0],g[1]^1U);
@@ -751,6 +834,112 @@ void TestSyntheticFireAndFairies() {
             lights.clear();f.W32(f.Actor+0x30C,0xBAD);
             CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
             Require(lights.empty(),"unknown fire-arrow action emitted");
+        }
+        if(row.Actor==0xB) {
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Radius==400 && lights[0].PositionWorld[0]==100 &&
+                    std::abs(lights[0].Color[0]-235.F/255.F)<1e-5F,"Dodongo breath lost OoT3D frame/alpha policy or mouth position");
+            for(const float frame:{28.F,43.5F}) {
+                lights.clear();f.F32(f.Actor+0x240,frame);
+                CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+                Require(lights.empty(),"Dodongo breath emitted outside frames 29..43");
+            }
+            lights.clear();f.F32(f.Actor+0x240,30.F);f.W32(f.Actor+0x9D4,0x55868C+4);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"Dodongo not breathing emitted");
+            f.W32(f.Actor+0x9D4,0x55868C);
+        }
+        if(row.Actor==0xFD) {
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && std::abs(lights[0].Radius-1000.F)<1e-2F && lights[0].PositionWorld[1]==60.F,
+                    "risen Fireshield lost the OoT3D fire-wall policy");
+            lights.clear();f.W8(f.Actor+0x266,64);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Radius<600.F && lights[0].Color[0]<.3F,"sinking Fireshield not faded");
+            lights.clear();f.W8(f.Actor+0x266,0);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"lowered (extinguished) Fireshield emitted");
+            f.W8(f.Actor+0x266,255);f.W32(f.Actor+0x144,0x4CE20C+4);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"Fireshield with another draw callback emitted");
+        }
+        if(row.Actor==0x145) {
+            // Snowhead (area 2): authored green; out-of-range area -> Clock Town orange.
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Color[0]==0 && lights[0].Color[1]==1 && lights[0].Group==1 &&
+                    lights[0].Radius==100,"stray fairy lost its area colour or fairy group");
+            lights.clear();f.W16(f.Actor+0x674,7);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Color[0]==1 && std::abs(lights[0].Color[1]-150.F/255.F)<1e-6F,
+                    "stray fairy area clamp differs from native");
+            lights.clear();f.F32(f.Actor+0x58,.005F);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && std::abs(lights[0].Color[0]-.5F)<1e-6F,"collected stray fairy not fading");
+            // Held by an enemy / collider kind: no draw callback, no glow.
+            lights.clear();f.W32(f.Actor+0x144,0);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"hidden stray fairy glowed");
+            f.W32(f.Actor+0x144,draw);f.F32(f.Actor+0x58,.01F);
+        }
+        if(flameGroup) {
+            // F02(b) flame group: one light per drawn element at the element's
+            // own position (per-element offset +0x2FC+i*0x14), OoT3D flame policy
+            // with the group's grown scale 0.006 -> radius 750, raised 30.
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].PositionWorld[0]==300.F && lights[0].PositionWorld[2]==500.F &&
+                    std::abs(lights[0].PositionWorld[1]-270.F)<1e-3F && std::abs(lights[0].Radius-750.F)<1e-2F &&
+                    std::abs(lights[0].Color[0]-1.F)<1e-6F,"Honotrap flame group element lost its position/policy");
+            const uint64_t first=lights[0].SourceIdentity;
+            // A second drawn element (index 5) is a separate light, not a duplicate.
+            f.W8(f.Actor+0x2FC+5*0x14+0x12,1);f.F32(f.Actor+0x2FC+5*0x14+0xC,.003F);
+            for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x2FC+5*0x14+n*4,-50.F);
+            lights.clear();CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==2 && lights[0].SourceIdentity==first && lights[1].SourceIdentity!=first &&
+                    lights[1].PositionWorld[0]==-50.F && lights[1].Color[0]<.6F,"flame group elements merged or duplicated");
+            // Element not drawn (vanished): no light; scale 0 (sin clamp): no light.
+            f.W8(f.Actor+0x2FC+5*0x14+0x12,0);f.F32(f.Actor+0x2FC+2*0x14+0xC,0.F);
+            lights.clear();CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"undrawn/zero-scale flame group element emitted");
+            f.F32(f.Actor+0x2FC+2*0x14+0xC,.006F);
+            // Other kinds with the group callbacks are not the group (negative).
+            f.W16(f.Actor+0x1C,2);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"non-group Honotrap read as a flame group");
+            f.W16(f.Actor+0x1C,4);
+            // Killed actor (update cleared by Actor_Kill): row no longer proved.
+            f.W32(f.Actor+0x140,0);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"killed flame group emitted");
+            f.W32(f.Actor+0x140,row.Update);
+        }
+        if(row.Actor==0x61 && !flameGroup) {
+            // Grown drop flame: full level, radius 500*scale/0.004 (OoT3D policy).
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && std::abs(lights[0].Radius-600.F)<1e-3F &&
+                    std::abs(lights[0].Color[0]-1.F)<1e-6F && std::abs(lights[0].PositionWorld[1]-44.F)<1e-3F,
+                    "Honotrap flame lost the OoT3D size/level policy");
+            // Spawn scale 0.0001: no light yet; vanishing half way: dimmer.
+            lights.clear();f.F32(f.Actor+0x58,.0001F);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"just-spawned Honotrap flame emitted");
+            f.F32(f.Actor+0x58,.00245F);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Color[0]>.4F && lights[0].Color[0]<.6F,"vanishing Honotrap flame not faded");
+            // The eye (params 0/3) and the flame group (4) are not this flame.
+            for(const uint16_t kind:{uint16_t(0),uint16_t(3),uint16_t(4)}) {
+                lights.clear();f.W16(f.Actor+0x1C,kind);
+                CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+                Require(lights.empty(),"Honotrap eye/group treated as a single flame");
+            }
+            // The eye draw callback (profile draw 4E22B8) is not a flame.
+            f.W16(f.Actor+0x1C,1);f.W32(f.Actor+0x144,0x4E22B8);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"Honotrap eye draw treated as flame");
         }
         if(row.Actor==0xC){f.W32(f.Actor+0x144,draw);f.W8(f.Actor+0x768,2);
             CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
@@ -782,6 +971,8 @@ void TestSceneSnapshots() {
     TestSyntheticFireAndFairies();
     TestLocalSourceGuards();
     TestRoundTwoSourcesConverted();
+    TestRoundEightSourcesConverted();
+    TestMultiRowActorOffsets();
     TestEachProvenSourcePublication();
     TestRoomEmitterPublication();
     Fixture f; Mm3dNativeA32LightingProbe probe;

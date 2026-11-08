@@ -4,7 +4,7 @@ from unittest.mock import patch
 import scene_emitters as mm
 
 
-def model10(texture="room_mado_01", additive=False):
+def model10(texture="room_mado_01", additive=False, pixels=None, points=(0, 0, 0, 100, 0, 0, 0, 100, 0)):
     def chunk(tag, body):
         return tag + struct.pack("<I", len(body) + 8) + body
     material = bytearray(0x16C)
@@ -14,7 +14,7 @@ def model10(texture="room_mado_01", additive=False):
         struct.pack_into("<I", material, 0x138, 1)
         struct.pack_into("<H", material, 0x13E, 1)
     mats = chunk(b"mats", struct.pack("<I", 1) + material)
-    pixels = bytes([127, 255, 11, 41]) * 64
+    pixels = pixels if pixels is not None else bytes([127, 255, 11, 41]) * 64
     tex = chunk(b"tex ", struct.pack("<I", 1) + struct.pack("<IHHHHHHI16s", len(pixels), 1, 1, 8, 8,
                 0x6752, 0x1401, 0, texture.encode()))
     skl = chunk(b"skl ", struct.pack("<IIhh9fI", 1, 0, 0, -1, 1, 1, 1, 0, 0, 0, 10, 20, 30, 0))
@@ -36,7 +36,7 @@ def model10(texture="room_mado_01", additive=False):
     vatr = bytearray(0x54)
     vatr[:4] = b"vatr"
     struct.pack_into("<II", vatr, 12, 36, len(vatr))
-    vatr.extend(struct.pack("<9f", 0, 0, 0, 100, 0, 0, 0, 100, 0))
+    vatr.extend(struct.pack("<9f", *points))
     indices = struct.pack("<3H", 0, 1, 2)
     parts = [skl, b"", mats, tex, sklm, b"", bytes(vatr), indices, pixels]
     header, body, offsets = bytearray(0x48), bytearray(), []
@@ -88,10 +88,47 @@ class MmSceneEmitterTests(unittest.TestCase):
         for name in ("zk_water_light", "room_torch_light", "knk_shadow_light"):
             self.assertIsNone(mm.category(name, True))
         data, pixels = model10("mn_light_03", additive=True)
-        with patch.object(mm.shared, "texels", side_effect=AssertionError("image analysis forbidden")):
-            emitters = mm.model_emitters(mm.Model(data, 0))
+        emitters = mm.model_emitters(mm.Model(data, 0))
         self.assertEqual([e["category"] for e in emitters], ["light-shaft"])
         self.assertEqual(emitters[0]["surfaces"], [f"{mm.content_hash(pixels):016x}"])
+    # F02(c), coordinator 2026-11-08: OoT3D's offline texel-colour rules are
+    # ported (same thresholds); anything else must not read pixels.
+    def test_texels_read_only_for_oot3d_offline_rules(self):
+        for name in ("room_hikari_01", "room_mado_01", "room_lamp_01", "room_magic_01"):
+            data, _ = model10(name, additive=False)
+            with patch.object(mm.shared, "texels", side_effect=AssertionError("image analysis outside OoT3D rule")):
+                self.assertTrue(mm.model_emitters(mm.Model(data, 0)))
+
+    DOOR = (10, 20, 30, 110, 220, 30, 10, 120, 80)  # 100 wide, 200 high, 50 deep
+
+    def test_white_additive_doorway_volume_is_daylight_doorway(self):
+        white = bytes([255]) * 256
+        data, _ = model10("kj_kabe_01", additive=True, pixels=white, points=self.DOOR)
+        emitters = mm.model_emitters(mm.Model(data, 0))
+        self.assertEqual([e["category"] for e in emitters], ["doorway"])
+        self.assertEqual(emitters[0]["colour"], list(mm.shared.DAYLIGHT))
+        # Negative: same white volume drawn opaque, a tinted additive volume,
+        # and a white additive sheet (not doorway-shaped) are not doorways.
+        tinted = bytes([255, 40, 200, 255]) * 64
+        flat = (0, 0, 0, 100, 0, 0, 0, 100, 0)
+        for args in ((False, white, self.DOOR), (True, tinted, self.DOOR), (True, white, flat)):
+            data, _ = model10("kj_kabe_01", *args)
+            self.assertEqual(mm.model_emitters(mm.Model(data, 0)), [])
+        # Title fact: white water spray (EUR kks/ym2_mizukemuri) is not daylight.
+        data, _ = model10("kks_mizukemuri", True, white, self.DOOR)
+        self.assertEqual(mm.model_emitters(mm.Model(data, 0)), [])
+
+    def test_mgm_fire_follows_oot3d_fire_colour_guard(self):
+        self.assertEqual(mm.category("mgm_fire_body", True), "fire-lava")
+        self.assertEqual(mm.category("ganon_mgm_01", False), "fire-lava")
+        reddish = bytes([255, 30, 120, 255]) * 64   # a,b,g,r: r=255 g=120 b=30
+        bluish = bytes([255, 255, 120, 30]) * 64    # r=30 b=255: not fire
+        dark = bytes([255, 10, 10, 40]) * 64        # max 40/255 <= 0.25: not fire
+        data, _ = model10("ganon_mgm_01", additive=True, pixels=reddish)
+        self.assertEqual([e["category"] for e in mm.model_emitters(mm.Model(data, 0))], ["fire-lava"])
+        for pixels in (bluish, dark):
+            data, _ = model10("ganon_mgm_01", additive=True, pixels=pixels)
+            self.assertEqual(mm.model_emitters(mm.Model(data, 0)), [])
 
     def test_v10_rigid_geometry_bones_and_native_blend_offsets(self):
         data, pixels = model10(additive=True)
@@ -99,8 +136,7 @@ class MmSceneEmitterTests(unittest.TestCase):
         self.assertTrue(model.materials[0][1])
         self.assertEqual(model.textures[0][-1], pixels)
         self.assertEqual([point for _, point in model.triangles(0)[0]], [(10, 20, 30), (110, 20, 30), (10, 120, 30)])
-        with patch.object(mm.shared, "texels", side_effect=AssertionError("image analysis forbidden")):
-            emitters = mm.model_emitters(model)
+        emitters = mm.model_emitters(model)
         self.assertEqual(len(emitters), 1)
         self.assertEqual(emitters[0]["category"], "window-lamp")
         self.assertEqual(emitters[0]["surfaces"], [f"{mm.content_hash(pixels):016x}"])
