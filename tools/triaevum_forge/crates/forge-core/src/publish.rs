@@ -373,13 +373,27 @@ pub fn publish_private_runtime(
     create_dir(&config_root)?;
     let topscreen_config = config_root.join("topscreen_ui.json");
     let runtime_config = config_root.join(if request.android.is_some() { ANDROID_CONFIG } else { "TriAevum.json" });
+    // The TopScreen UI profile is a per-title fact (OoT3D's per-game mod);
+    // a title without it gets no TopScreen file and no TopScreen option.
+    let topscreen_ui = forge_catalog::title::ACTIVE.topscreen_ui;
+    if !topscreen_ui
+        && (assets.topscreen_texture_pack.is_some()
+            || assets.topscreen_link_animations.is_some()
+            || assets.topscreen_ui_atlas_hd.is_some())
+    {
+        return Err(missing("TopScreen assets were given for a title without the TopScreen UI profile"));
+    }
     // Validate both existing user files before changing any installed title file.
-    for user_config in [&topscreen_config, &runtime_config] {
+    let user_configs: Vec<&PathBuf> =
+        if topscreen_ui { vec![&topscreen_config, &runtime_config] } else { vec![&runtime_config] };
+    for user_config in user_configs {
         if user_config.exists() {
             load_json_object(user_config)?;
         }
     }
-    publish_topscreen_config(&topscreen_config, request.android.is_some(), request.hud_layout)?;
+    if topscreen_ui {
+        publish_topscreen_config(&topscreen_config, request.android.is_some(), request.hud_layout)?;
+    }
     ensure_runtime_config(&runtime_config, &product.product)?;
     let savedata = private_root.join("savedata");
     create_dir(&savedata)?;
@@ -397,12 +411,15 @@ pub fn publish_private_runtime(
         text(&resolve(&package.join("resources"))?)?,
         "--renderer".into(),
         "nri".into(),
-        "--ui-profile".into(),
-        "topscreen".into(),
-        "--config".into(),
-        text(&runtime_config)?,
-        "--topscreen-config".into(),
-        text(&topscreen_config)?,
+    ]);
+    if topscreen_ui {
+        arguments.extend(["--ui-profile".into(), "topscreen".into()]);
+    }
+    arguments.extend(["--config".into(), text(&runtime_config)?]);
+    if topscreen_ui {
+        arguments.extend(["--topscreen-config".into(), text(&topscreen_config)?]);
+    }
+    arguments.extend([
         "--gameplay-timing".into(),
         "native30_interpolated".into(),
         "--presentation-rate".into(),
@@ -561,7 +578,7 @@ pub fn publish_private_runtime(
     runtime.insert("launch_profile".into(), json!(reference(&profile_path)?));
     runtime.insert("launch_profile_scope".into(), json!(context.scope(&profile_path, Some(&title))?.as_str()));
     runtime.insert("launch_profile_sha256".into(), json!(sha256_hex(&profile_path, cancel)?));
-    runtime.insert("ui_profile".into(), json!("topscreen"));
+    runtime.insert("ui_profile".into(), json!(if topscreen_ui { "topscreen" } else { "title" }));
     runtime.insert("renderer".into(), json!("nri"));
     for (key, path) in [
         ("topscreen_textures", &texture_pack),
@@ -621,7 +638,7 @@ pub fn publish_private_runtime(
         "plugin": text(&destination)?,
         "plugin_sha256": plugin_hash,
         "launch_profile": text(&profile_path)?,
-        "topscreen_config": text(&topscreen_config)?,
+        "topscreen_config": if topscreen_ui { json!(text(&topscreen_config)?) } else { Value::Null },
     }))
 }
 

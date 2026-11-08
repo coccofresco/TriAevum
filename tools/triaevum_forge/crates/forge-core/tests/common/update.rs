@@ -86,12 +86,15 @@ pub fn config_files(data: &Path) -> Vec<(String, Vec<u8>)> {
 
 /// The user's own TopScreen layout and graphics choices.
 pub fn customize_settings(data: &Path) {
-    let topscreen = data.join("config/topscreen_ui.json");
-    let mut user = load_json_object(&topscreen).unwrap();
-    user.insert("hud_margin_x".into(), json!(40));
-    user.insert("dpad_size_percent".into(), json!(130));
-    user.insert("camera_fov_percent".into(), json!(120));
-    atomic_write_json(&topscreen, &Value::Object(user)).unwrap();
+    // Only a title with the TopScreen UI profile has a TopScreen layout.
+    if forge_catalog::title::ACTIVE.topscreen_ui {
+        let topscreen = data.join("config/topscreen_ui.json");
+        let mut user = load_json_object(&topscreen).unwrap();
+        user.insert("hud_margin_x".into(), json!(40));
+        user.insert("dpad_size_percent".into(), json!(130));
+        user.insert("camera_fov_percent".into(), json!(120));
+        atomic_write_json(&topscreen, &Value::Object(user)).unwrap();
+    }
     let runtime = data.join("config/TriAevum.json");
     let mut config = load_json_object(&runtime).unwrap();
     config.insert("UserChoice".into(), json!({"Kept": true}));

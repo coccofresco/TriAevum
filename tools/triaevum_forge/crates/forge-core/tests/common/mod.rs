@@ -305,3 +305,10 @@ pub fn assert_interior_sun(build: &Value, reused: bool, context: &str) {
         assert_eq!(build["interior_sun"]["title"], forge_catalog::title::ACTIVE.id, "{context}");
     }
 }
+
+/// Arguments the launch profile lacks for a title without the TopScreen UI
+/// profile (`--ui-profile topscreen` and `--topscreen-config <file>`).
+#[allow(dead_code)]
+pub fn topscreen_shift() -> usize {
+    if forge_catalog::title::ACTIVE.topscreen_ui { 0 } else { 4 }
+}

@@ -191,3 +191,37 @@ fn profile_relative_placeholders_are_expanded() {
     fixture.receipt.remove("launch_profile_sha256");
     assert_eq!(fixture.validate().unwrap(), fixture.profile);
 }
+
+/// Rewrites the fixture profile's arguments and re-pins its digest.
+fn rewrite_profile(fixture: &mut Fixture, edit: impl FnOnce(&mut Vec<Value>)) {
+    let mut payload: Value = serde_json::from_slice(&std::fs::read(&fixture.profile).unwrap()).unwrap();
+    edit(payload["arguments"].as_array_mut().unwrap());
+    atomic_write_json(&fixture.profile, &payload).unwrap();
+    let digest = sha(&fixture.profile);
+    fixture.receipt.insert("launch_profile_sha256".into(), json!(digest));
+}
+
+fn drop_option(arguments: &mut Vec<Value>, option: &str) {
+    let index = arguments.iter().position(|argument| argument == option).unwrap();
+    arguments.drain(index..index + 2);
+}
+
+#[test]
+fn title_without_topscreen_profile_needs_no_topscreen_file() {
+    // MM3D (per-game mod dekui): no --ui-profile topscreen, no --topscreen-config.
+    let mut fixture = Fixture::new();
+    rewrite_profile(&mut fixture, |arguments| drop_option(arguments, "--topscreen-config"));
+    std::fs::remove_file(fixture.data.join("config").join("topscreen_ui.json")).unwrap();
+    assert_eq!(fixture.validate().unwrap(), fixture.profile);
+}
+
+#[test]
+fn topscreen_profile_must_route_its_topscreen_file() {
+    // Negative: the TopScreen UI profile without its file is refused.
+    let mut fixture = Fixture::new();
+    rewrite_profile(&mut fixture, |arguments| {
+        drop_option(arguments, "--topscreen-config");
+        arguments.extend([json!("--ui-profile"), json!("topscreen")]);
+    });
+    assert_eq!(fixture.error(), "Missing or duplicate installed profile option: --topscreen-config");
+}

@@ -146,12 +146,20 @@ pub fn validate_installed_runtime(
     }
     // Resolve profile-relative paths first. Reject ambiguous duplicate
     // routing arguments rather than validating one value and executing another.
-    for (option, expected) in [
+    // The TopScreen UI profile is a per-title fact (OoT3D's per-game mod): a
+    // profile that selects it, or routes a TopScreen file, must route the
+    // installation's TopScreen file; a title without it (MM3D) has neither.
+    let topscreen = arguments.windows(2).any(|pair| pair[0] == "--ui-profile" && pair[1] == "topscreen")
+        || arguments.iter().any(|argument| argument == "--topscreen-config");
+    let mut routed = vec![
         ("--a32-process-manifest", title.join("process-manifest.json")),
         ("--config", data_root.join("config").join("TriAevum.json")),
-        ("--topscreen-config", data_root.join("config").join("topscreen_ui.json")),
-        ("--save-data", data_root.join("savedata")),
-    ] {
+    ];
+    if topscreen {
+        routed.push(("--topscreen-config", data_root.join("config").join("topscreen_ui.json")));
+    }
+    routed.push(("--save-data", data_root.join("savedata")));
+    for (option, expected) in routed {
         let Some(value) = single_value(&arguments, option) else {
             return Err(recovery(format!("Missing or duplicate installed profile option: {option}")));
         };

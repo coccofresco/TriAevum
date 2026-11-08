@@ -83,14 +83,28 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     assert!(host().runtime == host().installed_runtime || !fixture.package.join(host().runtime).exists());
 
     let profile = load_json_object(&fixture.launch_profile()).unwrap();
+    // Receipt hook: the exact launch-profile bytes (placeholders only, no
+    // machine path) for a before/after identity comparison.
+    if let Some(dump) = std::env::var_os("TRIAEVUM_FORGE_PROFILE_DUMP") {
+        std::fs::copy(fixture.launch_profile(), dump).unwrap();
+    }
     assert_eq!(profile["format"], "oot3d_native_game_launch_profile_v1");
     let arguments: Vec<&str> = profile["arguments"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
     assert_eq!(arguments[0..2], ["--title-plugin", &format!("${{runtime_dir}}/{plugin_relative}")]);
     assert_eq!(arguments[4..6], ["--resource-root", "${runtime_dir}/resources"]);
+    // The TopScreen UI profile is a per-title fact: OoT3D's profile selects it
+    // and routes its file; a title without it (MM3D, dekui) has neither option.
+    let shift = common::topscreen_shift();
+    if forge_catalog::title::ACTIVE.topscreen_ui {
+        assert_eq!(arguments[8..10], ["--ui-profile", "topscreen"]);
+        assert_eq!(arguments[12..14], ["--topscreen-config", "${runtime_dir}/data/config/topscreen_ui.json"]);
+    } else {
+        assert!(!arguments.iter().any(|a| *a == "--ui-profile" || a.starts_with("--topscreen")), "{arguments:?}");
+    }
     // A plain package is its own activation: its data is a runtime_dir path.
-    assert_eq!(arguments[10..12], ["--config", "${runtime_dir}/data/config/TriAevum.json"]);
-    assert_eq!(arguments[24..26], ["--height", "720"]);
-    let tail: Vec<&str> = arguments[26..].iter().step_by(2).copied().collect();
+    assert_eq!(arguments[10 - shift / 2..12 - shift / 2], ["--config", "${runtime_dir}/data/config/TriAevum.json"]);
+    assert_eq!(arguments[24 - shift..26 - shift], ["--height", "720"]);
+    let tail: Vec<&str> = arguments[26 - shift..].iter().step_by(2).copied().collect();
     assert_eq!(tail, ["--water-texture-catalog", "--scene-light-catalog", "--renderer-cache-directory"]);
     assert!(profile["path_scopes"].as_object().unwrap().values().all(|scope| scope == "relative"));
 
@@ -112,10 +126,14 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
 
     let active = load_json_object(&data.join("active-title.json")).unwrap();
     assert_eq!(active["module_sha256"], state["module"]["sha256"]);
-    assert_eq!(
-        Value::Object(load_json_object(&data.join("config/topscreen_ui.json")).unwrap()),
-        Value::Object(standard_topscreen().unwrap())
-    );
+    if forge_catalog::title::ACTIVE.topscreen_ui {
+        assert_eq!(
+            Value::Object(load_json_object(&data.join("config/topscreen_ui.json")).unwrap()),
+            Value::Object(standard_topscreen().unwrap())
+        );
+    } else {
+        assert!(!data.join("config/topscreen_ui.json").exists(), "no TopScreen file for this title");
+    }
     assert_eq!(load_json_object(&data.join("config/TriAevum.json")).unwrap()["Graphics"]["Preset"], "Enhanced");
     assert_eq!(load_json_object(&data.join("config/game_language.json")).unwrap()["selected"], "en");
     assert!(data.join("savedata").is_dir());
@@ -136,7 +154,8 @@ fn a_runtime_with_managed_data_paths_routes_the_data_tree() {
     let arguments: Vec<&str> = profile["arguments"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
     let value = |option: &str| arguments[arguments.iter().position(|a| *a == option).unwrap() + 1];
     // The earlier arguments keep their places.
-    assert_eq!(arguments[24..26], ["--height", "720"]);
+    let shift = common::topscreen_shift();
+    assert_eq!(arguments[24 - shift..26 - shift], ["--height", "720"]);
     assert_eq!(value("--log-directory"), "${runtime_dir}/data/logs");
     assert_eq!(value("--crash-directory"), "${runtime_dir}/data/logs/crashes");
     assert_eq!(value("--savestate-directory"), "${runtime_dir}/data/savestates");
@@ -230,7 +249,8 @@ fn a_second_install_reuses_the_title_and_keeps_user_state() {
     .unwrap();
     let migrated = load_json_object(&topscreen).unwrap();
     assert_eq!(migrated["hud_scale"], 1.0);
-    assert_eq!(migrated["hud_margin_x"], 4);
+    // A title without the TopScreen UI profile never rewrites that file.
+    assert_eq!(migrated["hud_margin_x"], if forge_catalog::title::ACTIVE.topscreen_ui { 4 } else { 40 });
     assert_eq!(migrated["camera_fov_percent"], 120);
 }
 

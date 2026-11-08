@@ -34,6 +34,12 @@ pub struct ForgeTitle {
     /// prebuild (`--prebuild-interior-sun`, OoT3D's titles/oot3d/environment).
     /// A title without one installs with no interior-sun step.
     pub offline_interior_sun: bool,
+    /// Whether the title's installed launch profile selects the TopScreen UI
+    /// profile (`--ui-profile topscreen` + `--topscreen-config`), OoT3D's
+    /// per-game mod (TopScreen/SingleScreen). A title without it launches with
+    /// the runtime's title UI (MM3D: dekui is integrated in the product code)
+    /// and its profile carries no TopScreen option.
+    pub topscreen_ui: bool,
 }
 
 pub const OOT3D: ForgeTitle = ForgeTitle {
@@ -47,6 +53,7 @@ pub const OOT3D: ForgeTitle = ForgeTitle {
     // EUR (tools/triaevum_release/supported_revisions.json).
     code_sha256: &["16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"],
     offline_interior_sun: true,
+    topscreen_ui: true,
 };
 
 pub const MM3D: ForgeTitle = ForgeTitle {
@@ -62,6 +69,10 @@ pub const MM3D: ForgeTitle = ForgeTitle {
     // MM3D has no interior-sun prebuild (its scene inventory is not OoT3D's;
     // the runtime reads no interior-sun cache for MM3D).
     offline_interior_sun: false,
+    // MM3D's per-game mod is dekui (in the product code); the runtime refuses
+    // the TopScreen profile for any adapter but OoT3D EUR
+    // (oot3d_native_a32_window_setup.cpp "TopScreen UI profile belongs to OoT3D EUR").
+    topscreen_ui: false,
 };
 
 /// Every title this source tree knows (for naming a foreign dump only).

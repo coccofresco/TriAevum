@@ -112,6 +112,14 @@ fn a_replaced_package_is_bound_without_the_rom_and_keeps_everything() {
 #[test]
 fn use_standard_resets_only_the_layout_and_says_so() {
     let (fixture, _) = installed();
+    if !forge_catalog::title::ACTIVE.topscreen_ui {
+        // A title without the TopScreen UI profile has no layout to reset.
+        replace_package(&fixture, Some("0.8.1"), NEW_RUNTIME, NEW_PLUGIN);
+        let result = refresh_with(&fixture, |request| request.hud_layout = HudLayout::Standard).unwrap();
+        assert_eq!(result["config_changes"], json!([]));
+        assert!(!fixture.data().join("config/topscreen_ui.json").exists());
+        return;
+    }
     let before = load_json_object(&fixture.data().join("config/topscreen_ui.json")).unwrap();
     let runtime_config = std::fs::read(fixture.data().join("config/TriAevum.json")).unwrap();
     replace_package(&fixture, Some("0.8.1"), NEW_RUNTIME, NEW_PLUGIN);
