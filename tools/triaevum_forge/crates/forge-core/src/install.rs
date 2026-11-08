@@ -650,17 +650,25 @@ pub fn install_precompiled_title(
         runtime_record: runtime_record(root, &catalog).map_err(verify)?,
         runtime: std::cell::OnceCell::new(),
     };
-    let interior_sun = prepare_interior_sun(
-        &bridge,
-        data_root,
-        &romfs.path,
-        &romfs.sha256,
-        &renderer_cache,
-        tables.interior_sun_masks.as_deref(),
-        report,
-        cancel,
-    )
-    .map_err(step("shaders", Operation::InteriorSun))?;
+    let interior_sun = if forge_catalog::title::ACTIVE.offline_interior_sun {
+        prepare_interior_sun(
+            &bridge,
+            data_root,
+            &romfs.path,
+            &romfs.sha256,
+            &renderer_cache,
+            tables.interior_sun_masks.as_deref(),
+            report,
+            cancel,
+        )
+        .map_err(step("shaders", Operation::InteriorSun))?
+    } else {
+        report("interior-sun", "This title has no offline interior sun to prepare.");
+        let mut skipped = Map::new();
+        skipped.insert("applicable".into(), json!(false));
+        skipped.insert("title".into(), json!(forge_catalog::title::ACTIVE.id));
+        skipped
+    };
     let renderer_preparation =
         prepare_renderer_shader_cache(services, root, data_root, &item, &renderer_cache, report).map_err(&helper)?;
     let pipeline_preparation = prepare_device_pipelines(

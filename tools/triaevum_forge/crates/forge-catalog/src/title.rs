@@ -30,6 +30,10 @@ pub struct ForgeTitle {
     pub forge_product: &'static str,
     /// Lower-case code.bin SHA-256 of the title's known revisions.
     pub code_sha256: &'static [&'static str],
+    /// Whether the title's runtime adapter has the offline interior-sun
+    /// prebuild (`--prebuild-interior-sun`, OoT3D's titles/oot3d/environment).
+    /// A title without one installs with no interior-sun step.
+    pub offline_interior_sun: bool,
 }
 
 pub const OOT3D: ForgeTitle = ForgeTitle {
@@ -42,6 +46,7 @@ pub const OOT3D: ForgeTitle = ForgeTitle {
     forge_product: "TriAevum Forge",
     // EUR (tools/triaevum_release/supported_revisions.json).
     code_sha256: &["16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"],
+    offline_interior_sun: true,
 };
 
 pub const MM3D: ForgeTitle = ForgeTitle {
@@ -54,6 +59,9 @@ pub const MM3D: ForgeTitle = ForgeTitle {
     forge_product: "TriAevum Forge for Majora's Mask 3D",
     // EUR CTR-P-AJRP code.bin (== USA v1.1), titles/mm3d/forge recipe.
     code_sha256: &["6eec27b1827eab2c87744ac38066d569ffe6fe75790b1eb3300bd91f5099038d"],
+    // MM3D has no interior-sun prebuild (its scene inventory is not OoT3D's;
+    // the runtime reads no interior-sun cache for MM3D).
+    offline_interior_sun: false,
 };
 
 /// Every title this source tree knows (for naming a foreign dump only).

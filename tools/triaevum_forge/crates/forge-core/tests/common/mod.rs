@@ -244,6 +244,8 @@ impl NativeServices for FakeRuntime {
     }
 
     fn prebuild_interior_sun(&self, request: &InteriorSunRequest, _: &CancelToken) -> Result<NativeOutput> {
+        // Only a title with an offline interior sun runs the prebuild (MM3D has none).
+        assert!(forge_catalog::title::ACTIVE.offline_interior_sun, "interior-sun prebuild run for a title without one");
         // The packaged runtime, or the placed one when a repair rebuilds the cache.
         let runtime = &request.runtime;
         assert!(
@@ -290,4 +292,16 @@ impl NativeServices for FakeRuntime {
 #[allow(dead_code)]
 pub fn launch_profile_name() -> String {
     forge_catalog::platform::launch_profile_name(forge_core::layout::host_platform().unwrap().installed_runtime)
+}
+
+/// The build's interior-sun record: prepared (`reused` as given) for a title
+/// with an offline interior sun, otherwise recorded as not applicable.
+#[allow(dead_code)]
+pub fn assert_interior_sun(build: &Value, reused: bool, context: &str) {
+    if forge_catalog::title::ACTIVE.offline_interior_sun {
+        assert_eq!(build["interior_sun"]["receipt_reused"], reused, "{context}");
+    } else {
+        assert_eq!(build["interior_sun"]["applicable"], false, "{context}");
+        assert_eq!(build["interior_sun"]["title"], forge_catalog::title::ACTIVE.id, "{context}");
+    }
 }

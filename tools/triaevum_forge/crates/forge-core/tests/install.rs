@@ -63,7 +63,7 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     assert_eq!(result["build"]["install_model"], "precompiled_title_rom_import_v1");
     assert_eq!(result["build"]["objects_compiled"], 0);
     assert_eq!(result["build"]["device_pipeline_preparation"], Value::Null);
-    assert_eq!(result["build"]["interior_sun"]["receipt_reused"], false);
+    common::assert_interior_sun(&result["build"], false, "first install");
     assert!(result["install_wall_seconds"].as_f64().unwrap() >= 0.0);
 
     let data = fixture.data();
@@ -204,7 +204,7 @@ fn a_second_install_reuses_the_title_and_keeps_user_state() {
 
     let second = fixture.install(&runtime, &mut Vec::new()).unwrap();
     assert_eq!(second["prepared"]["status"], "reused");
-    assert_eq!(second["build"]["interior_sun"]["receipt_reused"], true);
+    common::assert_interior_sun(&second["build"], true, "second install");
     assert_eq!(second["build"]["package"]["status"], "reused");
     let state = load_json_object(&state_path).unwrap();
     assert_eq!(state["translation"]["status"], "kept");

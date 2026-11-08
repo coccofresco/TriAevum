@@ -109,16 +109,20 @@ fn missing_assets_and_preparation_caches_are_rebuilt() {
     let water = data.join("cache/water");
     assert!(water.is_dir(), "the fixture prepares water textures");
     std::fs::remove_dir_all(&water).unwrap();
-    // The interior-sun cache is invalid too: its receipt no longer proves it.
+    // The interior-sun cache is invalid too: its receipt no longer proves it
+    // (only a title with an offline interior sun has one).
+    let interior_sun = forge_catalog::title::ACTIVE.offline_interior_sun;
     let shells = data.join("cache/renderer/shadow-shells");
-    std::fs::remove_dir_all(&shells).unwrap();
+    if interior_sun {
+        std::fs::remove_dir_all(&shells).unwrap();
+    }
     assert!(matches!(state(&fixture), InstallationState::RepairNeeded { reason: RepairReason::ReceiptMismatch, .. }));
 
     let result = repair(&fixture).unwrap();
     assert_eq!(result["route"], "in_place");
     assert_eq!(result["recovered_activation"], false);
-    assert_eq!(result["build"]["interior_sun"]["receipt_reused"], false, "rebuilt, not trusted");
-    assert!(water.is_dir() && shells.is_dir());
+    common::assert_interior_sun(&result["build"], false, "rebuilt, not trusted");
+    assert!(water.is_dir() && (shells.is_dir() || !interior_sun));
     assert_ready(&fixture);
     assert_kept(&kept);
 }
