@@ -539,7 +539,9 @@ void GfxRenderingAPIVulkan::PrepareNativePicaPrograms(
     for (unsigned thread = 0; thread < threads; ++thread) {
         mStartupPreparationThreads.emplace_back([this, prepare, progress, finished] {
             Renderer3ds::LowerPicaPreparationThreadPriority();
-            for (size_t index; (index = progress->Next++) < progress->Items.size();) {
+            // An error exit abandons the parts not started yet.
+            for (size_t index = 0;
+                 Renderer3ds::ClaimPicaStartupPart(progress->Next, progress->Items.size(), index);) {
                 if (!prepare(progress->Items[index])) ++progress->Failures;
                 // A failed part is not prepared, but it is no longer pending.
                 ++mStartupPreparedParts;

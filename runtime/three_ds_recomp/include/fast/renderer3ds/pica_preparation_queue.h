@@ -34,6 +34,16 @@ class PicaPreparationTask final {
 // Preparation threads run below normal priority (the calling thread).
 void LowerPicaPreparationThreadPriority();
 
+// An error exit abandons startup preparation: parts no worker has started are
+// skipped (what already finished still reaches the persisted caches), so the
+// fatal teardown never waits minutes for the remaining parts. A normal quit
+// never abandons it: preparation then finishes for the caches as before.
+void AbandonPicaStartupPreparation() noexcept;
+[[nodiscard]] bool PicaStartupPreparationAbandoned() noexcept;
+// Claims the next of `count` startup parts into `index`: false once every
+// part is claimed or startup preparation was abandoned.
+[[nodiscard]] bool ClaimPicaStartupPart(std::atomic<size_t>& next, size_t count, size_t& index) noexcept;
+
 // A small pool of below-normal-priority threads. The render thread submits
 // owned-input tasks and polls them; a task it cannot draw without is run on
 // the calling thread if no worker has started it yet (Complete).

@@ -64,7 +64,41 @@ int main() try {
         queue.Complete(*task);
         Check(task->Done(), "a failing task completes");
     }
-    std::puts("preparation queue: 4 contracts passed");
+    {
+        // Startup parts: without an error exit every part is claimed once.
+        std::atomic<size_t> next{0};
+        size_t index = 0, claimed = 0;
+        while (Fast::Renderer3ds::ClaimPicaStartupPart(next, 5, index)) Check(index == claimed++, "parts are claimed in order");
+        Check(claimed == 5U && !Fast::Renderer3ds::PicaStartupPreparationAbandoned(), "a normal run claims every startup part");
+    }
+    {
+        // An error exit (process-wide, so last) abandons the parts not started:
+        // workers shaped like the renderer's stop within one part, not after
+        // the whole list (Q-INTEG-R10-2: the fatal teardown joins them).
+        constexpr size_t kParts = 2000;
+        std::atomic<size_t> next{0}, prepared{0};
+        std::vector<std::thread> workers;
+        for (int worker = 0; worker < 3; ++worker)
+            workers.emplace_back([&] {
+                for (size_t index = 0; Fast::Renderer3ds::ClaimPicaStartupPart(next, kParts, index);) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    ++prepared;
+                }
+            });
+        while (prepared.load() < 6U) std::this_thread::yield();
+        const auto abandoned = std::chrono::steady_clock::now();
+        Fast::Renderer3ds::AbandonPicaStartupPreparation();
+        for (auto& worker : workers) worker.join();
+        const auto joinMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - abandoned).count();
+        std::printf("abandon: prepared=%zu of %zu join_ms=%lld
+", prepared.load(), kParts, static_cast<long long>(joinMs));
+        Check(Fast::Renderer3ds::PicaStartupPreparationAbandoned(), "the abandon is visible");
+        Check(prepared.load() < 100U && joinMs < 2000, "an abandoned startup preparation stops taking parts");
+        size_t index = 0;
+        Check(!Fast::Renderer3ds::ClaimPicaStartupPart(next, kParts, index), "nothing is claimed after the abandon");
+    }
+    std::puts("preparation queue: 6 contracts passed");
     return 0;
 } catch (const std::exception& error) {
     std::fprintf(stderr, "preparation queue test failed: %s\n", error.what());

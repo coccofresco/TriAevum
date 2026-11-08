@@ -517,6 +517,9 @@ int main(int argc, char** argv) {
                 reportDirectory.assign(folder.begin(), folder.end());
             }
         }
+        // The error ends the process: teardown must not wait for the
+        // startup preparation still queued (Q-INTEG-R10-2).
+        AbandonBackgroundWorkForDemo();
         DestroyContextForDemo();
         // After the window is gone, so the dialog is not hidden behind it.
         if (fatalDialog)

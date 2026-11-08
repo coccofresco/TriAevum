@@ -15,6 +15,7 @@
 #include "fast/Fast3dWindow.h"
 #include "fast/WindowExtentPolicy.h"
 #include "fast/backends/gfx_rendering_api.h"
+#include "fast/renderer3ds/pica_preparation_queue.h"
 #include "fast/resource/ResourceType.h"
 #include "fast/resource/factory/TextureFactory.h"
 #include "three_ds_recomp/legacy/controller/controldeck/ControlDeck.h"
@@ -243,6 +244,10 @@ void InitContextForDemo(const Args& args) {
     }
     RecordSwitchHostInitStage("host_audio");
     window->SetCursorVisibility(true);
+}
+
+void AbandonBackgroundWorkForDemo() noexcept {
+    Fast::Renderer3ds::AbandonPicaStartupPreparation();
 }
 
 void DestroyContextForDemo() noexcept {
