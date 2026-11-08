@@ -377,7 +377,7 @@ void CheckControlPersistence() {
     // MM's real F1 widget shares the same persistent controls owner, without
     // installing an OoT TopScreen owner or changing any bindings.
     auto mm = std::make_shared<NativeControlConfigRuntime>(root / "mm-controls.json", NativeControlDefaults());
-    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mm, nullptr, true)});
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mm, nullptr, {}, true)});
     Frame(); Frame(); Click("Controls"); Click("Devices");
     const auto mmBindings = mm->Snapshot().Config.Bindings;
     Select("##Native button labels", "Original 3DS");
@@ -394,7 +394,7 @@ void CheckControlPersistence() {
     Click("Revert changes"); Frame(true);
     Check(mm->Snapshot().Config.NativeButtonLabels && loggedPanelText.find("parse") != std::string::npos,
           "MM failed revert changed the preview or hid the persistence error");
-    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(blocked, nullptr, true)});
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(blocked, nullptr, {}, true)});
     Frame(); Frame(); Click("Devices");
     Select("##Native button labels", "Original 3DS"); Click("Save controls"); Frame(true);
     Check(!blocked->Snapshot().Config.NativeButtonLabels && loggedPanelText.find("cannot") != std::string::npos,

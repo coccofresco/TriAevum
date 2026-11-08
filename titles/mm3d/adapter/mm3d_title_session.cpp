@@ -421,8 +421,7 @@ public:
   }
   void Reset() override {
     if (const char* audit = std::getenv("TRIAEVUM_MM3D_COMPOSITION_AUDIT"); audit && std::string_view(audit) == "1")
-      std::fprintf(stderr, "TRIAEVUM_MM3D_COMPOSITION_RESET %s
-", CompositionSummary().dump().c_str());
+      std::fprintf(stderr, "TRIAEVUM_MM3D_COMPOSITION_RESET %s\n", CompositionSummary().dump().c_str());
     mComposition.Reset();
     mRumble.Reset();
     mPhotoCamera.Reset();
