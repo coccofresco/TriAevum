@@ -140,42 +140,45 @@ void TestRumbleSetting() {
 }
 
 
-// Title gameplay rows (MM3D quick put away) belong to the controls owner: off
-// by default and not written (OoT3D files are unchanged), on survives save and
-// reload, a wrong type or unknown key is refused, a preset never chooses it.
+// Title gameplay rows (MM3D quick put away, roll dash) belong to the controls
+// owner: on by default like OoT3D's TopScreen profile and not written (default
+// files are unchanged), off survives save and reload, a wrong type or unknown key
+// is refused, a preset keeps the default.
 void TestTitleGameplaySetting() {
     auto config = NativeControlDefaults();
     std::string json, error;
     NativeControlConfig loaded;
-    Require(!config.QuickPutAway, "quick put away starts off");
+    Require(config.QuickPutAway && config.RollDash, "title gameplay rows start on (OoT3D TopScreen default)");
     Require(SerializeNativeControlConfigText(config, &json, &error) && json.find("title_gameplay") == std::string::npos,
-            "off is not written");
-    config.QuickPutAway = true;
+            "the default is not written");
+    Require(ParseNativeControlConfigText(json, &loaded, &error) && loaded.QuickPutAway && loaded.RollDash,
+            "a file without title_gameplay loads the default on");
+    config.QuickPutAway = false;
     Require(SerializeNativeControlConfigText(config, &json, &error) &&
-                json.find("\"quick_put_away\": true") != std::string::npos &&
-                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
-            "quick put away survives save and reload");
+                json.find("\"quick_put_away\": false") != std::string::npos &&
+                json.find("roll_dash") == std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && !loaded.QuickPutAway,
+            "quick put away off survives save and reload");
     auto document = nlohmann::json::parse(json);
     document["title_gameplay"]["quick_put_away"] = 1;
     Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
                 error.find("title_gameplay") != std::string::npos, "a non-boolean value is refused");
     document["title_gameplay"] = {{"aiming_reticle_unknown", true}};
     Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error), "an unknown title gameplay row is refused");
-    config.RollDash = true;
+    config.RollDash = false;
     Require(SerializeNativeControlConfigText(config, &json, &error) &&
-                json.find("\"roll_dash\": true") != std::string::npos &&
-                json.find("\"quick_put_away\": true") != std::string::npos &&
-                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && loaded.RollDash,
-            "roll dash survives save and reload beside quick put away");
-    config.QuickPutAway = false;
+                json.find("\"roll_dash\": false") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && !loaded.RollDash,
+            "roll dash off survives save and reload beside quick put away");
+    config.QuickPutAway = true;
     Require(SerializeNativeControlConfigText(config, &json, &error) &&
                 json.find("quick_put_away") == std::string::npos &&
-                ParseNativeControlConfigText(json, &loaded, &error) && loaded.RollDash && !loaded.QuickPutAway,
-            "roll dash alone is written alone");
+                ParseNativeControlConfigText(json, &loaded, &error) && !loaded.RollDash && loaded.QuickPutAway,
+            "roll dash off alone is written alone");
     for (const auto profile : {NativeControlProfile::Keyboard, NativeControlProfile::KeyboardMouse,
                                NativeControlProfile::Controller})
-        Require(!NativeControlPreset(profile).QuickPutAway && !NativeControlPreset(profile).RollDash,
-                "a preset chose a title gameplay row");
+        Require(NativeControlPreset(profile).QuickPutAway && NativeControlPreset(profile).RollDash,
+                "a preset changed a title gameplay row default");
 }
 
 // The controls owner keeps the "Button prompts" choice and resolves the

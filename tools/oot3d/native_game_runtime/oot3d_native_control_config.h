@@ -96,10 +96,11 @@ struct NativeControlConfig {
   // ("rumble", written only when not Off).
   NativeRumbleStrength Rumble = NativeRumbleStrength::Off;
   // Gameplay rows a title implements outside a mod-owned profile (MM3D; OoT3D's
-  // TopScreen keeps its own). Off by default, as native; not part of a preset
-  // ("title_gameplay", written only when a value is on).
-  bool QuickPutAway = false;
-  bool RollDash = false;
+  // TopScreen keeps its own). On by default like OoT3D's TopScreen profile
+  // (coordinator decision 2026-11-08); presets keep the default ("title_gameplay",
+  // written only when a value is off, so default files stay unchanged).
+  bool QuickPutAway = true;
+  bool RollDash = true;
 
   bool operator==(const NativeControlConfig&) const = default;
 };
