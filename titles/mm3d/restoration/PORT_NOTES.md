@@ -152,7 +152,7 @@ language and restores original bytes when the associated setting is disabled.
 Metadata is guarded along with message bytes. The donor field decoding, binary
 search, all 14 language-reader calls and `0x195e -> 0x1962` lookup remap remain.
 
-**TODO for integration:** obtain/review edits from the user's own EUR messages
+**Open item (known limit of Moonfall Curse alpha 1):** obtain/review edits from the user's own EUR messages
 per language. Native price logic can run without text edits, but its displayed
 text will not be corrected until matching edits are supplied. The port does
 not guess translations or ship game strings. Missing/corrupted data rejects an

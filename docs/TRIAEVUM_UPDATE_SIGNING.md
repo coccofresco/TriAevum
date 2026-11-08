@@ -60,6 +60,39 @@ python tools/triaevum_release/archive_release.py --package <package folder> --ou
 
 The release audit verifies a present signature against the embedded keys.
 
+## Status before beta.2 (release review G3-F1)
+
+`tools/triaevum_forge/update-signing-keys.json` lists **no key** (`"keys": []`).
+What that means for the next releases:
+
+- **A candidate release** (`prepare_release.py --candidate`, as beta.1.2 was)
+  needs no signature. It passes the audit unsigned, and users install it from
+  a fresh folder or with `--update-target`. Its Forge embeds the empty list, so
+  it refuses every later update ZIP: the release after it must be installed
+  the same way.
+- **A final (non-candidate) release** must be signed. `prepare_release.py`
+  refuses it without `--signing-key`, and `audit_release.py` checks the
+  signature against the embedded keys, so with an empty list no final package
+  can pass the audit.
+- The keys are compiled into the Forge. A Forge built **before** the key is
+  committed can never accept a signed update, so the key must be committed
+  before the release Forge is built.
+
+Owner steps, once, before building a signed release Forge (no key is generated
+by the tooling on its own):
+
+1. On the publishing machine, outside the repository:
+   `python tools/triaevum_release/release_signature.py generate-key --private-key <path outside the repository> --add`
+   (optionally with `TRIAEVUM_RELEASE_SIGNING_PASSPHRASE` set to encrypt the key
+   file). The private key never enters the repository or a package; the tool
+   refuses a path inside either.
+2. Back up the private key and its passphrase in a second safe place.
+3. Commit the updated `update-signing-keys.json` (public key only) on the
+   release line, then build the Forge and the package from that commit.
+4. Release with `--signing-key <path>` (or `TRIAEVUM_RELEASE_SIGNING_KEY`), and
+   check that `release_signature.py verify --package <package>` and the release
+   audit pass, and that the package receipt names the key id.
+
 ## What Forge refuses
 
 - No signature, or a key this Forge does not embed: "This update is not signed
