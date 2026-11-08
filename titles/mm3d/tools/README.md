@@ -56,3 +56,13 @@ SHA-256 in `vertex_family.json`, and the family size (14 vertex + 9 pass
 modules) is checked. `--check <pack>` verifies an existing pack against the
 dump. The fragment families are title-independent built-ins shared with OoT3D.
 Binding the pack (`PreparedShaders`) belongs to the MM title integration.
+
+## Tracked shader packs (coordinator decision 2026-11-08)
+
+`titles/mm3d/shaders/mm3d_native_vertex.spvpack` is ROM-derived and tracked in
+Git, following the OoT3D precedent (`tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack`).
+Guard: `python vertex_family.py --check` regenerates it from the dump and must be
+byte-identical. `mm3d_native_fragment.spvpack` is the empty SPVK pack (shared
+fragment families); `python fragment_family.py --check` refuses any entry.
+Tests: `python -m unittest test_vertex_family test_fragment_family`.
+titles/mm3d stays local; the public form of ROM-derived packs is owner-deferred.
