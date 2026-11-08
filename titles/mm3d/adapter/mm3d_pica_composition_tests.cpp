@@ -142,19 +142,19 @@ void TestMm3dSceneLighting() {
     constexpr uint32_t layout=0x08040000,resource=0x08040100,nameAddress=0x08040200;
     Require(memory.Write32(layout+4,resource)&&memory.Write32(resource+0x18,nameAddress),"layout fixture");
     uint32_t begin=0x15000000;
-    for(std::string_view name:{"Hud","Hud2","HudItemIconSet","Telop","MessageWindow","MenuItem","MenuMask","MenuCollect","FileSelect","MenuSchedule","MenuOcarina","MenuStartup","HudUnknown","TouchPanel"}) {
+    for(std::string_view name:{"Hud","Hud2","HudItemIconSet","Telop","MessageWindow","MenuItem","MenuMask","MenuCollect","FileSelect","MenuSchedule","MenuOcarina","MenuStartup","HudUnknown"}) {
         for(uint32_t i=0;i<name.size();++i)Require(memory.Write8(nameAddress+i,uint8_t(name[i])),"layout name");
         Require(memory.Write8(nameAddress+uint32_t(name.size()),0),"name terminator");
         state.r[1]=layout;
         (void)pass(kMm3dLayoutOwnerDrawEntry,0x00126998U,begin,begin+0x40);
         Require(tracker.TakeCommandListCompositionSpans(begin,0x40,spans,&error),error);
         const auto& attribution=spans.back().Attribution;
-        const bool hud=name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop"||name=="TouchPanel";
+        const bool hud=name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop";
         Require(IsMm3dGameplayHud(attribution.SourcePc,attribution.NativeValue)==hud,"HUD-only attribution");
         begin+=0x40;
     }
     // P17 owner dump: every owner draw's resource name is counted, known or not.
-    Require(tracker.Stats().LayoutOwners.size()==14&&tracker.Stats().LayoutOwners.at("HudUnknown")==1&&
+    Require(tracker.Stats().LayoutOwners.size()==13&&tracker.Stats().LayoutOwners.at("HudUnknown")==1&&
             tracker.Stats().LayoutOwners.at("Hud")==1&&tracker.Stats().LayoutOwnersDropped==0,"layout owner dump");
     Require(!IsMm3dGameplayHud(kMm3dQuadQueueDrawEntry,kMm3dUiTag|1U),"mixed sprites never blanket HUD");
     Require(memory.Write32(resource+0x18,0xFFFFFFF0U),"bad name pointer");

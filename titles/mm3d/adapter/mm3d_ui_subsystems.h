@@ -8,10 +8,7 @@ namespace Oot3dNativeGame {
 // mixed quad queues remain visible; never infer HUD from all queue-4 draws.
 enum class Mm3dUiSubsystem:uint32_t { Unknown,GameplayHud,Pause,Message,FileSelect,Notebook,Ocarina,Startup };
 inline Mm3dUiSubsystem ClassifyMm3dLayout(std::string_view name) {
-  // TouchPanel: the touch-screen gameplay panel (minimap, item/mask buttons)
-  // that the single-screen layout shows on the top screen; P17 owner dump
-  // r5-owner: drawn on every gameplay frame beside Hud/Telop.
-  if(name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop"||name=="TouchPanel")return Mm3dUiSubsystem::GameplayHud;
+  if(name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop")return Mm3dUiSubsystem::GameplayHud;
   if(name=="MessageWindow")return Mm3dUiSubsystem::Message;
   if(name=="FileSelect"||name=="FilePlate"||name=="PopupWindow"||name=="UpPlateDetail")return Mm3dUiSubsystem::FileSelect;
   if(name=="MenuSchedule"||name=="MenuQuestlist"||name=="UpSchedule"||name=="UpQuestlist"||name=="UpEventMap")return Mm3dUiSubsystem::Notebook;
