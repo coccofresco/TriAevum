@@ -326,7 +326,7 @@ bool NativeA32WindowSession::RunFrame() {
   // owner; titles without such rows ignore them (OoT3D: TopScreen runtime).
   if (titleSession && controlConfigRuntime) {
     const auto controls = controlConfigRuntime->Snapshot().Config;
-    titleSession->SetGameplayOptions({.QuickPutAway = controls.QuickPutAway});
+    titleSession->SetGameplayOptions({.QuickPutAway = controls.QuickPutAway, .RollDash = controls.RollDash});
   }
   ApplyPhotoModeHud();
   uiLifecycleBridge.BeginHostFrame(

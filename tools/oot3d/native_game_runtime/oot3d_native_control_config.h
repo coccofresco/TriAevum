@@ -99,6 +99,7 @@ struct NativeControlConfig {
   // TopScreen keeps its own). Off by default, as native; not part of a preset
   // ("title_gameplay", written only when a value is on).
   bool QuickPutAway = false;
+  bool RollDash = false;
 
   bool operator==(const NativeControlConfig&) const = default;
 };

@@ -242,10 +242,17 @@ class NativeControlsSettingsPanel final
       });
       section("Gameplay", [&] {
         if (mTopScreen) DrawTopScreenGameplay(mTopDraft);
-        else if (mTitleGameplay.QuickPutAway) {
-          if (ImGui::Checkbox("Quick put away", &mControlDraft.QuickPutAway)) mControlDirty = true;
-          if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Items can be put away immediately instead of after the native cooldown.");
+        else if (mTitleGameplay.Any()) {
+          if (mTitleGameplay.QuickPutAway) {
+            if (ImGui::Checkbox("Quick put away", &mControlDraft.QuickPutAway)) mControlDirty = true;
+            if (ImGui::IsItemHovered())
+              ImGui::SetTooltip("Items can be put away immediately instead of after the native cooldown.");
+          }
+          if (mTitleGameplay.RollDash) {
+            if (ImGui::Checkbox("Roll dash", &mControlDraft.RollDash)) mControlDirty = true;
+            if (ImGui::IsItemHovered())
+              ImGui::SetTooltip("Holding A after a roll keeps running at the faster dash speed.");
+          }
         } else ImGui::TextDisabled("TopScreen profile is not active");
       });
       section("Touch", [&] { DrawTouch(); });
@@ -343,6 +350,7 @@ class NativeControlsSettingsPanel final
         mControlDraft.ButtonPrompts = previous.ButtonPrompts;
         mControlDraft.Rumble = previous.Rumble;
         mControlDraft.QuickPutAway = previous.QuickPutAway;
+        mControlDraft.RollDash = previous.RollDash;
         mControlDirty = true;
         ImGui::CloseCurrentPopup();
       }

@@ -87,10 +87,10 @@ public:
   // The host's one gameplay settings store (F1 and Esc share it): the rows
   // MM3D implements reach the title-owned sites; the rest stay inert.
   void SetGameplayOptions(const TitleGameplayOptions& options) override {
-    mGameplay.Set({options.QuickPutAway});
+    mGameplay.Set({options.QuickPutAway, options.RollDash});
   }
   [[nodiscard]] TitleGameplayOptionSet SupportedGameplayOptions() const override {
-    return {.QuickPutAway = true};
+    return {.QuickPutAway = true, .RollDash = true};
   }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {

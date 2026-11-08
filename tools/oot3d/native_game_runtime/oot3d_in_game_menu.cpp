@@ -840,6 +840,7 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
       config.ButtonPrompts = previous.ButtonPrompts;
       config.Rumble = previous.Rumble;
       config.QuickPutAway = previous.QuickPutAway;
+      config.RollDash = previous.RollDash;
       return ApplyControls(config);
     };
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(NativeControlProfile::Custom); };
@@ -1169,6 +1170,20 @@ void InGameMenu::BuildGameTab(Menu::Document &document) {
         return ApplyControls(config);
       };
       row.Modified = [this] { return mControls.QuickPutAway != NativeControlConfig{}.QuickPutAway; };
+      tab.Rows.push_back(std::move(row));
+    }
+    if (mOwners.TitleGameplay.RollDash) {
+      Row row;
+      row.Key = "Roll dash";
+      row.Kind = RowKind::Toggle;
+      row.Help = "Holding A after a roll keeps running at the faster dash speed.";
+      row.Read = [this] { return mControls.RollDash ? 1 : 0; };
+      row.Write = [this](int value) {
+        auto config = mControls;
+        config.RollDash = value != 0;
+        return ApplyControls(config);
+      };
+      row.Modified = [this] { return mControls.RollDash != NativeControlConfig{}.RollDash; };
       tab.Rows.push_back(std::move(row));
     }
   }

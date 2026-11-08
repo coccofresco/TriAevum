@@ -159,11 +159,23 @@ void TestTitleGameplaySetting() {
     document["title_gameplay"]["quick_put_away"] = 1;
     Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
                 error.find("title_gameplay") != std::string::npos, "a non-boolean value is refused");
-    document["title_gameplay"] = {{"roll_dash", true}};
+    document["title_gameplay"] = {{"aiming_reticle_unknown", true}};
     Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error), "an unknown title gameplay row is refused");
+    config.RollDash = true;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("\"roll_dash\": true") != std::string::npos &&
+                json.find("\"quick_put_away\": true") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && loaded.RollDash,
+            "roll dash survives save and reload beside quick put away");
+    config.QuickPutAway = false;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("quick_put_away") == std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded.RollDash && !loaded.QuickPutAway,
+            "roll dash alone is written alone");
     for (const auto profile : {NativeControlProfile::Keyboard, NativeControlProfile::KeyboardMouse,
                                NativeControlProfile::Controller})
-        Require(!NativeControlPreset(profile).QuickPutAway, "a preset chose quick put away");
+        Require(!NativeControlPreset(profile).QuickPutAway && !NativeControlPreset(profile).RollDash,
+                "a preset chose a title gameplay row");
 }
 
 // The controls owner keeps the "Button prompts" choice and resolves the
