@@ -85,6 +85,16 @@ if(TRIAEVUM_TITLE_MM3D)
         titles/mm3d/adapter/mm3d_timing_observer_tests.cpp)
     oot3d_target_defaults(mm3d_timing_observer_tests FOLDER Tests)
 
+    # The game window's icon per title (TitleSession::WindowIcon).
+    add_executable(mm3d_window_icon_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_window_icon_tests.cpp
+        titles/mm3d/adapter/mm3d_window_icon.cpp
+        tools/oot3d/native_demo_host/triaevum_window_icon.cpp)
+    target_include_directories(mm3d_window_icon_tests PRIVATE
+        tools/oot3d/native_demo_host
+        runtime/three_ds_recomp/include)
+    oot3d_target_defaults(mm3d_window_icon_tests FOLDER Tests)
+
     add_executable(mm3d_light_arena_tests EXCLUDE_FROM_ALL
         titles/mm3d/gameplay/mm3d_light_arena_tests.cpp)
     oot3d_target_defaults(mm3d_light_arena_tests FOLDER Tests)
@@ -143,11 +153,27 @@ target_sources(oot3d_native_game PRIVATE
     tools/oot3d/native_game_runtime/triaevum_data_routing.cpp
     tools/oot3d/native_game_runtime/triaevum_early_log.cpp
 )
+# The product whose icon the executable carries: oot3d (TriAevum's game icon,
+# the default and the dual-title developer build) or mm3d (the MM3D product,
+# titles/mm3d/branding). Only the icon resource depends on it.
+set(TRIAEVUM_PRODUCT_TITLE "oot3d" CACHE STRING "Product title of the game executable's icon (oot3d, mm3d)")
+set_property(CACHE TRIAEVUM_PRODUCT_TITLE PROPERTY STRINGS oot3d mm3d)
+if(TRIAEVUM_PRODUCT_TITLE STREQUAL "mm3d")
+    if(NOT TRIAEVUM_TITLE_MM3D)
+        message(FATAL_ERROR "TRIAEVUM_PRODUCT_TITLE=mm3d needs mm3d in TRIAEVUM_TITLES")
+    endif()
+    set(_triaevum_product_rc titles/mm3d/branding/mm3d_windows.rc)
+elseif(TRIAEVUM_PRODUCT_TITLE STREQUAL "oot3d")
+    set(_triaevum_product_rc tools/oot3d/native_game_runtime/triaevum_windows.rc)
+else()
+    message(FATAL_ERROR "TRIAEVUM_PRODUCT_TITLE: unknown title '${TRIAEVUM_PRODUCT_TITLE}' (oot3d, mm3d)")
+endif()
 if(WIN32)
     target_sources(oot3d_native_game PRIVATE
         tools/oot3d/native_game_runtime/triaevum_windows.manifest
-        # The executable's icon (tools/triaevum_release/branding).
-        tools/oot3d/native_game_runtime/triaevum_windows.rc)
+        # The executable's icon (tools/triaevum_release/branding, or
+        # titles/mm3d/branding for TRIAEVUM_PRODUCT_TITLE=mm3d).
+        ${_triaevum_product_rc})
     # Owner decision 12 (UX plan WP-03): players get no console window; an
     # error that ends the game shows a dialog (triaevum_fatal_report.h) and
     # developers ask for a console with --console (triaevum_console.h).
@@ -493,7 +519,8 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
     # The title sessions this build contains (triaevum_title_session.h).
     if(TRIAEVUM_TITLE_MM3D)
         target_sources(oot3d_native_game PRIVATE
-            titles/mm3d/adapter/mm3d_title_session.cpp)
+            titles/mm3d/adapter/mm3d_title_session.cpp
+            titles/mm3d/adapter/mm3d_window_icon.cpp)
         target_compile_definitions(oot3d_native_game PRIVATE TRIAEVUM_TITLE_MM3D=1)
         target_link_libraries(oot3d_native_game PRIVATE
             oot3d_mm3d_guest_patches

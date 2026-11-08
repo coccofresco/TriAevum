@@ -18,3 +18,7 @@ const Fast::WindowIconImage& TriAevumWindowIcon() {
     static const Fast::WindowIconImage icon{kWindowIconSize, kWindowIconSize, kWindowIconRgba};
     return icon;
 }
+
+const Fast::WindowIconImage& ResolveWindowIcon(const Fast::WindowIconImage* titleIcon) {
+    return titleIcon != nullptr ? *titleIcon : TriAevumWindowIcon();
+}

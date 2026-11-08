@@ -12,6 +12,7 @@
 #include "oot3d_environment_time.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
+#include "fast/WindowIcon.h"
 #include "fast/extension/grass_types.h"
 #include "gameplay_rumble.h"
 #include "triaevum_title_presentation.h"
@@ -81,6 +82,9 @@ public:
 
   // The game's name in capability messages.
   [[nodiscard]] virtual const char *GameName() const = 0;
+  // The game window's icon for this title (static pixels); null keeps the
+  // game icon (TriAevumWindowIcon, OoT3D's).
+  [[nodiscard]] virtual const Fast::WindowIconImage *WindowIcon() const { return nullptr; }
   // The composition provider the CTR host feeds, or nullptr for the
   // session's own.
   virtual Oot3dPicaCommandListCompositionProvider *CompositionProvider() { return nullptr; }

@@ -1,0 +1,5 @@
+// The MM3D product's executable icon ("Maschera di Majora, anello turchese",
+// titles/mm3d/branding/README.md), selected by CMake TRIAEVUM_PRODUCT_TITLE=mm3d.
+// Icon group 1 is the icon Explorer shows and the one SDL gives the game's
+// window class.
+1 ICON "windows/triaevum.ico"

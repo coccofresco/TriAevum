@@ -207,7 +207,7 @@ void InitContextForDemo(const Args& args) {
         window->EnableOot3dVulkanBackend();
     }
     window->ConfigureDefaultWindowExtent(!args.Scripted(), initialRequestIsDefault);
-    window->ConfigureWindowIcon(&TriAevumWindowIcon());
+    window->ConfigureWindowIcon(&ResolveWindowIcon(args.WindowIcon));
     if (TestFatal("vulkan-device")) {
         throw std::runtime_error(
             "the Vulkan device could not be created (simulated by TRIAEVUM_TEST_FATAL=vulkan-device)");

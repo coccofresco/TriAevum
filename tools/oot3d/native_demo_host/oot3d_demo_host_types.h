@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fast/WindowIcon.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -42,6 +44,9 @@ struct Args {
     int32_t AudioDesiredBuffered = 2480;
     int32_t BackendId = -1;
     std::string Renderer = "nri";
+    // The active title's window icon (TitleSession::WindowIcon); null: the
+    // game icon (TriAevumWindowIcon).
+    const Fast::WindowIconImage* WindowIcon = nullptr;
 
     // A scripted session (captures, fixed steps, bounded or replayed runs,
     // benchmarks, scheduled settings): what the host adds for a person at the

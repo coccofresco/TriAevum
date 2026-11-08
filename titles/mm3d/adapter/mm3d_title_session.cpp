@@ -28,6 +28,7 @@
 #include "mm3d_photo_camera_hook.h"
 #include "mm3d_presentation_settings.h"
 #include "mm3d_timing_observer.h"
+#include "mm3d_window_icon.h"
 #include "mm3d_frame_pacing.h"
 #include "mm3d_ui_subsystems.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
@@ -51,6 +52,7 @@ namespace {
 class Mm3dTitleSession final : public TitleSession {
 public:
   const char *GameName() const override { return "Majora's Mask 3D"; }
+  const Fast::WindowIconImage *WindowIcon() const override { return &Mm3dWindowIcon(); }
   Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
   bool NativeFragmentLighting() const override { return true; }
   std::string_view GrassRuleNamespace() const override { return "mm3d"; }
