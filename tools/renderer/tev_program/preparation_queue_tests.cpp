@@ -2,6 +2,7 @@
 // draw that cannot wait for a worker runs a still-queued task itself, and a
 // drain boundary leaves no task behind.
 #include "fast/renderer3ds/pica_preparation_queue.h"
+#include "fast/backends/gfx_startup_preparation_abandon.h"
 
 #include <atomic>
 #include <chrono>
@@ -68,8 +69,8 @@ int main() try {
         // Startup parts: without an error exit every part is claimed once.
         std::atomic<size_t> next{0};
         size_t index = 0, claimed = 0;
-        while (Fast::Renderer3ds::ClaimPicaStartupPart(next, 5, index)) Check(index == claimed++, "parts are claimed in order");
-        Check(claimed == 5U && !Fast::Renderer3ds::PicaStartupPreparationAbandoned(), "a normal run claims every startup part");
+        while (Fast::StartupPreparation::ClaimPart(next, 5, index)) Check(index == claimed++, "parts are claimed in order");
+        Check(claimed == 5U && !Fast::StartupPreparation::Abandoned(), "a normal run claims every startup part");
     }
     {
         // An error exit (process-wide, so last) abandons the parts not started:
@@ -80,22 +81,22 @@ int main() try {
         std::vector<std::thread> workers;
         for (int worker = 0; worker < 3; ++worker)
             workers.emplace_back([&] {
-                for (size_t index = 0; Fast::Renderer3ds::ClaimPicaStartupPart(next, kParts, index);) {
+                for (size_t index = 0; Fast::StartupPreparation::ClaimPart(next, kParts, index);) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(5));
                     ++prepared;
                 }
             });
         while (prepared.load() < 6U) std::this_thread::yield();
         const auto abandoned = std::chrono::steady_clock::now();
-        Fast::Renderer3ds::AbandonPicaStartupPreparation();
+        Fast::StartupPreparation::Abandon();
         for (auto& worker : workers) worker.join();
         const auto joinMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - abandoned).count();
         std::printf("abandon: prepared=%zu of %zu join_ms=%lld\n", prepared.load(), kParts, static_cast<long long>(joinMs));
-        Check(Fast::Renderer3ds::PicaStartupPreparationAbandoned(), "the abandon is visible");
+        Check(Fast::StartupPreparation::Abandoned(), "the abandon is visible");
         Check(prepared.load() < 100U && joinMs < 2000, "an abandoned startup preparation stops taking parts");
         size_t index = 0;
-        Check(!Fast::Renderer3ds::ClaimPicaStartupPart(next, kParts, index), "nothing is claimed after the abandon");
+        Check(!Fast::StartupPreparation::ClaimPart(next, kParts, index), "nothing is claimed after the abandon");
     }
     std::puts("preparation queue: 6 contracts passed");
     return 0;

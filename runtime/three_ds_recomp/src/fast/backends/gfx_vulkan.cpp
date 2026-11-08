@@ -2,6 +2,7 @@
 // ImGui). Other topics: gfx_vulkan_*.cpp; native PICA: gfx_vulkan_pica*.cpp.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
+#include "fast/backends/gfx_startup_preparation_abandon.h"
 
 namespace Fast {
 
@@ -541,7 +542,7 @@ void GfxRenderingAPIVulkan::PrepareNativePicaPrograms(
             Renderer3ds::LowerPicaPreparationThreadPriority();
             // An error exit abandons the parts not started yet.
             for (size_t index = 0;
-                 Renderer3ds::ClaimPicaStartupPart(progress->Next, progress->Items.size(), index);) {
+                 StartupPreparation::ClaimPart(progress->Next, progress->Items.size(), index);) {
                 if (!prepare(progress->Items[index])) ++progress->Failures;
                 // A failed part is not prepared, but it is no longer pending.
                 ++mStartupPreparedParts;

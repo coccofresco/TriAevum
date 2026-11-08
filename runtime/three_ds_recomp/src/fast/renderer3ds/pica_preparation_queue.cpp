@@ -112,24 +112,6 @@ void LowerPicaPreparationThreadPriority() {
 #endif
 }
 
-namespace {
-std::atomic<bool> gStartupPreparationAbandoned{false};
-} // namespace
-
-void AbandonPicaStartupPreparation() noexcept {
-    gStartupPreparationAbandoned.store(true, std::memory_order_release);
-}
-
-bool PicaStartupPreparationAbandoned() noexcept {
-    return gStartupPreparationAbandoned.load(std::memory_order_acquire);
-}
-
-bool ClaimPicaStartupPart(std::atomic<size_t>& next, size_t count, size_t& index) noexcept {
-    if (PicaStartupPreparationAbandoned()) return false;
-    index = next++;
-    return index < count;
-}
-
 void PicaPreparationQueue::Worker() {
     LowerPicaPreparationThreadPriority();
     for (;;) {
