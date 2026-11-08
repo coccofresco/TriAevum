@@ -91,6 +91,9 @@ pub fn validate_product_info_for(
     if !supported {
         return Err(preflight("TriAevum is missing NRI, F1 or TopScreen support"));
     }
+    if let Some(message) = forge_catalog::title::runtime_title_error(&forge_catalog::title::ACTIVE, info.get("titles")) {
+        return Err(preflight(&message));
+    }
     if !source_commit.is_empty() && !eq_str(get(info, "source_commit"), source_commit) {
         return Err(preflight("Runtime source commit does not match the release"));
     }

@@ -85,9 +85,44 @@ pub fn foreign_title_message(active: &ForgeTitle, foreign: &ForgeTitle) -> Strin
     )
 }
 
+/// Whether a runtime whose product information lists `titles` (its
+/// `titles` array: the adapters the build contains) can run `active`. A
+/// runtime that predates the field carries only OoT3D.
+pub fn runtime_title_error(active: &ForgeTitle, titles: Option<&serde_json::Value>) -> Option<String> {
+    let carries = match titles {
+        None => active.id == OOT3D.id,
+        Some(serde_json::Value::Array(items)) => items.iter().any(|item| item.as_str() == Some(active.id)),
+        Some(_) => return Some("Runtime product information lists its titles incorrectly".to_owned()),
+    };
+    (!carries).then(|| {
+        format!(
+            "This TriAevum runtime does not contain {} ({}); {} needs a runtime built with that title.",
+            active.display_name, active.id, active.forge_product
+        )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_must_carry_the_forge_title() {
+        use serde_json::json;
+        let both = json!(["oot3d", "mm3d"]);
+        let oot_only = json!(["oot3d"]);
+        assert_eq!(runtime_title_error(&OOT3D, Some(&both)), None);
+        assert_eq!(runtime_title_error(&MM3D, Some(&both)), None);
+        assert_eq!(runtime_title_error(&OOT3D, Some(&oot_only)), None);
+        // An older runtime (no field) is the OoT3D runtime, unchanged.
+        assert_eq!(runtime_title_error(&OOT3D, None), None);
+        // Negatives: the MM3D Forge refuses a runtime without MM3D, naming it.
+        let refusal = runtime_title_error(&MM3D, Some(&oot_only)).unwrap();
+        assert!(refusal.contains("Majora's Mask 3D") && refusal.contains("(mm3d)"), "{refusal}");
+        assert!(runtime_title_error(&MM3D, None).is_some());
+        assert!(runtime_title_error(&OOT3D, Some(&json!(["mm3d"]))).is_some());
+        assert!(runtime_title_error(&OOT3D, Some(&json!("oot3d"))).is_some());
+    }
 
     #[test]
     fn titles_are_isolated() {
