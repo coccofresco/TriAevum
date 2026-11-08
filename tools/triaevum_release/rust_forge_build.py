@@ -74,14 +74,30 @@ def rustflags(target: str, target_dir: Path | None = None) -> list[str]:
     glutin's EGL/GLX bindings)."""
     config = tomllib.loads((FORGE_ROOT / ".cargo/config.toml").read_text(encoding="utf-8"))
     flags = [str(flag) for flag in config.get("target", {}).get(target, {}).get("rustflags", [])]
+    flags += [f"--remap-path-prefix={source}={replacement}" for source, replacement in _remaps(target_dir)]
+    if target == WINDOWS.target:
+        flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/PDBALTPATH:%_PDB%"]
+    return flags
+
+
+def _remaps(target_dir: Path | None) -> list[tuple[Path, str]]:
     remaps = [(_home("RUSTUP_HOME", ".rustup"), "/rustup"), (_home("CARGO_HOME", ".cargo"), "/cargo"),
               (REPO_ROOT, "/triaevum")]
     if target_dir is not None:
         remaps.append((target_dir.resolve(), "/target"))
-    flags += [f"--remap-path-prefix={source}={replacement}" for source, replacement in remaps]
+    return remaps
+
+
+def c_flags(target: str, target_dir: Path | None, inherited: str = "") -> str:
+    """CFLAGS/ASMFLAGS for crates that compile C or assembly through `cc`
+    (ring): the same prefixes are remapped, because a build with debug line
+    tables (CARGO_PROFILE_RELEASE_DEBUG) records their source paths, which
+    --remap-path-prefix does not reach. GCC and Clang only: MSVC has no
+    equivalent, and the Windows build records no C debug paths."""
     if target == WINDOWS.target:
-        flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/PDBALTPATH:%_PDB%"]
-    return flags
+        return inherited
+    maps = [f"-ffile-prefix-map={source}={replacement}" for source, replacement in _remaps(target_dir)]
+    return " ".join(part for part in (inherited, *maps) if part)
 
 
 def _rustc_release(cargo: str) -> str:
@@ -135,6 +151,10 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
     environment = {**os.environ, "CARGO_TARGET_DIR": str(target_dir),
                    "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target, target_dir))}
     environment.pop("RUSTFLAGS", None)
+    for variable in ("CFLAGS", "ASMFLAGS"):
+        flags = c_flags(target, target_dir, environment.get(variable, ""))
+        if flags:
+            environment[variable] = flags
     features = target_features(target, features)
     command = [cargo, "build", "--release", "--locked", "--target", target,
                *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)],

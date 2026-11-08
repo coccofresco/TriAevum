@@ -98,6 +98,12 @@ class TitleReleaseTests(unittest.TestCase):
         self.assertEqual(linux, ("forge-desktop/title-mm3d", "forge-cli/title-mm3d"))
         self.assertEqual(rust_forge_build.target_features("x86_64-pc-windows-msvc", mm3d), tuple(mm3d))
         self.assertEqual(rust_forge_build.target_features("x86_64-unknown-linux-gnu", ()), ())
+        # C sources (ring) get the same path remapping on Linux, not on Windows.
+        linux_flags = rust_forge_build.c_flags("x86_64-unknown-linux-gnu", Path("/work/target"), "-O2")
+        self.assertTrue(linux_flags.startswith("-O2 -ffile-prefix-map="))
+        self.assertIn("=/cargo", linux_flags)
+        self.assertIn("=/target", linux_flags)
+        self.assertEqual(rust_forge_build.c_flags("x86_64-pc-windows-msvc", Path("/work/target"), "/O2"), "/O2")
         # Negatives: a feature of no Forge package, a bare feature.
         for bad in (("forge-other/title-mm3d",), ("title-mm3d",)):
             with self.assertRaisesRegex(ValueError, "Not a Forge package feature"):
