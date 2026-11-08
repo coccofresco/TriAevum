@@ -157,7 +157,7 @@ mod tests {
         let installation = Installation::at(directory.path()).unwrap();
         std::fs::create_dir(installation.root.join("recipes")).unwrap();
         std::fs::write(
-            installation.root.join("recipes").join("oot3d.json"),
+            installation.root.join(forge_catalog::recipes::PACKAGED_RECIPES),
             br#"{"format": "triaevum_supported_revisions_v1", "recipes": [{"id": "r", "optional_inputs": {
                 "vanilla_ui_hud_3_2_archive": {"name": "pack.zip", "bytes": 3, "sha256": "AB"}}}]}"#,
         )

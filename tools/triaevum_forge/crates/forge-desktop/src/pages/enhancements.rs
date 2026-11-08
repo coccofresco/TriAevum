@@ -415,28 +415,6 @@ pub fn show(app: &mut ForgeApp, ui: &mut egui::Ui, record: &mut Recorder, action
     }
     ui.add_space(8.0);
     apply_section(app, ui, record, actions, &status);
-    if status["title_id"] == "0004000000125600" || status["installed"] != true {
-        ui.add_space(12.0);
-        section(ui, "MM3D local interface preparation", |ui| {
-            line(
-                ui,
-                record,
-                "mm3d_ui_inputs_help",
-                "For a verified MM3D EUR v1.1 recipe, Prepare / Apply builds all five language archives, reviewed dialogue and prices, native UI layouts and HD font coverage locally. No game text is downloaded.",
-            );
-            line(
-                ui,
-                record,
-                "mm3d_ui_restoration_help",
-                "Place your original Project Restoration romfs folder inside the folder below. Forge verifies its files before preparing. Your saved games and settings are not replaced.",
-            );
-            let folder = app.installation.data_root.join("imports/mm3d-restoration");
-            line(ui, record, "mm3d_ui_inputs_folder", RichText::new(folder.display().to_string()).monospace().small());
-            if record.button(ui, true, "mm3d_ui_inputs_open", Button::new("Open local MM3D input folder")) {
-                actions.push(Action::OpenFolder(folder));
-            }
-        });
-    }
     ui.add_space(12.0);
     hd_section(app, ui, record, actions, &status);
     ui.add_space(12.0);

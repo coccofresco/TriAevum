@@ -93,3 +93,55 @@ fn the_other_titles_dump_is_rejected_by_name() {
     eprintln!("per-title dumps checked: {checked}");
     assert!(title::foreign_title(&ACTIVE, ACTIVE.code_sha256[0]).is_none());
 }
+
+/// validate_title bound to the MM3D title-module ARTIFACT CONTRACT
+/// (W/analysis/parity/CATALOGS/RESULTS.md). FIXTURE: the MM3D module is not
+/// built yet, so the plugin/runtime files are stand-in bytes; the binding
+/// (recipe id, dump-only inputs, abi_version 2, target, translator identity,
+/// sizes/digests) is the real validate_title path.
+#[test]
+fn mm3d_title_module_contract_binds_through_validate_title() {
+    use forge_base::hashing::sha256_hex;
+    use forge_catalog::precompiled;
+    use serde_json::{json, Value};
+
+    let mm_path = repo().join(MM3D.embedded_recipes);
+    let recipe = recipes::load_recipe(&mm_path, "mm3d-eur-local-6eec27b1").unwrap();
+    let oot = recipes::load_recipes(&repo().join(OOT3D.embedded_recipes)).unwrap();
+    let oot_recipe = oot[0].as_object().unwrap().clone();
+    let platform = forge_catalog::WINDOWS;
+    let directory = tempfile::tempdir().unwrap();
+    let artifact = |name: &str, bytes: &[u8]| {
+        let path = forge_catalog::paths::join_posix(directory.path(), name);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, bytes).unwrap();
+        json!({"path": name, "bytes": bytes.len(), "sha256": sha256_hex(bytes)})
+    };
+    let plugin_name = format!("titles/mm3d-eur-local-6eec27b1/{}", platform.title_module);
+    let item = |abi: u64, identity: &str| {
+        json!({"recipe": "mm3d-eur-local-6eec27b1", "inputs": recipe["inputs"], "abi_version": abi,
+               "target": platform.target, "translator_identity_sha256": identity,
+               "plugin": artifact(&plugin_name, b"mm3d title module fixture")})
+    };
+    let write = |title: Value| {
+        let catalog = json!({"format": precompiled::FORMAT, "install_model": precompiled::MODEL,
+            "target": platform.target, "runtime": artifact(platform.runtime, b"runtime fixture"),
+            "native_module": artifact(platform.native_module, b"native module fixture"), "titles": [title]});
+        forge_base::fsutil::atomic_write_json(&directory.path().join(precompiled::CATALOG), &catalog).unwrap();
+    };
+    let cancel = forge_base::CancelToken::new();
+    write(item(2, &"c".repeat(64)));
+    let bound = forge_catalog::validate_title(directory.path(), &recipe, None, &cancel).unwrap();
+    assert_eq!(bound["recipe"], "mm3d-eur-local-6eec27b1");
+    // Negatives (recorded): the OoT3D recipe finds no module in the MM catalog;
+    // ABI 1, a missing translator identity and a tampered module are refused.
+    let error = forge_catalog::validate_title(directory.path(), &oot_recipe, None, &cancel).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::UnsupportedRevision);
+    write(item(1, &"c".repeat(64)));
+    assert!(forge_catalog::validate_title(directory.path(), &recipe, None, &cancel).is_err(), "ABI 1 accepted");
+    write(item(2, ""));
+    assert!(forge_catalog::validate_title(directory.path(), &recipe, None, &cancel).is_err(), "no translator identity");
+    write(item(2, &"c".repeat(64)));
+    std::fs::write(forge_catalog::paths::join_posix(directory.path(), &plugin_name), b"tampered module bytes!!!!").unwrap();
+    assert!(forge_catalog::validate_title(directory.path(), &recipe, None, &cancel).is_err(), "tampered module");
+}

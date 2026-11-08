@@ -78,8 +78,11 @@ mod tests {
         assert_eq!(installation.data_root, installation.layout.activation.join("data"));
         assert_eq!(installation.active_title_state(), installation.data_root.join("active-title.json"));
         std::fs::create_dir(installation.root.join("recipes")).unwrap();
-        std::fs::write(installation.root.join("recipes").join("oot3d.json"), b"{}").unwrap();
-        assert!(installation.recipes().ends_with("recipes/oot3d.json"));
+        // The packaged recipes of this Forge build's title (recipes/oot3d.json
+        // for the OoT3D Forge, recipes/mm3d.json for the MM3D Forge).
+        let packaged = forge_catalog::recipes::PACKAGED_RECIPES;
+        std::fs::write(installation.root.join(packaged), b"{}").unwrap();
+        assert!(installation.recipes().ends_with(packaged));
         if cfg!(all(windows, target_arch = "x86_64")) {
             assert_eq!(installation.runtime_path().unwrap(), installation.root.join("TriAevum.exe"));
         }
