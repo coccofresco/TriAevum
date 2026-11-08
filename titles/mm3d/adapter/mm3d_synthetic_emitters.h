@@ -37,6 +37,15 @@ inline constexpr std::array kMm3dSyntheticSources{
     Mm3dSyntheticSource{0xFA,0x483C88,0x435704,{{
         {0x483544,0xE1D602F2},{0x483594,0xEDD40A16},
         {0x4841F8,0xE2840FBF},{0x48420C,0xE1D511F6}}}},
+    // 0x61 = En_Honotrap (gameplay_dangeon_keep, init 428270 branches on params
+    // 0/3/4). Flame kinds 1/2: init installs update 4E2304 / draw 4E2234
+    // (literals 42878C/428790, stored at 428740/428748); FlameGrow 2D23A8
+    // (init literal 428784) grows scale.x(+0x58) to 0.004 (params 1, literal
+    // 2D24B0 via vldreq at 2D23C0) or 0.0048. Analysis round5/honotrap_proof.out.
+    Mm3dSyntheticSource{0x61,0x4E2304,0x428794,{{
+        {0x428740,0xE5860140},{0x428748,0xE5860144},
+        {0x42878C,0x004E2304},{0x428790,0x004E2234},
+        {0x428784,0x002D23A8},{0x2D24B0,0x3B83126F},{0x2D23C0,0x0D9F0A3A}}}},
     Mm3dSyntheticSource{0x10B,0x4B4BE8,0x474070,{{
         {0x47403C,0xEBFD1750},{0x474040,0xE584026C},
         {0x474000,0xE5840264},{0x4B4C6C,0xE594220C}}}},
@@ -137,6 +146,16 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
         if(!(total>0))return;
         for(uint32_t c=0;c<3;++c)position[c]=sum[c]/total;
         radius=400.F*std::clamp(scale[0]/.03F,.1F,2.F);
+    } else if(id==0x61) {
+        // OoT3D policy (oot3d_native_a32_fire_emitters.cpp, En_Honotrap): the
+        // flames (params 1, 2) grow from 0.0001 to 0.004 / 0.0048 and shrink
+        // as they vanish; the eyes (0, 3) and the flame group (4) are not this.
+        uint16_t params=0;
+        if(draw!=0x4E2234 || !memory.Read16(actor+0x1C,&params) || (params!=1 && params!=2))return;
+        const float grown=params==1?.004F:.0048F;
+        level=std::clamp((scale[0]-.0001F)/(grown-.0001F),0.F,1.F);
+        const float size=scale[0]/.004F;
+        position[1]+=20.F*size;radius=500.F*size;
     } else {
         // A wall's native phase installs its draw callback; hidden phases do
         // not emit. The spout controller can delegate the visual to child2.

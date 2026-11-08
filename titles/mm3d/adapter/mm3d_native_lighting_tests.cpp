@@ -9,6 +9,7 @@
 #include "oot3d_native_a32_memory.h"
 #include "fast/renderer3ds/pica_resolved_draw_stream.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include <algorithm>
 #include <bit>
 #include <cmath>
 #include <cstdlib>
@@ -280,6 +281,10 @@ void TestRoomEmitterPublication() {
 }
 
 void TestSyntheticFireAndFairies() {
+    // F02(b): OoT3D's S-candidates present in MM (Honotrap flames) must be rows.
+    for(const uint16_t id:{uint16_t(0x61)})
+        Require(std::any_of(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
+                [&](const auto& r){return r.Actor==id;}),"OoT3D synthetic fire analogue missing in MM");
     for(const auto& row:kMm3dSyntheticSources) {
         Fixture f;std::vector<PicaScenePointLight> lights;
         f.W16(f.Actor,row.Actor);f.W32(f.Actor+0x140,row.Update);f.W32(f.Actor+0x13C,row.Destroy);
@@ -292,6 +297,7 @@ void TestSyntheticFireAndFairies() {
         if(row.Actor==0xB7){draw=0x47C5E4;f.F32(f.Actor+0x224,255);f.F32(f.Actor+0x228,1);f.W32(f.Actor+0x28C,f.Model);}
         if(row.Actor==0xFA){draw=0x483518;for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x2FC+n*4,255);
             for(uint32_t i=0;i<10;++i)for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x22C+i*12+n*4,float(10+n*10));}
+        if(row.Actor==0x61){draw=0x4E2234;f.W16(f.Actor+0x1C,2);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0048F);}
         f.W32(f.Actor+0x144,draw);
         CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
         Require(lights.size()==1 && lights[0].IndependentEmission && !lights[0].ReplacesNativeLocal &&
@@ -315,6 +321,31 @@ void TestSyntheticFireAndFairies() {
             lights.clear();f.W32(f.Actor+0x30C,0xBAD);
             CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
             Require(lights.empty(),"unknown fire-arrow action emitted");
+        }
+        if(row.Actor==0x61) {
+            // Grown drop flame: full level, radius 500*scale/0.004 (OoT3D policy).
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && std::abs(lights[0].Radius-600.F)<1e-3F &&
+                    std::abs(lights[0].Color[0]-1.F)<1e-6F && std::abs(lights[0].PositionWorld[1]-44.F)<1e-3F,
+                    "Honotrap flame lost the OoT3D size/level policy");
+            // Spawn scale 0.0001: no light yet; vanishing half way: dimmer.
+            lights.clear();f.F32(f.Actor+0x58,.0001F);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"just-spawned Honotrap flame emitted");
+            f.F32(f.Actor+0x58,.00245F);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Color[0]>.4F && lights[0].Color[0]<.6F,"vanishing Honotrap flame not faded");
+            // The eye (params 0/3) and the flame group (4) are not this flame.
+            for(const uint16_t kind:{uint16_t(0),uint16_t(3),uint16_t(4)}) {
+                lights.clear();f.W16(f.Actor+0x1C,kind);
+                CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+                Require(lights.empty(),"Honotrap eye/group treated as a single flame");
+            }
+            // The eye draw callback (profile draw 4E22B8) is not a flame.
+            f.W16(f.Actor+0x1C,1);f.W32(f.Actor+0x144,0x4E22B8);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"Honotrap eye draw treated as flame");
         }
         if(row.Actor==0xC){f.W32(f.Actor+0x144,draw);f.W8(f.Actor+0x768,2);
             CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
