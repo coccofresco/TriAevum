@@ -510,6 +510,7 @@ public:
             {"max_player_distance",photo.MaxPlayerDistance},{"last_eye",photo.LastEye},
             {"last_native_eye",photo.LastNativeEye}}},
         {"layout_owners", {{"draws",stats.LayoutOwners},{"dropped",stats.LayoutOwnersDropped}}},
+        {"quad_objects", {{"draws",stats.QuadObjects},{"dropped",stats.QuadObjectsDropped}}},
         {"scene_projections",std::move(projections)},
         {"scene_projection_segments_discarded",mProjectionHistory.DiscardedSegments()},
         {"foliage_distance", {{"verified", mFoliage.Verified()},
@@ -587,6 +588,21 @@ public:
            {"prepared", site.Prepared},
            {"replacements", site.Replacements},
            {"declined", site.Declined}});
+      // Read-only state facts of the gameplay rows (mm3d_gameplay_options.h):
+      // what the option did to the player, not only that it dispatched.
+      if (site.Name == "mm3d.quick_put_away" || site.Name == "mm3d.roll_dash.speed") {
+        const auto f = mGameplay.Facts();
+        sites.back()["facts"] = site.Name == "mm3d.quick_put_away"
+            ? nlohmann::json{{"skips", f.PutAwaySkips},
+                             {"skips_cooldown_below_rearm", f.PutAwaySkipsUnarmed},
+                             {"min_cooldown_at_skip", f.MinCooldownAtSkip}}
+            : nlohmann::json{{"player_updates", f.PlayerUpdates},
+                             {"run_updates_native", f.RunUpdatesNative},
+                             {"run_updates_dash", f.RunUpdatesDash},
+                             {"max_run_speed_native", f.MaxRunSpeedNative},
+                             {"max_run_speed_dash", f.MaxRunSpeedDash},
+                             {"roll_to_run", f.RollToRun}};
+      }
     }
     return sites;
   }

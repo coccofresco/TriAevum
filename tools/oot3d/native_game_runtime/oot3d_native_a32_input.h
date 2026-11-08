@@ -44,12 +44,44 @@ enum NativeA32HostKey : uint32_t {
 };
 uint32_t NativeA32HostKeyMask(const std::string& name);
 
+// The in-game (Esc) menu's controls a scripted run presses, as the keyboard
+// would (Esc toggles, arrows, Enter, Backspace, Q/E tabs). The menu holds the
+// game while open, so no guest frame (and no timeline segment) advances: a
+// segment's "menu_presses" is queued once when the segment starts and the
+// host plays it on its own presented frames (one press, then three released
+// frames each), never through the guest pad.
+enum NativeA32MenuPress : uint8_t {
+    kNativeMenuPressNone = 0,
+    kNativeMenuPressToggle = 1, // Esc
+    kNativeMenuPressUp = 2,
+    kNativeMenuPressDown = 3,
+    kNativeMenuPressLeft = 4,
+    kNativeMenuPressRight = 5,
+    kNativeMenuPressConfirm = 6, // Enter
+    kNativeMenuPressBack = 7,    // Backspace
+    kNativeMenuPressTabPrevious = 8, // Q
+    kNativeMenuPressTabNext = 9,     // E
+};
+inline constexpr uint32_t kNativeA32MaxMenuPresses = 16U;
+uint8_t NativeA32MenuPressCode(const std::string& name);
+inline uint8_t NativeA32MenuPressAt(uint64_t packed, uint32_t index) {
+    return static_cast<uint8_t>((packed >> (index * 4U)) & 0xFU);
+}
+
 struct NativeA32InputFrame : ThreeDsRecomp::Input::InputFrame {
     bool Exit = false;
     bool Scripted = false;
     int32_t ScriptSegmentIndex = -1;
     uint32_t HostKeys = 0;
+    // Scripted-run-only host stall (test infrastructure like host_keys, never a
+    // product setting): the host sleeps this long before the refresh, so a
+    // timeline can stress the native-30 limiter and its deadline rebase.
+    uint32_t HostFrameDelayMs = 0;
+    // Scripted in-game menu presses (NativeA32MenuPress, 4 bits each).
+    uint64_t MenuPresses = 0;
+    uint32_t MenuPressCount = 0;
 };
+inline constexpr uint32_t kNativeA32MaxHostFrameDelayMs = 250U;
 
 bool ResolveNativeGameplayMouseOwnership(
     bool nativeFrontendTouchEnabled, bool hostGuiVisible,
@@ -278,6 +310,9 @@ class NativeA32InputTimeline {
         uint32_t StartFrame = 0;
         uint32_t EndFrameExclusive = 0;
         uint32_t HostKeys = 0;
+        uint32_t HostFrameDelayMs = 0;
+        uint64_t MenuPresses = 0;
+        uint32_t MenuPressCount = 0;
     };
 
     std::filesystem::path mSourcePath;

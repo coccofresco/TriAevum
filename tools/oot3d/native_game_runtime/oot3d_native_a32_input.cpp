@@ -157,6 +157,32 @@ uint32_t ReadHostKeys(const nlohmann::json& segment) {
     return mask;
 }
 
+uint32_t ReadHostFrameDelay(const nlohmann::json& segment) {
+    if (!segment.contains("host_frame_delay_ms")) return 0U;
+    const auto& value = segment.at("host_frame_delay_ms");
+    if (!value.is_number_unsigned() || value.get<uint64_t>() > kNativeA32MaxHostFrameDelayMs)
+        throw std::runtime_error("native input timeline host_frame_delay_ms must be an unsigned count <= 250");
+    return static_cast<uint32_t>(value.get<uint64_t>());
+}
+
+void ReadMenuPresses(const nlohmann::json& segment, uint64_t& packed, uint32_t& count) {
+    packed = 0U;
+    count = 0U;
+    if (!segment.contains("menu_presses")) return;
+    const auto& presses = segment.at("menu_presses");
+    if (!presses.is_array() || presses.size() > kNativeA32MaxMenuPresses)
+        throw std::runtime_error("native input timeline menu_presses must be an array of at most 16 names");
+    for (const auto& press : presses) {
+        if (!press.is_string())
+            throw std::runtime_error("native input timeline menu press names must be strings");
+        const auto code = NativeA32MenuPressCode(press.get<std::string>());
+        if (code == kNativeMenuPressNone)
+            throw std::runtime_error("unknown native input timeline menu press: " + press.get<std::string>());
+        packed |= static_cast<uint64_t>(code) << (count * 4U);
+        ++count;
+    }
+}
+
 bool ReadOptionalBool(const nlohmann::json& segment, const char* key) {
     if (!segment.contains(key)) {
         return false;
@@ -608,12 +634,27 @@ NativeA32InputTimeline NativeA32InputTimeline::LoadFile(
         segment.Hid.GyroscopeValid = ReadMotionVector(source, "gyroscope_dps", segment.Hid.GyroscopeDegreesPerSecond);
         segment.Hid.AccelerometerValid = ReadMotionVector(source, "accelerometer_g", segment.Hid.Accelerometer);
         segment.HostKeys = ReadHostKeys(source);
+        segment.HostFrameDelayMs = ReadHostFrameDelay(source);
+        ReadMenuPresses(source, segment.MenuPresses, segment.MenuPressCount);
         timeline.mSegments.push_back(segment);
         previousEnd = segment.EndFrameExclusive;
         first = false;
     }
     timeline.mSourcePath = std::filesystem::absolute(path).lexically_normal();
     return timeline;
+}
+
+uint8_t NativeA32MenuPressCode(const std::string& name) {
+    if (name == "toggle") return kNativeMenuPressToggle;
+    if (name == "up") return kNativeMenuPressUp;
+    if (name == "down") return kNativeMenuPressDown;
+    if (name == "left") return kNativeMenuPressLeft;
+    if (name == "right") return kNativeMenuPressRight;
+    if (name == "confirm") return kNativeMenuPressConfirm;
+    if (name == "back") return kNativeMenuPressBack;
+    if (name == "tab_prev") return kNativeMenuPressTabPrevious;
+    if (name == "tab_next") return kNativeMenuPressTabNext;
+    return kNativeMenuPressNone;
 }
 
 uint32_t NativeA32HostKeyMask(const std::string& name) {
@@ -663,6 +704,9 @@ NativeA32InputFrame NativeA32InputTimeline::Sample(uint32_t guestFrame,
             static_cast<const ThreeDsRecomp::Input::InputFrame&>(segment);
         result.ScriptSegmentIndex = static_cast<int32_t>(index);
         result.HostKeys = segment.HostKeys;
+        result.HostFrameDelayMs = segment.HostFrameDelayMs;
+        result.MenuPresses = segment.MenuPresses;
+        result.MenuPressCount = segment.MenuPressCount;
         break;
     }
     return result;

@@ -434,17 +434,18 @@ void CheckControlPersistence() {
     Frame(); Frame();
     Click("Controls");
     if (!labelVisible("Quick put away")) Click("Gameplay");
-    Check(!mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away does not start off");
+    // On by default like OoT3D's TopScreen profile (coordinator decision 2026-11-08).
+    Check(mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away does not start on");
     Click("Quick put away");
-    Check(mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away did not preview through the controls owner");
-    Check(!mmControls->Snapshot().Config.RollDash, "MM3D roll dash does not start off");
+    Check(!mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away did not preview through the controls owner");
+    Check(mmControls->Snapshot().Config.RollDash, "MM3D roll dash does not start on");
     Click("Roll dash");
-    Check(mmControls->Snapshot().Config.RollDash, "MM3D roll dash did not preview through the controls owner");
+    Check(!mmControls->Snapshot().Config.RollDash, "MM3D roll dash did not preview through the controls owner");
     Click("Save controls");
     NativeControlConfig mmSaved;
-    Check(LoadNativeControlConfig(root / "mm3d-controls.json", &mmSaved) && mmSaved.QuickPutAway,
+    Check(LoadNativeControlConfig(root / "mm3d-controls.json", &mmSaved) && !mmSaved.QuickPutAway,
           "Save controls did not persist MM3D quick put away");
-    Check(mmSaved.RollDash, "Save controls did not persist MM3D roll dash");
+    Check(!mmSaved.RollDash, "Save controls did not persist MM3D roll dash");
     // A title without such rows (OoT3D outside TopScreen) shows none.
     InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mmControls, nullptr)});
     Frame(); Frame();

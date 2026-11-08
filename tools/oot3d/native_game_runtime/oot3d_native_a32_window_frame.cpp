@@ -635,14 +635,22 @@ bool NativeA32WindowSession::RunFrame() {
 #endif
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // A dev lab "menu" command replaces the host controls with its presses.
-  inGameMenu.Update(devLabMenuDriving ? devLabMenuInput : nativeControlPollingState.Menu, imGuiOwnsInput,
-                    presentationElapsedSeconds);
+  {
+    auto menuInput = devLabMenuDriving ? devLabMenuInput : nativeControlPollingState.Menu;
+    ApplyScriptedMenuStep(menuInput);
+    inGameMenu.Update(menuInput, imGuiOwnsInput, presentationElapsedSeconds);
+  }
   // The lab's wheel is a delta for one menu update; the lab command advances
   // per guest refresh, this update per presented frame.
   devLabMenuInput.PointerWheel = 0.0F;
 #else
-  inGameMenu.Update(nativeControlPollingState.Menu, imGuiOwnsInput, presentationElapsedSeconds);
+  {
+    auto menuInput = nativeControlPollingState.Menu;
+    ApplyScriptedMenuStep(menuInput);
+    inGameMenu.Update(menuInput, imGuiOwnsInput, presentationElapsedSeconds);
+  }
 #endif
+  if (nativeControlPollingState.ScriptedMenu.PressesApplied != 0U && inGameMenu.IsOpen()) ++nativeControlPollingState.ScriptedMenu.OpenFrames;
   // The first-play help card, once per installation, when the game is first
   // shown (after the preparation screen) and no other host surface is up.
   if (!helpCardConsidered && (!helpCardEligible || (preparationScreen.Done() && !imGuiOwnsInput &&
@@ -1182,6 +1190,11 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
   auto &window = *windowPointer;
   auto &dspHle = *dspHleStorage;
+  // Scripted runs only: a timeline's host_frame_delay_ms stalls the host to
+  // stress the frame limiter; a live (unscripted) frame never carries it.
+  if (inputFrame.Scripted && inputFrame.HostFrameDelayMs != 0U)
+    std::this_thread::sleep_for(std::chrono::milliseconds(inputFrame.HostFrameDelayMs));
+  QueueScriptedMenuPresses(inputFrame);
   UpdateDevFreeCamera(inputFrame);
   const uint32_t topScreenButtons = inputFrame.Hid.Buttons;
   const uint32_t topScreenPressed =
@@ -3210,6 +3223,42 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
   }
 }
 #endif
+
+void NativeA32WindowSession::QueueScriptedMenuPresses(const Oot3dNativeGame::NativeA32InputFrame &inputFrame) {
+  if (!inputFrame.Scripted || inputFrame.ScriptSegmentIndex == nativeControlPollingState.ScriptedMenu.Segment) return;
+  nativeControlPollingState.ScriptedMenu.Segment = inputFrame.ScriptSegmentIndex;
+  for (uint32_t index = 0; index < inputFrame.MenuPressCount; ++index) {
+    nativeControlPollingState.ScriptedMenu.Steps.push_back(Oot3dNativeGame::NativeA32MenuPressAt(inputFrame.MenuPresses, index));
+    ++nativeControlPollingState.ScriptedMenu.PressesQueued;
+  }
+}
+
+void NativeA32WindowSession::ApplyScriptedMenuStep(Oot3dNativeGame::InGameMenuHostInput &input) {
+  if (nativeControlPollingState.ScriptedMenu.Steps.empty()) {
+    nativeControlPollingState.ScriptedMenu.Tick = 0U;
+    return;
+  }
+  // One presented frame pressed, three released: every press is an edge.
+  const uint32_t phase = nativeControlPollingState.ScriptedMenu.Tick++ % 4U;
+  if (phase == 0U) {
+    using namespace Oot3dNativeGame;
+    switch (nativeControlPollingState.ScriptedMenu.Steps.front()) {
+      case kNativeMenuPressToggle: input.Toggle = true; break;
+      case kNativeMenuPressUp: input.Up = true; break;
+      case kNativeMenuPressDown: input.Down = true; break;
+      case kNativeMenuPressLeft: input.Left = true; break;
+      case kNativeMenuPressRight: input.Right = true; break;
+      case kNativeMenuPressConfirm: input.Confirm = true; break;
+      case kNativeMenuPressBack: input.Back = true; break;
+      case kNativeMenuPressTabPrevious: input.TabPrevious = true; break;
+      case kNativeMenuPressTabNext: input.TabNext = true; break;
+      default: break;
+    }
+    ++nativeControlPollingState.ScriptedMenu.PressesApplied;
+  } else if (phase == 3U) {
+    nativeControlPollingState.ScriptedMenu.Steps.pop_front();
+  }
+}
 
 void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32InputFrame &inputFrame) {
   auto &freeCamera = *nativeCandidateDispatch.DevFreeCamera;

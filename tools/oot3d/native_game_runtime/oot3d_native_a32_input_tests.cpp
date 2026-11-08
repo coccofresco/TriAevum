@@ -140,42 +140,45 @@ void TestRumbleSetting() {
 }
 
 
-// Title gameplay rows (MM3D quick put away) belong to the controls owner: off
-// by default and not written (OoT3D files are unchanged), on survives save and
-// reload, a wrong type or unknown key is refused, a preset never chooses it.
+// Title gameplay rows (MM3D quick put away, roll dash) belong to the controls
+// owner: on by default like OoT3D's TopScreen profile and not written (default
+// files are unchanged), off survives save and reload, a wrong type or unknown key
+// is refused, a preset keeps the default.
 void TestTitleGameplaySetting() {
     auto config = NativeControlDefaults();
     std::string json, error;
     NativeControlConfig loaded;
-    Require(!config.QuickPutAway, "quick put away starts off");
+    Require(config.QuickPutAway && config.RollDash, "title gameplay rows start on (OoT3D TopScreen default)");
     Require(SerializeNativeControlConfigText(config, &json, &error) && json.find("title_gameplay") == std::string::npos,
-            "off is not written");
-    config.QuickPutAway = true;
+            "the default is not written");
+    Require(ParseNativeControlConfigText(json, &loaded, &error) && loaded.QuickPutAway && loaded.RollDash,
+            "a file without title_gameplay loads the default on");
+    config.QuickPutAway = false;
     Require(SerializeNativeControlConfigText(config, &json, &error) &&
-                json.find("\"quick_put_away\": true") != std::string::npos &&
-                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
-            "quick put away survives save and reload");
+                json.find("\"quick_put_away\": false") != std::string::npos &&
+                json.find("roll_dash") == std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && !loaded.QuickPutAway,
+            "quick put away off survives save and reload");
     auto document = nlohmann::json::parse(json);
     document["title_gameplay"]["quick_put_away"] = 1;
     Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
                 error.find("title_gameplay") != std::string::npos, "a non-boolean value is refused");
     document["title_gameplay"] = {{"aiming_reticle_unknown", true}};
     Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error), "an unknown title gameplay row is refused");
-    config.RollDash = true;
+    config.RollDash = false;
     Require(SerializeNativeControlConfigText(config, &json, &error) &&
-                json.find("\"roll_dash\": true") != std::string::npos &&
-                json.find("\"quick_put_away\": true") != std::string::npos &&
-                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && loaded.RollDash,
-            "roll dash survives save and reload beside quick put away");
-    config.QuickPutAway = false;
+                json.find("\"roll_dash\": false") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && !loaded.RollDash,
+            "roll dash off survives save and reload beside quick put away");
+    config.QuickPutAway = true;
     Require(SerializeNativeControlConfigText(config, &json, &error) &&
                 json.find("quick_put_away") == std::string::npos &&
-                ParseNativeControlConfigText(json, &loaded, &error) && loaded.RollDash && !loaded.QuickPutAway,
-            "roll dash alone is written alone");
+                ParseNativeControlConfigText(json, &loaded, &error) && !loaded.RollDash && loaded.QuickPutAway,
+            "roll dash off alone is written alone");
     for (const auto profile : {NativeControlProfile::Keyboard, NativeControlProfile::KeyboardMouse,
                                NativeControlProfile::Controller})
-        Require(!NativeControlPreset(profile).QuickPutAway && !NativeControlPreset(profile).RollDash,
-                "a preset chose a title gameplay row");
+        Require(NativeControlPreset(profile).QuickPutAway && NativeControlPreset(profile).RollDash,
+                "a preset changed a title gameplay row default");
 }
 
 // The controls owner keeps the "Button prompts" choice and resolves the
@@ -281,6 +284,54 @@ void TestHostKeysTimeline() {
     bool refused = false;
     try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
     Require(refused, "an unknown host key is refused");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","frame_origin":"run","segments":[
+      {"start_frame":0,"end_frame_exclusive":5,"buttons":[]},
+      {"start_frame":5,"end_frame_exclusive":9,"buttons":[],"host_frame_delay_ms":40}]})");
+    const auto stall = NativeA32InputTimeline::LoadFile(path);
+    Require(stall.Sample(0, 2).HostFrameDelayMs == 0U, "no stall outside the stall segment");
+    Require(stall.Sample(0, 6).HostFrameDelayMs == 40U && stall.Sample(0, 6).Scripted,
+            "a scripted stall segment carries its host delay");
+    Require(stall.Sample(0, 9).HostFrameDelayMs == 0U, "the stall ends with its segment");
+    Require(NativeA32InputFrame{}.HostFrameDelayMs == 0U, "a live frame never stalls");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","segments":[
+      {"start_frame":0,"end_frame_exclusive":1,"host_frame_delay_ms":1000}]})");
+    refused = false;
+    try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
+    Require(refused, "a stall above 250 ms is refused");
+    std::filesystem::remove(path);
+}
+
+// A timeline's "menu_presses" are the Esc menu's keys in order, packed on the
+// frame (the window plays them on presented frames while the menu holds the
+// game), never pad buttons; unknown names and more than 16 are refused.
+void TestMenuPressesTimeline() {
+    const auto path = std::filesystem::temp_directory_path() / "triaevum_menu_presses_timeline.json";
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","frame_origin":"run","segments":[
+      {"start_frame":0,"end_frame_exclusive":5,"buttons":[]},
+      {"start_frame":5,"end_frame_exclusive":6,"buttons":[],
+       "menu_presses":["toggle","tab_next","tab_next","tab_next","confirm","toggle"]}]})");
+    const auto timeline = NativeA32InputTimeline::LoadFile(path);
+    const auto before = timeline.Sample(0, 2), esc = timeline.Sample(0, 5), after = timeline.Sample(0, 7);
+    Require(before.MenuPressCount == 0U, "a segment without menu_presses presses nothing");
+    Require(esc.MenuPressCount == 6U && esc.Hid.Buttons == 0U && esc.HostKeys == 0U,
+            "menu presses are not pad buttons or host keys");
+    const uint8_t expected[] = {kNativeMenuPressToggle, kNativeMenuPressTabNext, kNativeMenuPressTabNext,
+                                kNativeMenuPressTabNext, kNativeMenuPressConfirm, kNativeMenuPressToggle};
+    for (uint32_t index = 0; index < 6U; ++index)
+        Require(NativeA32MenuPressAt(esc.MenuPresses, index) == expected[index], "menu presses keep their order");
+    Require(after.MenuPressCount == 0U, "menu presses belong to their segment");
+    Require(NativeA32InputFrame{}.MenuPressCount == 0U, "a live frame carries no scripted menu press");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","segments":[
+      {"start_frame":0,"end_frame_exclusive":1,"menu_presses":["escape"]}]})");
+    bool refused = false;
+    try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
+    Require(refused, "an unknown menu press is refused");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","segments":[
+      {"start_frame":0,"end_frame_exclusive":1,"menu_presses":["up","up","up","up","up","up","up","up","up",
+       "up","up","up","up","up","up","up","up"]}]})");
+    refused = false;
+    try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
+    Require(refused, "more than 16 menu presses are refused");
     std::filesystem::remove(path);
 }
 
@@ -309,6 +360,7 @@ int main(int argc, char** argv) {
     TestShoulderMappings();
     TestTitleGameplaySetting();
     TestHostKeysTimeline();
+    TestMenuPressesTimeline();
     TestButtonPromptsOwner();
     TestRumbleSetting();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);

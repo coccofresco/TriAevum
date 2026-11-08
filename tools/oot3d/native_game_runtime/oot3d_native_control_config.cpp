@@ -268,8 +268,8 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
         return false;
       }
     }
-    parsed.QuickPutAway = gameplay.value("quick_put_away", false);
-    parsed.RollDash = gameplay.value("roll_dash", false);
+    parsed.QuickPutAway = gameplay.value("quick_put_away", true);
+    parsed.RollDash = gameplay.value("roll_dash", true);
   }
 
   if (document.contains("controller_touchpad")) {
@@ -758,8 +758,8 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
     document["button_prompts"] = ThreeDsRecomp::Input::ButtonPromptsName(config.ButtonPrompts);
   if (config.Rumble != NativeRumbleStrength::Off)
     document["rumble"] = ThreeDsRecomp::Input::RumbleStrengthName(config.Rumble);
-  if (config.QuickPutAway) document["title_gameplay"]["quick_put_away"] = true;
-  if (config.RollDash) document["title_gameplay"]["roll_dash"] = true;
+  if (!config.QuickPutAway) document["title_gameplay"]["quick_put_away"] = false;
+  if (!config.RollDash) document["title_gameplay"]["roll_dash"] = false;
   NativeControlConfig validated;
   if (!DecodeNativeControlConfig(document, &validated, error)) {
     return false;
