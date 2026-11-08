@@ -20,7 +20,8 @@ struct Mm3dLocalLightSource {
 };
 inline constexpr std::array kMm3dLocalLightSources{
     // Player/carried fire: wrapper callbacks dispatch through 6919AC. Native
-    // init 1F5C78 inserts +9A4 and stores +9A0; destroy 1F6FDC removes it.
+    // init 1F45DC tail-branches (B at 1F4600) to 1F5C78, whose BL at 1F6818
+    // inserts +9A4 and stores +9A0; destroy 1F6FDC removes it.
     // Keep the title's active radius/RGB/limb-tip position, not a second stick.
     Mm3dLocalLightSource{0,2,0x9A4,0x9A0,0x1F4E1C,0x43A8D4,{{
         {0x1F6818,0xEBFFC3E9},{0x1F681C,0xE58409A0},
