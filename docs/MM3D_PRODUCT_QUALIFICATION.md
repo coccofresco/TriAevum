@@ -386,3 +386,37 @@ decision-policy inputs (`graphics_settings.h`, `gfx_vulkan_pica_draw.cpp`, compo
 omission condition moved into `OmitsNativeProjectedShadowRole`) differ from the corpus recording source. The corpus was
 requalified at the CATALOGS tip, which does not carry 049bd3ce. The gate requires fresh variant recordings; no package
 was produced and no installed run was made. Evidence: `W/analysis/parity/INTEG/module-window/out-r13/`.
+
+## Module window part 3 (2026-11-08, integ round 8)
+
+The corpus re-recorded by CATALOGS at 35fe6696 (pack ddef4aee, qualification c347d0ee) qualifies against this tree
+(check exit 0, SHA256SUMS OK); window preflight exit 0. OoT-only TriAevum.exe at the tip is up to date and identical to
+the round-7 O2 binary bf2cb10e, so no new per-cut O2 was due (no C++ changed after it).
+
+The MM package, install, status and bad-input steps now pass. Defects found on the MM install path and fixed:
+- The precompiled release audit read `recipes/oot3d.json`; it now reads the release's single declared revision recipe
+  (0b52b8c1).
+- Forge asked the runtime for the ROM languages without the code identity, so the runtime read the MM3D RomFS as
+  OoT3D's. Installation now passes the verified code.bin SHA-256 (ede9ba7e).
+- The offline interior-sun prebuild (an OoT3D title tool) ran for MM3D and failed. It is now a per-title Forge fact, and
+  MM3D records it as not applicable (94bdc772).
+
+Package facts:
+- 96 files. The catalog is re-laid with abi 2 and translator dd2ff99a; plugin 3e6ebcd0; runtime cf127a72.
+- `validate_title` exits 0, and the tampered-DLL negative exits 1.
+- The MM product-contract audit reports 18416 compiled functions, 0 host boundaries and 0 residual entries (exit 0). The
+  OoT-contract negative exits 1.
+- The Restoration members are bundled.
+
+Installed layout:
+- `Moonfall_Curse.exe` and `data/Moonfall_Curse.launch.json`. There is no root `TriAevum.exe` and no leftover
+  `runtime/TriAevum.exe`.
+- Icon receipt of the installed binaries: 9/9 MM images, 0/9 OoT images. The update helper and the Forge GUI carry the
+  steel mask. The CLI `triaevum-forge.exe` has no icon in either title.
+
+F07 Windows row: still **NOT QUALIFIED**. The one granted installed run exited 2 within one second, before any guest
+execution. The cause was diagnosed offline and lies in the run harness, not the product: `run_safe.sh` (installed mode)
+put `--screenshot-rgb8` before `--launch-profile`. The runtime only loads a profile given as argv[1], so it rejected
+`--launch-profile` as an unknown option. The harness is fixed, and its dry-run receipt shows argv[1] =
+`--launch-profile`. Under the run budget, no retry or diagnostic run was made, so no realtime product evidence exists yet.
+Evidence: `W/analysis/parity/INTEG/module-window/out-r14/`.
