@@ -1,0 +1,20 @@
+{
+  "format": "triaevum_mm3d_vertex_family_v1",
+  "title": "mm3d",
+  "revision": "EUR CTR-P-AJRP code.bin == USA v1.1",
+  "romfs_directory": "shaders",
+  "note": "Guard words: every SHBIN must hash exactly; LineShader DVLE 1 is a geometry program and stays untranslated (--vertex-only).",
+  "shbin": {
+    "DebugShader.shbin": "d25ddcdb9e6faa8cacd3fe70a180e0e1d93d4d3d1779ac8642ad5874864f088f",
+    "DummyShader.shbin": "7b254c77f8f8eaa3ee22dacb4b2e08f30c0ac15d37c137881aed6b5cf8a2427f",
+    "GzwShader.shbin": "a8a32a61cf8aa0bfeb6bf7918e9d6957db4d88161bbcea39a8d19f17940c9295",
+    "LayoutShader.shbin": "d049fe483f1b9a02b6c2a42fa725f93077e8ad8ec495d1d0e7669b61e2f91324",
+    "LineShader.shbin": "d4a3638e2bbdaa2dd9c36732da32a08350da61e03b2a0f72cb06469ad2318b6f"
+  },
+  "expected": {
+    "native_vertex_artifacts": 14,
+    "title_pass_artifacts": 9,
+    "vertex_dvle": 6,
+    "untranslated_geometry_dvle": 1
+  }
+}
