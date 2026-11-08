@@ -206,9 +206,17 @@ def default_runtime_plugin_path() -> Path:
 
 
 def default_runtime_launch_profile_path() -> Path:
-    activation = installation_layout().activation
-    # Named after the installed executable, as the runtime looks for it.
-    legacy = activation / launch_profile_name(host_platform())
+    layout = installation_layout()
+    activation = layout.activation
+    platform = host_platform()
+    # Named after the executable that runs, as the runtime looks for it. A
+    # sealed Linux payload (AppImage/Flatpak: activation outside the package)
+    # never places the runtime under the product name: it runs as packaged.
+    name = launch_profile_name(platform)
+    if sys.platform == "linux" and layout.activation != layout.package:
+        packaged = platform.runtime.rsplit("/", 1)[-1]
+        name = packaged + ".launch.json"
+    legacy = activation / name
     # An installation made before the profile moved to data/ keeps it: the
     # runtime prefers a profile beside it, so a second one would go stale.
     if legacy.is_file():

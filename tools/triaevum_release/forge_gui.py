@@ -258,7 +258,13 @@ def install_private_title(
 
 
 def runtime_path() -> Path:
-    return installed_runtime_path(installation_root(), host_platform()).resolve()
+    root, platform = installation_root(), host_platform()
+    # A sealed Linux payload (AppImage/Flatpak) runs the runtime as packaged:
+    # its desktop entry names the product, the file keeps its packaged name.
+    layout = for_package(root)
+    if sys.platform == "linux" and layout.activation != layout.package:
+        return (root / platform.runtime).resolve()
+    return installed_runtime_path(root, platform).resolve()
 
 
 def launch_runtime(data_root: Path | None = None) -> subprocess.Popen[bytes]:
