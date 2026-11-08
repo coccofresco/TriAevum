@@ -129,3 +129,33 @@ and interactive/physical-platform audio qualification remain unresolved. No
 repeat of the failed timed test or speculative buffer/catch-up increase was
 performed. Evidence: `LANGAUDIO/{cold-replay-04,fixed-state-smoke-04}-analysis.json`,
 `cold-replay-04-diagnosis.json`, and `fixed-state-smoke-04/post-restore.png`.
+
+## Audio scheduling in the MM3D guest (decomp check, 2026-11-08 r3)
+
+Donor mm3d-decomp-dl 28182d85 (v1.0 USA, read by meaning; EUR v1.1 addresses
+differ). The guest runs a dedicated audio thread, clocked by the DSP frame, not by
+the game frame (2Ship signals its audio thread from the game frame instead):
+
+- Thread loop `FUN_001c1854` (twin `FUN_001c186c`): runs while flag `+0xd` is
+  set. Each pass waits for the DSP frame (`FUN_001d06b0`) or the timed path
+  `FUN_001cbb88` bracketed by `svc 0x28` GetSystemTick. It runs registered
+  callbacks under the lock pair `FUN_00192d3c`/`FUN_00192d9c` (the same pair as the
+  mixer), then calls the frame step `FUN_001cbca8` under that lock and records the
+  tick delta.
+- Frame step `FUN_001cbca8` is skipped while state bytes `+1`/`+3` are set
+  (paused/disabled). It calls `FUN_001d0830`.
+- `FUN_001d0830` mixes two output channels through the already-matched dispatch
+  `FUN_001d65ec(...,0/1,...)`, runs the voice step and the 24-voice loop
+  (`FUN_001d638c`, `FUN_001d6538`). It computes the buffered budget
+  `(+0x1320) - FUN_001d656c - FUN_001d6318` and gives it to `FUN_001d63c0`,
+  which retires voices beyond the budget under the lock. It flips the
+  double-buffer index `+0x131e`/`+0x131a` and signals the DSP with `svc 0x18`
+  SignalEvent.
+
+Consequence for TriAevum: the native port runs this thread as guest code. Its
+pacing therefore comes from the emulated DSP-frame event that the shared
+runtime's audio output queue drives, for both titles. Our realtime starvation
+(LANGAUDIO cold-replay-04/05) cannot come from an MM-specific scheduling rule:
+the guest only produces a frame when the host delivers the DSP event and guest
+CPU time. This matches the round-1 finding that guest A32 throughput dominates.
+No title fact or runtime change follows from this check.
