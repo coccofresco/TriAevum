@@ -129,12 +129,21 @@ inline constexpr std::array kMm3dCompositionOwnerGuards{
 // Observers decline replacement: the original instruction always executes.
 // Also exported by --block-boundaries; adding a runtime site alone does not
 // regenerate an already-built registry.
+// An unconditional `ldmia sp!, {..., pc}` (pop with pc) or `bx lr`: the
+// guest never reaches the next word after it.
+constexpr bool Mm3dIsUnconditionalReturn(uint32_t word) noexcept {
+    return (word & 0xFFFF8000U) == 0xE8BD8000U || word == 0xE12FFF1EU;
+}
+
 inline void RegisterMm3dLightingHooks(Mm3dGuestPatches& patches) {
     for (const auto& hook : kMm3dLightingHookSites) {
         Mm3dGuestPatchSite site;
         site.Pc = hook.Pc; site.Name = "lighting-observer-" + std::to_string(hook.Pc);
         for (uint32_t i = 0; i < hook.Words.size(); ++i) site.Guard.emplace_back(hook.Pc + i * 4U, hook.Words[i]);
         site.Handler = [](auto&, auto&) -> std::optional<uint32_t> { return std::nullopt; };
+        // Observers always execute the original instruction, so Pc + 4 is a
+        // continuation only when that instruction can fall through.
+        site.ContinuesAtNext = !Mm3dIsUnconditionalReturn(hook.Words[0]);
         patches.Add(std::move(site));
     }
 }

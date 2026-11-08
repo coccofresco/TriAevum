@@ -1,4 +1,5 @@
 #include "mm3d_guest_patches.h"
+#include "mm3d_lighting_hook_sites.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -216,10 +217,48 @@ void TestProductBoundaries() {
             "a disabled site must not need module boundaries");
 }
 
+void TestReturnSiteNeedsNoContinuation() {
+    // An observer on an unconditional return: Pc + 4 is literal data and is
+    // neither a registry boundary nor a module entry the product requires.
+    Mm3dGuestPatches patches;
+    Mm3dGuestPatchSite site;
+    site.Pc = kSite;
+    site.Name = "epilogue-observer";
+    site.Guard = {{kSite, 0xE8BD8038U}};
+    site.Handler = [](auto&, auto&) -> std::optional<std::uint32_t> { return std::nullopt; };
+    site.ContinuesAtNext = false;
+    patches.Add(std::move(site));
+    WordMemory memory;
+    memory.Words = {{kSite, 0xE8BD8038U}};
+    Require(patches.Verify(memory) == 1U, "the return site was not enabled");
+    Require(patches.BlockBoundaries() == std::vector<std::uint32_t>{kSite},
+            "a return site must not export its literal successor");
+    Require(patches.MissingProductBoundaries({kSite}).empty(),
+            "a module without the literal successor was refused");
+    // Negative: the site itself is still required.
+    Require(patches.MissingProductBoundaries({}) == std::vector<std::uint32_t>{kSite},
+            "a module lacking the return site was accepted");
+    Require(Mm3dIsUnconditionalReturn(0xE8BD8038U) && Mm3dIsUnconditionalReturn(0xE12FFF1EU) &&
+                !Mm3dIsUnconditionalReturn(0x08BD8038U) && !Mm3dIsUnconditionalReturn(0xE8BD4038U),
+            "return classification");
+    // The title's epilogue observers (guard word 0 = pop {r3-r5,pc}) export
+    // no literal successor; the body observers keep theirs.
+    Mm3dGuestPatches lighting;
+    RegisterMm3dLightingHooks(lighting);
+    const auto bounds = lighting.BlockBoundaries();
+    const auto has = [&](std::uint32_t pc) {
+        return std::binary_search(bounds.begin(), bounds.end(), pc);
+    };
+    Require(has(0x0011EF58U) && !has(0x0011EF5CU) && !has(0x0011EFA8U) && !has(0x0011EFF8U),
+            "epilogue observers exported their literal successors");
+    Require(has(0x0011EF3CU) && has(0x0011EF40U), "a body observer lost its continuation");
+}
+
 } // namespace
 
 int main() {
     TestProductBoundaries();
+    TestReturnSiteNeedsNoContinuation();
     TestReplacement();
     TestGuard();
     TestMissingBlock();

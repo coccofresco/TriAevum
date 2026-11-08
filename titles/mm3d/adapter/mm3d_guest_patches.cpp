@@ -81,7 +81,9 @@ std::vector<std::uint32_t> Mm3dGuestPatches::BlockBoundaries() const {
             continue;
         }
         boundaries.push_back(entry.Site.Pc);
-        boundaries.push_back(entry.Site.Pc + 4U);
+        if (entry.Site.ContinuesAtNext) {
+            boundaries.push_back(entry.Site.Pc + 4U);
+        }
     }
     std::sort(boundaries.begin(), boundaries.end());
     boundaries.erase(std::unique(boundaries.begin(), boundaries.end()), boundaries.end());
@@ -98,7 +100,9 @@ std::vector<std::uint32_t> Mm3dGuestPatches::MissingProductBoundaries(
         }
         anyEnabled = true;
         needed.push_back(entry.Site.Pc);
-        needed.push_back(entry.Site.Pc + 4U);
+        if (entry.Site.ContinuesAtNext) {
+            needed.push_back(entry.Site.Pc + 4U);
+        }
     }
     if (anyEnabled) {
         needed.insert(needed.end(), mTargets.begin(), mTargets.end());
