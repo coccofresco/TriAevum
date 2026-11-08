@@ -210,6 +210,9 @@ public:
   }
   // A savestate was restored.
   virtual void Reset() {}
+  // Host-held title work that a state cannot carry is in flight (a host
+  // continuation of guest code): the save waits for the next boundary.
+  [[nodiscard]] virtual bool SavestateCapturePending() const { return false; }
 
   // runtime.json: the title's composition and guest patch statistics.
   [[nodiscard]] virtual nlohmann::json CompositionSummary() const { return nullptr; }

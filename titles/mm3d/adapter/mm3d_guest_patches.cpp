@@ -136,6 +136,12 @@ void Mm3dGuestPatches::SkipOnce(std::uint32_t pc, std::uint32_t thread) {
     }
 }
 
+void Mm3dGuestPatches::ResetPending() noexcept {
+    for (auto& entry : mSites) {
+        entry.SkipThreads.clear();
+    }
+}
+
 bool Mm3dConditionPassed(std::uint32_t instruction, std::uint32_t cpsr) noexcept {
     return a32::ConditionPassed(static_cast<a32::Condition>(instruction >> 28U), cpsr);
 }

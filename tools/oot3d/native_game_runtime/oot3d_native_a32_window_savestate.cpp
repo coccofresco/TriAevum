@@ -283,6 +283,7 @@ NativeA32WindowSession::SaveState(const std::filesystem::path &path, bool withSe
   if (objectBankStorage->Pending()) return SaveStateOutcome::Deferred;
   // The temporary rain count and the outer weather frame are host-held.
   if (rainStorage->Pending()) return SaveStateOutcome::Deferred;
+  if (titleSession && titleSession->SavestateCapturePending()) return SaveStateOutcome::Deferred;
   const auto started = std::chrono::steady_clock::now();
   Oot3dNativeGame::NativeA32SavestateRuntimeState runtime;
   runtime.FrameCount = frameCount;

@@ -351,7 +351,12 @@ public:
     mPhotoCamera.Reset();
     // dekui's UI/camera host state belongs to the abandoned timeline.
     if (mSingleScreen) mSingleScreen->ResetHostState();
+    // Restoration's suspended guest calls too (the restored guest threads
+    // never return to them); the save waits for them to finish.
+    mGuestCalls.Reset();
+    mGuestPatches.ResetPending();
   }
+  bool SavestateCapturePending() const override { return mGuestCalls.Active() != 0U; }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();

@@ -85,6 +85,8 @@ class Mm3dGuestPatches {
     // pc, its own instruction runs: a site whose work ran elsewhere (a
     // coroutine that called guest code) resumes the guest at itself.
     void SkipOnce(std::uint32_t pc, std::uint32_t thread);
+    // A savestate was restored: pending SkipOnce marks are dropped.
+    void ResetPending() noexcept;
 
     // oot3d::recomp::a32::NativeFunctionCallback over a Mm3dGuestPatches.
     static bool Execute(std::uint32_t pc, oot3d::recomp::a32::GuestState& state,

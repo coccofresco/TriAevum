@@ -143,12 +143,54 @@ void TestStrayReturn() {
     Require(!guest.Dispatch(Mm3dGuestCalls::kReturnSentinel), "a stray return was handled");
 }
 
+// A restored savestate abandons a body suspended in a guest call: Reset
+// drops it (the old timeline's return is then a stray return, the body never
+// resumes), and pending SkipOnce marks no longer let the site's instruction
+// run once.
+void TestResetOnRestore() {
+    Guest guest;
+    guest.Calls.Install(guest.Patches);
+    int resumed = 0;
+    bool destroyed = false;
+    struct Guard {
+        bool* Flag;
+        ~Guard() { *Flag = true; }
+    };
+    Mm3dGuestCalls::Body body = [&](Mm3dGuestCallContext& context) -> Mm3dGuestTask {
+        Guard guard{&destroyed};
+        co_await context.Call(kAdd, {{1, 2}});
+        ++resumed;
+    };
+    Mm3dGuestPatchSite site;
+    site.Pc = kSite;
+    site.Name = "restore";
+    site.Handler = [&](a32::GuestState& state, a32::MemoryBus& memory) {
+        return guest.Calls.Start(kSite, kSite, body, state, memory);
+    };
+    guest.Patches.Add(std::move(site));
+    (void)guest.Patches.Verify(guest.Memory);
+    guest.State.thread_pointer = 0x4000U;
+    Require(guest.Dispatch(kSite) && guest.Next == kAdd && guest.Calls.Active() == 1U,
+            "the call was not in flight");
+    guest.Calls.Reset();
+    Require(guest.Calls.Active() == 0U && destroyed, "Reset kept the suspended body");
+    guest.State.r[0] = 3U;
+    Require(!guest.Dispatch(Mm3dGuestCalls::kReturnSentinel) && resumed == 0,
+            "the abandoned timeline's return resumed the body");
+
+    guest.Patches.SkipOnce(kSite, 0x4000U);
+    guest.Patches.ResetPending();
+    Require(guest.Dispatch(kSite) && guest.Next == kAdd,
+            "a SkipOnce mark from the abandoned timeline survived");
+}
+
 } // namespace
 
 int main() {
     TestCalls();
     TestResumeAtSite();
     TestStrayReturn();
+    TestResetOnRestore();
     std::cout << "mm3d_guest_calls_tests: ok\n";
     return 0;
 }
