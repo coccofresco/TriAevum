@@ -390,6 +390,7 @@ private:
   void PublishTopScreenUiConfig();
   void ApplyPhotoModeHud();
   bool devFreeCameraToggleHeld = false;
+  bool scriptedHideHudHeld = false;  // timeline host key "hide_hud" edge
   std::chrono::steady_clock::time_point devFreeCameraLastRefresh{};
   // Moves the free camera from the pad, keyboard and mouse and withholds that
   // input from the game while it is active.
