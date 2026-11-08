@@ -282,7 +282,7 @@ void TestRoomEmitterPublication() {
 
 void TestSyntheticFireAndFairies() {
     // F02(b): OoT3D's S-candidates present in MM (Honotrap flames) must be rows.
-    for(const uint16_t id:{uint16_t(0x61),uint16_t(0xB),uint16_t(0xFD)})
+    for(const uint16_t id:{uint16_t(0x61),uint16_t(0xB),uint16_t(0xFD),uint16_t(0x145)})
         Require(std::any_of(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
                 [&](const auto& r){return r.Actor==id;}),"OoT3D synthetic fire analogue missing in MM");
     for(const auto& row:kMm3dSyntheticSources) {
@@ -300,11 +300,14 @@ void TestSyntheticFireAndFairies() {
         if(row.Actor==0xB){draw=0x456990;f.W32(f.Actor+0x9D4,0x55868C);f.F32(f.Actor+0x240,31.5F);
             for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0xA20+n*4,float(100+n));}
         if(row.Actor==0xFD){draw=0x4CE20C;f.W8(f.Actor+0x266,255);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0348F);}
+        if(row.Actor==0x145){draw=0x424D18;f.W16(f.Actor+0x674,2);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.01F);
+            const uint8_t env[]={255,150,0,255,255,0,0,255,0,255,0,255,0,0,255,255,255,255,0,255};
+            for(uint32_t i=0;i<sizeof(env);++i)f.W8(0x675708+i,env[i]);}
         if(row.Actor==0x61){draw=0x4E2234;f.W16(f.Actor+0x1C,2);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0048F);}
         f.W32(f.Actor+0x144,draw);
         CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
         Require(lights.size()==1 && lights[0].IndependentEmission && !lights[0].ReplacesNativeLocal &&
-                lights[0].Group==2 && lights[0].Radius>0,"proved native fire phase not published");
+                lights[0].Group==(row.Actor==0x145?1U:2U) && lights[0].Radius>0,"proved native fire phase not published");
         lights.clear();CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,true,false,lights);
         Require(lights.empty(),"registered source gained a synthetic duplicate");
         for(const auto& g:row.Guards)if(g[0]){f.W32(g[0],g[1]^1U);
@@ -354,6 +357,25 @@ void TestSyntheticFireAndFairies() {
             f.W8(f.Actor+0x266,255);f.W32(f.Actor+0x144,0x4CE20C+4);
             CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
             Require(lights.empty(),"Fireshield with another draw callback emitted");
+        }
+        if(row.Actor==0x145) {
+            // Snowhead (area 2): authored green; out-of-range area -> Clock Town orange.
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Color[0]==0 && lights[0].Color[1]==1 && lights[0].Group==1 &&
+                    lights[0].Radius==100,"stray fairy lost its area colour or fairy group");
+            lights.clear();f.W16(f.Actor+0x674,7);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Color[0]==1 && std::abs(lights[0].Color[1]-150.F/255.F)<1e-6F,
+                    "stray fairy area clamp differs from native");
+            lights.clear();f.F32(f.Actor+0x58,.005F);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && std::abs(lights[0].Color[0]-.5F)<1e-6F,"collected stray fairy not fading");
+            // Held by an enemy / collider kind: no draw callback, no glow.
+            lights.clear();f.W32(f.Actor+0x144,0);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"hidden stray fairy glowed");
+            f.W32(f.Actor+0x144,draw);f.F32(f.Actor+0x58,.01F);
         }
         if(row.Actor==0x61) {
             // Grown drop flame: full level, radius 500*scale/0.004 (OoT3D policy).

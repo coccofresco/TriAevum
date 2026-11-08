@@ -63,6 +63,15 @@ inline constexpr std::array kMm3dSyntheticSources{
         {0x4CE5B4,0xED940A96},{0x4CE5B8,0xED9F1A38},
         {0x4CE6A0,0x437F0000},{0x4CE5EC,0xE5C40266},
         {0x4CE224,0xE5D40266},{0x4A88A0,0x3D0E8A72},{0,0}}}},
+    // 0x145 = En_Elforg (stray fairy; keep, size 0x690, draw 424D18). Its
+    // sparkle spawner 47C080 (called from the init-installed actions) reads
+    // area s16 +0x674 (literal 47C1C8, ldrsh 47C170, >=5 -> 0 at 47C174/178)
+    // and the authored per-area env colours at 675708 (literal 47C1CC).
+    // No LightContext record: a draw-only glow, lit in the fairy group.
+    Mm3dSyntheticSource{0x145,0x424D48,0x3CE078,{{
+        {0x47C158,0xE59F0068},{0x47C1C8,0x00000674},
+        {0x47C170,0xE19000F4},{0x47C174,0xE3500005},
+        {0x47C178,0x23A00000},{0x47C1CC,0x00675708},{0x675708,0xFF0096FF}}}},
     Mm3dSyntheticSource{0x10B,0x4B4BE8,0x474070,{{
         {0x47403C,0xEBFD1750},{0x474040,0xE584026C},
         {0x474000,0xE5840264},{0x4B4C6C,0xE594220C}}}},
@@ -100,8 +109,18 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
     uint32_t draw=0;if(!memory.Read32(actor+0x144,&draw))return;
     std::array<float,3> position{},scale{},colour{1,.6F,.25F};
     if(!V(memory,actor+0x24,position)||!V(memory,actor+0x58,scale))return;
-    float level=1,radius=300;
-    if(id==0xC) {
+    float level=1,radius=300;uint32_t group=2;
+    if(id==0x145) {
+        // Stray fairy: visible while its draw callback is installed (enemy-
+        // held/collider kinds have none), in its area's authored colour,
+        // fading as the native collect shrink lowers scale below 0.01.
+        int16_t area=0;std::array<uint8_t,3> rgb{};
+        if(draw!=0x424D18 || !memory.Read16(actor+0x674,reinterpret_cast<uint16_t*>(&area)))return;
+        const uint32_t index=area<0||area>=5?0U:uint32_t(area);
+        for(uint32_t c=0;c<3;++c)if(!memory.Read8(0x675708U+index*4U+c,&rgb[c]))return;
+        for(uint32_t c=0;c<3;++c)colour[c]=float(rgb[c])/255.F;
+        level=std::clamp(scale[0]/.01F,0.F,1.F);radius=100;group=1;
+    } else if(id==0xC) {
         uint8_t aura=0,invisible=0;
         if(draw!=0x457638 || !memory.Read8(actor+0x768,&aura)||aura!=1 ||
            !memory.Read8(actor+0x76A,&invisible) || (invisible && !nativeDrawObserved))return;
@@ -208,7 +227,7 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
     if(!(level>0)||!(radius>0))return;
     PicaScenePointLight light;
     light.SourceIdentity=(uint64_t{0xB7}<<56)|(uint64_t{id}<<40)|(uint64_t{actor}<<8);
-    light.PositionWorld=position;light.Radius=radius;light.Group=2;light.IndependentEmission=true;
+    light.PositionWorld=position;light.Radius=radius;light.Group=group;light.IndependentEmission=true;
     for(uint32_t c=0;c<3;++c)light.Color[c]=colour[c]*level;
     lights.push_back(light);
 }
