@@ -1,6 +1,7 @@
 #include "mm3d_pica_composition.h"
 
 #include "mm3d_title_contracts.h"
+#include "mm3d_ui_subsystems.h"
 #include "mm3d_scene_environment.h"
 #include "mm3d_lighting_hook_sites.h"
 #include "recomp/a32_runtime.h"
@@ -104,6 +105,12 @@ bool Mm3dNativePicaCompositionTracker::VerifyHooks(oot3d::recomp::a32::MemoryBus
             if (!memory.Read32(hook.Pc + 4U * i, &word) || word != hook.Words[i]) return false;
         }
     }
+    // Semantic actor owners: En_Mag (title logo) and Object_Kankyo. IDs
+    // alone are insufficient; their draw callback and code must also agree.
+    for (const auto [pc, word] : kMm3dCompositionOwnerGuards) {
+        uint32_t actual = 0;
+        if (!memory.Read32(pc, &actual) || actual != word) return false;
+    }
     // Data guards only: a mismatch leaves the environment group Unknown.
     if (!mLighting.VerifyEnvironmentGroupGuards(memory))
         std::fprintf(stderr, "MM3D environment group: writer guard words differ; group stays unknown\n");
@@ -117,9 +124,29 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     oot3d::recomp::a32::MemoryBus& memory) {
     if (!mHooksVerified) return Event::None;
     mLighting.ObserveBlockEntry(pc, state, memory);
+    if (pc == 0x00191238U || pc == 0x001749C4U || pc == 0x00174EBCU || pc == 0x00191200U)
+        InvalidateActor(pc == 0x00191238U ? state.r[0] : state.r[4]);
+    if (pc == 0x005EC220U) {
+        mModelLifetimes.erase(state.r[0]);
+        for (auto& [slot, owner] : mQueueOwners)
+            if (owner.Model == state.r[0])
+                owner = {owner.Model, owner.Generation, 0, false, owner.List};
+        ++mStats.LifecycleInvalidations;
+    }
     if (pc == 0x0015E9ECU) {
+        uint16_t scene = 0;
+        uint32_t frame = 0;
+        const uint32_t play = state.r[0];
+        const bool valid = play != 0U && play <= UINT32_MAX - 0x14AU &&
+            memory.Read16(play + 0x148U, &scene) && memory.Read32(play + 0x138U, &frame);
+        if (!valid || play != mPlay || scene != mScene || frame < mPlayFrame) {
+            mActorLifetimes.clear(); mModelLifetimes.clear(); mSpans.clear();
+            ++mStats.LifecycleInvalidations;
+        }
+        mPlay = valid ? play : 0U; mScene = scene; mPlayFrame = frame;
         ++mQueueGeneration;
         mQueueOwners.clear(); mActorDrawStack.clear(); mModelSubmit.reset(); mModelScope.reset();
+        mOverlaySubmit.reset();
         mActive.reset(); mFineSuppressed = false;
     }
     if (pc == 0x00182C44U) {
@@ -130,6 +157,11 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (state.r[0] != 0U && state.r[0] <= UINT32_MAX - 0x148U &&
             memory.Read16(state.r[0], &id) && memory.Read32(state.r[0] + 0x144U, &callback) &&
             callback != 0U && callback == state.r[2]) identity = (uint64_t{id} << 32U) | state.r[0];
+        if (identity) {
+            auto& lifetime = mActorLifetimes[state.r[0]];
+            if (lifetime.Identity != identity || !lifetime.Lifetime)
+                lifetime = {identity, NextLifetime()};
+        }
         mActorDrawStack.push_back(identity);
     } else if (pc == 0x00182C48U && !mActorDrawStack.empty()) mActorDrawStack.pop_back();
     if (pc == 0x0020A898U) {
@@ -140,7 +172,19 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (!mModelSubmit || state.r[1] != mModelSubmit->Model || state.r[14] != mModelSubmit->ReturnPc)
             mModelSubmit.reset();
     } else if (pc == 0x00223EDCU) mModelSubmit.reset();
+    if (pc == 0x0011F000U) {
+        // The 2D helper tail-calls the list append with its caller's LR.
+        // Bind the exact model/list/return tuple, not an LR or model guess.
+        uint32_t list = 0;
+        mOverlaySubmit.reset();
+        if (state.r[0] && state.r[0] <= UINT32_MAX - 8U &&
+            memory.Read32(state.r[0] + 8U, &list) && list)
+            mOverlaySubmit = OverlaySubmit{state.r[1], list, state.r[14]};
+    }
     if (pc == 0x00224104U) {
+        const bool overlayProducer = mOverlaySubmit && mOverlaySubmit->List == state.r[0] &&
+            mOverlaySubmit->Model == state.r[1] && mOverlaySubmit->ReturnPc == state.r[14];
+        mOverlaySubmit.reset();
         uint32_t count = 0;
         if (state.r[0] != 0U && state.r[0] <= UINT32_MAX - 0x408U &&
             memory.Read32(state.r[0] + 4U, &count) && count < 256U) {
@@ -148,11 +192,35 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                 if (it->second.List == state.r[0]) it = mQueueOwners.erase(it); else ++it;
             }
             const uint32_t slot = state.r[0] + 8U + count * 4U;
-            const bool producer = state.r[14] == 0x0020A8DCU || state.r[14] == 0x0020A8F8U || state.r[14] == 0x0020A918U;
-            const bool shadow = producer && mModelSubmit && mModelSubmit->Model == state.r[1] && mModelSubmit->Shadow;
+            const bool producer = overlayProducer || state.r[14] == 0x0020A8DCU ||
+                state.r[14] == 0x0020A8F8U || state.r[14] == 0x0020A918U;
+            const bool shadow = producer && !overlayProducer && mModelSubmit && mModelSubmit->Model == state.r[1] && mModelSubmit->Shadow;
             // Always replace the slot, including unrelated producers; never key by model alone.
-            mQueueOwners[slot] = {state.r[1], mQueueGeneration,
-                shadow || mActorDrawStack.empty() ? 0U : mActorDrawStack.back(), shadow, state.r[0]};
+            QueueOwner owner{state.r[1], mQueueGeneration,
+                !producer || shadow || mActorDrawStack.empty() ? 0U : mActorDrawStack.back(), shadow, state.r[0]};
+            const auto actor = mActorLifetimes.find(uint32_t(owner.Actor));
+            uint32_t vtable = 0, callback = 0;
+            const bool liveActor = owner.Actor && actor != mActorLifetimes.end() && actor->second.Identity == owner.Actor;
+            // Room/background models use the proved Play/scene owner rather
+            // than masquerading as actors. Their model destructor and scene
+            // reset provide the same lifetime boundaries as actor models.
+            const uint64_t temporalOwner = liveActor ? owner.Actor :
+                mActorDrawStack.empty() && mPlay ? (1ULL << 63U) | (uint64_t{mScene} << 32U) | mPlay : 0U;
+            const uint64_t ownerEpoch = liveActor ? actor->second.Lifetime : 0U;
+            // Semantic ownership belongs to the guarded actor callback, not
+            // the CMB temporal ABI: effects and 2D models may have other vtables.
+            if (liveActor && memory.Read32(uint32_t(owner.Actor) + 0x144U, &callback)) {
+                owner.Isolated = (owner.Actor >> 32U) == 0x87U && callback == 0x0039F068U;
+                owner.Atmosphere = (owner.Actor >> 32U) == 0x41U && callback == 0x004C03F4U;
+            }
+            if (producer && !shadow && temporalOwner &&
+                memory.Read32(state.r[1], &vtable) && vtable == 0x0063BED4U) {
+                auto& model = mModelLifetimes[state.r[1]];
+                if (model.Owner != temporalOwner || model.OwnerEpoch != ownerEpoch || !model.Lifetime)
+                    model = {temporalOwner, ownerEpoch, NextLifetime()};
+                owner.Lifetime = model.Lifetime;
+            }
+            mQueueOwners[slot] = owner;
         }
         return Event::None;
     }
@@ -182,10 +250,15 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             // Identical model handles with different owners cannot establish a
             // permutation by observation. Do not transfer either actor/shadow role.
             if (std::any_of(before.begin(), before.end(), [&](const auto& other) {
-                return other.Model == model && (other.Actor != owner.Actor || other.Shadow != owner.Shadow);
+                return other.Model == model && (other.Actor != owner.Actor || other.Shadow != owner.Shadow ||
+                    other.Lifetime != owner.Lifetime || other.Isolated != owner.Isolated || other.Atmosphere != owner.Atmosphere);
             })) {
-                for (auto& other : before) if (other.Model == model) { other.Actor = 0; other.Shadow = false; }
-                owner.Actor = 0; owner.Shadow = false;
+                for (auto& other : before) if (other.Model == model) {
+                    other.Actor = 0; other.Shadow = false; other.Lifetime = 0;
+                    other.Isolated = false; other.Atmosphere = false;
+                }
+                owner.Actor = 0; owner.Shadow = false; owner.Lifetime = 0;
+                owner.Isolated = false; owner.Atmosphere = false;
             }
             after.push_back(owner); before.erase(found);
         }
@@ -215,7 +288,8 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         }
         return Event::None;
     }
-    if ((pc == 0x005EF0CCU || pc == 0x005EF094U) && mActive && WorldLayer(mActive->Attribution.Layer)) {
+    if ((pc == 0x005EF0CCU || pc == 0x005EF094U) && mActive &&
+        (WorldLayer(mActive->Attribution.Layer) || mActive->Attribution.Layer == Oot3dPicaCompositionLayer::Ui)) {
         if (mFineSuppressed) return Event::None;
         if (mModelScope) {
             ++mStats.NestedScopeEntries;
@@ -244,6 +318,21 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             child.Attribution.NativeActorIdentity = owner->second.Actor;
             child.Attribution.NativeActorGeometry = owner->second.Actor != 0;
             child.Attribution.NativeProjectedShadow = owner->second.Shadow;
+            child.Attribution.IsolatedLighting = owner->second.Isolated;
+            child.Attribution.ExcludeFromPresentationFxaa |= owner->second.Isolated;
+            if (owner->second.Isolated) ++mStats.IsolatedModelSpans;
+            if (owner->second.Atmosphere && WorldLayer(child.Attribution.Layer)) {
+                child.Attribution.Layer = Oot3dPicaCompositionLayer::Atmosphere;
+                ++mStats.AtmosphereModelSpans;
+            }
+            const auto lifetime = mModelLifetimes.find(model);
+            if (WorldLayer(child.Attribution.Layer) && !child.Attribution.IsolatedLighting && owner->second.Lifetime &&
+                lifetime != mModelLifetimes.end() && lifetime->second.Lifetime == owner->second.Lifetime) {
+                child.Attribution.TemporalIdentity = {lifetime->second.Owner, model, 1U,
+                    uint64_t{mActive->ReturnPc} << 32U, owner->second.Lifetime};
+                child.Attribution.TemporalCommandBufferIdentity = true;
+                ++mStats.TemporalModelSpans;
+            }
         }
         // Proven model factory/vtable ABI. +90 is a resource/preparation object.
         uint32_t vtable = 0, primary = 0, secondary = 0;
@@ -310,6 +399,12 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                           WorldLayer(scope->Layer)
                               ? mSceneLighting
                               : Fast::Renderer3ds::PicaNativeLightBinding{}};
+    mActive->Attribution.ExcludeFromPresentationFxaa = scope->Layer == Oot3dPicaCompositionLayer::Ui;
+    if (scope->EntryPc == kMm3dLayoutOwnerDrawEntry) {
+        const auto subsystem = ReadMm3dUiSubsystem(memory, state.r[1]);
+        if (subsystem != Mm3dUiSubsystem::Unknown)
+            mActive->Attribution.NativeValue = kMm3dUiTag | uint32_t(subsystem);
+    }
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         ++mStats.SceneFrames;
         const uint64_t frame = mStats.SceneFrames;
@@ -366,12 +461,35 @@ bool Mm3dNativePicaCompositionTracker::TakeCommandListCompositionSpans(
     return true;
 }
 
+uint64_t Mm3dNativePicaCompositionTracker::NextLifetime() noexcept {
+    if (++mNextLifetime == 0) ++mNextLifetime;
+    return mNextLifetime;
+}
+
+void Mm3dNativePicaCompositionTracker::InvalidateActor(uint32_t actor) {
+    mActorLifetimes.erase(actor);
+    for (auto& [slot, owner] : mQueueOwners)
+        if (uint32_t(owner.Actor) == actor)
+            owner = {owner.Model, owner.Generation, 0, false, owner.List};
+    for (auto it = mModelLifetimes.begin(); it != mModelLifetimes.end();) {
+        if (!(it->second.Owner & (1ULL << 63U)) && uint32_t(it->second.Owner) == actor)
+            it = mModelLifetimes.erase(it);
+        else ++it;
+    }
+    ++mStats.LifecycleInvalidations;
+}
+
 void Mm3dNativePicaCompositionTracker::Reset() noexcept {
+    // Never rewind the monotonic allocator on state load: the same guest
+    // addresses after restore must not match an earlier presented sample.
+    mActorLifetimes.clear(); mModelLifetimes.clear();
+    mPlay = mPlayFrame = 0; mScene = 0;
     mActive.reset();
     mSpans.clear();
     mSceneLighting = {};
     mLighting.Reset();
     mActorDrawStack.clear(); mQueueOwners.clear(); mModelSubmit.reset(); mModelScope.reset();
+    mOverlaySubmit.reset();
     mFineSuppressed = false;
     ++mQueueGeneration;
     mStats = {};

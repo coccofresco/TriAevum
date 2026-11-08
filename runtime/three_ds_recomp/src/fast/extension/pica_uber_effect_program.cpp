@@ -497,7 +497,8 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
     result += declarations;
     result.append(source.substr(global, prologue - global));
     result += atPrologue;
-    if (request.FragmentLightingBalance && !request.PbrNativeBalance) {
+    if (request.FragmentLightingBalance) {
+        // Balanced GGX also needs captured secondary for TEV material factors.
         // Use the exact maintained capture equations of specialized programs,
         // at frontend-owned sites, before the TEV/native-alpha replay region.
         size_t cursor = prologue;

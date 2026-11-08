@@ -187,6 +187,7 @@ Oot3dNativeGame::Oot3dPicaRawDraw RawDraw(uint64_t id) {
     packet.Indexed = true;
     packet.Composition.SourcePc = 0x002E2CD0;
     packet.Composition.IsolatedLighting = true;
+    packet.Composition.ExcludeFromPresentationFxaa = true;
     for (size_t i = 0; i < packet.Registers.size(); ++i) packet.Registers[i] = static_cast<uint32_t>(i * 2654435761U);
     packet.VertexShader.ProgramWordCount = 3;
     packet.VertexShader.Program[0] = 0x4e000000;
@@ -232,6 +233,12 @@ void RawDrawRoundTrip(const std::filesystem::path& directory) {
             return id;
         });
     Require(reencoded == encoded && second == resources, "raw draw re-encodes identically");
+    Require(decoded.Packet.Composition.ExcludeFromPresentationFxaa, "overlay FXAA contract round trips");
+    auto legacy = encoded;
+    legacy["composition"].erase("exclude_presentation_fxaa");
+    Require(Oot3dNativeGame::DecodeOot3dPicaRawDraw(legacy, resources, decoded, &error) &&
+            !decoded.Packet.Composition.ExcludeFromPresentationFxaa,
+            "legacy records do not opt in to the overlay FXAA contract");
 
     const auto path = directory / "raw-draws.jsonl";
     {
@@ -270,8 +277,19 @@ void NativePbrFamily() {
                 Require(keys.insert(PicaUberEffectVariantKey(r)).second, "distinct GGX structural keys");
                 Require(PicaUberEffectSupports(d, r), "GGX native policy supported");
                 const auto source = BuildPicaUberEffectProgram(r);
-                Require(source.find(std::string(Fast::Renderer3ds::kPicaFragmentBalanceCaptureDiffuse)) == std::string::npos,
-                        "GGX uses per-slot gain equations, not native TEV capture");
+                const auto capture = std::string(Fast::Renderer3ds::kPicaFragmentBalanceCaptureDiffuse);
+                const auto captureAt = source.find(capture);
+                Require((captureAt != std::string::npos) == balanced,
+                        "only balanced GGX captures native secondary material response");
+                if (balanced) {
+                    Require(source.find(capture, captureAt + capture.size()) == std::string::npos,
+                            "GGX capture not duplicated by native alpha replay");
+                    Require(source.find("material_secondary += balance_specular[slot] * factor;") != std::string::npos,
+                            "GGX preserves native secondary as a material factor");
+                    Require(source.find("float direct_attenuation = attenuation;") != std::string::npos &&
+                            source.find("direct_attenuation = pica_native_point_attenuation(") != std::string::npos,
+                            "GGX converted point uses the maintained attenuation path");
+                }
                 Require(source.find(balanced ? "float pbr_native_scale = 1.0;" :
                     "pbr_direct = pbr_albedo; pbr_ambient = vec3(0.0);") != std::string::npos, "shared specialized GGX ownership equations");
                 const auto nri = BuildPicaNriFragmentShaderVariant(source);

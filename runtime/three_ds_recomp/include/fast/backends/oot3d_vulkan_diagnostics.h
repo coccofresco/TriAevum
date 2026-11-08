@@ -628,6 +628,8 @@ struct Oot3dVulkanFrameDiagnostics {
     // authored vertex normal; AO texture relief candidates and appliers.
     uint32_t NormalGuideDrawCount = 0;
     uint32_t TypedNormalGuideDrawCount = 0;
+    uint32_t NativeFragmentNormalGuideDrawCount = 0;
+    uint32_t PbrNormalGuideDrawCount = 0;
     uint32_t AoReliefCandidateDrawCount = 0;
     uint32_t AoReliefTextureDrawCount = 0;
     uint32_t AoReliefAppliedDrawCount = 0;
@@ -896,7 +898,8 @@ class Oot3dVulkanDiagnostics {
                             bool deformedMotionValid, bool repeatedIdentity = false);
     void RecordTemporalCorrespondence(uint32_t reason, uint32_t provenance);
     void RecordGrassMotion(uint32_t bladeCount);
-    void RecordNormalGuideDraw(bool typedNormal, bool relief);
+    void RecordNormalGuideDraw(bool typedNormal, bool relief,
+                               bool nativeFragmentNormal = false, bool pbrNormal = false);
     void RecordAoReliefDraw(bool reliefTexture);
     void EndFrame();
     void SetGpuTimings(uint64_t frameIndex,

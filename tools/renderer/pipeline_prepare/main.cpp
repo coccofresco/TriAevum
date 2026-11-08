@@ -264,7 +264,7 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
                 titlePrograms ? std::span<const Renderer3ds::PicaVertexArtifact>(titleVertices)
                               : Oot3dNativeGame::TitleVertexArtifacts(),
                 titlePrograms ? Fast::Extension::UberFragmentArtifacts()
-                              : Fast::Extension::LegacyUberFragmentArtifacts(),
+                              : Fast::Extension::StartupUberFragmentArtifacts(false, false),
                 Renderer3ds::NativeFragmentArtifacts(), startupDevice);
         const size_t total = parts.size() + entries.size();
         const auto progress = [&](size_t attempted, size_t prepared, size_t failed, const std::string& last) {

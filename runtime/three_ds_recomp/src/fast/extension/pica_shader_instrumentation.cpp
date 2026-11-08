@@ -706,12 +706,13 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_FRAGMENT_IRRADIANCE_V1");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingOperand;
         }
-        if (fragmentBalance && !pbrBalance) {
+        if (fragmentBalance) {
             const auto& sites=result.Hooks.NativeLightingCapture;
             insertions.push_back({sites.Begin, std::string(Renderer3ds::kPicaFragmentBalanceCaptureBegin)});
             insertions.push_back({sites.Diffuse, std::string(Renderer3ds::kPicaFragmentBalanceCaptureDiffuse)});
             insertions.push_back({sites.Specular, std::string(Renderer3ds::kPicaFragmentBalanceCaptureSpecular)});
-            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V2_LOCAL_POINTS");
+            if (!pbrBalance)
+                result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_BALANCE_V4_PROFILE_NATIVE_POINTS_FACTOR");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
         }
         if (nativeFragmentShadows) {
@@ -719,7 +720,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::NativeFragmentLitShadows;
         }
         if (fragmentBalance && pbrBalance) {
-            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_GGX_NATIVE_BALANCE_V1");
+            result.FragmentKey=SaltedVariantKey(result.FragmentKey, "PICA_GGX_NATIVE_BALANCE_V3_PROFILE_NATIVE_POINTS_FACTOR");
             result.AppliedFeatures |= PicaShaderInstrumentationFeature::FragmentLightingBalance;
         }
         if (pbr) {
@@ -827,9 +828,16 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
         declarations +=
             "layout(location=1) out vec4 pica_normal_guide;\n";
         const bool typedNormal = !surfaceLighting && !materialNormal && request.SurfaceNormalInput;
+        // Native fragment lighting already decoded the Gzw quaternion/bump
+        // normal in view space. Surface relighting must not replace that guide
+        // with a vertex-lit reconstruction (which may have no authored input).
+        const bool nativeNormal = materialNormal && (fragmentOperand || nativeFragmentShadows);
+        if (nativeNormal)
+            result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_NATIVE_FRAGMENT_NORMAL_GUIDE_V1");
         decisions.Set(Decision::NormalGuide);
         decisions.NormalAt = writer;
         decisions.Normal = pbr ? Decision::NormalPath::Pbr
+            : nativeNormal ? Decision::NormalPath::Material
             : surfaceLighting ? Decision::NormalPath::Surface
             : materialNormal ? Decision::NormalPath::Material
             : typedNormal ? Decision::NormalPath::Typed
@@ -837,7 +845,7 @@ BuildPicaFragmentInstrumentationVariant(const PicaFragmentInstrumentationRequest
             : Decision::NormalPath::NativeRotate;
         if (pbr) {
             epilogue += "    pica_normal_guide = vec4(pbr_normal * 0.5 + 0.5, 1.0);\n";
-        } else if (surfaceLighting) {
+        } else if (surfaceLighting && !nativeNormal) {
             epilogue +=
                 "    pica_normal_guide = vec4(pica_surface_unit(pica_surface_normal) * 0.5 + 0.5, 1.0);\n";
         } else if (materialNormal) {

@@ -151,15 +151,16 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     // When an overlay (native UI, the isolated title logo) reaches the target
     // before its transfer, that surface is proven only by the scene
     // completion recorded at this boundary.
-    if (!mNativeFidelityProfile && (sceneEffects || mPresentationWorldSurface) &&
+    const bool fxaaBeforeUi = mSpatialAaMode == 1U && draw.Composition.ExcludeFromPresentationFxaa;
+    if (!mNativeFidelityProfile && (sceneEffects || mPresentationWorldSurface || fxaaBeforeUi) &&
         NativeSceneOverlayDraw(draw)) {
         const auto* beforeUi = mNativePicaCompositionSchedule.FindAnchorBeforeDraw(
             Extension::EffectStage::BeforeUi, reference.Target, draw.SubmissionId);
         if (beforeUi != nullptr) {
             GpuTextureCopySourceImport composed;
-            if (sceneEffects) {
+            if (sceneEffects || fxaaBeforeUi) {
                 std::string error;
-                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, composed, &error, beforeUi))
+                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, composed, &error, beforeUi, fxaaBeforeUi))
                     throw std::runtime_error(error);
             }
             if (composed.Image == VK_NULL_HANDLE || composed.Image == target.ColorImage) {
@@ -1127,6 +1128,19 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         pointReplacement->Points);
                 }
             }
+            if (fragmentBalance) {
+                Renderer3ds::PicaTevProgram tev{};
+                if (draw.FragmentUniformBytes.size() < Extension::kPicaPackedFragmentTevProgramOffset + sizeof(tev)) {
+                    fragmentBalance.reset(); // Unknown material composition keeps the native draw.
+                    pointReplacement.reset();
+                    surfaceBinding.ScenePoints.reset();
+                }
+                else {
+                    std::memcpy(&tev, draw.FragmentUniformBytes.data() +
+                        Extension::kPicaPackedFragmentTevProgramOffset, sizeof(tev));
+                    Renderer3ds::ApplyPicaFragmentSecondaryMaterialFactor(*fragmentBalance, tev);
+                }
+            }
             // An unqualified fragment-lit draw keeps the no-profile native
             // reference (pica_fragment_balance.h).
             const bool balanceFallback = Renderer3ds::PicaFragmentLitTitleDrawKeepsNative(
@@ -1176,6 +1190,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 (void)Renderer3ds::ExcludePicaSceneDirectionalsLitNatively(
                     *surfaceLighting, std::span(directions.data(), directionCount));
             }
+            if (surfaceLighting)
+                Renderer3ds::PreservePicaNativeFragmentSceneReference(
+                    *surfaceLighting, nativePointDraw, balanceWaterEligible && !waterSurface.ReachesWater);
             // Water in a mixed mesh (a room's water and banks in one draw),
             // or a whole water draw (on its own plane when it has no body).
             if (surfaceLighting && waterSurface.WorldBounds.Available && mSurfaceLightingView &&
@@ -1462,7 +1479,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceLighting.has_value(),
             pbrOptions,
             reliefTexture,
-            surfaceLighting && (surfaceLighting->Control[3] & 2U) != 0U,
+            surfaceLighting && (fragmentBalance.has_value() || (surfaceLighting->Control[3] & 2U) != 0U),
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
             surfaceCandidate && surfaceDebug.ShadowCode(surfaceOrdinal) != 0U,
 #endif
@@ -1486,10 +1503,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (surfaceLighting) surfaceLighting->Control[1] = 0;
             pointReplacement.reset();
         }
-        if (surfaceLighting && !Extension::HasPicaShaderInstrumentationFeature(
-                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand))
+        if (surfaceLighting && (fragmentBalanceApplied || !Extension::HasPicaShaderInstrumentationFeature(
+                shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::FragmentLightingOperand)))
             Renderer3ds::FoldPicaSurfaceMaterialForPbr(*surfaceLighting,
-                pbrOptions.NativeBalance || pbrOptions.PreserveNativeUnlit);
+                fragmentBalanceApplied || pbrOptions.PreserveNativeUnlit);
+        // Both evaluators own native slots through the same ledger. Fold the
+        // explicit additions once, then remove their duplicate native terms.
+        // Do this only after admission: fallback shaders keep their old inputs.
+        if (surfaceLighting && fragmentBalanceApplied)
+            Renderer3ds::PreparePicaFragmentProfileSurface(*surfaceLighting, *fragmentBalance, mFrameEnvironment);
+        if (surfaceLighting && pointReplacement && fragmentBalance)
+            Renderer3ds::ApplyPicaNativePointReplacementControls(*surfaceLighting, *pointReplacement, mFrameEnvironment);
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
         if (surfaceCandidate && surfaceDebug.Tracing()) {
             // One candidate: its native colour computation and what Modern did.
@@ -1578,17 +1602,50 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         : kind == Renderer3ds::PicaNativeLightSource::Type::Point      ? "point"
                                                                                         : "none";
                 };
+                const auto nativeTrace = Extension::DecodePicaNativeDrawEnvironment(
+                    draw.VertexUniformBytes, draw.FragmentUniformBytes, draw.FragmentFeatures).FragmentLighting;
                 std::string lights = ",\"classifiedLights\":[";
                 for (size_t slot = 0; slot < draw.LightBinding.Sources.size(); ++slot) {
                     const auto& source = draw.LightBinding.Sources[slot];
-                    char text[192];
+                    char text[1024];
+                    const auto& n = nativeTrace.Lights[slot];
                     std::snprintf(text, sizeof(text),
-                                  "%s{\"slot\":%zu,\"kind\":\"%s\",\"scope\":\"%s\",\"origin\":\"%s\",\"id\":\"%llx\"}",
+                                  "%s{\"slot\":%zu,\"kind\":\"%s\",\"scope\":\"%s\",\"origin\":\"%s\",\"id\":\"%llx\","
+                                  "\"position\":[%.9g,%.9g,%.9g],\"radius\":%.9g,\"unattenuated\":[%.9g,%.9g,%.9g],"
+                                  "\"reference\":[%.9g,%.9g,%.9g],\"nativeDiffuse\":[%.9g,%.9g,%.9g],"
+                                  "\"nativePosition\":[%.9g,%.9g,%.9g],\"nativeAttenuation\":[%.9g,%.9g]}",
                                   slot ? "," : "", slot, kindName(source.Kind),
                                   Renderer3ds::PicaNativeLightScopeName(source.Scope),
                                   Renderer3ds::PicaNativeLightOriginName(source.Origin),
-                                  static_cast<unsigned long long>(source.SourceIdentity));
+                                  static_cast<unsigned long long>(source.SourceIdentity),
+                                  source.PositionWorld[0], source.PositionWorld[1], source.PositionWorld[2], source.Radius,
+                                  source.UnattenuatedColor[0], source.UnattenuatedColor[1], source.UnattenuatedColor[2],
+                                  source.ReferenceColor[0], source.ReferenceColor[1], source.ReferenceColor[2],
+                                  n.Diffuse[0], n.Diffuse[1], n.Diffuse[2],
+                                  n.PositionOrDirectionView[0], n.PositionOrDirectionView[1], n.PositionOrDirectionView[2],
+                                  n.DistanceAttenuationBias, n.DistanceAttenuationScale);
                     lights += text;
+                }
+                lights += "],\"selectedPoints\":[";
+                if (const auto& points = draw.LightBinding.ScenePoints) {
+                    for (uint32_t p = 0; p < points->Count; ++p) {
+                        const auto& point = points->Lights[p];
+                        std::array<float, 3> positionView{};
+                        if (mSurfaceLightingView) for (size_t r = 0; r < 3; ++r) {
+                            positionView[r] = mSurfaceLightingView->Rows[r][3];
+                            for (size_t c = 0; c < 3; ++c)
+                                positionView[r] += mSurfaceLightingView->Rows[r][c] * point.PositionWorld[c];
+                        }
+                        char text[512];
+                        std::snprintf(text, sizeof(text),
+                            "%s{\"id\":\"%llx\",\"position\":[%.9g,%.9g,%.9g],\"radius\":%.9g,\"color\":[%.9g,%.9g,%.9g],"
+                            "\"replacementPositionView\":[%.9g,%.9g,%.9g]}",
+                            p ? "," : "", static_cast<unsigned long long>(point.SourceIdentity),
+                            point.PositionWorld[0], point.PositionWorld[1], point.PositionWorld[2], point.Radius,
+                            point.Color[0], point.Color[1], point.Color[2],
+                            positionView[0], positionView[1], positionView[2]);
+                        lights += text;
+                    }
                 }
                 lights += "],\"environmentLights\":";
                 if (const auto& scene = draw.LightBinding.SceneDirectionals) {
@@ -1671,12 +1728,26 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         static_cast<unsigned long long>(pointReplacement->Points.Lights[i].SourceIdentity));
                     record += identity;
                 }
-                record += "]}}";
+                record += "]},\"nativePointControls\":[";
+                bool firstControl = true;
+                if (surfaceLighting) for (uint32_t i = 0; i < 8; ++i) {
+                    const auto& gain = pointReplacement->Balance.Gains[i];
+                    if (gain[3] < 4) continue;
+                    const auto p = static_cast<uint32_t>(gain[3]) - 4U;
+                    const auto& color = surfaceLighting->ScenePoints[p].Color;
+                    char control[256];
+                    std::snprintf(control, sizeof(control),
+                        "%s{\"slot\":%u,\"pointRow\":%u,\"intensity\":%.9g,\"radiusScale\":%.9g,"
+                        "\"tint\":[%.9g,%.9g,%.9g],\"shadowRow\":%.9g}", firstControl ? "" : ",", i, p,
+                        gain[0], gain[1], color[0], color[1], color[2], color[3]);
+                    record += control; firstControl = false;
+                }
+                record += "]}";
             }
             if (fragmentBalance) {
                 char balance[256];
                 std::snprintf(balance,sizeof(balance),
-                    ",\"fragmentBalance\":%u,\"balanceKeyIndex\":%u,\"referenceFillMask\":%u,\"balanceGlobalAmbientGain\":%.9g}",
+                    ",\"fragmentBalance\":%u,\"balanceKeyIndex\":%u,\"secondaryMaterialFactor\":%u,\"balanceGlobalAmbientGain\":%.9g}",
                     fragmentBalanceApplied?1U:0U,fragmentBalance->Control[1],fragmentBalance->Control[2],
                     static_cast<double>(fragmentBalance->Parameters[0]));
                 record.pop_back();record+=balance;
@@ -1811,7 +1882,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             mDiagnostics.RecordNormalGuideDraw(
                 shaderVariant.TypedNormalGuide,
                 Extension::HasPicaShaderInstrumentationFeature(
-                    shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NormalGuideTextureRelief));
+                    shaderVariant.AppliedFeatures, Extension::PicaShaderInstrumentationFeature::NormalGuideTextureRelief),
+                draw.FragmentFeatures.FragmentLightingEnabled &&
+                    shaderVariant.Decisions.Normal == Extension::PicaEffectDecisions::NormalPath::Material,
+                shaderVariant.Decisions.Normal == Extension::PicaEffectDecisions::NormalPath::Pbr);
         if (shaderVariant.AmbientGuideEligibility ==
                 Extension::PicaAmbientOcclusionGuideEligibility::
                     AppliedExact ||
@@ -2550,11 +2624,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             surfaceDebug.ShadowRecord("shadow_receiver", mFrameCounter, draw.SubmissionId, fields);
         }
 #endif
+        const VkDeviceSize surfacePayloadSize =
+            Renderer3ds::PicaSurfaceUniformUploadSize(uniformSurface, drawBalanceApplied);
         const std::array<VkDeviceSize, 7> uniformSizes{
             draw.VertexUniformBytes.size(), previousVertexUniformBytes.size(),
             draw.FragmentUniformBytes.size(), uniformShadow ? directionalShadowUniformSize : 0U,
             uniformToon ? toonBytes.size() : 0U,
-            uniformSurface ? sizeof(*surfaceLighting) : 0U,
+            surfacePayloadSize,
             uniformPbr ? sizeof(*pbrUniforms) : 0U};
         VkDeviceSize uniformBytes = 0;
         for (const auto size : uniformSizes)
@@ -2599,10 +2675,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         const VkDeviceSize toonUniformSize = uniformToon
             ? toonBytes.size() : directionalShadowUniformSize;
         VkDeviceSize surfaceUniformOffset = directionalShadowUniformOffset;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        const VkDeviceSize surfaceUploadStart = frame.UniformBytesUsed;
+#endif
         if (uniformSurface && drawBalanceApplied) {
             const Renderer3ds::PicaBalancedSurfaceUniforms packed{*surfaceLighting, *fragmentBalance};
-            surfaceUniformOffset = uploadUniform(std::span<const uint8_t>(
-                reinterpret_cast<const uint8_t*>(&packed), sizeof(packed)));
+            surfaceUniformOffset = frame.BalancedSurfaceUniforms.Resolve(packed, uploadUniform);
         } else if (uniformSurface) {
             // Compare host-cached state, not potentially write-combined mapped
             // upload memory. The offset belongs to this frame and arena only.
@@ -2614,9 +2692,18 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             }
             surfaceUniformOffset = *frame.SurfaceLightingUniformOffset;
         }
-        const VkDeviceSize surfaceUniformSize = uniformSurface
-            ? (drawBalanceApplied ? sizeof(Renderer3ds::PicaBalancedSurfaceUniforms) : sizeof(*surfaceLighting))
-            : directionalShadowUniformSize;
+        const VkDeviceSize surfaceUniformSize = uniformSurface ? surfacePayloadSize : directionalShadowUniformSize;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        if (uniformSurface && surfaceDebug.ShadowSelected(surfaceOrdinal)) {
+            char fields[256];
+            std::snprintf(fields, sizeof(fields),
+                ",\"balanced\":%u,\"payload_bytes\":%llu,\"reused\":%u,\"offset\":%llu",
+                drawBalanceApplied ? 1U : 0U, static_cast<unsigned long long>(surfacePayloadSize),
+                frame.UniformBytesUsed == surfaceUploadStart ? 1U : 0U,
+                static_cast<unsigned long long>(surfaceUniformOffset));
+            surfaceDebug.ShadowRecord("surface_upload", mFrameCounter, draw.SubmissionId, fields);
+        }
+#endif
         const VkDeviceSize pbrUniformOffset = uniformPbr
             ? uploadUniform(std::span<const uint8_t>(
                 reinterpret_cast<const uint8_t*>(&pbrUniforms.value()), sizeof(*pbrUniforms)))
@@ -2920,7 +3007,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const bool retainSceneBeforeUi = overlayDraw &&
                 renderTarget.SceneBeforeUiSerial != 0U &&
                 renderTarget.SceneBeforeUiSerial == renderTarget.ContentWriteSerial;
+            const bool excludePresentationFxaa = overlayDraw &&
+                (draw.Composition.ExcludeFromPresentationFxaa ||
+                 (renderTarget.PresentationFxaaExcludedSerial != 0U &&
+                  renderTarget.PresentationFxaaExcludedSerial == renderTarget.ContentWriteSerial));
             renderTarget.ContentWriteSerial = ++mGpuTextureCopyWriteSerial;
+            if (excludePresentationFxaa)
+                renderTarget.PresentationFxaaExcludedSerial = renderTarget.ContentWriteSerial;
             if (retainResolvedScene)
                 renderTarget.SceneEffectsResolvedSerial = renderTarget.ContentWriteSerial;
             if (retainSceneBeforeUi)

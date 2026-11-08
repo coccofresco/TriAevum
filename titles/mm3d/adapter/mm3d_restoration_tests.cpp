@@ -11,6 +11,7 @@
 #include <iostream>
 #include <map>
 #include <string_view>
+#include <nlohmann/json.hpp>
 
 namespace {
 
@@ -199,6 +200,28 @@ void TestReadMessageEdits() {
     Mm3dGuestCalls calls;
     Mm3dRestorationPort port(calls);
     Require(port.SetMessageEdits(*edits), "valid message edits were refused");
+    auto priced = nlohmann::json::parse(document("triaevum_mm3d_message_edits_v1", fnv("5072000000")));
+    priced["edits"][0]["price"] = true;
+    priced["edits"][0]["original_metadata"] = 0xfff0000aU;
+    priced["edits"][0]["edited_metadata"] = 0xfff00014U;
+    auto priceEdits = Mm3dRestorationPort::ReadMessageEdits(priced.dump(), &error);
+    Require(priceEdits && (*priceEdits)[0].price && (*priceEdits)[0].original_metadata == 0xfff0000aU &&
+                (*priceEdits)[0].edited_metadata == 0xfff00014U && port.SetMessageEdits(*priceEdits),
+            "prepared price metadata was discarded");
+    const auto rejects = [&](const char* key, const nlohmann::json& value) {
+        auto invalid = priced;
+        invalid["edits"][0][key] = value;
+        Require(!Mm3dRestorationPort::ReadMessageEdits(invalid.dump(), &error), "malformed edit accepted");
+    };
+    rejects("id", -1); rejects("id", 65536); rejects("id", 62.5);
+    rejects("language", 256); rejects("language", 14);
+    rejects("original_hash", "1234junk"); rejects("edited_hash", "-123456789abcdef");
+    rejects("original_metadata", -1); rejects("edited_metadata", 0x100000000ULL);
+    rejects("original", ""); rejects("edited", "00");
+    auto unpaired = priced; unpaired["edits"][0].erase("edited_metadata");
+    Require(!Mm3dRestorationPort::ReadMessageEdits(unpaired.dump(), &error), "unpaired metadata accepted");
+    auto notArray = priced; notArray["edits"] = nlohmann::json::object();
+    Require(!Mm3dRestorationPort::ReadMessageEdits(notArray.dump(), &error), "non-array edits accepted");
     auto wrong = Mm3dRestorationPort::ReadMessageEdits(
         document("triaevum_mm3d_message_edits_v1", fnv("5072000001")), &error);
     Require(wrong.has_value() && !port.SetMessageEdits(*wrong), "an edit with a wrong hash was accepted");

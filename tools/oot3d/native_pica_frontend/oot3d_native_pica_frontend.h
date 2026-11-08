@@ -162,6 +162,13 @@ struct Oot3dPicaCompositionAttribution {
     // Transient command destination, used ONLY to derive the source-relative
     // trigger offset. Cleared before publishing a draw packet.
     uint32_t TemporalPacketBeginAddress = 0;
+    // Opt-in for a model that executes persistent source buffers instead of
+    // copying packets. Only inherited jump ownership may supply Part/Slot;
+    // the transient parent command-list destination is never an identity.
+    bool TemporalCommandBufferIdentity = false;
+    // Title-proven overlay that must not pass through presentation FXAA.
+    // Default false preserves existing producers' scanout behavior.
+    bool ExcludeFromPresentationFxaa = false;
 
     bool operator==(const Oot3dPicaCompositionAttribution&) const = default;
 };

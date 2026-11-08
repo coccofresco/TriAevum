@@ -27,6 +27,7 @@ void GfxRenderingAPIVulkan::EnsureFrameUniformCapacity(
     frame.UniformBuffer = replacement;
     frame.UniformBytesUsed = 0;
     frame.SurfaceLightingUniformOffset.reset();
+    frame.BalancedSurfaceUniforms.Reset();
     // Legacy descriptor keys contain textures, not the implicit uniform buffer.
     // Existing sets stay alive in the frame pool; new draws need fresh bindings.
     frame.TextureDescriptorSets.clear();

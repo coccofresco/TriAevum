@@ -1,7 +1,14 @@
 #include "oot3d_native_pica_fragment_shader_gen.h"
 #include "oot3d_native_pica_program_descriptor.h"
 #include "oot3d_native_pica_canonical_hash.h"
+#include "oot3d_native_pica_shader_gen.h"
+#include "fast/renderer3ds/pica_surface_lighting_shader.h"
+#include "fast/renderer3ds/pica_texture_coordinates.h"
+#include <fstream>
+#include <filesystem>
+#include <nlohmann/json.hpp>
 #include "fast/extension/pica_fragment_lighting.h"
+#include "fast/renderer3ds/pica_fragment_grass_lighting.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -23,13 +30,13 @@ void Require(bool condition, const char* message) {
 }
 
 #if defined(OOT3D_NATIVE_PICA_TEST_SHADERC)
-void RequireFragmentShaderCompiles(const std::string& source) {
+void RequireFragmentShaderCompiles(const std::string& source, shaderc_shader_kind kind = shaderc_fragment_shader) {
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan,
                                  shaderc_env_version_vulkan_1_1);
     const auto result = compiler.CompileGlslToSpv(
-        source, shaderc_fragment_shader, "native_pica_lighting.frag", options);
+        source, kind, "native_pica_lighting", options);
     if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
         std::cerr << "native PICA lighting shader did not compile: "
                   << result.GetErrorMessage() << '\n';
@@ -206,7 +213,80 @@ void TestIncrementalRegisterFileHash() {
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    // Optional private frontend snapshot: prove a real title program's grass
+    // seams and compile its two atlas stages without another gameplay run.
+    if (argc == 2) {
+        using namespace Oot3dNativeGame;
+        std::ifstream stream(argv[1]);
+        nlohmann::json fixture; stream >> fixture;
+        Oot3dNativePicaFrontend frontend;
+        std::string error;
+        Require(frontend.RestoreState(fixture, &error), error.c_str());
+        frontend.SetDiagnosticHistoryEnabled(true);
+        frontend.SetCommandBufferReader([&](uint32_t address, uint32_t bytes, uint32_t* guest,
+                                           std::vector<uint32_t>* words) {
+            const auto found = fixture.at("grass_compile_buffers").find(std::to_string(address));
+            if (found == fixture.at("grass_compile_buffers").end()) return false;
+            *words = found->get<std::vector<uint32_t>>();
+            if (words->size() * 4 != bytes) return false;
+            *guest = address - 0x20000000U + 0x14000000U;
+            return true;
+        });
+        Oot3dGspCommandPacket submit{};
+        submit.Control = 1;
+        submit.Parameters[0] = fixture.at("grass_compile_root_guest").get<uint32_t>();
+        submit.Parameters[1] = fixture.at("grass_compile_root_bytes").get<uint32_t>();
+        const auto words = fixture.at("grass_compile_buffers").at(std::to_string(
+            submit.Parameters[0] - 0x14000000U + 0x20000000U)).get<std::vector<uint32_t>>();
+        Require(frontend.SubmitGspCommand(submit, words, &error), error.c_str());
+        const auto index = fixture.at("grass_compile_draw").get<size_t>();
+        Require(frontend.PendingDrawPackets().size() > index, "private grass packet missing");
+        const auto& packet = frontend.PendingDrawPackets()[index];
+        Require(packet.Registers[0x85] * 8 == 0x184DC480U, "private terrain draw identity shifted");
+        Oot3dPicaDecodedDrawState state;
+        Require(DecodeOot3dPicaDrawState(packet, state, &error), error.c_str());
+        Oot3dPicaGeneratedVertexShader vertex;
+        Require(GenerateOot3dPicaVertexShader(packet, state, vertex, &error), error.c_str());
+        const auto& hooks = vertex.TemporalProgram->Hooks;
+        std::cerr << "private terrain seams: program=" << packet.VertexShader.ProgramWordCount
+                  << " swizzles=" << packet.VertexShader.SwizzleWordCount
+                  << " entry=" << state.ShaderInterface.VertexMainOffset
+                  << " uv=" << hooks.TextureCoordinates[0].Available()
+                  << " transform=" << (hooks.TransformProgram() != nullptr)
+                  << " surface=" << (hooks.SurfaceProgram() != nullptr) << '\n';
+        Require(hooks.TextureCoordinates[0].Available() && hooks.TransformProgram() && hooks.SurfaceProgram(),
+                "private terrain missing typed grass UV/transform/surface hooks");
+        const auto affine = Fast::Renderer3ds::DecodePicaAffineUv(&hooks.TextureCoordinates[0],
+            vertex.Uniforms.BooleanMask, {reinterpret_cast<const uint8_t*>(vertex.Uniforms.Floats.data()), sizeof(vertex.Uniforms.Floats)});
+        std::cerr << "private terrain affine status=" << int(affine.Status) << " input=" << int(affine.InputRegister)
+                  << " root=" << vertex.Uniforms.Floats[89][3] << " mode=" << vertex.Uniforms.Floats[92][0] << '\n';
+        Require(affine.Status == Fast::Renderer3ds::PicaAffineUvStatus::Applied,
+                "private terrain UV contract rejected its native uniforms");
+        for (const bool modern : {false, true}) {
+            const auto atlasVertex = Fast::Renderer3ds::BuildPicaSurfaceLightingVertexShader(vertex.Source, hooks, modern);
+            Require(!atlasVertex.empty(), "private terrain atlas vertex unavailable");
+#if defined(OOT3D_NATIVE_PICA_TEST_SHADERC)
+            RequireFragmentShaderCompiles(atlasVertex, shaderc_vertex_shader);
+#endif
+            for (const auto mode : {Oot3dPicaTevMode::Specialized, Oot3dPicaTevMode::Parametric}) {
+                Oot3dPicaGeneratedFragmentShader fragment;
+                Require(GenerateOot3dPicaFragmentShader(packet, state, fragment, &error,
+                            Oot3dPicaShaderBuildPurpose::RuntimeDraw, mode), error.c_str());
+                for (const bool coefficients : {false, true}) {
+                    const auto atlas = Fast::Renderer3ds::BuildPicaFragmentGrassLightingShader(
+                        fragment.Source, fragment.Hooks, modern, coefficients,
+                        Fast::Renderer3ds::DecodePicaSurfaceColorResponse(packet.Registers).Fragment);
+                    Require(!atlas.empty(), "private terrain atlas fragment unavailable");
+#if defined(OOT3D_NATIVE_PICA_TEST_SHADERC)
+                    RequireFragmentShaderCompiles(atlas);
+#endif
+                }
+            }
+        }
+        std::cout << "Private grass terrain: UV/transform/surface hooks, 2 vertex + 8 fragment atlas variants passed\n";
+        return 0;
+    }
     using namespace Oot3dNativeGame;
     TestCanonicalHashZeroRuns();
     TestIncrementalRegisterFileHash();
@@ -295,6 +375,51 @@ int main() {
 #if defined(OOT3D_NATIVE_PICA_TEST_SHADERC)
     RequireFragmentShaderCompiles(lightingShader.Source);
 #endif
+    // A register-proven fragment response preserves HDR gain, unlike a white
+    // texture passed through native TEV's final clamp (0.75 * 0.5 * 4 = 1.5).
+    auto terrainPacket = lightingPacket;
+    for (const auto b : {0xC0, 0xC8, 0xD0, 0xD8, 0xF0, 0xF8}) {
+        terrainPacket.Registers[b] = 0x0FFF0FFF;
+        terrainPacket.Registers[b + 1] = terrainPacket.Registers[b + 2] = terrainPacket.Registers[b + 4] = 0;
+    }
+    terrainPacket.Registers[0xC0] = 0x0E300E31; terrainPacket.Registers[0xC2] = 0x10001;
+    terrainPacket.Registers[0xC8] = 0x0E1F0E0F; terrainPacket.Registers[0xCA] = 1; terrainPacket.Registers[0xCC] = 2;
+    const auto response = Fast::Renderer3ds::DecodePicaSurfaceColorResponse(terrainPacket.Registers);
+    Require(!response.Available && response.Fragment.Available && response.Fragment.TintStage == 1 &&
+            response.Fragment.PackedScales == 8, "fragment TEV factorization changed the legacy capability");
+    auto badResponse = terrainPacket;
+    badResponse.Registers[0xC4] = 1;
+    Require(!Fast::Renderer3ds::DecodePicaSurfaceColorResponse(badResponse.Registers).Fragment.Available,
+            "texture-dependent saturation before tint acquired grass factorization");
+    badResponse = terrainPacket; badResponse.Registers[0xC9] = 1;
+    Require(!Fast::Renderer3ds::DecodePicaSurfaceColorResponse(badResponse.Registers).Fragment.Available,
+            "inverted tint acquired grass factorization");
+    badResponse = terrainPacket; badResponse.Registers[0xCA] = 2;
+    Require(!Fast::Renderer3ds::DecodePicaSurfaceColorResponse(badResponse.Registers).Fragment.Available,
+            "additive material acquired grass factorization");
+    const auto noTint = [&] { auto p = terrainPacket; p.Registers[0xC8] = 0x0FFF0FFF; p.Registers[0xCA] = 0; return p; }();
+    Require(Fast::Renderer3ds::DecodePicaSurfaceColorResponse(noTint.Registers).Fragment.Available &&
+            Fast::Renderer3ds::DecodePicaSurfaceColorResponse(noTint.Registers).Fragment.Key() != response.Fragment.Key(),
+            "parametric atlas cache key omitted tint response");
+    for (const auto mode : {Oot3dPicaTevMode::Specialized, Oot3dPicaTevMode::Parametric}) {
+        Oot3dPicaGeneratedFragmentShader terrain;
+        Require(GenerateOot3dPicaFragmentShader(terrainPacket, state, terrain, &lightingError,
+                    Oot3dPicaShaderBuildPurpose::RuntimeDraw, mode), "grass terrain fixture generation");
+        for (const bool modern : {false, true}) for (const bool coefficients : {false, true}) {
+            const auto atlas = Fast::Renderer3ds::BuildPicaFragmentGrassLightingShader(
+                terrain.Source, terrain.Hooks, modern, coefficients, response.Fragment);
+            Require(!atlas.empty() && atlas.find("#define pica_sample_texture0") != std::string::npos &&
+                    atlas.find("grass_samples[grass_sample]") != std::string::npos &&
+                    atlas.find("grass_response = byteround3(grass_response) * 4.0") != std::string::npos,
+                    "fragment grass atlas lost typed lighting or unclipped TEV gain");
+#if defined(OOT3D_NATIVE_PICA_TEST_SHADERC)
+            RequireFragmentShaderCompiles(atlas);
+#endif
+        }
+        auto invalid = terrain.Hooks; invalid.NativeLightingCapture = {};
+        Require(Fast::Renderer3ds::BuildPicaFragmentGrassLightingShader(terrain.Source, invalid, true, true, response.Fragment).empty(),
+                "fragment grass accepted missing capture sites");
+    }
     auto shadowState = state;
     shadowState.Textures[0].Enabled = true;
     shadowState.Textures[0].Type = 2U;

@@ -14,12 +14,14 @@
 #include "fast/renderer3ds/pica_program_preparation.h"
 #include "fast/renderer3ds/pica_preparation_queue.h"
 #include "fast/renderer3ds/pipeline_cache_flusher.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "fast/renderer3ds/pica_texture_copy_plan.h"
 #include "fast/renderer3ds/pica_shadow_geometry.h"
 #include "fast/renderer3ds/pica_ui_canvas.h"
 #include "fast/renderer3ds/pica_pbr_material.h"
 #include "fast/renderer3ds/pica_pbr_seams.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include "fast/renderer3ds/pica_surface_uniform_upload.h"
 #include "fast/renderer3ds/pica_surface_calibration_trace.h"
 #include "fast/renderer3ds/gpu_memory_residency.h"
 #include "fast/renderer3ds/vulkan_memory_budget.h"
@@ -491,6 +493,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         VkDeviceSize UniformBytesUsed = 0;
         std::optional<VkDeviceSize> SurfaceLightingUniformOffset;
         Renderer3ds::PicaSurfaceLightingUniforms SurfaceLightingUniforms;
+        Renderer3ds::PicaBalancedSurfaceUploadCache BalancedSurfaceUniforms;
         VkDescriptorPool DescriptorPool = VK_NULL_HANDLE;
         std::map<TextureDescriptorKey, VkDescriptorSet> TextureDescriptorSets;
         std::vector<uint64_t> NativePicaCompletionIds;
@@ -723,6 +726,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // before UI kept for an upscaler; native UI writes carry it like the
         // resolved serial, any other write ends it.
         uint64_t SceneBeforeUiSerial = 0;
+        uint64_t PresentationFxaaExcludedSerial = 0;
         VkImage MsaaColorImage = VK_NULL_HANDLE;
         VkDeviceMemory MsaaColorMemory = VK_NULL_HANDLE;
         VkImageView MsaaColorView = VK_NULL_HANDLE;
@@ -797,6 +801,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // The same transfer of the scene before native UI was made this frame
         // (mNativePicaSceneBeforeUiDisplays).
         bool SceneBeforeUi = false;
+        bool PresentationFxaaExcluded = false;
     };
 
     struct PresentRequest {
@@ -1705,7 +1710,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                                        uint64_t afterDrawSubmissionId,
                                        GpuTextureCopySourceImport& output,
                                        std::string* error,
-                                       const Renderer3ds::PicaCompositionStageAnchor* beforeUi = nullptr);
+                                       const Renderer3ds::PicaCompositionStageAnchor* beforeUi = nullptr,
+                                       bool fxaaBeforeUi = false);
     // The display graph body, shared between presentation and the raw copy's
     // scene-source composition so the graph is executed exactly once and in the
     // same order in both cases. `copyOutput` (and the `copySource` it belongs
@@ -1719,7 +1725,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const NativePicaDisplayImage& display,
         NativePicaRenderTarget* copySource,
         GpuTextureCopySourceImport* copyOutput, std::string* error,
-        bool beforeNativeUi = false);
+        bool beforeNativeUi = false, bool fxaaBeforeUi = false);
     bool SubmitNativePicaTextureCopy(const GfxNativePicaDisplayTransferView& transfer, std::string* error);
     // GPU producers a later draw samples without a raw copy: a colour target
     // written by earlier draws, and the tiled result of a DisplayTransfer.
@@ -1865,6 +1871,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // Persists the NRI pipeline cache while the session runs; stopped before
     // the final store at shutdown.
     Renderer3ds::PipelineCacheFlusher mNriPipelineCacheFlusher;
+    // What the title's shader preparation lets startup do
+    // (fast/renderer3ds/title_shader_preparation.h), read at Init.
+    Renderer3ds::TitleShaderPreparationPlan mTitleShaderPreparationPlan{};
     // Per-frame vertex/upload arena sizing evidence, summarized at shutdown.
     VkDeviceSize mPeakFrameVertexBytes = 0;
     uint32_t mFrameVertexArenaGrowths = 0;

@@ -255,12 +255,13 @@ private:
   uint64_t mRevision = 0;
 };
 
-// What the title's renderer can apply. NativeFragmentLighting: its scene is
-// lit by native fragment lights, which take a profile only in the supported
-// shape (Fast::Renderer3ds::PicaFragmentBalanceProfileSupported); the panel
-// marks the other controls unavailable and says why.
+// NativeFragmentLighting: show the native-fragment profile explanation.
+// Both native-fragment and vertex-lit surfaces support the authored controls;
+// draw-specific ownership/admission stays in the shared renderer.
 struct SceneEnvironmentPanelOptions {
   bool NativeFragmentLighting = false;
+  // Display-only title vocabulary; group indices and profile storage stay shared.
+  std::string CompanionLightName = "Navi";
 };
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateSceneEnvironmentPanel(std::shared_ptr<SceneEnvironmentRuntime> runtime,

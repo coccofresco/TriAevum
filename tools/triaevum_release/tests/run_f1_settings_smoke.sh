@@ -34,6 +34,7 @@ for unit in tools/oot3d/native_game_runtime/oot3d_native_controls_settings_panel
             tools/oot3d/native_game_runtime/oot3d_game_language_panel \
             tools/oot3d/native_game_runtime/triaevum_audio_settings_panel \
             tools/oot3d/native_game_runtime/oot3d_savestate_panel \
+            tools/oot3d/native_game_runtime/oot3d_savestate_settings \
             titles/oot3d/environment/oot3d_scene_environment \
             titles/oot3d/environment/oot3d_scene_environment_blend \
             titles/oot3d/environment/oot3d_scene_environment_codec \

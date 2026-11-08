@@ -355,6 +355,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDisplayTransfer(
             // The scene this display showed before native UI, transferred
             // exactly as the display: an upscaler reconstructs it and lays the
             // display's UI over its output.
+            display.PresentationFxaaExcluded = source->PresentationFxaaExcludedSerial != 0U &&
+                source->PresentationFxaaExcludedSerial == source->ContentWriteSerial;
             display.SceneBeforeUi = false;
             if (mPresentationUpscaler && nriDisplayCopy && display.SceneEffectsResolved &&
                 source->SceneBeforeUiSerial != 0U &&
@@ -412,7 +414,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
     const NativePicaDisplayImage& display,
     NativePicaRenderTarget* copySource,
     GpuTextureCopySourceImport* copyOutput, std::string* error,
-    bool beforeNativeUi) {
+    bool beforeNativeUi, bool fxaaBeforeUi) {
     Renderer3ds::SlowStepTrace slowSteps("display_graph");
     if (mFrameActive) mGpuProfiler.Mark(mCurrentFrame, "display_graph", mCommandBuffers[mCurrentFrame]);
 
@@ -3321,7 +3323,9 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             // The declared scene colour, not an effect name, decides whether
             // this boundary composed anything: when no scene stage applies, the
             // native target already is the composed scene.
-            const bool composedScene =
+            const bool applyBoundaryFxaa = fxaaBeforeUi && beforeNativeUi && worldSurface &&
+                !display.PresentationFxaaExcluded && mSpatialAaMode == 1U;
+            const bool composedScene = applyBoundaryFxaa ||
                 effectPlan.SceneOutput != Extension::EffectResource::SceneColor;
             const auto compositionPass = effectPlan.FindPass(
                 Extension::DisplayEffectPass::SceneComposition);
@@ -3433,7 +3437,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             compositionFormats[10] = VK_FORMAT_R32G32B32A32_UINT;
             Extension::PicaScanoutPolicyInput compositionPolicy{};
             compositionPolicy.TransferFlags = 0U;
-            compositionPolicy.AaMode = 0U;
+            compositionPolicy.AaMode = applyBoundaryFxaa ? 1U : 0U;
             compositionPolicy.Width = compositionWidth;
             compositionPolicy.Height = compositionHeight;
             compositionPolicy.EffectsComposited = true;
@@ -3511,6 +3515,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             // composed colour is what a display-encoded native target holds.
             copyOutput->Encoding = Extension::NativePicaSceneColorEncoding();
             copyOutput->SceneEffectsResolved = true;
+            if (applyBoundaryFxaa)
+                mDiagnostics.RecordBeforeUiAntiAliasing(true, false);
             mDiagnostics.RecordDisplayEffectGraphExecution(
                 effectExecution.Summary());
             restoreEffectPassGuides();
@@ -3835,7 +3841,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
              static_cast<uint32_t>(scissorBottom - scissorTop)}};
         const Extension::PicaScanoutPolicyInput scanoutPolicy{
                 transfer.Flags,
-                wantsSmaa ? 0U : mSpatialAaMode,
+                (wantsSmaa || display.PresentationFxaaExcluded) ? 0U : mSpatialAaMode,
                 display.Width,
                 display.Height,
                 mHiZDepthPyramidPass.MipCount(),
@@ -3848,7 +3854,12 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 mSwapchainFormat == VK_FORMAT_B8G8R8A8_SRGB ||
                     mSwapchainFormat == VK_FORMAT_R8G8B8A8_SRGB,
                 presentationSettings.Effects,
-                presentationPerspective};
+                presentationPerspective,
+                Extension::PicaGuideDiagnosticMode() != 0 &&
+                    scanoutPass->ReadsResource(Extension::EffectResource::NativeDepth) &&
+                    scanoutPass->ReadsResource(Extension::EffectResource::NormalGuide) &&
+                    (Extension::PicaGuideDiagnosticMode() < 4 ||
+                     scanoutPass->ReadsResource(Extension::EffectResource::OutlineGeometryGuide))};
         if (!Extension::ValidatePicaScanoutPolicyInput(scanoutPolicy)) {
             throw std::runtime_error(
                 "PICA scanout color policy is invalid");
@@ -4033,7 +4044,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             }
         }
         mDiagnostics.RecordDisplayTransfer(
-            true, smaaForDisplay ? 2U : mSpatialAaMode,
+            true, smaaForDisplay ? 2U : display.PresentationFxaaExcluded ? 0U : mSpatialAaMode,
             static_cast<uint32_t>(mNativePicaSampleCount));
         return true;
 }
@@ -4046,7 +4057,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
 bool GfxRenderingAPIVulkan::ComposeNativePicaSceneForCopy(
     NativePicaRenderTarget& source, uint64_t afterDrawSubmissionId,
     GpuTextureCopySourceImport& output, std::string* error,
-    const Renderer3ds::PicaCompositionStageAnchor* beforeUi) {
+    const Renderer3ds::PicaCompositionStageAnchor* beforeUi, bool fxaaBeforeUi) {
     output = {};
     if (mFrameActive) mGpuProfiler.Mark(mCurrentFrame, "compose_for_copy", mCommandBuffers[mCurrentFrame]);
     if (!mFrameActive || source.ColorImage == VK_NULL_HANDLE ||
@@ -4143,9 +4154,11 @@ bool GfxRenderingAPIVulkan::ComposeNativePicaSceneForCopy(
         NativePicaSceneFullyResolvedForTarget(
             source.Key.RenderTargetNamespace,
             source.Key.ColorPhysicalAddress);
+    boundaryImage.PresentationFxaaExcluded = source.PresentationFxaaExcludedSerial != 0U &&
+        source.PresentationFxaaExcludedSerial == source.ContentWriteSerial;
     if (!ExecuteNativePicaDisplayGraph(
             boundary, boundaryImage, &source, &output, error,
-            beforeUi != nullptr)) {
+            beforeUi != nullptr, fxaaBeforeUi)) {
         output = {};
         return false;
     }

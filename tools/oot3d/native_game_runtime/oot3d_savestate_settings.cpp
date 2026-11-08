@@ -22,6 +22,9 @@ std::string CaptureSavestateSettings(const SavestateSettingsOwners& owners) {
       {"graphics", Fast::Extension::SerializeGraphicsSettings(
                        Fast::Extension::GraphicsSettingsRuntime::Instance().Snapshot())},
   };
+  if (!owners.TitleSettingsNotice.empty()) {
+    document["title_settings_notice"] = owners.TitleSettingsNotice;
+  }
   std::string text;
   if (owners.TopScreen != nullptr &&
       SerializeTopScreenUiConfigText(owners.TopScreen->Snapshot().Config, &text)) {
@@ -58,9 +61,15 @@ SavestateSettingsApplyResult ApplySavestateSettings(
     result.Lines.push_back(std::move(line));
   };
   const auto document = nlohmann::json::parse(settingsJson, nullptr, false);
-  if (!document.is_object() || document.value("schema", 0) != kSettingsSchema) {
+  // Comparing JSON values avoids throwing type_error for a corrupt string,
+  // array or null schema. Reject before any live owner is mutated.
+  if (!document.is_object() || !document.contains("schema") ||
+      !document["schema"].is_number_integer() || document["schema"] != kSettingsSchema) {
     fail("Settings: unsupported or damaged settings block");
     return result;
+  }
+  if (!owners.TitleSettingsNotice.empty()) {
+    result.Lines.push_back(owners.TitleSettingsNotice);
   }
   if (const auto graphics = document.find("graphics"); graphics != document.end()) {
     auto& runtime = Fast::Extension::GraphicsSettingsRuntime::Instance();

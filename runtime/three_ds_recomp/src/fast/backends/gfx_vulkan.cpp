@@ -486,8 +486,8 @@ void GfxRenderingAPIVulkan::PrepareNativePicaPrograms(
     const Renderer3ds::PicaStartupProgramDevice device{mDepthFormat, mNativePicaSampleCount,
                                                        mPbrSeamsAvailable};
     using Item = Renderer3ds::PicaStartupProgramPart;
-    const auto supersets = NativePicaFragmentLightingOperand() || NativePicaFragmentLitShadowReceivers()
-        ? Extension::UberFragmentArtifacts() : Extension::LegacyUberFragmentArtifacts();
+    const auto supersets = Extension::StartupUberFragmentArtifacts(
+        NativePicaFragmentLightingOperand(), NativePicaFragmentLitShadowReceivers());
     std::vector<Item> items = Renderer3ds::PicaStartupProgramParts(
         vertices,
         UsesAlwaysAvailablePrograms() ? supersets

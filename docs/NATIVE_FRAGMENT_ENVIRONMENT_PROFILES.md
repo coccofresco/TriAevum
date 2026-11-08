@@ -19,6 +19,16 @@ gain (one when Preserve scene brightness owns the baseline). Preservation retain
 ambient, not a second opposite directional fill. Never infer a baked surface by
 zeroing a directly lit source.
 
+A native secondary RGB can also be a **material factor**, not an additive
+highlight: native TEV may multiply `FPRI * texture * vertex tint * FSEC`. A
+Lambert key replaces primary, not that multiplier. When native TEV product/
+replace/buffer dataflow proves both primary and secondary are required RGB
+factors, retain captured Scene secondary/LUT terms at unit gain and do not
+shadow them again. Local secondary still follows the local-light control.
+Additive, inverted, alpha-only, overwritten and unproved dependencies keep the
+ordinary direct-gain policy. This is structural material composition, with no
+actor/texture/scene exceptions. The balance-only variant key is V3.
+
 Add the shared material-weighted ambient, key/fill, placed/scene-point and rim
 responses to that ledger, once. Key colour/direction use the existing scene-main,
 scene-ambient or manual resolvers (including offsets and the horizon rule); only

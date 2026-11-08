@@ -239,6 +239,23 @@ struct PicaVertexTextureCoordinateSourceLayout {
     }
 };
 
+// Optional guards for an indexed affine subroutine reached through a uniform
+// dispatch. Version zero preserves the legacy affine contract unchanged.
+struct PicaVertexAffineUvGuards {
+    using Reference = std::array<uint8_t, 2>;
+    uint8_t Version = 0;
+    Reference RootMode{0xff, 0xff}, Zero{0xff, 0xff}, Stride{0xff, 0xff};
+    std::array<Reference, 2> DirectModes{{{0xff, 0xff}, {0xff, 0xff}}};
+    bool Valid() const noexcept {
+        if (Version == 0) return true;
+        if (Version != 1) return false;
+        for (const auto& r : {RootMode, Zero, Stride, DirectModes[0], DirectModes[1]})
+            if (r[0] >= 96 || r[1] >= 4) return false;
+        return true;
+    }
+    bool operator==(const PicaVertexAffineUvGuards&) const = default;
+};
+
 struct PicaVertexTextureCoordinateLayout {
     static constexpr uint8_t Unavailable = 0xffU;
 
@@ -261,6 +278,7 @@ struct PicaVertexTextureCoordinateLayout {
     uint8_t HomogeneousComponent = Unavailable;
     std::array<PicaVertexTextureCoordinateSourceLayout, 3U> Sources{};
     uint8_t SourceCount = 0U;
+    PicaVertexAffineUvGuards AffineGuards;
 
     bool operator==(
         const PicaVertexTextureCoordinateLayout&) const = default;
@@ -281,7 +299,7 @@ struct PicaVertexTextureCoordinateLayout {
             CoordinateModeConstantComponents[1] >= 4U ||
             MatrixRowUUniform >= 96U || MatrixRowVUniform >= 96U ||
             HomogeneousUniform >= 96U || HomogeneousComponent >= 4U ||
-            SourceCount == 0U || SourceCount > Sources.size()) {
+            SourceCount == 0U || SourceCount > Sources.size() || !AffineGuards.Valid()) {
             return false;
         }
         for (size_t index = 0U; index < SourceCount; ++index) {

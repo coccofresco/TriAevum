@@ -594,7 +594,8 @@ NativeA32WindowSession::SavestateSettingsOwners() const {
   return {launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen
               ? topScreenConfigRuntime
               : nullptr,
-          controlConfigRuntime, languageSettings};
+          controlConfigRuntime, languageSettings,
+          titleSession ? std::string(titleSession->SavestateSettingsNotice()) : std::string{}};
 }
 
 void NativeA32WindowSession::ServiceSavestateRequests() {
@@ -631,7 +632,11 @@ void NativeA32WindowSession::ServiceSavestateRequests() {
       savestateLibrary->SetLastState(path);
       report(true, std::string(request->WithSettings ? "State and settings saved: "
                                                      : "State saved: ") +
-                       fileName(path));
+                       fileName(path) +
+                       (request->WithSettings && titleSession &&
+                                !titleSession->SavestateSettingsNotice().empty()
+                            ? "\n" + std::string(titleSession->SavestateSettingsNotice())
+                            : std::string{}));
       return;
     }
     return;

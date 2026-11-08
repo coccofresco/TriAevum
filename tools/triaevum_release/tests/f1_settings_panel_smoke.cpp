@@ -1,11 +1,13 @@
 #include "fast/extension/graphics_settings_window.h"
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/title_grass_rules_file.h"
 #include "oot3d_native_controls_settings_panel.h"
 #include "oot3d_top_screen_settings_panel.h"
 #include "oot3d_photo_mode_panel.h"
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
+#include "oot3d_savestate_settings.h"
 #include "triaevum_audio_settings_panel.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS) && defined(TRIAEVUM_TITLE_MM3D)
 #include "oot3d_dev_tools_panel.h"
@@ -58,7 +60,11 @@ struct MemoryStore final : GraphicsSettingsPersistencePort {
     bool StoreGraphics(const nlohmann::json& value) override {
         ++Stores;
         if (Fail) return false;
-        Root["Graphics"] = value;
+        nlohmann::json host;
+        auto& file = ActiveTitleGrassRulesFile();
+        if (!file.Store(value, Root, host)) return false;
+        Root["Graphics"] = std::move(host);
+        file.Load(Root); // the settings view, as read at the next launch
         return true;
     }
     int PresetStores = 0;
@@ -527,13 +533,44 @@ void CheckAudioPanel() {
 // with its default, the listing that picks the state F8 loads, and status.
 void CheckSavestatePanel() {
     using namespace Oot3dNativeGame;
+    SavestateSettingsOwners owners;
+    owners.TitleSettingsNotice = "Adapter settings are omitted; current configuration is kept.";
+    const auto captured = CaptureSavestateSettings(owners);
+    Check(nlohmann::json::parse(captured).at("title_settings_notice") == owners.TitleSettingsNotice,
+          "state metadata lost the settings omission notice");
+    const auto applied = ApplySavestateSettings(captured, owners);
+    Check(applied.Success && std::find(applied.Lines.begin(), applied.Lines.end(),
+          owners.TitleSettingsNotice) != applied.Lines.end(), "load did not disclose omitted settings");
+    const auto before = CaptureSavestateSettings(owners);
+    for (const auto* invalid : {"{", "[]", "{}", "{\"schema\":null}",
+             "{\"schema\":\"1\"}", "{\"schema\":[]}", "{\"schema\":{}}",
+             "{\"schema\":true}", "{\"schema\":1.0}", "{\"schema\":2}"}) {
+        const auto rejected = ApplySavestateSettings(invalid, owners);
+        Check(!rejected.Success && CaptureSavestateSettings(owners) == before,
+              "damaged settings threw, succeeded or mutated a live owner");
+    }
+    auto saved = GraphicsSettingsRuntime::Instance().Snapshot();
+    auto current = saved;
+    current.DisplayIndex = saved.DisplayIndex + 1;
+    current.RefreshRate = saved.RefreshRate + 1;
+    current.Window = saved.Window == WindowMode::Windowed ? WindowMode::Borderless : WindowMode::Windowed;
+    current.OutputWidth = saved.OutputWidth + 16;
+    current.OutputHeight = saved.OutputHeight + 16;
+    current.VSync = !saved.VSync;
+    const auto merged = MergeSavedGraphicsSettings(saved, current);
+    Check(merged.DisplayIndex == current.DisplayIndex && merged.RefreshRate == current.RefreshRate &&
+          merged.Window == current.Window && merged.OutputWidth == current.OutputWidth &&
+          merged.OutputHeight == current.OutputHeight && merged.VSync == current.VSync,
+          "state settings replaced machine display selection");
     const auto root = std::filesystem::temp_directory_path() /
         ("triaevum-savestates-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto defaultFolder = root / "exe" / "savestates";
     auto library = std::make_shared<SavestateLibrary>(root / "config" / "savestates.json", defaultFolder);
-    InstallGraphicsSettingsPanelTabs({CreateSavestatePanel(library)});
+    InstallGraphicsSettingsPanelTabs({CreateSavestatePanel(library, owners.TitleSettingsNotice)});
     Frame(); Frame();
-    Click("Game"); Click("Save states"); Frame();
+    Click("Game"); Click("Save states"); Frame(true);
+    Check(loggedPanelText.find(owners.TitleSettingsNotice) != std::string::npos,
+          "save-state settings omission is not visible before the action");
     Check(Find("Load last state (F8)").Disabled && Find("Load last state + settings (Shift+F8)").Disabled,
           "load buttons enabled without any state");
     const auto expectRequest = [&](const char* button, SavestateRequestKind kind, bool withSettings) {
@@ -1260,39 +1297,66 @@ void CheckMm3dSceneEnvironment() {
     // MM3D's time is unknown here: not time-driven, no night profile.
     environment->ObserveScene(0x2A);
     // MM3D's scene is lit by native fragment lights (TitleSession::NativeFragmentLighting).
-    InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment,{.NativeFragmentLighting=true})});
+    InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment,{.NativeFragmentLighting=true,.CompanionLightName="Tatl"})});
     size=ImVec2(760,2600);
     Frame();Frame();Click("Lighting");Click("Lights & Shadows");Frame(true);
     Check(!environment->Snapshot().Profile.Enabled && !graphics.SnapshotForRendering().Environment.Enabled,
           "MM3D widget enabled a missing profile");
     Check(loggedPanelText.find("Fixed scene lighting")!=std::string::npos,
           "MM3D widget presented unknown time as time-driven");
+    // Same four owners and controls as OoT, in the title's vocabulary.
+    // Points remain editable with the ambient/directional profile disabled.
+    Check(loggedPanelText.find("Navi point lights")==std::string::npos,
+          "foreign companion label leaked into MM panel");
+    for (const char* name : {"Tatl", "Fairy", "Flame", "Architecture"}) {
+        const auto before = environment->Snapshot().Profile.PointLights;
+        const size_t i = std::string_view(name)=="Tatl" ? 0 : std::string_view(name)=="Fairy" ? 1 :
+                         std::string_view(name)=="Flame" ? 2 : 3;
+        EditScalar((std::string(name)+" intensity").c_str(), "2.5");
+        EditScalar((std::string(name)+" radius scale").c_str(), "1.75");
+        Click((std::string(name)+" point lights").c_str());
+        const auto after = graphics.SnapshotForRendering().Environment.PointLights;
+        Check(!after[i].Enabled && after[i].Intensity==2.5F && after[i].RadiusScale==1.75F,
+              "point group controls did not publish independently of the scene profile");
+        for (size_t j=0;j<4;++j) if (j!=i)
+            Check(after[j]==before[j],"point widget changed another group");
+        Click((std::string(name)+" point lights").c_str());
+    }
+    const auto points = environment->Snapshot().Profile.PointLights;
+    Click("Save profile");
+    Check(environment->Reload() && environment->Snapshot().Profile.PointLights==points,
+          "MM point controls did not survive save/reload");
+    for (auto preset : {GraphicsPreset::Authentic, GraphicsPreset::Enhanced, GraphicsPreset::Toon,
+                        GraphicsPreset::Custom, GraphicsPreset::EnhancedForMobile}) {
+        graphics.Apply(GraphicsSettingsService::Preset(preset));
+        Check(environment->Snapshot().Profile.PointLights==points,
+              "graphics preset stole environment-owned point settings");
+        if (preset!=GraphicsPreset::Authentic &&
+            UsesFullSceneLighting(graphics.Snapshot().Effects.SurfaceLighting))
+            Check(graphics.SnapshotForRendering().Environment.PointLights==points,
+                  "modern preset lost independent point settings");
+    }
+    graphics.Apply(settings);
+    Frame();
     Click("Use scene environment");
     Check(environment->Snapshot().Profile.Enabled,"MM3D profile control did not enable explicit override");
-    // The native-preserving profile (native scene direct 1) is not a shape
-    // native fragment lights take: the panel says it is not applied, keeps the
-    // unsupported control editable so it can be set back, and offers the
-    // controls the contract has no use for as unavailable.
+    // Every profile shape now uses the balance evaluator; no unavailable
+    // marks or destructive reset-to-transfer button remain.
     Frame(true);
-    Check(loggedPanelText.find("Not applied: this game is lit by native fragment lights")!=std::string::npos,
-          "unsupported fragment-light profile not explained");
-    Check(!Find("Native scene direct contribution").Disabled,"unsupported native direct cannot be set back");
-    Check(Find("Ambient intensity").Disabled && Find("Native fog contribution").Disabled &&
-              Find("Enable rim light").Disabled,
-          "controls native fragment lights do not apply were offered");
-    Check(!Find("Native local contribution").Disabled,"supported local contribution unavailable");
-    Click("Use the supported shape");
-    Frame(true);
-    {
-        const auto shaped=environment->Snapshot().Profile;
-        Check(shaped.Enabled && shaped.NativeDirectStrength==0.0F && shaped.AmbientIntensity==0.0F &&
-                  shaped.Lights[0].Intensity==1.0F && shaped.Lights[1].Intensity==0.0F &&
-                  shaped.NativeLocalStrength==1.0F && shaped.NativeAmbientStrength==1.0F,
-              "supported shape changed more than the unsupported controls");
-    }
-    Check(loggedPanelText.find("Applied to the native fragment lights")!=std::string::npos,
-          "supported fragment-light profile not confirmed");
-    Check(Find("Native scene direct contribution").Disabled,"native direct still offered once supported");
+    Check(loggedPanelText.find("Applied to native fragment lights")!=std::string::npos,
+          "fragment profile status not explained");
+    Check(loggedPanelText.find("Unavailable with native fragment lights")==std::string::npos,
+          "obsolete fragment-light unavailable marks remain");
+    for (const char* control : {"Native scene direct contribution", "Ambient intensity",
+                               "Native fog contribution", "Enable rim light", "Native local contribution"})
+        Check(!Find(control).Disabled,"supported fragment-light control unavailable");
+    Click("Enable rim light");
+    Check(environment->Snapshot().Profile.Rim.Enabled,"fragment-light rim widget did not publish");
+    Click("Add light at Link");
+    Check(environment->Snapshot().Profile.PlacedLights.size()==1,"fragment-light placed widget did not publish");
+    Click("Save profile");
+    Check(environment->Snapshot().FileExists && !environment->Snapshot().Dirty,
+          "fragment-light authored shape did not save");
     graphics.SetCapability(GraphicsCapability::NativeSurfaceLighting,false,"test unavailable");
     Frame();
     Check(!Find("Use scene environment").Disabled,"unsupported active environment cannot be disabled");
@@ -1888,6 +1952,9 @@ int main(int argc, char** argv) try {
     Frame(); Frame();
 
     if (argc == 2 && std::string_view(argv[1]) == "--grass-masks") {
+        const auto ruleDirectory = std::filesystem::temp_directory_path() / "triaevum-f1-title-grass";
+        std::filesystem::remove_all(ruleDirectory);
+        ActiveTitleGrassRulesFile().SetPath(ruleDirectory / "grass" / "title-fixture" / "rules.json");
         auto& bridge = GrassSceneBridge::Instance();
         bridge.Clear();
         GrassSceneMesh source;
@@ -1925,6 +1992,7 @@ int main(int argc, char** argv) try {
         Click("Grass");
         Click("Masks");
         Frame(true);
+        Check(loggedPanelText.find("Title grass rules:") != std::string::npos, "title grass authoring file hidden");
         Check(loggedPanelText.find("Covered source area") != std::string::npos, "mask overlap absent from panel");
         Check(loggedPanelText.find("MASK auto") != std::string::npos, "automatic catalog badge missing");
         Click("Overlay mask");
@@ -1996,6 +2064,14 @@ int main(int argc, char** argv) try {
               "manual catalog mask used wrong identity");
         Click("Remove mask rule");
         Check(runtime.Snapshot().Grass.Masks.empty(), "remove mask failed");
+        Click("Save current preset");
+        Check(std::filesystem::is_regular_file(ActiveTitleGrassRulesFile().Path()), "F1 did not write title grass file");
+        nlohmann::json reloaded = store->Root;
+        ActiveTitleGrassRulesFile().Load(reloaded);
+        Check(reloaded["Graphics"]["Grass"]["Masks"].empty() &&
+              reloaded["Graphics"]["GrassSavedPreset"]["Masks"].empty(), "title grass restart lost empty mask state");
+        ActiveTitleGrassRulesFile().SetPath({});
+        std::filesystem::remove_all(ruleDirectory);
         size.y = 680;
         Frame();
         Frame();

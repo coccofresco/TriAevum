@@ -127,6 +127,18 @@ if(WIN32)
 endif()
 add_test(NAME scene_point_light_gpu COMMAND scene_point_light_gpu_tests)
 set_tests_properties(scene_point_light_gpu PROPERTIES TIMEOUT 60)
+add_executable(native_point_reference_gpu_tests native_point_reference_gpu_tests.cpp
+    "${runtime}/src/fast/renderer3ds/pica_surface_lighting.cpp"
+    "${runtime}/src/fast/renderer3ds/point_shadow_map.cpp")
+target_compile_features(native_point_reference_gpu_tests PRIVATE cxx_std_20)
+target_include_directories(native_point_reference_gpu_tests PRIVATE "${runtime}/include" "${SHADERC_INCLUDE_DIR}")
+target_link_libraries(native_point_reference_gpu_tests PRIVATE Vulkan::Vulkan "${SHADERC_LIBRARY}")
+if(WIN32)
+    add_custom_command(TARGET native_point_reference_gpu_tests POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SHADERC_RUNTIME}" "$<TARGET_FILE_DIR:native_point_reference_gpu_tests>")
+endif()
+add_test(NAME native_point_reference_gpu COMMAND native_point_reference_gpu_tests)
+set_tests_properties(native_point_reference_gpu PROPERTIES TIMEOUT 60)
 add_executable(native_pbr_point_gpu_tests native_pbr_point_gpu_tests.cpp
     "${runtime}/src/fast/renderer3ds/pica_pbr_shading.cpp"
     "${runtime}/src/fast/renderer3ds/pica_pbr_seam_shader.cpp"
@@ -287,6 +299,7 @@ foreach(_pack renderer3ds/pica_native_fragment extension/pica_temporal_fragment 
         "${runtime}/src/fast/${_pack}.spvpack")
 endforeach()
 add_test(NAME pica_fragment_artifacts COMMAND build_fragment_artifacts --check)
+add_test(NAME pica_native_normal_guides COMMAND build_fragment_artifacts --normal-guide-check)
 add_test(NAME pica_temporal_fragment_artifacts COMMAND build_fragment_artifacts --temporal --check)
 add_test(NAME pica_toon_fragment_artifacts COMMAND build_fragment_artifacts --toon --check)
 triaevum_add_spirv_pack(build_fragment_artifacts "${runtime}/src/fast/extension/pica_uber_fragment_binaries.cpp"
@@ -294,6 +307,7 @@ triaevum_add_spirv_pack(build_fragment_artifacts "${runtime}/src/fast/extension/
 add_test(NAME pica_uber_fragment_artifacts COMMAND build_fragment_artifacts --uber --check)
 add_test(NAME pica_native_lighting_uber_artifacts COMMAND build_fragment_artifacts --native-lighting-uber --check)
 add_test(NAME pica_caster_fragment_artifacts COMMAND build_fragment_artifacts --casters --check)
+add_test(NAME pica_fragment_balance_compile COMMAND build_fragment_artifacts --balance-check)
 set_tests_properties(pica_toon_fragment_artifacts PROPERTIES TIMEOUT 120)
 set_tests_properties(pica_temporal_fragment_artifacts PROPERTIES TIMEOUT 180)
 set_tests_properties(pica_fragment_artifacts PROPERTIES TIMEOUT 120)

@@ -465,7 +465,8 @@ layout(set=0,binding=16,std140) uniform PicaSurfaceLighting {
 )glsl") + (fragmentBalance ? std::string(R"glsl(    uvec4 balance_control;
     vec4 balance_gains[8];
     vec4 balance_parameters;
-)glsl") : std::string{}) + std::string(R"glsl(} pica_surface;)glsl") + (fragmentBalance ? std::string("\nvec3 pica_balance_ambient = vec3(0.0);\n") : std::string{}) + std::string(R"glsl(
+)glsl") : std::string{}) + std::string(R"glsl(} pica_surface;)glsl") + (fragmentBalance ?
+        std::string("\nvec3 pica_balance_ambient = vec3(0.0);\n") + std::string(kPicaNativePointBalanceFunctions) : std::string{}) + std::string(R"glsl(
 vec3 pica_surface_water_world = vec3(0.0);
 float pica_surface_water_footprint = 0.0;
 // The water face: its world normal (up on a body's plane) and tangent frame
@@ -616,7 +617,12 @@ void pica_surface_light(int slot, out vec3 direction, out vec3 radiance) {
     }
 }
 void pica_surface_scene_point(int slot, out vec3 direction, out vec3 radiance) {
-    PicaScenePointLight light = pica_surface.scene_points[slot];
+)glsl") + (fragmentBalance ? std::string(R"glsl(    if (pica_native_point_row(slot)) {
+        direction = vec3(0.0, 0.0, 1.0);
+        radiance = vec3(0.0);
+        return;
+    }
+)glsl") : std::string{}) + std::string(R"glsl(    PicaScenePointLight light = pica_surface.scene_points[slot];
     vec3 delta = light.position_radius.xyz + pica_view;
     vec3 world_delta = vec3(dot(pica_surface.view_to_world_linear[0].xyz, delta),
                             dot(pica_surface.view_to_world_linear[1].xyz, delta),

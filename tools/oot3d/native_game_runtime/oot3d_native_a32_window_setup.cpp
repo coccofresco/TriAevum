@@ -8,6 +8,8 @@
 #include "triaevum_host_audio.h"
 #include "oot3d_savestate_migration.h"
 #include "fast/extension/graphics_settings_persistence.h"
+#include "fast/extension/title_grass_rules_file.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
 
@@ -147,6 +149,8 @@ void NativeA32WindowSession::Setup() {
   std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
             << " code_sha256=" << manifest->CodeBinSha256 << '\n';
   titleSession = Oot3dNativeGame::CreateTitleSession(titleAdapter);
+  if (titleSession) picaPresentationScheduler.SetGameplayHudClassifier(
+      [title=titleSession.get()](uint32_t pc,uint32_t value) { return title->IsGameplayHud(pc,value); });
   // Before any settings load: configurations older than schema 15 take the
   // title's shipped grass source and mask rules. OoT3D's rules are keyed by
   // its own textures; another title's configuration drops an unedited copy
@@ -224,6 +228,18 @@ void NativeA32WindowSession::Setup() {
     }
     directories.push_back(launch.UiTexturePackDirectory / "common");
     Oot3d::Renderer::AzaharTexturePackRuntime::Instance().SetBaseDirectories(std::move(directories));
+  }
+  // Optional title-owned grass authoring files. OoT3D retains its existing
+  // config storage and output; titles choosing a namespace cannot overwrite
+  // its sources/masks even when they share the host configuration file.
+  {
+    auto& file = Fast::Extension::ActiveTitleGrassRulesFile();
+    file.SetPath({});
+    if (titleSession && !titleSession->GrassRuleNamespace().empty()) {
+      const auto config = std::filesystem::absolute(
+          launch.Host.ConfigurationPath.empty() ? "oot3d_native_game.json" : launch.Host.ConfigurationPath);
+      file.SetPath(config.parent_path() / "grass" / titleSession->GrassRuleNamespace() / "rules.json");
+    }
   }
   // The installed game's program ID and the managed custom texture folders
   // (UX plan WP-05C), kept across every settings reconfigure; the
@@ -607,7 +623,8 @@ void NativeA32WindowSession::Setup() {
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
         .DevToolsTitle = &devToolsTitle,
 #endif
-        .FreeCamera = nativeCandidateDispatch.DevFreeCamera};
+        .FreeCamera = nativeCandidateDispatch.DevFreeCamera,
+        .MessageEditsPath = launch.TitleMessageEditsPath};
     titleSession->InstallHooks(titleHooks);
     widescreenProjection.Title = titleSession.get();
   }
@@ -1152,7 +1169,8 @@ void NativeA32WindowSession::Setup() {
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur ||
       titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
     applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(
-        sceneEnvironment, {.NativeFragmentLighting = titleSession && titleSession->NativeFragmentLighting()}));
+        sceneEnvironment, {.NativeFragmentLighting = titleSession && titleSession->NativeFragmentLighting(),
+                           .CompanionLightName = titleSession ? std::string(titleSession->CompanionLightName()) : "Navi"}));
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // The developer tours, lab and emitter inventory drive OoT3D's guest
@@ -1228,7 +1246,9 @@ void NativeA32WindowSession::Setup() {
             topScreenConfigRuntime));
   }
   applicationSettingsTabs.push_back(
-      Oot3dNativeGame::CreateSavestatePanel(savestateLibrary));
+      Oot3dNativeGame::CreateSavestatePanel(
+          savestateLibrary, titleSession ? std::string(titleSession->SavestateSettingsNotice())
+                                        : std::string{}));
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
 #if defined(__ANDROID__)
   constexpr bool kOfferAudioFocusMute = false;
@@ -1303,6 +1323,10 @@ void NativeA32WindowSession::Setup() {
   if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {
     Fast::Extension::InstallGraphicsSettingsWindowTitle(title);
   }
+  // The renderer reads it when the context starts it.
+  Fast::Renderer3ds::InstallTitleShaderPreparation(
+      {Oot3dNativeGame::TitlePreparedShaders(titleAdapter, titleSession.get()),
+       std::string(Oot3dNativeGame::TitlePipelineCacheNamespace(titleAdapter, titleSession.get()))});
   InitContextForDemo(hostArgs);
   // What the title itself provides to the graphics settings: the effects
   // that need a scene view, and the scene FOV, stay inactive without it.
@@ -1351,6 +1375,9 @@ void NativeA32WindowSession::Setup() {
   alwaysAvailablePrograms =
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
+  // The title pass programs serve the shared renderer passes (shadow
+  // casters among them) of every title: registering them is a lookup table,
+  // and MM3D's draws hit them.
   if (programPreparation != nullptr)
     programPreparation->RegisterTitlePassPrograms(
         Oot3dNativeGame::NativePicaTitlePassPrograms());
@@ -1968,6 +1995,12 @@ void NativeA32WindowSession::UpdateScenePresentation() {
           std::max<uint32_t>(1, presentationPicture.Width),
           std::max<uint32_t>(1, presentationPicture.Height));
   widescreenProjection.Projection.FovMultiplier = graphics.FovMultiplier;
+  widescreenProjection.Projection.TitleOwnsSceneProjection = titleSession && titleSession->OwnsSceneProjection();
+  if (titleSession) {
+    const auto& presentation = widescreenProjection.Projection.Presentation;
+    titleSession->SetPresentation({graphics.FovMultiplier, presentation.HorizontalFovExpansion,
+                                   presentation.VerticalFovExpansion, graphics.ExtendedDrawDistance});
+  }
   auto &visibility = widescreenProjection.ActorVisibility;
   visibility.ExtendedDrawDistance = graphics.ExtendedDrawDistance;
   visibility.Presentation = widescreenProjection.Projection.Presentation;

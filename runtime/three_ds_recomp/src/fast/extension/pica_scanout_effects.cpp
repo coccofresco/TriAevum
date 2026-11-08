@@ -36,7 +36,10 @@ PicaScanoutPushConstants BuildPicaScanoutPushConstants(
     output.AmbientOcclusion =
         static_cast<uint32_t>(input.AmbientOcclusionAvailable && !effectsBaked && !aoDebug);
     output.Outline = static_cast<uint32_t>(
-        input.OutlineAvailable && !effectsBaked);
+        (input.OutlineAvailable && !effectsBaked) || input.GuideDiagnostic);
+    // The existing diagnostic shader uses the outline/AO flag as its guide
+    // availability gate, then returns before any colour effects. A resolved
+    // scene must not suppress that gate when the caller proved its resources.
     output.InvWidth =
         1.0F / static_cast<float>(std::max(input.Width, 1U));
     output.InvHeight =

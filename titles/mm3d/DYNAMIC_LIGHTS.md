@@ -165,3 +165,110 @@ approval**. The four-populated-category room catalog, unknown material roles,
 uncaptured variants, installer/previous-room integration and the prior failed
 product smoke remain honestly bounded in the evidence index. Base-profile
 values, including ambient0.6, remain unchanged; the look verdict is the owner's.
+
+## Native contribution conservation correction (`f04d2376`)
+
+Owner review rejected the old On torch pools as too dark. The shared conversion
+had discarded exact native fragment-slot diffuse/specular response and rebuilt
+it from a separately faded supplemental colour, generic material/normal and
+different falloff. Exact identity proved ownership, not energy conservation.
+
+Matched slots now retain their native per-pixel response and attenuation LUT;
+user intensity/tint/radius controls and the existing cube visibility apply once.
+The exact matching point row is excluded from supplemental evaluation. Installed
+GGX uses the same native radiance/attenuation and cube routing. Ambient and alpha
+are retained. Unmatched independent emitters and OoT3D's legacy path are unchanged;
+there is no per-scene tuning, base-profile edit, new uniform ABI or old pack change.
+
+A real Clock Town floor-triangle sample traced to source `99069c4` gives native
+unshadowed RGB `(0.228650,0.158109,0)` versus the old approximation
+`(0.189191,0.131659,0)`. The corrected unit-control, unoccluded response is native.
+Another sample had almost no deficit: do not claim that selector fade explains
+all the image darkening. Reconstruction is not a live pixel/visibility readback.
+New36 production GPU cases preserve contribution at the70-unit reference distance
+and across/beyond native reach, with shadow/control/ambient/specular/alpha checks.
+Pipeline72, foundation463+1skip,54 existing point cases and12 GGX+12 native-unlit
+PBR cases pass. Regenerated uber/pass packs remain byte-identical.
+
+Exactly four new serialized launches, zero retries: diagnostic Clock Town Off,
+diagnostic Woodfall Off, then corrected On for each at this implementation.
+Off used `cde29681` plus trace-only instrumentation and is BMP-identical to the
+previous Off reference; both On runs used one clean `f04d2376` binary. Details:
+`DL/captures/conversion/INDEX.md`. No other scene/game was rerun.
+
+The new comparisons show retained warm response, but darker regions remain
+around torch bases and parts of the altar. Whether every remaining region is an
+intended cube shadow or a residual artifact is not isolated by these captures.
+**Contribution conservation is tested; complete visual resolution and appearance
+approval remain unclaimed.** The four-launch budget is exhausted. Further live
+isolation needs new authorization; all earlier product/full-parity gaps remain.
+
+## Wave 2: reference routing, loaded rooms, lifetime and census
+
+The additional authorized shadow-Off diagnostic did not remove most Woodfall
+Off/On darkening. Trace routing identified a separate reference error: local-only
+native-fragment draws with points Off retained two supplemental Scene directionals
+in the legacy vertex-colour fallback; converted On draws used native-fragment
+recomposition. Vertex colour is an authored TEV factor, not another scene-light
+receiver. The shared capability-gated uniform fix removes that supplemental Scene
+array for eligible native-fragment draws. Native vertex-lit titles, water's separate
+contract, explicit profile keys and native response conservation are unchanged.
+The numeric production GPU fixture includes the old erroneous .25→(.45,.35,.25)
+vertex-factor witness and corrected (.25,.25,.25) reference. This is not a profile
+brightness adjustment or proof of every remaining dark pixel.
+
+EUR room capture now reads current C260 and previous C2C4 (record stride64 hex,
+segment+10), independently re-found from request/copy/draw/unload code and ten
+instruction guards. Pending request C330 excludes the incompletely installed
+current record; previous remains eligible. Shared catalog capture deduplicates
+identical room records and rejects conflicting fingerprints. S14 removes strength
+history immediately on unfollow, rejects old in-flight observations on reload,
+and retains last strength for continuously followed but temporarily unseen surfaces.
+Scene/frame/day rollback resets MM continuity and follow lifetime. Regression
+fixtures cover coexistence, pending install, unload, every corrupt guard, duplicate
+and conflicting records, fade0/reload, never-seen1 and same-frame scene reuse.
+Three real offline saves have empty previous records: **no live room transition
+or actual two-loaded-room save was captured**. Synthetic coexistence is labelled.
+
+The title-owned `tools/emitter_census.py` inventories all used material slots and
+alternate headers without pixels or new light recipes. Stock EUR results:310 rooms,
+308 models,5247 materials,6721 slots;72 primary candidates,47 secondary candidates,
+232 explicitly excluded roles,6370 unknowns,0 parse rejects. Four categories remain
+populated in the145-source catalog. Zero magic/doorway name matches are not proof
+that these semantic classes are absent. All but one room have invariant setup mesh
+pointers; the variant has no admitted emitters. Header hashes still do not attest
+arbitrary modified payloads. Runtime mismatches/failed guards/conflicting records
+omit catalog lights; modified-content catalog validation remains CATALOGS-owned.
+
+`DL/wave2/ANALOGUES.md` explicitly disposes all26 OoT actor and8 material rows as
+proved equivalents or remaining unknowns (none silently declared absent). Unproved
+breath/particle/lantern variants and atlas/body/secondary/doorway roles stay native.
+G05 inventory enumeration is complete; universal source/material parity is not.
+
+A1025-sample offline full clock cycle exercises both horizons, wrapping clock,
+changing colour, caster elevation and continuity. Double-Time direction cut,
+Song-of-Time day rollback, frame rollback/save restore, fixed-time entry and scene
+reuse are covered. Day rollback now invalidates the snapshot even when the scene
+and clock match. This is adapter evidence, not a live song/transition capture or
+new GPU shadow-page/keyframe-budget measurement. G06/G08/G21 retain those limits.
+Final run receipts and precise qualification are in `DL/wave2/` and `DL/PROGRESS.md`.
+
+Wave-2 qualification at implementation `fe5485d4`: exactly two safe-runner game
+launches, no retries. Diagnostic On/point-shadows-Off at `1c99e1fd` passed24s;
+final corrected **Off** reference at `fe5485d4` passed27s. The two original
+frame270 Woodfall BMPs are byte-for-byte identical, SHA256
+`2a480dbe3aed1a356ed875a0affa70eb30b6e72d831ff10be5428ab171bb49e0`.
+Corrected binary: `925f1f48a1107cc1cae82b2d1e294fe24b83569d0e8ee9c73e0abac148bedbc3`.
+This isolates the Woodfall reference mismatch; it does **not** establish that
+all historical cube-shadow pixels are correct, close Clock Town torch bases
+(its archived Off has no matching extra-Scene route), or approve the appearance.
+
+Developer/MM-lighting builds/tests, pipeline73, foundation463+1 known skip,
+Python11, ten EUR room guards and116 production GPU cases pass. Five legacy
+fragment families/pass104/generator-consumer pass; regenerated uber/pass packs
+are byte-identical. Historical O2 remains3/3 cap-p13, not a new game run. Logs
+retain11/22 pass-artifact misses; there is no zero-miss corpus claim. No new
+product/OoT/room/song runtime was authorized or run. Two-launch allowance spent.
+G05 unknown variants, G06 material/category proof, G08 real coexistence/modified
+content identity and G21 live/budget integration remain explicitly incomplete;
+old product load failure and full-parity/owner-approval limits are unchanged.

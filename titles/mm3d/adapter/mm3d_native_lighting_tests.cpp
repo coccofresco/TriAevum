@@ -35,6 +35,9 @@ struct Fixture {
         }
         for (const auto& hook : kMm3dLightingHookSites)
             for (uint32_t i = 0; i < 4; ++i) W32(hook.Pc + 4U * i, hook.Words[i]);
+        for (const auto& guard : kMm3dRoomEmitterGuards) W32(guard[0], guard[1]);
+        W8(Play + 0xC2C4U, 0xFF);
+        for (const auto [pc, word] : kMm3dCompositionOwnerGuards) W32(pc, word);
         W32(kMm3dCurrentViewPointer, Play + kMm3dPlayViewOffset);
         W8(Play + 0x13DU, 4); W32(Play + 0x4A8U, Play); W16(Play + 0x148U, 0x6F); W32(Play + 0x138U, 1);
         W8(Play + 0x87FFU, 0xFF); W32(Play + 0x8824U, std::bit_cast<uint32_t>(1.0F));
@@ -60,6 +63,116 @@ struct Fixture {
     }
     void Link(uint32_t node, uint32_t info, uint32_t next) { W32(node,info); W32(node+8U,next); }
 };
+
+void TestCompositionTemporalLifetimes() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "temporal hooks verified");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    uint32_t frame = 1;
+    const auto beginFrame = [&] {
+        f.W32(f.Play + 0x138U, frame++);
+        s.r[0] = f.Play; observe(0x15E9ECU);
+    };
+    const auto enqueue = [&](uint16_t id = 0, uint32_t callback = 0x1F8E28U, bool overlay = false, bool wrongReturn = false) {
+        f.W16(f.Actor, id); f.W32(f.Actor + 0x144U, callback);
+        s.r[0] = f.Actor; s.r[2] = callback; observe(0x182C44U);
+        f.W32(f.Queue + 4U, 0);
+        if (overlay) {
+            f.W32(f.Play + 8U, f.Queue);
+            s.r[0] = f.Play; s.r[1] = f.Model; s.r[14] = 0x39F100U;
+            observe(0x11F000U);
+        }
+        s.r[0] = f.Queue; s.r[1] = f.Model;
+        s.r[14] = overlay ? (wrongReturn ? 0x39F104U : 0x39F100U) : 0x20A8F8U;
+        observe(0x224104U);
+        f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
+        observe(0x182C48U);
+    };
+    const auto consume = [&](uint32_t pass = 0x11EF3CU) {
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = pass; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000020U);
+        observe(0x5EF0D0U); observe(pass);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 1, "one precise model range");
+        return spans.front().Attribution;
+    };
+    beginFrame(); enqueue();
+    const auto first = consume();
+    Require(first.TemporalIdentity.Available() && first.TemporalCommandBufferIdentity &&
+            first.TemporalIdentity.Owner == f.Actor && first.TemporalIdentity.Instance == f.Model &&
+            !first.ExcludeFromPresentationFxaa,
+            "guarded actor/model did not publish a temporal source-buffer contract");
+    beginFrame(); enqueue();
+    Require(consume().TemporalIdentity == first.TemporalIdentity, "continuous lifetime changed each frame");
+    for (uint32_t site : {0x191238U, 0x1749C4U, 0x174EBCU, 0x191200U, 0x5EC220U}) {
+        beginFrame(); enqueue();
+        s.r[0] = site == 0x5EC220U ? f.Model : f.Actor; s.r[4] = f.Actor; observe(site);
+        const auto dead = consume();
+        Require(!dead.TemporalIdentity.Available() && !dead.NativeActorGeometry && !dead.IsolatedLighting,
+                "queued ownership survived native lifetime end");
+        beginFrame(); enqueue();
+        const auto replacement = consume();
+        Require(replacement.TemporalIdentity.Available() &&
+                replacement.TemporalIdentity.Lifetime != first.TemporalIdentity.Lifetime,
+                "recycled actor/model matched the former lifetime");
+    }
+    beginFrame();
+    f.W32(f.Queue + 4U, 0);
+    s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+    f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
+    const auto background = consume();
+    Require(background.TemporalIdentity.Available() && !background.NativeActorGeometry &&
+            (background.TemporalIdentity.Owner & (1ULL << 63U)), "scene-owned model lost native temporal identity");
+    tracker.Reset(); beginFrame(); enqueue();
+    Require(consume().TemporalIdentity.Lifetime != first.TemporalIdentity.Lifetime,
+            "restore rewound temporal lifetime allocator");
+    beginFrame(); enqueue(); const auto beforeScene = consume().TemporalIdentity;
+    f.W16(f.Play + 0x148U, 0x61); beginFrame(); enqueue();
+    Require(consume().TemporalIdentity.Lifetime != beforeScene.Lifetime, "scene change retained lifetime");
+    const auto beforeRollback = consume().TemporalIdentity;
+    frame = 1; beginFrame(); enqueue();
+    Require(consume().TemporalIdentity.Lifetime != beforeRollback.Lifetime, "frame rollback retained lifetime");
+    beginFrame(); enqueue(0x87, 0x39F068U);
+    const auto logo = consume(0x11EFD4U);
+    Require(logo.IsolatedLighting && logo.ExcludeFromPresentationFxaa &&
+            logo.Layer == Oot3dPicaCompositionLayer::Ui &&
+            !logo.TemporalIdentity.Available(), "title logo lost isolated native UI ownership");
+    beginFrame(); enqueue(0x87, 0x39F068U);
+    const auto worldLogo = consume();
+    Require(worldLogo.IsolatedLighting && worldLogo.ExcludeFromPresentationFxaa &&
+            !worldLogo.TemporalIdentity.Available(), "world-queued logo acquired scene temporal history");
+    beginFrame(); enqueue(0x41, 0x4C03F4U);
+    Require(consume().Layer == Oot3dPicaCompositionLayer::Atmosphere, "kankyo model became relightable world");
+    // Non-CMB renderables retain callback-proved semantics, but never gain
+    // a temporal contract for an unknown model ABI.
+    f.W32(f.Model, 0U);
+    beginFrame(); enqueue(0x41, 0x4C03F4U);
+    const auto effect = consume();
+    Require(effect.Layer == Oot3dPicaCompositionLayer::Atmosphere && !effect.TemporalIdentity.Available(),
+            "non-CMB kankyo renderable lost atmosphere ownership");
+    beginFrame(); enqueue(0x87, 0x39F068U, true);
+    Require(consume(0x11EFD4U).IsolatedLighting, "native 2D helper lost logo isolation");
+    beginFrame(); enqueue(0x87, 0x39F068U, true, true);
+    Require(!consume(0x11EFD4U).IsolatedLighting, "unmatched 2D helper return acquired logo ownership");
+    f.W32(f.Model, 0x63BED4U);
+    beginFrame(); enqueue(0x41, 0x1F8E28U);
+    Require(consume().Layer == Oot3dPicaCompositionLayer::OpaqueWorld, "actor id alone classified atmosphere");
+    beginFrame(); enqueue(); f.W32(f.Model, 0U);
+    // A new unproved model cannot acquire temporal ownership.
+    s.r[0] = f.Model; observe(0x5EC220U);
+    beginFrame(); enqueue();
+    Require(!consume().TemporalIdentity.Available(), "unproved model ABI got identity");
+    for (const auto [pc, word] : kMm3dCompositionOwnerGuards) {
+        f.W32(pc, word ^ 1U);
+        Require(!tracker.VerifyHooks(f.Memory), "corrupt owner guard accepted");
+        f.W32(pc, word);
+    }
+}
 
 void TestAcceptedAndSelectedSources() {
     Fixture f; Mm3dNativeA32LightingProbe probe;
@@ -124,10 +237,10 @@ void TestLocalSourceGuards() {
 }
 
 void TestEachProvenSourcePublication() {
-    for (const auto& source : kMm3dLocalLightSources) {
+    for (const auto& source : kMm3dLocalLightSources) for (uint16_t params : {0U,1U,5U}) {
         Fixture f; Mm3dNativeA32LightingProbe probe;
         f.W16(f.Actor,source.Actor); f.W8(f.Actor+2,source.Category);
-        f.W16(f.Actor+0x1C,1);
+        f.W16(f.Actor+0x1C,params);
         f.W32(f.Actor+0x140,source.Update); f.W32(f.Actor+0x13C,source.Destroy);
         for (const auto& guard : source.Guards) f.W32(guard[0],guard[1]);
         f.W32(f.Play+0x20C0+source.Category*12,1);
@@ -138,6 +251,8 @@ void TestEachProvenSourcePublication() {
         const auto binding=probe.CaptureRenderer(0,f.Memory);
         Require(binding.ScenePoints && binding.ScenePoints->Count==1,"proved source not selected exactly once");
         const auto& light=binding.ScenePoints->Lights[0];
+        Require(light.Group==(source.Actor==0x10 ? (params==0 ? 0U : 1U) : 2U),
+                "companion/fairy/non-fairy settings ownership crossed");
         Require(light.SourceIdentity==f.Actor+source.Info+4 && light.ReplacesNativeLocal && light.Radius==250,
                 "source publication changed native identity/radius");
         const float gain=source.Actor==0x10?1.0F:0.15F;
@@ -165,11 +280,29 @@ void TestRoomEmitterPublication() {
     f.W16(segment+26,1);f.W32(segment+28,0x09005678);
     const auto room=CaptureMm3dEmitterRoom(f.Play,f.Memory);
     Require(room && room->Fingerprint==*hash,"runtime relocation changed room identity");
+    f.W8(f.Play+0xC2C4,1); f.W32(f.Play+0xC2D4,segment);
+    Require(CaptureMm3dEmitterRooms(f.Play,f.Memory).size()==2,"coexisting previous room lost");
+    f.W32(f.Play+0xC330,1);
+    const auto pending=CaptureMm3dEmitterRooms(f.Play,f.Memory);
+    Require(pending.size()==1 && pending[0].Number==1,"pending current inherited old segment");
+    f.W32(f.Play+0xC330,0); f.W8(f.Play+0xC2C4,0xFF); f.W32(f.Play+0xC2D4,0);
+    for (const auto& guard : kMm3dRoomEmitterGuards) {
+        f.W32(guard[0],guard[1]^1U);
+        Require(CaptureMm3dEmitterRooms(f.Play,f.Memory).empty(),"corrupt room writer guard admitted");
+        f.W32(guard[0],guard[1]);
+    }
     char fingerprint[17];std::snprintf(fingerprint,sizeof(fingerprint),"%016llx",static_cast<unsigned long long>(*hash));
     const std::string json=std::string(R"({"schema":"triaevum.scene-lights","version":1,"title":"mm3d","rooms":[{"scene":111,"room":0,"fingerprint":")")+
         fingerprint+R"(","emitters":[{"position":[10,20,30],"colour":[1,0.8,0.5],"radius":500,"gain":0.45,"category":"window-lamp","independentEmission":true,"surfaces":["0000000000001234"]}]}]})";
     const auto catalog=PicaEmitterCatalog::Parse(json);
     Require(catalog && catalog->MatchesTitle("mm3d"),"MM catalog rejected");
+    std::vector<PicaScenePointLight> duplicateLights;
+    const std::array duplicateRooms{*room,*room};
+    CapturePicaRoomEmitters(*catalog,111,duplicateRooms,duplicateLights,nullptr);
+    Require(duplicateLights.size()==1,"duplicate current/previous room emitted twice");
+    auto conflicts=duplicateRooms; conflicts[1].Fingerprint^=1;
+    duplicateLights.clear();CapturePicaRoomEmitters(*catalog,111,conflicts,duplicateLights,nullptr);
+    Require(duplicateLights.empty(),"conflicting room identity admitted");
     probe.SetEmitterCatalog(catalog);probe.CaptureSceneLights(f.Play,f.Memory);
     auto binding=probe.CaptureRenderer(0,f.Memory);
     Require(binding.ScenePoints && binding.ScenePoints->Count==1 && binding.ScenePoints->Lights[0].Group==3 &&
@@ -181,6 +314,16 @@ void TestRoomEmitterPublication() {
     emission.Observe(0x1234,0);emission.BeginFrame();
     f.W32(f.Play+0x138,2);probe.CaptureSceneLights(f.Play,f.Memory);
     Require(!probe.CaptureRenderer(0,f.Memory).ScenePoints,"native-off fake-emissive surface still lit");
+    emission.Observe(0x1234,0); // in-flight observation from the old room
+    emission.Follow({}); emission.Follow(std::array<uint64_t,1>{0x1234});
+    Require(emission.Strength(0x1234)==1,"same-frame reload inherited old fade");
+    emission.BeginFrame();
+    Require(emission.Strength(0x1234)==1,"in-flight old observation survived reload");
+    emission.Observe(0x1234,.25F);emission.BeginFrame();emission.BeginFrame();
+    Require(emission.Strength(0x1234)==.25F,"temporarily unseen loaded surface lost strength");
+    // Same-frame scene reuse must invalidate the global follow history.
+    f.W16(f.Play+0x148,0x61);probe.CaptureSceneLights(f.Play,f.Memory);
+    Require(emission.Strength(0x1234)==1,"scene change retained surface strength");
     f.W8(f.Play+0xC260,0xFF);
     Require(!CaptureMm3dEmitterRoom(f.Play,f.Memory),"unloaded room accepted");
     f.W8(f.Play+0xC260,0);f.W8(segment,'X');
@@ -342,6 +485,57 @@ void TestNestedAndInvalidConsumer() {
     }
 }
 
+void TestClockCutsAndDayReset() {
+    Fixture f; Mm3dNativeA32LightingProbe probe;
+    const uint32_t sun=f.Play+0x86D0,moon=f.Play+0x86E8;
+    f.W32(f.Play+0xA88,f.Nodes);f.Link(f.Nodes,sun,f.Nodes+12);f.Link(f.Nodes+12,moon,0);
+    f.W32(0x7751EC,3);
+    uint32_t frame=0;uint16_t clock=0;
+    const auto capture=[&](uint16_t time) {
+        clock=time; f.W16(0x7751F8,time);f.W32(f.Play+0x138,++frame);
+        const double angle=double(std::bit_cast<int16_t>(uint16_t(time-0x8000)))*6.283185307179586/65536.0;
+        const std::array<int,3> direction{int(-std::sin(angle)*120),int(std::cos(angle)*120),int(std::cos(angle)*20)};
+        f.Direction(sun,0,0,uint8_t(128+direction[1]));
+        f.Direction(moon,0,0,uint8_t(128-direction[1]));
+        for (unsigned a=0;a<3;++a) {
+            f.W8(sun+4+a,std::bit_cast<uint8_t>(int8_t(direction[a])));
+            f.W8(moon+4+a,std::bit_cast<uint8_t>(int8_t(-direction[a])));
+        }
+        probe.CaptureSceneLights(f.Play,f.Memory);
+        const auto lights=probe.CaptureRenderer(0,f.Memory).SceneDirectionals;
+        Require(lights && lights->Count==2,"clock fixture lost directionals");
+        Require(std::isfinite(lights->ShadowStrength) && lights->ShadowStrength>=0 && lights->ShadowStrength<=1,
+                "clock/horizon shadow strength invalid");
+        for (uint32_t i=0;i<lights->Count;++i)
+            for (float component:lights->Lights[i].Color)
+                Require(std::isfinite(component) && component>=0 && component<=1,"clock colour out of range");
+        const auto* caster=FindPicaSceneMainDirectional(*lights);
+        if (caster && caster->SkyLight && lights->ShadowStrength>0) {
+            const auto direction=PicaSceneDirectionalDirection(*caster);
+            Require(direction && PicaSceneElevationSine(*direction,lights->WorldUp)>0,
+                    "clock fixture casts below horizon");
+        }
+        return lights;
+    };
+    const auto start=capture(0);const auto epoch=start->ContinuityEpoch;
+    for (uint32_t tick=1;tick<=1024;++tick) {
+        const auto lights=capture(uint16_t(tick*64));
+        Require(lights->ContinuityEpoch==epoch && lights->Lights[0].SkyLight,
+                "ordinary clock wrap/horizon broke continuity");
+    }
+    const auto song=capture(0x8000);
+    Require(song->ContinuityEpoch>epoch,"Double Time direction cut did not start an epoch");
+    const auto beforeReset=song->ContinuityEpoch;
+    f.W32(0x7751EC,1);const auto reset=capture(clock);
+    Require(reset->ContinuityEpoch>beforeReset,"Song of Time day rollback inherited old epoch");
+    const auto beforeRestore=reset->ContinuityEpoch;frame=0;
+    Require(capture(clock)->ContinuityEpoch>beforeRestore,"save restore inherited old epoch");
+    f.W8(f.Play+0x8704,1);const auto fixed=capture(clock);
+    Require(!fixed->Lights[0].SkyLight,"fixed-time entry acquired clock sky ownership");
+    f.W16(f.Play+0x148,0x61);const auto scene=capture(clock);
+    Require(scene->ContinuityEpoch>fixed->ContinuityEpoch,"scene reuse inherited old epoch");
+}
+
 void TestWaterOperandEligibility() {
     Require(PicaNativeFragmentOperandWaterEligible(true,0U,false,false,false),"null/empty-water legacy route changed");
     Require(PicaNativeFragmentOperandWaterEligible(true,2U,true,false,false),"dry geometry in a water scene lost operand");
@@ -486,8 +680,9 @@ void TestLightFunctionsAndGroup() {
 }
 } // namespace
 int main() {
+    TestCompositionTemporalLifetimes();
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
-    TestLightFunctionsAndGroup();
+    TestLightFunctionsAndGroup();TestClockCutsAndDayReset();
     std::cout << "mm3d_native_lighting_tests: ok\n";
 }

@@ -51,6 +51,9 @@ private:
     mutable std::mutex mMutex;
     std::unordered_set<uint64_t> mFollowed;
     std::unordered_map<uint64_t, float> mStrength;
+    // Title removals invalidate in-flight observations, including an unload
+    // followed by a reload of the same hash before the next render frame.
+    std::unordered_set<uint64_t> mRemoved;
     // Render thread only.
     std::unordered_set<uint64_t> mFrameFollowed;
     std::unordered_map<uint64_t, float> mFrame;

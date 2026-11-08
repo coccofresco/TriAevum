@@ -219,6 +219,27 @@ TEST(SpirvPack, OptionalPublisherFamilyLinksEverySupersetWithoutOotVertices) {
         }));
 }
 
+// A preparation-work regression is deterministic even when the driver cache
+// hides its wall time. Non-native titles must not prewarm native-only supersets.
+TEST(SpirvPack, StartupFamilyFollowsNativeLightingCapabilities) {
+    using namespace Fast::Renderer3ds;
+    const auto vertices = Oot3dNativeGame::TitleVertexArtifacts();
+    const PicaStartupProgramDevice device{VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, true};
+    for (const bool operand : {false, true}) {
+        for (const bool shadows : {false, true}) {
+            const bool native = operand || shadows;
+            const auto family = Fast::Extension::StartupUberFragmentArtifacts(operand, shadows);
+            EXPECT_EQ(family.size(), native ? 140U : 36U);
+            const auto parts = PicaStartupProgramParts(vertices, family, NativeFragmentArtifacts(), device);
+            EXPECT_EQ(parts.size(), native ? 159U : 55U);
+            for (const auto& part : parts)
+                EXPECT_TRUE(PicaStageInterfaceLinks(part.Vertex, part.Fragment));
+        }
+    }
+    // Runtime lookup must retain native variants, regardless of startup policy.
+    EXPECT_EQ(Fast::Extension::UberFragmentArtifacts().size(), 140U);
+}
+
 // The startup preparation (and Forge's device preparation) links each program
 // part once. Every link must be valid: separate samplers, as the startup
 // layout declares them, and fragment inputs the vertex program writes (the

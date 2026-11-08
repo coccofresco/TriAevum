@@ -1445,9 +1445,20 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     devSurfaceTraceFrame = 0U;
   }
 #endif
-  // Rumble (Controls > Rumble): the OoT3D adapter's events from the native
-  // game state, handed to Input, which plays them on the active pad at the
-  // next poll. Off reads nothing; reading never writes the guest.
+  // Rumble facts belong to the title; Input owns strength and playback.
+  // Keep the existing OoT reader/sequence unchanged. Optional producers reset
+  // without guest reads while Off, disconnected, unfocused or in the host menu.
+  if (titleSession) {
+    const auto& admission = nativeControlPollingState.RumbleAdmission;
+    if (titleRumbleContextRevision != admission.Revision) {
+      (void)titleSession->RumblePulses(process.Memory(), false);
+      titleRumbleContextRevision = admission.Revision;
+    }
+    const bool enabled = admission.Allowed && SDL_GetKeyboardFocus() != nullptr &&
+                         (!inGameMenuStorage || !inGameMenuStorage->IsOpen());
+    for (const auto& pulse : titleSession->RumblePulses(process.Memory(), enabled))
+      nativeControlPollingState.Rumble.Request(pulse);
+  }
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
       nativeControlPollingState.RumbleStrength != ThreeDsRecomp::Input::RumbleStrength::Off) {
     Oot3dNativeGame::Oot3dRumbleSample rumbleSample;
@@ -2260,10 +2271,11 @@ void NativeA32WindowSession::PresentVisualFrame(
                   presentedNativeLabels->ItemsLabels.clear();
               }
             }
-            frameActors = Oot3dNativeGame::CollectNativeActorInteractions(
-                process.Memory(),
-                sceneViewProbe.Stats().LastPlayStateAddress,
-                finished->Sequence);
+            frameActors = titleSession
+                ? titleSession->ActorInteractions(process.Memory(), finished->Sequence)
+                : Oot3dNativeGame::CollectNativeActorInteractions(
+                      process.Memory(), sceneViewProbe.Stats().LastPlayStateAddress,
+                      finished->Sequence);
             ++visualStats.SnapshotCount;
             suppressTopScreenBackdrop = relocatedFrontend;
             completedFrame =
@@ -3160,8 +3172,16 @@ void NativeA32WindowSession::UpdateDevFreeCamera(Oot3dNativeGame::NativeA32Input
   const float mouseY = static_cast<float>(sources.DevMouseDeltaY);
   sources.DevMouseDeltaX = sources.DevMouseDeltaY = 0;
   if (!freeCamera.Active()) return;
+  const auto productOwns = titleSession
+      ? titleSession->PhotoCameraOwnsInput(processStorage->Memory()) : std::nullopt;
+  if (productOwns) {
+    const bool owns = *productOwns;
+    if (!owns && devFreeCameraOwnedInput) freeCamera.ResetToGame();
+    devFreeCameraOwnedInput = owns;
+    if (!owns) return;
+  }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-  if (devToolsTitle) {
+  if (!productOwns && devToolsTitle) {
     if (!devWarpGuest) devWarpGuest = Oot3dNativeGame::MakeDevWarpProcessGuest(*processStorage);
     const bool owns = devToolsTitle->CameraOwnsInput(*devWarpGuest);
     if (!owns && devFreeCameraOwnedInput) freeCamera.ResetToGame();

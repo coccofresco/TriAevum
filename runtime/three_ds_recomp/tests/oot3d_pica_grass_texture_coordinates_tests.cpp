@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstring>
+#include <limits>
 #include <string_view>
 #include <vector>
 
@@ -115,6 +116,36 @@ void main() {
         transform, {8192.0F, 16384.0F});
     EXPECT_FLOAT_EQ(uv[0], 0.5F);
     EXPECT_FLOAT_EQ(uv[1], 0.375F);
+}
+
+TEST(Oot3dPicaGrassTextureCoordinates, GuardsUniformDispatchedIndexedAffineModes) {
+    using namespace Fast::Extension;
+    constexpr std::string_view vertex = "typed indexed affine", fragment = "void main() {}";
+    auto bytes = BuildTextureCoordinateUniforms();
+    auto hooks = BuildVertexHooks(vertex);
+    auto& g = hooks.TextureCoordinates[0].AffineGuards;
+    g.Version = 1; g.RootMode = {89, 3}; g.Zero = {93, 0}; g.Stride = {93, 3};
+    g.DirectModes = {{{93, 2}, {93, 1}}};
+    const auto fh = BuildFragmentHooks(fragment, Oot3d::Renderer::PicaTextureCoordinateOperation::NativeVFlip);
+    const auto put = [&](uint8_t u, uint8_t c, float v) { std::memcpy(bytes.data() + 80 + size_t(u) * 16 + c * 4, &v, 4); };
+    const auto decode = [&] { return DecodePicaGrassTextureCoordinateTransform(vertex, fragment, bytes, 3, &hooks, &fh); };
+    put(93, 2, 2); put(93, 3, 3);
+    ASSERT_TRUE(decode().Applied());
+    const auto uv = ApplyPicaGrassTextureCoordinateTransform(decode(), {8192, 16384});
+    EXPECT_FLOAT_EQ(uv[0], 0.5F); EXPECT_FLOAT_EQ(uv[1], 0.375F);
+    put(92, 0, 2); EXPECT_TRUE(decode().Applied());
+    put(92, 0, 0); EXPECT_EQ(decode().Eligibility, PicaGrassTextureCoordinateEligibility::ProceduralCoordinates);
+    put(92, 0, 3); EXPECT_EQ(decode().Eligibility, PicaGrassTextureCoordinateEligibility::ProceduralCoordinates);
+    put(92, 0, 1); put(89, 3, 1);
+    EXPECT_EQ(decode().Eligibility, PicaGrassTextureCoordinateEligibility::UnsupportedVertexProgram);
+    put(89, 3, 0); put(93, 0, 1);
+    EXPECT_EQ(decode().Eligibility, PicaGrassTextureCoordinateEligibility::UnsupportedVertexProgram);
+    put(93, 0, 0); put(93, 1, 0);
+    EXPECT_EQ(decode().Eligibility, PicaGrassTextureCoordinateEligibility::UnsupportedVertexProgram);
+    put(93, 1, 1); put(93, 3, std::numeric_limits<float>::quiet_NaN());
+    EXPECT_EQ(decode().Eligibility, PicaGrassTextureCoordinateEligibility::UnsupportedVertexProgram);
+    put(93, 3, 3); put(89, 0, 1e-7F); // native comparison is exact: third route, which is disabled
+    EXPECT_EQ(decode().Eligibility, PicaGrassTextureCoordinateEligibility::UnsupportedCoordinateSource);
 }
 
 TEST(Oot3dPicaGrassTextureCoordinates,

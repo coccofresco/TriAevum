@@ -60,6 +60,9 @@ struct PicaScanoutPolicyInput {
     bool TargetSrgb = false;
     EffectsSettings Effects;
     std::optional<PerspectiveViewState> Perspective;
+    // Opt-in diagnostic shader with its required guides actually bound.
+    // This is not an outline request and never reapplies composed effects.
+    bool GuideDiagnostic = false;
 };
 
 [[nodiscard]] bool ValidatePicaScanoutPolicyInput(

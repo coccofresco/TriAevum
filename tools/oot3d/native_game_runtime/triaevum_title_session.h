@@ -12,11 +12,15 @@
 #include "oot3d_environment_time.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
+#include "fast/extension/grass_types.h"
+#include "gameplay_rumble.h"
+#include "triaevum_title_presentation.h"
 
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
 #include <functional>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -60,6 +64,8 @@ struct TitleSessionHookSetup {
   // and the free camera its hooks drive.
   std::shared_ptr<DevWarpTitleAbi> *DevToolsTitle = nullptr;
   std::shared_ptr<DevFreeCamera> FreeCamera;
+  // Local launcher preparation, never serialized into a game savestate.
+  std::filesystem::path MessageEditsPath;
 };
 
 // What the session lends a title at an observed block entry.
@@ -84,12 +90,62 @@ public:
   // The shared renderer's native fragment lighting operand and lit shadow
   // receivers, which this title's shaders need.
   [[nodiscard]] virtual bool NativeFragmentLighting() const { return false; }
+  // Display name of point group zero, not a separate settings owner.
+  [[nodiscard]] virtual std::string_view CompanionLightName() const { return "Navi"; }
+  // Title-owned settings not serialized by the shared state+settings owners.
+  // Shown before saving/loading and retained in the state metadata.
+  [[nodiscard]] virtual std::string_view SavestateSettingsNotice() const { return {}; }
   // The actor profiles (the title's own ids) whose rigid geometry may be
   // cached in static shadow layers. None by default: every actor is dynamic.
   [[nodiscard]] virtual StaticShadowActorPolicy StaticShadowActors() const { return {}; }
   // The grass source and mask rules ({"Sources", "Masks"}) a configuration
   // older than grass rules takes, or none.
   [[nodiscard]] virtual std::optional<nlohmann::json> GrassRuleDefaults() const { return std::nullopt; }
+
+  // Optional independent authoring files below <config>/grass/<namespace>.
+  // Empty keeps the existing configuration storage (including OoT3D).
+  [[nodiscard]] virtual std::string_view GrassRuleNamespace() const { return {}; }
+  // Completed visual source frame: title reads its live native colliders.
+  // Values only cross this seam; the renderer sees no guest layout or ids.
+  [[nodiscard]] virtual std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
+      oot3d::recomp::a32::MemoryBus& memory, uint64_t sourceFrame) const {
+    (void)memory; (void)sourceFrame;
+    return {};
+  }
+
+  // Whether the title has prepared shaders: a vertex-program family and
+  // fragment-family packs built in, and a scenario corpus and Forge
+  // preparation behind the persistent pipeline cache
+  // (fast/renderer3ds/title_shader_preparation.h). Without them the renderer
+  // uses no always-available programs; every program a draw uses is still
+  // compiled when the draw needs it. OoT3D (no session) has them.
+  [[nodiscard]] virtual bool PreparedShaders() const { return false; }
+  // The title's pipeline cache namespace: its own pipeline cache files in
+  // the renderer cache directory, never another title's (non-empty; lower
+  // case letters, digits, '_' and '-'). OoT3D (no session) keeps the
+  // original file names.
+  [[nodiscard]] virtual std::string_view PipelineCacheNamespace() const = 0;
+
+  [[nodiscard]] virtual bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const {
+    (void)sourcePc; (void)nativeValue; return false;
+  }
+  virtual void SetPresentation(const TitlePresentationSettings& settings) { (void)settings; }
+  // A title may apply the renderer/window policy at its native scene projection
+  // loads. Its unrelated stereo/base-frustum helper must then stay untouched.
+  [[nodiscard]] virtual bool OwnsSceneProjection() const { return false; }
+
+  // Optional product photo-camera input gate. nullopt preserves legacy title
+  // handling; false releases gameplay input to menus/cutscenes/transitions.
+  [[nodiscard]] virtual std::optional<bool> PhotoCameraOwnsInput(
+      oot3d::recomp::a32::MemoryBus& memory) const { (void)memory; return std::nullopt; }
+
+  // Input owns admission/strength/playback. Disabled must reset history without
+  // reading guest memory; absent producers return no events.
+  [[nodiscard]] virtual std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) {
+    (void)memory; (void)enabled;
+    return {};
+  }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }
@@ -148,5 +204,21 @@ public:
 // adapter needs none (OoT3D EUR, generic titles). Throws when the title's
 // adapter is not part of this build.
 std::unique_ptr<TitleSession> CreateTitleSession(TitleAdapter adapter);
+
+// Whether the running title has prepared shaders (TitleSession::PreparedShaders):
+// its session says so; OoT3D's adapter, still wired into the window session
+// itself, has them; a generic title has none.
+[[nodiscard]] inline bool TitlePreparedShaders(TitleAdapter adapter, const TitleSession *session) {
+  return session != nullptr ? session->PreparedShaders() : adapter == TitleAdapter::Oot3dEur;
+}
+
+// The running title's pipeline cache namespace (TitleSession::
+// PipelineCacheNamespace): its session's; OoT3D keeps the original file
+// names (empty); a generic title has its own files, apart from OoT3D's.
+[[nodiscard]] inline std::string_view TitlePipelineCacheNamespace(TitleAdapter adapter,
+                                                                 const TitleSession *session) {
+  if (session != nullptr) return session->PipelineCacheNamespace();
+  return adapter == TitleAdapter::Oot3dEur ? std::string_view{} : std::string_view{"generic"};
+}
 
 } // namespace Oot3dNativeGame

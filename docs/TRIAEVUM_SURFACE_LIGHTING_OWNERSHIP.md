@@ -375,7 +375,14 @@ Verification (developer launch; owner's play config, Vanilla+ RomFS overlay;
   Field by the river varies run to run (the before exe twice gave two hashes:
   the river's wave phase), so it is not an identity gate.
 
-### Native fragment lights: light function and fallback (2026-11-06)
+### Native fragment lights: initial transfer contract (2026-11-06, historical)
+
+Superseded by [Environment profiles on native fragment lighting](NATIVE_FRAGMENT_ENVIRONMENT_PROFILES.md).
+All valid profile shapes now apply, including added ambient, key/fill/offsets,
+rim, fog and placed lights. Preservation retains ambient (not an extra opposite
+fill). Local-only draws accept ambient/rim/placed controls without acquiring the
+actor's scene-following key. The following records the initial restricted path,
+not the current F1 availability.
 
 A title whose scene is lit per pixel by native fragment lights
 (`TitleSession::NativeFragmentLighting`) takes a scene profile only in the
@@ -444,6 +451,12 @@ fog off, unsupported shapes leave the frame native), `triaevum_environment_tests
 group), `triaevum_f1_settings_smoke` (the marks on the actual widgets).
 
 ### Identity-proved native Local points
+
+Historical first-increment description below. Current group Off/zero ownership
+is specified in [Scene point-light settings](TRIAEVUM_SCENE_POINT_LIGHT_SETTINGS.md):
+proved native direct/specular is suppressed, not restored. Native ambient stays
+independent. Later native-reference/GGX work also supersedes the approximation
+and GGX limitation recorded below.
 
 `PicaScenePointLight::ReplacesNativeLocal` is an explicit title proof, off
 by default. `BuildPicaNativePointReplacement` admits these sources by exact

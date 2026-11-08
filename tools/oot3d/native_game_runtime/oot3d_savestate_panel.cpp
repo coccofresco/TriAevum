@@ -68,8 +68,8 @@ std::filesystem::path ExistingFolder(std::filesystem::path path) {
 
 class SavestatePanel final : public Fast::Extension::GraphicsSettingsPanelTab {
  public:
-  explicit SavestatePanel(std::shared_ptr<SavestateLibrary> library)
-      : mLibrary(std::move(library)) {}
+  explicit SavestatePanel(std::shared_ptr<SavestateLibrary> library, std::string settingsNotice)
+      : mLibrary(std::move(library)), mSettingsNotice(std::move(settingsNotice)) {}
 
   const char* Label() const noexcept override { return "Save states"; }
   const char* Group() const noexcept override { return Fast::Extension::kGameSettingsGroup; }
@@ -87,6 +87,7 @@ class SavestatePanel final : public Fast::Extension::GraphicsSettingsPanelTab {
     ImGui::TextWrapped(
         "A save state holds the game moment only and loads with any resolution and "
         "settings. \"+ settings\" also stores graphics, TopScreen, controls and language.");
+    if (!mSettingsNotice.empty()) ImGui::TextWrapped("%s", mSettingsNotice.c_str());
     DrawFolder(fixedSlot);
 
     ImGui::SeparatorText("Load");
@@ -305,6 +306,7 @@ class SavestatePanel final : public Fast::Extension::GraphicsSettingsPanelTab {
   }
 
   std::shared_ptr<SavestateLibrary> mLibrary;
+  std::string mSettingsNotice;
   std::vector<SavestateEntry> mEntries;
   std::string mListError;
   std::filesystem::path mListedDirectory;
@@ -320,8 +322,8 @@ class SavestatePanel final : public Fast::Extension::GraphicsSettingsPanelTab {
 } // namespace
 
 std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
-CreateSavestatePanel(std::shared_ptr<SavestateLibrary> library) {
-  return std::make_shared<SavestatePanel>(std::move(library));
+CreateSavestatePanel(std::shared_ptr<SavestateLibrary> library, std::string settingsNotice) {
+  return std::make_shared<SavestatePanel>(std::move(library), std::move(settingsNotice));
 }
 
 } // namespace Oot3dNativeGame

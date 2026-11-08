@@ -36,6 +36,11 @@ target_compile_features(native_presentation_policy_tests PRIVATE cxx_std_20)
 target_include_directories(native_presentation_policy_tests PRIVATE ../include)
 add_test(NAME native_presentation_policy_tests COMMAND native_presentation_policy_tests)
 
+add_executable(title_shader_preparation_tests title_shader_preparation_tests.cpp)
+target_compile_features(title_shader_preparation_tests PRIVATE cxx_std_20)
+target_include_directories(title_shader_preparation_tests PRIVATE ../include)
+add_test(NAME title_shader_preparation_tests COMMAND title_shader_preparation_tests)
+
 add_executable(pica_temporal_history_tests pica_temporal_history_tests.cpp)
 target_compile_features(pica_temporal_history_tests PRIVATE cxx_std_20)
 target_include_directories(pica_temporal_history_tests PRIVATE ../include)
@@ -50,6 +55,11 @@ add_executable(pica_surface_coordinates_tests pica_surface_coordinates_tests.cpp
 target_compile_features(pica_surface_coordinates_tests PRIVATE cxx_std_20)
 target_include_directories(pica_surface_coordinates_tests PRIVATE ../include)
 add_test(NAME pica_surface_coordinates_tests COMMAND pica_surface_coordinates_tests)
+
+add_executable(pica_surface_uniform_upload_tests pica_surface_uniform_upload_tests.cpp)
+target_compile_features(pica_surface_uniform_upload_tests PRIVATE cxx_std_20)
+target_include_directories(pica_surface_uniform_upload_tests PRIVATE ../include)
+add_test(NAME pica_surface_uniform_upload_tests COMMAND pica_surface_uniform_upload_tests)
 
 add_executable(pica_surface_appearance_tests pica_surface_appearance_tests.cpp)
 target_compile_features(pica_surface_appearance_tests PRIVATE cxx_std_20)
@@ -273,6 +283,7 @@ add_executable(oot3d_pica_shader_pipeline_cache_tests
     ../src/fast/extension/pica_shader_pipeline_cache.cpp
     ../src/fast/extension/pica_toon_shader.cpp
     ../src/fast/extension/pica_uber_effect_program.cpp
+    ../src/fast/renderer3ds/pica_tev_program.cpp
 )
 set_property(TARGET oot3d_pica_shader_pipeline_cache_tests
     PROPERTY CXX_STANDARD 20)

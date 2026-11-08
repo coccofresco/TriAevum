@@ -1,4 +1,5 @@
 #include "mm3d_scene_environment.h"
+#include "../gameplay/mm3d_actor_interactions.h"
 #include "triaevum_title_adapter.h"
 #include <algorithm>
 #include <bit>
@@ -332,10 +333,83 @@ void TestEnvironmentGroupGuardsAndLatch() {
   latch.SetGuardsHold(false);
   Check(!latch.Observe(m, play, 0x62, ++frame), "failed guards kept a group");
 }
+
+void TestActorInteractions() {
+  auto m = Fixture();
+  for (uint32_t cat = 0; cat < 12; ++cat) {
+    m.Put(play + 0x20C0 + cat * 12, 0); m.Put(play + 0x20C4 + cat * 12, 0);
+  }
+  m.Put(play + 0x20D8, 1); m.Put(play + 0x20DC, player);
+  m.Put(player + 0x144, 0x1F4E0C); m.Put(player + 0x134, 0);
+  m.Put(player + 0x1FF, 4, 1);
+  m.Put(player + 0x9BC, player); m.Put(player + 0x9D1, 1, 1);
+  m.Float(player + 0x9FC, 12); m.Float(player + 0xA00, 38.15716F); m.Float(player + 0xA04, 4.926575F);
+  m.Put(player + 0xB4, 10, 2); m.Put(player + 0xB6, 10, 2); m.Put(player + 0xB8, 0, 2);
+  Check(CollectMm3dActorInteractions(m, 7, false).empty(), "colliders read before image guards");
+  for (const auto& g : Mm3dActorInteractionLayout::Guards) m.Put(g.Address, g.Word);
+  Check(Mm3dActorInteractionGuardsHold(m), "collider EUR guards rejected");
+  for (const auto& g : Mm3dActorInteractionLayout::Guards) {
+    m.Put(g.Address, g.Word ^ 1);
+    Check(!Mm3dActorInteractionGuardsHold(m), "corrupt collider guard accepted");
+    m.Put(g.Address, g.Word);
+  }
+  for (uint32_t form = 0; form < 5; ++form) {
+    m.Put(player + 0x1FF, form, 1);
+    // Native body dimensions, not an adapter form-size table. Changing forms
+    // and poses takes the updated native values on the next source snapshot.
+    m.Float(player + 0x9FC, 12.0F + form); m.Float(player + 0xA00, 38.0F + form);
+    const auto actors = CollectMm3dActorInteractions(m, 7, true);
+    Check(actors.size() == 1, "one of the five live forms missing");
+    Check(actors[0].Radius == 12 + form && actors[0].HalfHeight == (38 + form) * 0.5F,
+          "player used generic 10x10 colChkInfo instead of native body");
+    Check(actors[0].Type == Fast::Extension::GrassInteractor::Kind::PlayerLink &&
+          actors[0].StableId == player && actors[0].FrameId == 7 && actors[0].ContextId == play,
+          "collider role/identity/source mismatch");
+    Check(std::abs(actors[0].Position[1] - 24.926575F) < 0.0001F, "native body yShift lost");
+  }
+  const auto good = m;
+  m.Put(player + 0x9BC, player + 4);
+  Check(CollectMm3dActorInteractions(m, 7, true).empty(), "wrong cylinder owner accepted");
+  m = good; m.Put(player + 0x9D1, 2, 1);
+  Check(CollectMm3dActorInteractions(m, 7, true).empty(), "non-cylinder body accepted");
+  m = good; m.Put(player + 0x1FF, 5, 1);
+  Check(CollectMm3dActorInteractions(m, 7, true).empty(), "unknown form accepted");
+  m = good; m.Float(player + 0x9FC, std::numeric_limits<float>::quiet_NaN());
+  Check(CollectMm3dActorInteractions(m, 7, true).empty(), "NaN cylinder accepted");
+  m = good; m.Put(player + 0x144, 0);
+  Check(CollectMm3dActorInteractions(m, 7, true).empty(), "non-drawable actor accepted");
+  m = good; m.Put(play + 0x13D, 6, 1);
+  Check(CollectMm3dActorInteractions(m, 7, true).empty(), "teardown kept colliders");
+  m = good;
+  constexpr uint32_t horse = player + 0x20000;
+  m.Put(play + 0x20CC, 1); m.Put(play + 0x20D0, horse);
+  m.Put(horse, 0xD, 2); m.Put(horse + 2, 1, 1); m.Put(horse + 0x134, horse);
+  m.Put(horse + 0x140, 0x2B5CCC); m.Put(horse + 0x144, 0x35DD64);
+  m.Put(horse + 0x204, 2, 1); // MM's child Epona, not adult/bandit/donkey
+  m.Float(horse + 0x24, -412); m.Float(horse + 0x28, -77); m.Float(horse + 0x2C, 1681);
+  m.Put(horse + 0xB4, 35, 2); m.Put(horse + 0xB6, 100, 2); m.Put(horse + 0xB8, 0xFFF6, 2);
+  auto actors = CollectMm3dActorInteractions(m, 8, true);
+  Check(actors.size() == 2 && actors[0].Type == Fast::Extension::GrassInteractor::Kind::Epona &&
+        actors[0].Radius == 35 && actors[0].HalfHeight == 50 && actors[0].Position[1] == -87,
+        "Termina horse dimensions, role or signed Y shift wrong");
+  m.Put(horse + 0x204, 4, 1);
+  Check(CollectMm3dActorInteractions(m, 8, true)[0].Type == Fast::Extension::GrassInteractor::Kind::SceneActor,
+        "donkey acquired Epona priority");
+  m.Bytes.erase(horse + 0x204);
+  Check(CollectMm3dActorInteractions(m, 8, true)[0].Type == Fast::Extension::GrassInteractor::Kind::SceneActor,
+        "unreadable horse type acquired Epona priority");
+  m.Put(horse + 0x204, 2, 1);
+  m.Put(play + 0x20CC, 255); // cycle bounded, player still read
+  Check(CollectMm3dActorInteractions(m, 8, true).size() == 2, "cyclic category unbounded/duplicated");
+  m.Put(horse + 2, 5, 1);
+  Check(CollectMm3dActorInteractions(m, 8, true).size() == 1, "wrong category followed");
+  m.Put(play + 0x20D8, 256);
+  Check(CollectMm3dActorInteractions(m, 8, true).empty(), "oversized list followed");
+}
 } // namespace
 int main() try {
   TestReadContract();TestRecordedGameplay();TestRecordedNight();TestRejections();TestLifetimeAndStorage();
-  TestEnvironmentGroupDecode();TestEnvironmentGroupGuardsAndLatch();
+  TestEnvironmentGroupDecode();TestEnvironmentGroupGuardsAndLatch();TestActorInteractions();
   std::printf("MM3D scene environment guards passed: %d checks\n",checks);
   return 0;
 } catch(const std::exception& error) {

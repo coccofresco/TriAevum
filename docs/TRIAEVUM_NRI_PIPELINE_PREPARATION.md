@@ -85,6 +85,21 @@ drawable; only the recording backend consumes it.
 - Driver cache data remains local. The portable pack is not a driver cache.
 - Do not prepare concurrently with gameplay writing the same cache: atomic
   writes prevent partial files, but last-writer-wins can discard additions.
+- 2026-11-06: each title has its own pipeline cache files
+  (`TitleSession::PipelineCacheNamespace`,
+  `fast/renderer3ds/title_shader_preparation.h`). OoT3D keeps
+  `nri_pipeline_cache.bin` and `pipeline_cache.bin`, the files Forge and
+  `pipeline_prepare` write; MM3D uses `nri_pipeline_cache.mm3d.bin` and
+  `pipeline_cache.mm3d.bin`, a generic title `*.generic.bin`. A title never
+  loads another title's pipelines nor replaces them, and its own pipelines
+  persist for its next launch. A title without prepared shaders
+  (`TitleSession::PreparedShaders`; MM3D until its corpus exists, generic
+  titles) has no program family to link always-available programs from: its
+  hybrid/uber preparation becomes `complete` before device creation, so the
+  device is negotiated exactly as with `TRIAEVUM_SHADER_PREPARATION=complete`.
+  `TRIAEVUM_TITLE_SHADER_PREPARATION` prints the decision and the cache file.
+  The content-addressed SPIR-V and pass-shader caches are unaffected: their
+  entries are per program and never collide between titles.
 
 The helper now wraps a Vulkan device using the live renderer's shared
 `renderer3ds/pica_vulkan_device_profile.h`: application/API contract and enabled
