@@ -16,6 +16,7 @@
 #include "../dekui/button_glyph_emission.h"
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
+#include "../gameplay/mm3d_rumble_events.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
@@ -248,6 +249,10 @@ public:
     // whatever the output's aspect; the scene fills the output.
     if (!IsMm3dTopScreenCanvas(viewport)) return std::nullopt;
     return kMm3dUiFrameExtensionY;
+  }
+
+  bool ReadRumbleSample(oot3d::recomp::a32::MemoryBus &memory, Oot3dRumbleSample *sample) const override {
+    return ReadMm3dRumbleSample(memory, sample);
   }
 
   bool SceneEnvironmentStillCurrent(oot3d::recomp::a32::MemoryBus &memory,

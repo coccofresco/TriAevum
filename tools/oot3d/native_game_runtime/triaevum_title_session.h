@@ -41,6 +41,7 @@ class Oot3dPicaCommandListCompositionProvider;
 struct NativeA32SceneViewSnapshot;
 struct Oot3dPicaViewportState;
 struct SceneEnvironmentProfile;
+struct Oot3dRumbleSample;
 
 // The latest perspective frustum a title's builder produced (s0..s5), before
 // the presentation policy widens it.
@@ -111,6 +112,14 @@ public:
   virtual void ObserveButtonOverlayDraw(uint64_t) {}
   virtual void SelectButtonOverlay(std::span<const uint64_t>) {}
   virtual std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float) const { return {}; }
+
+  // Rumble (Controls > Rumble) for a title other than OoT3D: one read-only
+  // sample of the shared Damage/HardLanding tracker per guest refresh. The
+  // frame loop calls it only while Rumble is not Off.
+  virtual bool ReadRumbleSample(oot3d::recomp::a32::MemoryBus &memory, Oot3dRumbleSample *sample) const {
+    (void)memory; (void)sample;
+    return false;
+  }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }

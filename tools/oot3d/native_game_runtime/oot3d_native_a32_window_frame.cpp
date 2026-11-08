@@ -1465,14 +1465,18 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
     devSurfaceTraceFrame = 0U;
   }
 #endif
-  // Rumble (Controls > Rumble): the OoT3D adapter's events from the native
-  // game state, handed to Input, which plays them on the active pad at the
-  // next poll. Off reads nothing; reading never writes the guest.
-  if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
+  // Rumble (Controls > Rumble): the title adapter's events from the native
+  // game state (OoT3D here, other titles through their session), handed to
+  // Input, which plays them on the active pad at the next poll. Off reads
+  // nothing; reading never writes the guest.
+  if ((titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur || titleSession) &&
       nativeControlPollingState.RumbleStrength != ThreeDsRecomp::Input::RumbleStrength::Off) {
     Oot3dNativeGame::Oot3dRumbleSample rumbleSample;
-    (void)Oot3dNativeGame::ReadOot3dRumbleSample(process.Memory(), sceneViewProbe.Stats().LastPlayStateAddress,
-                                                 &rumbleSample);
+    if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur)
+      (void)Oot3dNativeGame::ReadOot3dRumbleSample(process.Memory(), sceneViewProbe.Stats().LastPlayStateAddress,
+                                                   &rumbleSample);
+    else
+      (void)titleSession->ReadRumbleSample(process.Memory(), &rumbleSample);
     for (const auto &event : oot3dRumbleEvents.Observe(rumbleSample))
       nativeControlPollingState.Rumble.Request(Oot3dNativeGame::Oot3dRumblePulse(event));
   } else {

@@ -65,6 +65,13 @@ if(TRIAEVUM_TITLE_MM3D)
         "${CMAKE_CURRENT_SOURCE_DIR}/titles/oot3d/environment"
         "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter")
     oot3d_target_defaults(mm3d_scene_environment_tests FOLDER Tests)
+    # MM3D rumble facts through the shared OoT3D tracker and pulses.
+    add_executable(mm3d_rumble_events_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_rumble_events_tests.cpp)
+    target_include_directories(mm3d_rumble_events_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter")
+    target_link_libraries(mm3d_rumble_events_tests PRIVATE oot3d_native_game_runtime)
+    oot3d_target_defaults(mm3d_rumble_events_tests FOLDER Tests)
 endif()
 
 # Clock verification must also work without the optional legacy cutscene host.
