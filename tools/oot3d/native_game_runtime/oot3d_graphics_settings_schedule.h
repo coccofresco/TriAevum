@@ -18,9 +18,20 @@ namespace Oot3dNativeGame {
 // { "schema": "oot3d.graphics_settings_schedule.v1",
 //   "steps": [ { "frame": 300,
 //                "graphics": { "Effects": { "GlobalIllumination": { "Mode": "Off" } } } } ] }
+//
+// A step may instead (or also) carry an "audio" block: a partial "Audio"
+// settings block (MasterVolume, Muted, MuteWhenUnfocused) merged onto the
+// current output settings and applied through Ship::AudioOutputPolicy::
+// Preview (the one owner; applied, never saved), plus "PreviewTone": true to
+// ask the owner for one preview tone. Window focus is not schedulable: the
+// frame loop reports the real keyboard focus to the owner every frame.
+//   { "frame": 900, "audio": { "MasterVolume": 40 } }
+//   { "frame": 960, "audio": { "Muted": true } }
 struct GraphicsSettingsScheduleStep {
   uint32_t Frame = 0;
-  nlohmann::json Graphics;
+  nlohmann::json Graphics; // null when the step changes no graphics
+  nlohmann::json Audio;    // null when the step changes no audio
+  bool PreviewTone = false;
 };
 
 class GraphicsSettingsSchedule {
@@ -48,6 +59,9 @@ private:
   std::vector<GraphicsSettingsScheduleStep> mSteps;
   size_t mNext = 0;
 };
+
+// The audio keys a step may name (the "Audio" block of the settings).
+[[nodiscard]] bool IsScheduledAudioKey(const std::string &key);
 
 // Merges a step onto the serialized current block (JSON merge patch).
 [[nodiscard]] nlohmann::json

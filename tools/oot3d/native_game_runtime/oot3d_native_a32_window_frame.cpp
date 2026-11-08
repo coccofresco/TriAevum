@@ -377,6 +377,30 @@ bool NativeA32WindowSession::RunFrame() {
   // Developer qualification: scheduled settings take the F1 commit path
   // (applied, not persisted) before this frame is rendered.
   for (const auto *step : graphicsSettingsSchedule.TakeDue(runFrameCount)) {
+    if (!step->Audio.is_null() || step->PreviewTone) {
+      // Audio steps take the one owner's Preview path (applied, not saved),
+      // the same call a dragged F1 slider makes.
+      const auto audioPolicy = audio != nullptr ? audio->GetOutputPolicy() : nullptr;
+      if (audioPolicy == nullptr)
+        throw std::runtime_error("audio settings schedule step at frame " +
+                                 std::to_string(step->Frame) +
+                                 " has no audio output owner");
+      if (!step->Audio.is_null()) {
+        auto block = Ship::SerializeAudioOutputSettings(audioPolicy->Settings());
+        block.merge_patch(step->Audio);
+        audioPolicy->Preview(Ship::ParseAudioOutputSettings(block));
+      }
+      if (step->PreviewTone) audioPolicy->RequestPreview();
+      const auto applied = audioPolicy->Settings();
+      std::fprintf(stderr,
+                   "TRIAEVUM_AUDIO_SETTINGS_SCHEDULE frame=%u master=%d muted=%d "
+                   "mute_unfocused=%d preview_tone=%d target_gain_q16=%u revision=%llu\n",
+                   step->Frame, applied.MasterVolume, applied.Muted ? 1 : 0,
+                   applied.MuteWhenUnfocused ? 1 : 0, step->PreviewTone ? 1 : 0,
+                   audioPolicy->TargetGainQ16(),
+                   static_cast<unsigned long long>(audioPolicy->Revision()));
+    }
+    if (step->Graphics.is_null()) continue;
     auto &graphicsSettings = Fast::Extension::GraphicsSettingsRuntime::Instance();
     const auto current = graphicsSettings.Snapshot();
     const auto decoded = Fast::Extension::DeserializeGraphicsSettings(
