@@ -258,8 +258,18 @@ whose authored CMB vertex normals are smoothed: decoded from the dump
 identity axis order confirmed against all permutations), only 34% of all
 room-2 triangle corners and 34% of floor-facing corners lie within 0.95 of
 their face normal (median 0.83). The guide carries the native shading normal,
-so the deficit is content-bound, not a guide defect. Whether a content-bound
-shortfall on the >= 0.95 share is acceptable is an owner question.
+so the deficit is content-bound, not a guide defect.
+
+**Status (coordinator decision, round 3): F18 closed, content-bound.** Smoothed
+authored normals are an intrinsic game difference; acceptance is the
+opposite-hemisphere gate (0.28% <= 0.50%). Offline faceted sanity on the same
+retained capture (`F18/faceted_sanity.py`, no new run): 16 px tiles whose
+agreement is constant to 1 LSB (planar facets: guide and depth normal both
+constant) are 1,375/1,378 = 99.8% >= 0.95, so where MM3D content is faceted the
+guide meets OoT3D's criterion. Negatives: a constant fallback normal on those
+tiles fails (rc=1), and the same tiles marked unlit/non-diagnostic are excluded
+rather than counted as passing (rc=1). Frames 350 and 550 of that capture are
+byte-identical, so this is one region sample.
 
 **Grouped live run `R3LIVE`** (exe from b2717ff1): Hide HUD via the merged
 host_keys, Off/FSR/TAA HUD samples, pause menu and a native dialogue
