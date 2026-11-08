@@ -521,6 +521,8 @@ class WholeAotProgramTest(unittest.TestCase):
         words = [0] * 18
         words[0] = 0xE12FFF1E
         words[8] = 0x1040  # pointer word naming 0x1040
+        # The Thumb range holds Thumb code (BX lr) the Thumb decoder accepts.
+        words[12:16] = [0x47704770] * 4
         words[16] = 0xE0039001  # decodes as A32 "and r9, r3, r1"
         words[17] = 0xE12FFF1E
         code = b"".join(word.to_bytes(4, "little") for word in words)
