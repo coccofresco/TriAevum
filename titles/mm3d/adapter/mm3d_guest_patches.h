@@ -47,6 +47,12 @@ struct Mm3dGuestPatchSite {
     // unconditional return (an observer on a function epilogue whose next
     // word is literal data). Such a site needs no boundary at Pc + 4.
     bool ContinuesAtNext = true;
+    // False when the handler itself never returns Pc + 4 (it declines, or
+    // continues elsewhere: a declared target, the caller). The product
+    // (whole-AOT title module) runs a declined site as the module's code at
+    // Pc, so only a handler's own Pc + 4 needs a module boundary there; the
+    // registry runtime keeps the boundary ContinuesAtNext gives.
+    bool HandlerReturnsNext = true;
 };
 
 class Mm3dGuestPatches {

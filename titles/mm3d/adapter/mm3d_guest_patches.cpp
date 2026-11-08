@@ -100,7 +100,7 @@ std::vector<std::uint32_t> Mm3dGuestPatches::MissingProductBoundaries(
         }
         anyEnabled = true;
         needed.push_back(entry.Site.Pc);
-        if (entry.Site.ContinuesAtNext) {
+        if (entry.Site.ContinuesAtNext && entry.Site.HandlerReturnsNext) {
             needed.push_back(entry.Site.Pc + 4U);
         }
     }

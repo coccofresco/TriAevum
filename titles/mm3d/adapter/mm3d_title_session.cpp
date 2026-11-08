@@ -236,11 +236,23 @@ public:
       const auto missing = mGuestPatches.MissingProductBoundaries(
           std::vector<uint32_t>(entries.begin(), entries.end()));
       if (!missing.empty()) {
-        char pc[16];
-        std::snprintf(pc, sizeof(pc), "0x%08X", missing.front());
+        // Every missing boundary with the site that needs it: the owner of
+        // the title module (its registry boundaries) reads the whole list.
+        std::string list;
+        const auto statistics = mGuestPatches.Statistics();
+        for (const auto pc : missing) {
+          char text[24];
+          std::snprintf(text, sizeof(text), " 0x%08X", pc);
+          list += text;
+          for (const auto &site : statistics)
+            if (site.Enabled && (site.Pc == pc || site.Pc + 4U == pc)) {
+              list += " (" + site.Name + (site.Pc == pc ? ")" : " +4)");
+              break;
+            }
+        }
         throw std::runtime_error(std::string("MM3D product: the title module lacks ") +
                                  std::to_string(missing.size()) +
-                                 " guest-patch boundary(ies), first at " + pc +
+                                 " guest-patch boundary(ies):" + list +
                                  "; rebuild the MM3D title module with the Mm3dGuestPatches boundaries");
       }
       // The product dispatch receipt (dekui / Project Restoration sites on

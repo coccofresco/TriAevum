@@ -9,6 +9,8 @@ inline void RegisterMm3dPhotoCamera(Mm3dGuestPatches& patches, Mm3dPhotoCamera& 
   Mm3dGuestPatchSite site;
   site.Pc=kMm3dCameraUpdateSite.Pc;
   site.Name="MM3D product photo camera";
+  // Returns to the caller (lr) or declines: never Pc + 4.
+  site.HandlerReturnsNext=false;
   for(uint32_t i=0;i<kMm3dCameraUpdateSite.Words.size();++i)
     site.Guard.emplace_back(site.Pc+4*i,kMm3dCameraUpdateSite.Words[i]);
   site.Handler=[&abi,camera=std::move(camera)](auto& state,auto& memory)->std::optional<uint32_t> {

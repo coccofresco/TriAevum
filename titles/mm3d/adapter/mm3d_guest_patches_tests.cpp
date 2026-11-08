@@ -254,10 +254,36 @@ void TestReturnSiteNeedsNoContinuation() {
     Require(has(0x0011EF3CU) && has(0x0011EF40U), "a body observer lost its continuation");
 }
 
+void TestHandlerNeverReturningNext() {
+    // MM3D product F07 r16 (startup self-check): the photo camera and the
+    // roll-dash sites decline or continue elsewhere. The product runs a
+    // declined site as the module's code at Pc, so Pc + 4 is no module
+    // boundary it needs; the registry runtime keeps it.
+    Mm3dGuestPatches patches;
+    Mm3dGuestPatchSite site;
+    site.Pc = kSite;
+    site.Name = "observer";
+    site.Guard = {{kSite, kCmpR1R2}};
+    site.Handler = [](auto&, auto&) -> std::optional<std::uint32_t> { return std::nullopt; };
+    site.HandlerReturnsNext = false;
+    patches.Add(std::move(site));
+    WordMemory memory;
+    memory.Words = {{kSite, kCmpR1R2}};
+    Require(patches.Verify(memory) == 1U, "the observer was not enabled");
+    Require(patches.BlockBoundaries() == std::vector<std::uint32_t>{kSite, kSite + 4U},
+            "the registry lost the observer's continuation");
+    Require(patches.MissingProductBoundaries({kSite}).empty(),
+            "a module without Pc + 4 was refused for a handler that never returns there");
+    // Negative: the site itself is still required.
+    Require(patches.MissingProductBoundaries({}) == std::vector<std::uint32_t>{kSite},
+            "a module lacking the observer's own PC was accepted");
+}
+
 } // namespace
 
 int main() {
     TestProductBoundaries();
+    TestHandlerNeverReturningNext();
     TestReturnSiteNeedsNoContinuation();
     TestReplacement();
     TestGuard();

@@ -205,6 +205,7 @@ class GameplayOptions {
     Mm3dGuestPatchSite input;
     input.Pc = kRollDashInputSite;
     input.Name = "mm3d.roll_dash.input";
+    input.HandlerReturnsNext = false;  // observe only: always declines
     input.Guard.assign(std::begin(kRollDashInputGuard), std::end(kRollDashInputGuard));
     input.Handler = [this](oot3d::recomp::a32::GuestState& state, oot3d::recomp::a32::MemoryBus& memory)
         -> std::optional<std::uint32_t> {
@@ -216,6 +217,7 @@ class GameplayOptions {
     Mm3dGuestPatchSite speed;
     speed.Pc = kRollDashSpeedSite;
     speed.Name = "mm3d.roll_dash.speed";
+    speed.HandlerReturnsNext = false;  // kRollDashSpeedApply (a declared target) or declines
     speed.Guard.assign(std::begin(kRollDashSpeedGuard), std::end(kRollDashSpeedGuard));
     speed.Handler = [this](oot3d::recomp::a32::GuestState&, oot3d::recomp::a32::MemoryBus&)
         -> std::optional<std::uint32_t> {
