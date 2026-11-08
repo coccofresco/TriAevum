@@ -309,6 +309,55 @@ void TestDeferredModelResourceLifetime() {
     Require(original.TemporalIdentity.Available(), "immutable historical attribution was mutated");
 }
 
+// F03: in-place recycling the native destroy hooks did not observe. The
+// actor identity is (id << 32 | address); the model lifetime is keyed by its
+// temporal owner, owner epoch and resource handles. A different actor at the
+// same address, or a model handed to another owner, must never match history.
+void TestUnobservedInPlaceRecycling() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "recycling hooks verified");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    uint32_t frame = 1;
+    const auto enqueue = [&](uint16_t id, bool actor) {
+        f.W32(f.Play + 0x138U, frame++); s.r[0] = f.Play; observe(0x15E9ECU);
+        if (actor) { f.W16(f.Actor, id); f.W32(f.Actor + 0x144U, 0x1F8E28U);
+            s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U); }
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 4U, 1); f.W32(f.Queue + 8U, f.Model);
+        if (actor) observe(0x182C48U);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = 0x11EF3CU; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000020U);
+        s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 1, "recycling fixture keeps one model range");
+        return spans.front().Attribution.TemporalIdentity;
+    };
+    const auto a = enqueue(0x10, true);
+    Require(a.Available() && enqueue(0x10, true) == a, "recycling baseline identity unstable");
+    // Same address, different actor id, no destroy site observed.
+    const auto b = enqueue(0x11, true);
+    Require(b.Available() && b.Owner != a.Owner && b.Lifetime != a.Lifetime,
+            "unobserved actor recycling at the same address matched the former lifetime");
+    // The former id returning at that address is a new instance, not a revival.
+    const auto a2 = enqueue(0x10, true);
+    Require(a2.Available() && a2.Lifetime != a.Lifetime && a2.Lifetime != b.Lifetime,
+            "actor ABA at the same address revived an old lifetime");
+    // Same model address handed from the actor to a scene owner and back.
+    const auto scene = enqueue(0, false);
+    Require(scene.Available() && (scene.Owner & (1ULL << 63U)) && scene.Lifetime != a2.Lifetime,
+            "model recycled to a scene owner kept the actor lifetime");
+    const auto back = enqueue(0x10, true);
+    Require(back.Available() && back.Lifetime != scene.Lifetime && back.Lifetime != a2.Lifetime,
+            "model returned to an actor revived a former lifetime");
+    Require(enqueue(0x10, true) == back, "recycled identity not stable afterwards");
+}
+
 void TestPrimitiveOwnership() {
     Fixture f;
     Mm3dNativePicaCompositionTracker tracker;
@@ -880,7 +929,7 @@ void TestLightFunctionsAndGroup() {
 }
 } // namespace
 int main() {
-    TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
+    TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestUnobservedInPlaceRecycling(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();
