@@ -28,7 +28,7 @@ TITLES = {
         "recipes": ROOT / "titles/mm3d/forge/supported_revisions.json",
         "recipe_path": "recipes/mm3d.json",
         "default_recipe": "mm3d-eur-local-6eec27b1",
-        "forge_features": ("forge-desktop/title-mm3d", "forge-cli/title-mm3d"),
+        "forge_features": ("forge-desktop/title-mm3d", "forge-cli/title-mm3d", "forge-update-helper/title-mm3d"),
     },
 }
 

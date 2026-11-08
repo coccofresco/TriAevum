@@ -39,6 +39,10 @@ class TitleReleaseTests(unittest.TestCase):
         recipes = json.loads(Path(layout[0]["source"]).read_text(encoding="utf-8"))
         self.assertEqual([r["id"] for r in recipes["recipes"]], [facts["default_recipe"]])
         self.assertIn("forge-cli/title-mm3d", facts["forge_features"])
+        # Every Windows Forge binary is per title, the update helper too (its
+        # own steel-mask icon, owner decision 2026-11-08): each crate's feature.
+        for crate in ("forge-desktop", "forge-cli", "forge-update-helper"):
+            self.assertIn(f"{crate}/title-mm3d", facts["forge_features"])
 
     def test_unknown_title_is_refused(self):
         with self.assertRaises(ValueError):
