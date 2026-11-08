@@ -158,6 +158,9 @@ void TestMm3dSceneLighting() {
         Require(attribution.ExcludeFromPresentationFxaa,"HUD attribution retains native UI FXAA exclusion");
         begin+=0x40;
     }
+    // P17 owner dump: every owner draw's resource name is counted, known or not.
+    Require(tracker.Stats().LayoutOwners.size()==13&&tracker.Stats().LayoutOwners.at("HudUnknown")==1&&
+            tracker.Stats().LayoutOwners.at("Hud")==1&&tracker.Stats().LayoutOwnersDropped==0,"layout owner dump");
     Require(!IsMm3dGameplayHud(kMm3dQuadQueueDrawEntry,kMm3dUiTag|1U),"mixed sprites never blanket HUD");
     Require(memory.Write32(resource+0x18,0xFFFFFFF0U),"bad name pointer");
     Require(ReadMm3dUiSubsystem(memory,layout)==Mm3dUiSubsystem::Unknown,"bad name bounded");

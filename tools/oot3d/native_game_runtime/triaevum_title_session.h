@@ -146,6 +146,9 @@ public:
     (void)sourcePc; (void)nativeValue; return false;
   }
   virtual void SetPresentation(const TitlePresentationSettings& settings) { (void)settings; }
+  // Photo mode Hide HUD for HUD a title draws host-side (outside the PICA
+  // layout owners IsGameplayHud classifies). Default: nothing to hide.
+  virtual void SetGameplayHudVisible(bool visible) { (void)visible; }
   // A title may apply the renderer/window policy at its native scene projection
   // loads. Its unrelated stereo/base-frustum helper must then stay untouched.
   [[nodiscard]] virtual bool OwnsSceneProjection() const { return false; }
@@ -162,6 +165,11 @@ public:
     (void)memory; (void)enabled;
     return {};
   }
+
+  // Gameplay rows a title implements outside a mod-owned profile (OoT3D's
+  // TopScreen runtime owns its own); default none, so no row is shown.
+  virtual void SetGameplayOptions(const TitleGameplayOptions& options) { (void)options; }
+  [[nodiscard]] virtual TitleGameplayOptionSet SupportedGameplayOptions() const { return {}; }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }

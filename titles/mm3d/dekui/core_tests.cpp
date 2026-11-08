@@ -253,12 +253,38 @@ void ImageContracts(const char* path) {
               << " Restoration-guarded native sites, " << mutations
               << " corrupt/missing guard checks; 17 appended entries excluded\n";
 }
+void PhotoHideHudMinimap() {
+    // Real Hook Begin/End on a quad queue holding one gameplay map entry.
+    struct MapMemory {
+        std::map<U32,U32> d;
+        std::optional<U32> Read(U32 at){auto i=d.find(at);if(i==d.end())return std::nullopt;return i->second;}
+        void Write(U32 at,U32 v){d[at]=v;}
+    };
+    using namespace NativeMinimap;
+    const auto run=[](bool photo,bool saved){
+        MapMemory m;
+        for(unsigned q=0;q<8;++q)m.d[Count(q)]=0;
+        m.d[0x6890ec]=0x00400000;m.d[0x6890f0]=0x00500000;m.d[0x727970+0x828]=0x00600000;
+        HudAdjustments::photo_hud_hidden=photo;HudAdjustments::hide_minimap=saved;
+        Hook hook;const U32 screen=0x00300000;
+        hook.Begin(m,screen,true);
+        m.d[Count(6)]=1;m.d[Pointer(6,0)]=0x00400000;m.d[Priority(6,0)]=5;
+        hook.End(m,screen,true,.4f,1.f,400.f);
+        HudAdjustments::photo_hud_hidden=false;HudAdjustments::hide_minimap=false;
+        return m.d[Count(6)];
+    };
+    Check(run(false,false)==1,"minimap kept when the HUD is shown");
+    Check(run(true,false)==0,"photo Hide HUD removes the dekui minimap");
+    Check(run(false,true)==0,"saved hide_minimap still removes the minimap");
+    std::cout << "PASS photo Hide HUD minimap\n";
+}
 } // namespace
 
 int main(int argc,char** argv) {
     try {
         HelpersAndReplay();
         SharedHookFrames();
+        PhotoHideHudMinimap();
         std::cout << "PASS helpers and SVC register/stack/VFP replay\n";
         ImageContracts(argc>1 ? argv[1] : std::getenv("MM3D_CODE_BIN"));
         return 0;

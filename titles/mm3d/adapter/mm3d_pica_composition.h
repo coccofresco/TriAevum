@@ -4,6 +4,7 @@
 #include "mm3d_native_a32_lighting.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -72,6 +73,10 @@ struct Mm3dNativePicaCompositionStats {
     uint64_t IsolatedModelSpans = 0;
     uint64_t AtmosphereModelSpans = 0;
     uint64_t LifecycleInvalidations = 0;
+    // P17 owner dump: draws per layout resource name at the owner draw entry
+    // (bounded; later names count in LayoutOwnersDropped).
+    std::map<std::string, uint64_t> LayoutOwners;
+    uint64_t LayoutOwnersDropped = 0;
 };
 
 // Records the command-list byte range each native pass writes, with its

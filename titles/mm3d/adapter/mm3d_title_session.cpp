@@ -15,7 +15,11 @@
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
 #include "../gameplay/mm3d_rumble_events.h"
+#include "../gameplay/mm3d_gameplay_options.h"
 #include "../gameplay/mm3d_light_arena.h"
+#include "../gameplay/mm3d_actor_visibility.h"
+#include "../gameplay/mm3d_foliage_distance.h"
+#include "../dekui/hud_adjustments.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
@@ -23,6 +27,8 @@
 #include "oot3d_native_pica_draw_state.h"
 #include "mm3d_photo_camera_hook.h"
 #include "mm3d_presentation_settings.h"
+#include "mm3d_timing_observer.h"
+#include "mm3d_frame_pacing.h"
 #include "mm3d_ui_subsystems.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
 #include "mm3d_dev_tools.h"
@@ -87,13 +93,29 @@ public:
     return IsMm3dGameplayHud(sourcePc, nativeValue);
   }
   bool OwnsSceneProjection() const override { return true; }
+  // dekui draws the single-screen minimap by rewriting the native quad
+  // queue (native_minimap.h); photo Hide HUD drops it there.
+  void SetGameplayHudVisible(bool visible) override {
+    Mm3dDekui::HudAdjustments::photo_hud_hidden.store(!visible);
+  }
   void SetPresentation(const TitlePresentationSettings& settings) override {
+    mPresentationSettings=settings;
     ApplyMm3dPresentationSettings(settings);
     mLightArena.SetEnabled(settings.ExtendedDrawDistance);
+    mVisibility.SetExtended(settings.ExtendedDrawDistance);
+    mFoliage.SetExtended(settings.ExtendedDrawDistance);
   }
   std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
       oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
     return mRumble.Poll(memory, enabled);
+  }
+  // The host's one gameplay settings store (F1 and Esc share it): the rows
+  // MM3D implements reach the title-owned sites; the rest stay inert.
+  void SetGameplayOptions(const TitleGameplayOptions& options) override {
+    mGameplay.Set({options.QuickPutAway, options.RollDash});
+  }
+  [[nodiscard]] TitleGameplayOptionSet SupportedGameplayOptions() const override {
+    return {.QuickPutAway = true, .RollDash = true};
   }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {
@@ -102,6 +124,9 @@ public:
     // scene camera, so they are not published as the scene view.
     auto &blockEntryHooks = setup.BlockEntryHooks;
     blockEntryHooks.push_back(kMm3dMtx44Frustum);
+    for (const auto& site : Mm3dVisibility::Sites) blockEntryHooks.push_back(site.Pc);
+    for (const auto& site : Mm3dFoliage::Sites) blockEntryHooks.push_back(site.Pc);
+    for (const auto& site : Mm3dTiming::Sites) blockEntryHooks.push_back(site.Pc);
     const auto compositionHooks = Mm3dNativePicaCompositionHookPcs();
     blockEntryHooks.insert(blockEntryHooks.end(), compositionHooks.begin(),
                            compositionHooks.end());
@@ -133,6 +158,7 @@ public:
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
       RegisterMm3dPhotoCamera(mGuestPatches, mPhotoCamera, setup.FreeCamera);
+      mGameplay.Register(mGuestPatches);
       mGuestCalls.Install(mGuestPatches);
       mRestoration.emplace(mGuestCalls);
       mRestoration->Register(mGuestPatches);
@@ -204,6 +230,20 @@ public:
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #endif
     }
+    const bool visibility = mVisibility.Verify(process.Memory(), [](uint32_t pc) {
+      return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+    });
+    Mm3dDekui::ActorDrawDistance::result_policy_owned.store(visibility);
+    if (!visibility) std::fprintf(stderr, "MM3D actor visibility disabled: guard or registry block mismatch\n");
+    if (!mFoliage.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D foliage distance disabled: guard or registry block mismatch\n");
+    if (!mTiming.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D timing receipts disabled: guard or registry block mismatch\n");
+    if (!mFramePacing.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D frame pacing disabled: EUR guard or registry mismatch\n");
     mHostMemory = &process.Memory();
     if (!mLightArena.Verify(process.Memory()))
       std::fprintf(stderr, "MM3D light overflow disabled: EUR arena contract mismatch\n");
@@ -216,6 +256,10 @@ public:
   }
 
   void ObserveBlockEntry(TitleBlockEntry &entry) override {
+    mTiming.Observe(entry.Pc, entry.State, entry.Memory);
+    mFramePacing.Observe(entry.Pc, entry.State, entry.Memory);
+    mVisibility.Observe(entry.Pc, entry.State, entry.Memory, mLightArena.Verified());
+    mFoliage.Observe(entry.Pc, entry.State, entry.Memory);
     // Same allocator PC, one dispatch: relocate BEFORE lighting invalidates the
     // destination owner. Never duplicate the existing lighting hook registration.
     if (entry.Pc == kMm3dLightAllocatorSite.Pc && mHostMemory) {
@@ -261,6 +305,9 @@ public:
       }
       const auto presented = DecodeSymmetricPerspective(view[0], projectionY, view[1], view[2]);
       if (read && presented) {
+        uint32_t nativeFov=0;
+        if(memory.Read32(base+0x18,&nativeFov))
+          mProjectionHistory.Record(mPresentationSettings,entry.HostFrame,std::bit_cast<float>(nativeFov),*presented);
         const float top = presented->Top;
         const float right = presented->Right;
         if (currentView != 0U) {
@@ -349,6 +396,10 @@ public:
     mComposition.Reset();
     mRumble.Reset();
     mPhotoCamera.Reset();
+    mVisibility.Reset();
+    mProjectionHistory.Reset();
+    mTiming.Reset();
+    mFramePacing.Reset();
     // dekui's UI/camera host state belongs to the abandoned timeline.
     if (mSingleScreen) mSingleScreen->ResetHostState();
     // Restoration's suspended guest calls too (the restored guest threads
@@ -360,7 +411,73 @@ public:
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
+    const auto &photo = mPhotoCamera.Stats();
+    const auto &pacing = mFramePacing.Stats();
+    auto projections=nlohmann::json::array();
+    for(unsigned i=0;i<mProjectionHistory.Count();++i) {
+      const auto& s=mProjectionHistory.Segments()[i];
+      projections.push_back({{"first_frame",s.FirstFrame},{"last_frame",s.LastFrame},{"samples",s.Samples},
+          {"native_fov",s.NativeFov},{"presented_fov",s.PresentedFov},{"aspect",s.Aspect},
+          {"fov_multiplier",s.Settings.FovMultiplier},{"horizontal_expansion",s.Settings.HorizontalExpansion},
+          {"vertical_expansion",s.Settings.VerticalExpansion},{"edd",s.Settings.ExtendedDrawDistance}});
+    }
     return nlohmann::json{
+        {"frame_pacing", {{"verified",mFramePacing.Verified()}, {"simulation_hz",30},
+            {"native_interval_writes",0}, {"begins",pacing.FramePacingFramesObserved},
+            {"decisions",pacing.FramePacingDecisionsObserved}, {"commits",pacing.FramePacingCommitsObserved},
+            {"interval_writes",pacing.FramePacingWrites}, {"deadline_writes",pacing.FramePacingDeadlineWrites},
+            {"read_failures",pacing.ReadFailures}, {"write_failures",pacing.WriteFailures},
+            {"rejected",mFramePacing.Rejected}, {"unpaired",mFramePacing.Unpaired},
+            {"resets",mFramePacing.Resets}, {"output_samples",mFramePacing.OutputSamples},
+            {"output_violations",mFramePacing.OutputViolations}}},
+        {"timing", {{"verified",mTiming.Verified()}, {"read_only",true},
+            {"game_calls",mTiming.GameCalls}, {"game_samples",mTiming.GameSamples},
+            {"player_calls",mTiming.PlayerCalls}, {"player_samples",mTiming.PlayerSamples},
+            {"limiter_calls",mTiming.LimiterCalls}, {"limiter_samples",mTiming.LimiterSamples},
+            {"commit_input_intervals",mTiming.CommitIntervals}, {"wait_decisions",mTiming.WaitDecisions},
+            {"non_native30_samples",mTiming.NonNative30Samples}, {"read_failures",mTiming.ReadFailures},
+            {"epoch_changes",mTiming.EpochChanges}, {"resets",mTiming.Resets},
+            {"game",{{"valid",mTiming.Game.Valid},{"state",mTiming.Game.State},
+                {"frame",mTiming.Game.Frame},{"main",mTiming.Game.Main},
+                {"vsync",mTiming.Game.Vsync},{"interval",mTiming.Game.Interval}}},
+            {"player",{{"valid",mTiming.Player.Valid},{"address",mTiming.Player.Player},
+                {"play",mTiming.Player.Play},{"frame",mTiming.Player.Frame},
+                {"form",mTiming.Player.Form},{"speed_xz",mTiming.Player.SpeedXZ},
+                {"flags",mTiming.Player.Flags},{"focus_actor",mTiming.Player.FocusActor},
+                {"ledge_type",mTiming.Player.Ledge&0xFF},{"ledge_timer",mTiming.Player.Ledge>>8}}},
+            {"limiter",{{"valid",mTiming.Limiter.Valid},{"state",mTiming.Limiter.State},
+                {"maximum",mTiming.Limiter.Maximum},{"interval",mTiming.Limiter.Interval},
+                {"deadline",mTiming.Limiter.Deadline},{"vsync",mTiming.Limiter.Vsync},
+                {"native_interval",mTiming.Limiter.Native}}}}},
+        {"photo_camera", {{"calls",photo.Calls},{"active_calls",photo.ActiveCalls},
+            {"inactive_calls",photo.InactiveCalls},{"rejected",photo.Rejected},{"applied",photo.Applied},
+            {"restored",photo.Restored},{"rebased",photo.Rebased},{"resets",photo.Resets},
+            {"write_failures",photo.WriteFailures},{"max_eye_distance",photo.MaxEyeDistance},
+            {"max_player_distance",photo.MaxPlayerDistance},{"last_eye",photo.LastEye},
+            {"last_native_eye",photo.LastNativeEye}}},
+        {"layout_owners", {{"draws",stats.LayoutOwners},{"dropped",stats.LayoutOwnersDropped}}},
+        {"scene_projections",std::move(projections)},
+        {"scene_projection_segments_discarded",mProjectionHistory.DiscardedSegments()},
+        {"foliage_distance", {{"verified", mFoliage.Verified()},
+             {"table_changes", mFoliage.Stats.TableChanges},
+             {"radius_changes", mFoliage.Stats.RadiusChanges},
+             {"pressure_native", mFoliage.Stats.PressureNative},
+             {"invalid", mFoliage.Stats.Invalid}}},
+        {"actor_visibility", {{"verified", mVisibility.Verified()},
+             {"calls", mVisibility.mStats.Calls}, {"results", mVisibility.mStats.Results},
+             {"native_inside", mVisibility.mStats.NativeInside},
+             {"native_mode_results", mVisibility.mStats.NativeModeResults},
+             {"extended_mode_results", mVisibility.mStats.ExtendedModeResults},
+             {"max_horizontal", mVisibility.mStats.MaxHorizontal},
+             {"max_vertical", mVisibility.mStats.MaxVertical},
+             {"actor_grants", mVisibility.mStats.ActorGrants},
+             {"grass_grants", mVisibility.mStats.GrassGrants},
+             {"wood_grants", mVisibility.mStats.WoodGrants},
+             {"restored", mVisibility.mStats.Restored},
+             {"invalid", mVisibility.mStats.Invalid},
+             {"native_mismatch", mVisibility.mStats.NativeMismatch},
+             {"unknown_callers", mVisibility.mStats.UnknownCallers},
+             {"identity_changes", mVisibility.mStats.IdentityChanges}}},
         {"light_arena", {{"verified", mLightArena.Verified()},
                          {"native_allocations", mLightArena.Stats().NativeAllocations},
                          {"banks_seen", mLightArena.Stats().BanksSeen},
@@ -430,6 +547,10 @@ private:
   }
   NativeA32Memory* mHostMemory = nullptr;
   Mm3dLightArena mLightArena;
+  Mm3dVisibility::Source mVisibility;
+  Mm3dFoliage::Source mFoliage;
+  TitlePresentationSettings mPresentationSettings;
+  PresentedProjectionHistory mProjectionHistory;
   Mm3dNativePicaCompositionTracker mComposition;
   // MM3D's single-screen mode: its settings and the typed replacements of
   // guest instructions that read them.
@@ -439,6 +560,9 @@ private:
   Mm3dGuestPatches mGuestPatches;
   Mm3dRumble::Source mRumble;
   Mm3dPhotoCamera mPhotoCamera;
+  Mm3dGameplay::GameplayOptions mGameplay;
+  Mm3dTiming::Observer mTiming;
+  Mm3dTiming::FramePacing mFramePacing;
   bool mImageMounted = false;
   bool mActorInteractionGuards = false;
 };

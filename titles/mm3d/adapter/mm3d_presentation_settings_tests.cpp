@@ -60,5 +60,19 @@ int main(){
    m.words[pc]=word^1U;Check(!C::PrimaryGameplayProjection(m,V),"corrupt aspect consumer rejected");
    m.words.erase(pc);Check(!C::PrimaryGameplayProjection(m,V),"unmapped aspect consumer rejected");m.words[pc]=word;
  }
+ PresentedProjectionHistory history;
+ for(unsigned i=0;i<12;++i) {
+   const bool wide=(i&1)!=0;const float fov=wide?49.5f:45.f,aspect=wide?16.f/9.f:400.f/240.f;
+   const float y=1.f/std::tan(fov*3.14159265358979323846f/360.f);
+   const auto projection=DecodeSymmetricPerspective(y/aspect,y,5,20000);
+   const TitlePresentationSettings settings{wide?1.1f:1.f,wide?16.f/15.f:1.f,1.f,true};
+   history.Record(settings,i*10,45,*projection);history.Record(settings,i*10+1,45,*projection);
+ }
+ Check(history.Count()==8&&history.DiscardedSegments()==4,"bounded product projection history");
+ Check(history.Segments()[0].FirstFrame==40&&history.Segments()[7].LastFrame==111,"history keeps newest segments");
+ Check(history.Segments()[7].Samples==2,"same setting merges observations");
+ Near(history.Segments()[7].PresentedFov,49.5f);Near(history.Segments()[7].Aspect,16.f/9.f);
+ history.Record({},200,45,{1,1,0,100});Check(history.Count()==8,"invalid frustum does not create receipt");
+ history.Reset();Check(!history.Count()&&!history.DiscardedSegments(),"restore discards prior receipt");
  std::cout<<"MM3D presentation ownership passed\n";
 }

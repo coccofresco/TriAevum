@@ -242,12 +242,23 @@ struct NativeFrameRatePolicyTemporalState {
     bool FramePacingDecisionPending = true;
 };
 
+// Title-owned ABI for the shared presentation limiter. This is independent of
+// simulation time scaling. A 2^32 modulus represents a wrapping uint32 counter.
+struct NativeFramePacingLayout {
+    uint32_t MaximumIntervalOffset = kOot3dFramePacingMaximumIntervalOffset;
+    uint32_t IntervalOffset = kOot3dFramePacingIntervalOffset;
+    uint32_t DeadlineOffset = kOot3dFramePacingDeadlineOffset;
+    uint32_t VsyncCounterAddress = kOot3dVsyncCounterAddress;
+    uint64_t CounterModulus = 0x7FFFFFFFULL;
+};
+
 // A narrow compatibility adapter for the still-A32 GameState ABI. Decompiled
 // C++ can consume NativeFrameRateContract directly and is not coupled to these
 // guest addresses.
 class NativeFrameRatePolicy {
   public:
-    explicit NativeFrameRatePolicy(NativeFrameRateContract contract);
+    explicit NativeFrameRatePolicy(NativeFrameRateContract contract,
+                                   NativeFramePacingLayout pacingLayout = {});
 
     bool ApplyNativeTimeScaleAtGameStateUpdate(
         uint32_t gameStateAddress, oot3d::recomp::a32::MemoryBus& memory);
@@ -273,6 +284,7 @@ class NativeFrameRatePolicy {
 
   private:
     NativeFrameRateContract mContract;
+    NativeFramePacingLayout mPacingLayout;
     NativeGameplayClock mGameplayClock;
     NativeFrameRatePolicyStats mStats;
     std::string mLastError;

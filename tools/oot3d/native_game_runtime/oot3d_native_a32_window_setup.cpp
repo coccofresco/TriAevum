@@ -1238,7 +1238,8 @@ void NativeA32WindowSession::Setup() {
           launch.UiProfile ==
                   Oot3dNativeGame::Oot3dUiProfile::TopScreen
               ? topScreenConfigRuntime
-              : nullptr));
+              : nullptr,
+          titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{}));
   if (launch.UiProfile ==
       Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
     applicationSettingsTabs.push_back(
@@ -1462,7 +1463,8 @@ void NativeA32WindowSession::Setup() {
       controlConfigRuntime,
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen ? topScreenConfigRuntime : nullptr,
       languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode, std::move(menuHost),
-      Oot3dNativeGame::HostAudioOutputPolicy()});
+      Oot3dNativeGame::HostAudioOutputPolicy(),
+      titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{}});
   // The first-play help card belongs to sessions a person plays: scripted
   // runs (captures, fixed steps, replays, the developer lab) never see it.
   // TRIAEVUM_HELP_CARD=1 or 0 overrides that, for qualification.
@@ -1956,6 +1958,7 @@ void NativeA32WindowSession::ApplyPhotoModeHud() {
   // the TopScreen compositor does not draw, follow render_hud as well.
   picaPresentationScheduler.SetNativeGameplayHudVisible(
       !hidden && (!nativeCandidateDispatch.TopScreenUiProfile || activeTopScreenConfig.RenderHud));
+  if (titleSession) titleSession->SetGameplayHudVisible(!hidden);
 }
 
 void NativeA32WindowSession::ApplySelectedUiProfile() {

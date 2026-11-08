@@ -401,7 +401,15 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
                               : Fast::Renderer3ds::PicaNativeLightBinding{}};
     mActive->Attribution.ExcludeFromPresentationFxaa = scope->Layer == Oot3dPicaCompositionLayer::Ui;
     if (scope->EntryPc == kMm3dLayoutOwnerDrawEntry) {
-        const auto subsystem = ReadMm3dUiSubsystem(memory, state.r[1]);
+        std::string name;
+        const auto subsystem = ReadMm3dLayoutName(memory, state.r[1], &name)
+            ? ClassifyMm3dLayout(name) : Mm3dUiSubsystem::Unknown;
+        if (!name.empty()) {
+            auto owner = mStats.LayoutOwners.find(name);
+            if (owner != mStats.LayoutOwners.end()) ++owner->second;
+            else if (mStats.LayoutOwners.size() < 64U) mStats.LayoutOwners.emplace(std::move(name), 1U);
+            else ++mStats.LayoutOwnersDropped;
+        }
         if (subsystem != Mm3dUiSubsystem::Unknown)
             mActive->Attribution.NativeValue = kMm3dUiTag | uint32_t(subsystem);
     }
