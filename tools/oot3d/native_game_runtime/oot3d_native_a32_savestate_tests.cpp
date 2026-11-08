@@ -657,6 +657,17 @@ int main() {
         { std::ofstream(plain, std::ios::binary) << "a"; }
         Require(library.NewStatePath(false, now) != plain,
                 "a new state would overwrite an existing file");
+        {
+          // A scripted save names its file; an interactive one does not.
+          const auto named = root / "scripted" / "s1.oot3dsav";
+          Require(library.SaveRequestPath(
+                      {SavestateRequestKind::Save, true, named}, now) == named,
+                  "a scripted save ignored the path it names");
+          Require(
+              library.SaveRequestPath({SavestateRequestKind::Save, true, {}},
+                                      now) == library.NewStatePath(true, now),
+              "an unnamed save does not take a new folder file");
+        }
         { std::ofstream(withSettings, std::ios::binary) << "bb"; }
         std::filesystem::last_write_time(
             withSettings, std::filesystem::last_write_time(plain) + std::chrono::seconds(5));
