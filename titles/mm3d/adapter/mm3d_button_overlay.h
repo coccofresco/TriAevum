@@ -5,6 +5,7 @@
 #include "native_button_overlay.h"
 #include "../dekui/ocarina_prompt.h"
 #include "../dekui/button_emission.h"
+#include "mm3d_touch_hud.h"
 #include <set>
 #include <tuple>
 #include <memory>
@@ -23,9 +24,13 @@ public:
   const Counters& Stats() const { return mStats; }
   size_t PendingLabels() const { size_t n=0;for(const auto& pane:mPending)n+=pane.Slots.size();return n; }
   size_t PendingPanes() const { return mSeen.size(); }
+  // Latest native HUD groups seen while touch prompts are active.
+  const Mm3dTouchHudGroups& TouchGroups() const { return mTouchGroups; }
   void Configure(const NativeControlConfig& controls, NativePromptSet prompts) {
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
     mControls = controls; mPrompts = prompts; mActive = active;
+    mTouchObserve = prompts == NativePromptSet::Touch;
+    if (!mTouchObserve) mTouchGroups = {};
     mStyle=std::make_shared<Style>(Style{controls,prompts});
   }
   // Inline prose I/II (ZR+X / ZR+Y) inside the guest's fixed 16-unit text
@@ -87,7 +92,7 @@ public:
   static constexpr uint32_t CommandCursorAddress=0x006A3A88U;
   // True suppresses only this native geometry, never the widget's children.
   template<class M> bool Capture(M& memory, uint32_t layout, uint32_t root, uint32_t pass) {
-    if(!mActive)return false;
+    if(!mActive && !mTouchObserve)return false;
     if(pass>3 && pass!=~0u){++mStats.PassRejected;return false;}
     if(!Mm3dDekui::ButtonEmission::CodeMatches(memory) ||
         !Mm3dDekui::NativeInventory::Pointer(root,0x140)){++mStats.GuardRejected;return false;}
@@ -190,6 +195,7 @@ private:
     else if ((*kind&65535)!=6) return false;
     if ((*kind&65535)==3 && !text) return false;
     auto action=text ? NativeControlAction::Zr : NativeControlAction::Count, modifier=NativeControlAction::Count;
+    auto element=Mm3dTouchHudElement::Count;
     const auto u=Float(m,*geo+0x28),v=Float(m,*geo+0x2c),uw=Float(m,*geo+0x30),vh=Float(m,*geo+0x34);
     if (!text && parts && *texture==parts && u&&v&&uw&&vh) {
       // Pane::BuildMatrix animates the UV affine separately from shared
@@ -220,28 +226,29 @@ private:
     }
     if (action==NativeControlAction::Count && owner &&
         (LayoutNamed(m,*owner,"HudItemIconSet") || LayoutNamed(m,*owner,"ItemIconSet2"))) {
-      if (Named(m,node,"disp_x_pane")) action=NativeControlAction::X;
-      if (Named(m,node,"disp_y_pane")) action=NativeControlAction::Y;
+      if (Named(m,node,"disp_x_pane")) {action=NativeControlAction::X;element=Mm3dTouchHudElement::ItemX;}
+      if (Named(m,node,"disp_y_pane")) {action=NativeControlAction::Y;element=Mm3dTouchHudElement::ItemY;}
       // Restoration uses ZR+X/Y for I/II, NOT OoT's direct ZR/ZL mapping.
-      if (Named(m,node,"disp_1_pane")) {action=NativeControlAction::X;modifier=NativeControlAction::Zr;}
-      if (Named(m,node,"disp_2_pane")) {action=NativeControlAction::Y;modifier=NativeControlAction::Zr;}
+      if (Named(m,node,"disp_1_pane")) {action=NativeControlAction::X;modifier=NativeControlAction::Zr;element=Mm3dTouchHudElement::ItemI;}
+      if (Named(m,node,"disp_2_pane")) {action=NativeControlAction::Y;modifier=NativeControlAction::Zr;element=Mm3dTouchHudElement::ItemII;}
     }
     const bool dpad=owner && LayoutNamed(m,*owner,"HudDpad") && Named(m,node,"pane_dpad");
-    if(dpad) action=NativeControlAction::DpadUp;
+    if(dpad) {action=NativeControlAction::DpadUp;element=Mm3dTouchHudElement::Dpad;}
     const bool hud = action != NativeControlAction::Count && !text && (!parts || *texture != parts);
     if (owner && LayoutNamed(m,*owner,"MessageWindow") && Named(m,node,"e_waitIcon"))
       action=NativeControlAction::A;
     bool ring=false;
     if (owner && LayoutNamed(m,*owner,"AActionIconBase") && Named(m,node,"bb00_ybtn")) {
-      action=NativeControlAction::A;ring=true;
+      action=NativeControlAction::A;ring=true;element=Mm3dTouchHudElement::ActionA;
     }
     if (owner && LayoutNamed(m,*owner,"BActionIcon") && Named(m,node,"a_button_base_pane")) {
-      action=NativeControlAction::B;ring=true;
+      action=NativeControlAction::B;ring=true;element=Mm3dTouchHudElement::ActionB;
     }
     if(action!=NativeControlAction::Count)++mStats.Candidates;
     if (action==NativeControlAction::Count) return false;
-    if ((!dpad && !NativeButtonOverlayGlyph(action,mPrompts,mControls)) ||
-        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls))) {
+    if (mTouchObserve && element==Mm3dTouchHudElement::Count) return false;
+    if (!mTouchObserve && ((!dpad && !NativeButtonOverlayGlyph(action,mPrompts,mControls)) ||
+        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls)))) {
       ++mStats.UnboundCandidates; return false;
     }
     auto x=Float(m,*geo+0x14),y=Float(m,*geo+0x18),w=Float(m,*geo+0x20),h=Float(m,*geo+0x24);
@@ -252,6 +259,16 @@ private:
     if (!x||!y||!w||!h||!xx||!xy||!yx||!yy||!tx||!ty||!r||!g||!b||!a ||
         *a<=0 || *w<=0 || *h<=0) {++mStats.PoseRejected;return false;}
     if(std::max({*r,*g,*b})<=0){++mStats.TintRejected;return false;}
+    if(mTouchObserve) {
+      // Touch prompts: native letters stay; only record where each HUD group
+      // is for the touch-anchor plan. Never suppresses native geometry.
+      const float gx=*x+*w*.5f,gy=*y+*h*.5f;
+      Mm3dTouchHudGroup group{true,*tx+*xx*gx+*xy*gy+40.f/3.f,*ty+*yx*gx+*yy*gy,
+          std::max(std::hypot(*xx,*yx)**w,std::hypot(*xy,*yy)**h)*.5f};
+      if(std::isfinite(group.X)&&std::isfinite(group.Y)&&std::isfinite(group.Radius)&&group.Radius>0&&group.Radius<128)
+        mTouchGroups[size_t(element)]=group;
+      return false;
+    }
     // A/B letters occupy the top of the 38x38 native ring. The crop is a
     // title asset fact (HUD atlas A:24..32,0..10; B:64..72,0..10).
     if (ring) { if (*w!=38 || *h!=38) {++mStats.RingGeometryRejected;return false;} *x+=16; *w=8; *h=10; }
@@ -328,6 +345,8 @@ private:
   NativeControlConfig mControls;
   NativePromptSet mPrompts=NativePromptSet::Touch;
   bool mActive=false;
+  bool mTouchObserve=false;
+  Mm3dTouchHudGroups mTouchGroups{};
   InlineChordStyle mInlineChordStyle=InlineChordStyle::Abbreviated;
   struct Style { NativeControlConfig Controls;NativePromptSet Prompts; };
   using Key=std::tuple<uint32_t,uint32_t,float,float>;

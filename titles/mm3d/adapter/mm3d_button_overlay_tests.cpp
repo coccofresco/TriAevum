@@ -1,3 +1,4 @@
+#include "oot3d_top_screen_mod_profile.h"
 #include "mm3d_button_overlay.h"
 #include "../dekui/button_glyph_emission.h"
 #include <fstream>
@@ -270,9 +271,71 @@ void TestSettings(){
  Check(Mm3dButtonOverlay::PartsButton(112.f/256,16.f/128,16.f/256,16.f/128)==NativeControlAction::Count,"other atlas row native");
  Check(Mm3dButtonOverlay::PartsButton(0,0,16.f/256,16.f/128)==NativeControlAction::Count,"unknown icon native");
 }
+void TestTouchHud(){
+ using ThreeDsRecomp::Input::TouchAnchor;
+ auto m=Fixture();const auto original=m.words;
+ Mm3dButtonOverlay touch;touch.Configure(NativeControlDefaults(),NativePromptSet::Touch);
+ Check(!touch.Capture(m,layout,node,3),"touch observation never suppresses native HUD art");
+ Check(touch.PendingLabels()==0&&m.words==original,"touch observation adds no labels and writes nothing");
+ const auto& x=touch.TouchGroups()[size_t(Mm3dTouchHudElement::ItemX)];
+ Check(x.Known&&std::abs(x.X-(308.f+40.f/3.f))<.01f&&x.Y==28.f&&x.Radius==8.f,"live X item pane centre and radius");
+ auto ring=Fixture();ring.Name(0x10020100,"AActionIconBase");ring.Name(0x10020200,"bb00_ybtn");
+ ring.F(geo+0x20,38);ring.F(geo+0x24,38);(void)touch.Capture(ring,layout,node,3);
+ const auto& a=touch.TouchGroups()[size_t(Mm3dTouchHudElement::ActionA)];
+ Check(a.Known&&std::abs(a.X-(319.f+40.f/3.f))<.01f&&a.Y==39.f&&a.Radius==19.f,"whole A ring, not its letter crop");
+ auto one=Fixture();one.Name(0x10020200,"disp_1_pane");(void)touch.Capture(one,layout,node,3);
+ Check(touch.TouchGroups()[size_t(Mm3dTouchHudElement::ItemI)].Known,"Restoration I pane recorded");
+ Mm3dButtonOverlay pad;pad.Configure(NativeControlDefaults(),NativePromptSet::Xbox);(void)pad.Capture(m,layout,node,3);
+ Check(!pad.TouchGroups()[size_t(Mm3dTouchHudElement::ItemX)].Known,"controller prompts record no touch groups");
+ auto menu=Fixture();menu.Name(0x10020100,"MenuItem");Mm3dButtonOverlay other;other.Configure(NativeControlDefaults(),NativePromptSet::Touch);
+ (void)other.Capture(menu,layout,node,3);
+ for(const auto& g:other.TouchGroups())Check(!g.Known,"non-HUD layouts are not touch groups");
+ ThreeDsRecomp::Input::TouchAnchorSet anchors{};const float canvas=240.f*16.f/9.f;
+ anchors[size_t(TouchAnchor::X)]={true,.80f,.40f,.88f,.54f};anchors[size_t(TouchAnchor::A)]={true,.88f,.55f,.98f,.72f};
+ const auto plan=PlanMm3dTouchHud(touch.TouchGroups(),anchors,canvas,Oot3dNativeGame::ResolveTopScreenTouchControlShape);
+ const auto shape=Oot3dNativeGame::ResolveTopScreenTouchControlShape(TouchAnchor::X,anchors[size_t(TouchAnchor::X)],canvas);
+ const auto& px=plan[size_t(Mm3dTouchHudElement::ItemX)];
+ Check(px.Active&&px.ToX==shape.ContentX&&px.ToY==shape.ContentY&&std::abs(px.Scale-shape.ContentHalf*.9f/8.f)<1e-4f,"X item to its anchor, OoT3D fill");
+ float cx=x.X,cy=x.Y;px.Apply(cx,cy);Check(cx==shape.ContentX&&cy==shape.ContentY,"group centre lands on control content centre");
+ float ex=x.X+8,ey=x.Y;px.Apply(ex,ey);Check(std::abs(ex-cx-shape.ContentHalf*.9f)<1e-3f,"group edge lands at 0.9 of content half");
+ Check(plan[size_t(Mm3dTouchHudElement::ActionA)].Active,"A ring anchored");
+ Check(!plan[size_t(Mm3dTouchHudElement::ItemI)].Active,"no ZL anchor leaves I native");
+ Check(!plan[size_t(Mm3dTouchHudElement::ItemY)].Active,"unseen Y group never invented");
+ Check(!PlanMm3dTouchHud(touch.TouchGroups(),anchors,0.f,Oot3dNativeGame::ResolveTopScreenTouchControlShape)[0].Active,"degenerate canvas plans nothing");
+ Check(Mm3dTouchHudAnchor(Mm3dTouchHudElement::ItemII)==TouchAnchor::Zr&&Mm3dTouchHudAnchor(Mm3dTouchHudElement::Dpad)==TouchAnchor::Dpad,"element anchor facts");
+}
+void TestDeviceSwitch(){
+ // Mirrors oot3d_native_a32_input_tests' prompt transitions, then feeds the
+ // runtime's ActivePromptSet into the MM3D overlay as the frame loop does.
+ using ThreeDsRecomp::Input::InputActivity;
+ NativeControlConfigRuntime runtime({},NativeControlDefaults());
+ NativeControlDeviceDescriptor xbox;xbox.InstanceId=1;xbox.Prompts=NativePromptSet::Xbox;
+ NativeControlDeviceDescriptor dualSense;dualSense.InstanceId=2;dualSense.Prompts=NativePromptSet::PlayStation;
+ const auto pads=[&](std::initializer_list<NativeControlDeviceDescriptor> devices,int32_t selected){
+  std::vector<NativeControlDeviceDescriptor> list(devices);for(auto& d:list)d.Selected=d.InstanceId==selected;runtime.ObserveDevices(std::move(list));};
+ auto m=Fixture();Mm3dButtonOverlay overlay;
+ const auto frame=[&](uint64_t draw){
+  overlay.Configure(runtime.Snapshot().Config,runtime.ActivePromptSet());overlay.Capture(m,layout,node,3);
+  overlay.SubmitCommandList(0x14001000,0x100);overlay.ObserveDraw(draw);overlay.Select(std::span(&draw,1));
+  return overlay.Compose(3);};
+ const auto glyph=[&]{return NativeButtonOverlayGlyph(NativeControlAction::X,runtime.ActivePromptSet(),runtime.Snapshot().Config);};
+ Check(runtime.ActivePromptSet()==NativePromptSet::Keyboard&&!frame(1).empty(),"no pad: keyboard labels on the MM HUD");
+ const auto keyboard=glyph();
+ pads({xbox,dualSense},1);Check(runtime.ActivePromptSet()==NativePromptSet::Xbox&&!frame(2).empty(),"pad hot-plugged: Xbox labels");
+ const auto xboxGlyph=glyph();Check(keyboard&&xboxGlyph&&*keyboard!=*xboxGlyph,"hot-plug changes the MM X label art");
+ pads({xbox,dualSense},2);Check(runtime.ActivePromptSet()==NativePromptSet::PlayStation&&!frame(3).empty(),"the selected pad of two");
+ const auto ps=glyph();Check(ps&&*ps!=*xboxGlyph,"selection switch changes the MM label family");
+ pads({},-1);Check(runtime.ActivePromptSet()==NativePromptSet::Keyboard&&!frame(4).empty(),"pad unplugged: keyboard again");
+ pads({dualSense},2);Check(runtime.ActivePromptSet()==NativePromptSet::PlayStation&&!frame(5).empty(),"pad reconnected without a press");
+ runtime.ObserveInputActivity(InputActivity::Touch,6.0);
+ Check(runtime.ActivePromptSet()==NativePromptSet::Touch&&frame(6).empty(),"touch: native MM letters, no host labels");
+ Check(overlay.TouchGroups()[size_t(Mm3dTouchHudElement::ItemX)].Known,"touch: HUD groups recorded for anchors");
+ runtime.ObserveInputActivity(InputActivity::Controller,7.0);
+ Check(!frame(7).empty()&&!overlay.TouchGroups()[size_t(Mm3dTouchHudElement::ItemX)].Known,"back to the pad: labels return, touch groups dropped");
+}
 }
 int main(int argc,char** argv){try{
- TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSubmissionOwnership();TestInlineAndChordBounds();TestSettings();
+ TestCapture();TestPictogramAndDpad();TestText();TestFrames();TestCaptureAccounting();TestSubmissionOwnership();TestInlineAndChordBounds();TestSettings();TestTouchHud();TestDeviceSwitch();
  if(argc==2){std::ifstream in(argv[1],std::ios::binary);Check(bool(in),"code image opens");
   for(auto [pc,word]:ButtonEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR emission guard agrees");}
   for(auto [pc,word]:ButtonGlyphEmission::Guards){U32 w=0;in.seekg(pc-0x100000);in.read(reinterpret_cast<char*>(&w),4);Check(w==word,"EUR glyph renderer guard agrees");}}
