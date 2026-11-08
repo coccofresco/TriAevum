@@ -25,6 +25,9 @@
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+#include "oot3d_native_compiled_functions.h"
+#endif
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_pica_draw_state.h"
 #include "mm3d_photo_camera_hook.h"
@@ -218,7 +221,26 @@ public:
     }
     if (!mGuestPatches.Empty()) {
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
-      throw std::runtime_error("MM3D adapter: guest patch sites need the A32 registry dispatch");
+      // The product runs the compiled title module: each site the mounted
+      // image enables must be a module function boundary, where the product
+      // dispatcher consults the native-function callback.
+      if (mRestoration.has_value()) {
+        mRestoration->ApplyDataPatches(process.Memory());
+      }
+      mGuestPatches.Verify(process.Memory(), nullptr);
+      const auto entries = Oot3dCompiledFunctionEntryPoints(true, false);
+      const auto missing = mGuestPatches.MissingProductBoundaries(
+          std::vector<uint32_t>(entries.begin(), entries.end()));
+      if (!missing.empty()) {
+        char pc[16];
+        std::snprintf(pc, sizeof(pc), "0x%08X", missing.front());
+        throw std::runtime_error(std::string("MM3D product: the title module lacks ") +
+                                 std::to_string(missing.size()) +
+                                 " guest-patch boundary(ies), first at " + pc +
+                                 "; rebuild the MM3D title module with the Mm3dGuestPatches boundaries");
+      }
+      process.SetNativeFunctionCallback(&Mm3dGuestPatches::Execute,
+                                        &mGuestPatches, mGuestPatches.EnabledPcs());
 #else
       // Each site whose code matches the mounted image replaces its
       // instruction; the registry starts a block at every site.

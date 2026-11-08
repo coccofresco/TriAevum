@@ -190,9 +190,36 @@ void TestCondition() {
     Require(Mm3dConditionPassed(0xEF000000U, 0U), "AL must pass");
 }
 
+// Whole-AOT product mode: an enabled site needs module boundaries at its PC,
+// the next instruction and the declared targets; a disabled site needs none.
+void TestProductBoundaries() {
+    int calls = 0;
+    Mm3dGuestPatches patches;
+    patches.Add(CompareSite(&calls));
+    patches.AddTargets({kSite + 16U});
+    WordMemory memory;
+    memory.Words = {{kSite, kCmpR1R2}, {kSite + 4U, kBeq}};
+    Require(patches.Verify(memory) == 1U, "the site was not enabled");
+    Require(patches.MissingProductBoundaries({kSite, kSite + 4U, kSite + 16U}).empty(),
+            "a module exporting every boundary was refused");
+    // Negative: a module without the continuation boundary is refused, and
+    // the missing PC is named.
+    Require(patches.MissingProductBoundaries({kSite, kSite + 16U}) ==
+                std::vector<std::uint32_t>{kSite + 4U},
+            "a module lacking the continuation boundary was accepted");
+    Require(patches.MissingProductBoundaries({}).size() == 3U,
+            "an empty module must lack all three boundaries");
+    WordMemory other;
+    other.Words = {{kSite, 0U}, {kSite + 4U, kBeq}};
+    Require(patches.Verify(other) == 0U, "a mismatching site was enabled");
+    Require(patches.MissingProductBoundaries({}).empty(),
+            "a disabled site must not need module boundaries");
+}
+
 } // namespace
 
 int main() {
+    TestProductBoundaries();
     TestReplacement();
     TestGuard();
     TestMissingBlock();

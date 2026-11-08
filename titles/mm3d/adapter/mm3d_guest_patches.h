@@ -80,6 +80,12 @@ class Mm3dGuestPatches {
     // instruction after it and the declared targets, sorted and unique.
     std::vector<std::uint32_t> BlockBoundaries() const;
     std::vector<SiteStatistics> Statistics() const;
+    // Whole-AOT product mode: the compiled title module must exit to the
+    // dispatcher at every boundary an enabled site needs (its PC, the
+    // instruction after it, the declared targets). Given the module's
+    // sorted function entry points, returns the boundaries it lacks.
+    std::vector<std::uint32_t> MissingProductBoundaries(
+        const std::vector<std::uint32_t>& sortedEntryPoints) const;
     bool Empty() const noexcept { return mSites.empty(); }
     // The next time the guest thread (its TLS pointer) reaches the site at
     // pc, its own instruction runs: a site whose work ran elsewhere (a
