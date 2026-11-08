@@ -9,7 +9,9 @@
 #include "oot3d_savestate_migration.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/title_grass_rules_file.h"
+#include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/title_shader_preparation.h"
+#include "oot3d_native_vertex_binaries.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
 
@@ -1353,6 +1355,14 @@ void NativeA32WindowSession::Setup() {
       std::move(applicationSettingsTabs));
   if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {
     Fast::Extension::InstallGraphicsSettingsWindowTitle(title);
+  }
+  // A title session's built-in packs (MM3D), before anything reads the
+  // families: its draws then find its programs, and the startup preparation
+  // below prepares its family next to the shared pass programs, as OoT3D's.
+  if (titleSession) {
+    if (!Oot3dNativeGame::InstallTitleBuiltInVertexPack(titleSession->BuiltInVertexProgramPack()) ||
+        !Fast::Renderer3ds::InstallTitleFragmentPack(titleSession->BuiltInFragmentProgramPack()))
+      throw std::runtime_error("title shader packs installed after the renderer read its families");
   }
   // The renderer reads it when the context starts it.
   Fast::Renderer3ds::InstallTitleShaderPreparation(

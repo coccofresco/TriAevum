@@ -12,4 +12,11 @@ std::span<const Fast::Renderer3ds::PicaVertexArtifact> TitleVertexArtifacts();
 // Only publisher-provided programs; never prewarm OoT's family for another title.
 std::span<const Fast::Renderer3ds::PicaVertexArtifact> AdditionalTitleVertexArtifacts();
 std::span<const Fast::Renderer::PassShaderArtifact> TitlePassArtifacts();
+// A title session's own built-in vertex family (MM3D's mm3d_native_vertex.spvpack),
+// installed by the window session before the renderer starts, i.e. before the
+// first use of the functions above. Appended after the embedded OoT3D programs
+// (exact source identities keep titles apart), exactly as a publisher-provided
+// pack, and returned by AdditionalTitleVertexArtifacts. OoT3D installs nothing.
+// Returns false (and installs nothing) once the family has been read.
+bool InstallTitleBuiltInVertexPack(std::span<const unsigned char> pack);
 } // namespace Oot3dNativeGame

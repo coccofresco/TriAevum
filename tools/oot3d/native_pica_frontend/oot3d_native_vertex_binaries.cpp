@@ -21,6 +21,8 @@ alignas(16) const unsigned char kPack[] = {
 #endif
 };
 TRIAEVUM_SPIRV_PACK_EMBED_END
+std::span<const unsigned char> gInstalledTitlePack;
+bool gEntriesRead = false;
 const std::vector<Fast::Renderer::SpirvPackEntry>& Entries() {
     // The environment is configured from the launch profile before first use.
     // Exact source identities keep other titles isolated; embedded programs
@@ -34,7 +36,12 @@ const std::vector<Fast::Renderer::SpirvPackEntry>& Entries() {
         return pack;
     }();
     static const auto entries = [] {
+        gEntriesRead = true;
         auto all = Fast::Renderer::ReadSpirvPack(kPack);
+        if (!gInstalledTitlePack.empty()) {
+            const auto title = Fast::Renderer::ReadSpirvPack(gInstalledTitlePack);
+            all.insert(all.end(), title.begin(), title.end());
+        }
         if (extra) all.insert(all.end(), extra->Entries().begin(), extra->Entries().end());
         return all;
     }();
@@ -42,6 +49,11 @@ const std::vector<Fast::Renderer::SpirvPackEntry>& Entries() {
 }
 } // namespace
 
+bool InstallTitleBuiltInVertexPack(std::span<const unsigned char> pack) {
+    if (gEntriesRead) return false;
+    gInstalledTitlePack = pack;
+    return true;
+}
 std::span<const Fast::Renderer3ds::PicaVertexArtifact> TitleVertexArtifacts() {
     static const auto artifacts = Fast::Renderer3ds::PicaVertexArtifactsFromPack(Entries());
     return artifacts;

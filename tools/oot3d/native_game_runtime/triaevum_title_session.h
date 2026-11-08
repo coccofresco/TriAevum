@@ -144,6 +144,12 @@ public:
   // uses no always-available programs; every program a draw uses is still
   // compiled when the draw needs it. OoT3D (no session) has them.
   [[nodiscard]] virtual bool PreparedShaders() const { return false; }
+  // The title's built-in shader packs (a vertex-program family and a
+  // fragment-family pack). The window session installs them before the
+  // renderer starts and prepares the family at startup as it does OoT3D's.
+  // Empty for a title without them.
+  [[nodiscard]] virtual std::span<const unsigned char> BuiltInVertexProgramPack() const { return {}; }
+  [[nodiscard]] virtual std::span<const unsigned char> BuiltInFragmentProgramPack() const { return {}; }
   // The title's pipeline cache namespace: its own pipeline cache files in
   // the renderer cache directory, never another title's (non-empty; lower
   // case letters, digits, '_' and '-'). OoT3D (no session) keeps the

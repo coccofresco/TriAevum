@@ -85,6 +85,47 @@ if(TRIAEVUM_TITLE_MM3D)
         titles/mm3d/adapter/mm3d_timing_observer_tests.cpp)
     oot3d_target_defaults(mm3d_timing_observer_tests FOLDER Tests)
 
+    include(runtime/three_ds_recomp/cmake/spirv_pack.cmake)
+    set(TRIAEVUM_MM3D_SHADER_PACK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/shaders")
+    function(triaevum_add_mm3d_builtin_shader_packs target)
+        set(_dir "${TRIAEVUM_MM3D_SHADER_PACK_DIR}")
+        if(ARGC GREATER 1)
+            set(_dir "${ARGV1}")
+        endif()
+        set(_source "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../titles/mm3d/shaders/mm3d_builtin_shader_packs.cpp")
+        set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_dir}")
+        if(EXISTS "${_dir}/mm3d_native_vertex.spvpack" AND EXISTS "${_dir}/mm3d_native_fragment.spvpack")
+            triaevum_add_spirv_pack(${target} "${_source}" "${_dir}/mm3d_native_vertex.spvpack")
+            triaevum_add_spirv_pack(${target} "${_source}" "${_dir}/mm3d_native_fragment.spvpack")
+            # #embed takes the pack by its absolute path (clang searches no -I
+            # directory for it); per target, so a test can build both outcomes.
+            target_compile_definitions(${target} PRIVATE TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS=1
+                "TRIAEVUM_MM3D_VERTEX_PACK=\"${_dir}/mm3d_native_vertex.spvpack\""
+                "TRIAEVUM_MM3D_FRAGMENT_PACK=\"${_dir}/mm3d_native_fragment.spvpack\"")
+        else()
+            target_sources(${target} PRIVATE "${_source}")
+        endif()
+    endfunction()
+    # Both outcomes of the rule, on fixture packs (copies of OoT3D's built-in
+    # vertex family and native fragment pack) and on no packs.
+    set(_mm3d_pack_fixture "${CMAKE_CURRENT_BINARY_DIR}/mm3d_shader_pack_fixture")
+    configure_file(tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack
+        "${_mm3d_pack_fixture}/mm3d_native_vertex.spvpack" COPYONLY)
+    configure_file(runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment.spvpack
+        "${_mm3d_pack_fixture}/mm3d_native_fragment.spvpack" COPYONLY)
+    foreach(_variant present absent)
+        add_executable(mm3d_builtin_shader_packs_${_variant}_tests EXCLUDE_FROM_ALL
+            titles/mm3d/shaders/mm3d_builtin_shader_packs_tests.cpp)
+        target_include_directories(mm3d_builtin_shader_packs_${_variant}_tests PRIVATE
+            runtime/three_ds_recomp/include)
+        oot3d_target_defaults(mm3d_builtin_shader_packs_${_variant}_tests FOLDER Tests)
+    endforeach()
+    triaevum_add_mm3d_builtin_shader_packs(mm3d_builtin_shader_packs_present_tests "${_mm3d_pack_fixture}")
+    target_compile_definitions(mm3d_builtin_shader_packs_present_tests PRIVATE EXPECT_PACKS=1)
+    triaevum_add_mm3d_builtin_shader_packs(mm3d_builtin_shader_packs_absent_tests
+        "${CMAKE_CURRENT_BINARY_DIR}/mm3d_shader_pack_none")
+    target_compile_definitions(mm3d_builtin_shader_packs_absent_tests PRIVATE EXPECT_PACKS=0)
+
     add_executable(mm3d_light_arena_tests EXCLUDE_FROM_ALL
         titles/mm3d/gameplay/mm3d_light_arena_tests.cpp)
     oot3d_target_defaults(mm3d_light_arena_tests FOLDER Tests)
@@ -509,6 +550,10 @@ if (TARGET oot3d_native_a32_aot OR TARGET oot3d_native_whole_aot OR
         target_sources(oot3d_native_game PRIVATE
             titles/mm3d/adapter/mm3d_title_session.cpp)
         target_compile_definitions(oot3d_native_game PRIVATE TRIAEVUM_TITLE_MM3D=1)
+        # MM3D's built-in shader packs (PARITY_PLAN P7.1, produced by CATALOGS):
+        # embedded exactly when both exist, as OoT3D's are; MM3D then has
+        # prepared shaders. No other switch (titles/mm3d/shaders/*.h).
+        triaevum_add_mm3d_builtin_shader_packs(oot3d_native_game)
         target_link_libraries(oot3d_native_game PRIVATE
             oot3d_mm3d_guest_patches
             oot3d_mm3d_single_screen

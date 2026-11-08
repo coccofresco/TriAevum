@@ -2,6 +2,7 @@
 // Restoration, lighting), its scene view and environment, its interface frame
 // and its developer tools, at the points the native A32 window session calls.
 #include "triaevum_title_session.h"
+#include "../shaders/mm3d_builtin_shader_packs.h"
 
 #include "a32_runtime.h"
 #include "mm3d_guest_calls.h"
@@ -100,12 +101,13 @@ public:
 #endif
     return contacts;
   }
-  // No MM3D shader corpus yet: no vertex-program family in the built-in uber
-  // set, no fragment-family pack, no scenario corpus or Forge preparation
-  // (PARITY_PLAN P7.1/P7.2). Return true once those exist: that restores
-  // always-available programs for MM3D (its startup program family must then
-  // be prepared by the window session next to OoT3D's).
-  bool PreparedShaders() const override { return false; }
+  // As OoT3D: prepared exactly when MM3D's built-in packs (vertex-program
+  // family + fragment-family pack, PARITY_PLAN P7.1) are compiled into this
+  // build. No product/developer or runtime pack-identity switch
+  // (titles/mm3d/shaders/mm3d_builtin_shader_packs.h).
+  bool PreparedShaders() const override { return Mm3dBuiltInShaderPacksPresent(); }
+  std::span<const unsigned char> BuiltInVertexProgramPack() const override { return Mm3dBuiltInVertexPack(); }
+  std::span<const unsigned char> BuiltInFragmentProgramPack() const override { return Mm3dBuiltInFragmentPack(); }
   // MM3D's own pipeline cache files, apart from OoT3D's.
   std::string_view PipelineCacheNamespace() const override { return "mm3d"; }
 

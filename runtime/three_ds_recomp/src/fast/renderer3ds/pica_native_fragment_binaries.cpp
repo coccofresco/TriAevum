@@ -16,10 +16,24 @@ alignas(16) const unsigned char kPack[] = {
 #endif
 };
 TRIAEVUM_SPIRV_PACK_EMBED_END
+std::span<const unsigned char> gTitlePack;
+bool gRead = false;
 } // namespace
-
+bool InstallTitleFragmentPack(std::span<const unsigned char> pack) {
+    if (gRead) return false;
+    gTitlePack = pack;
+    return true;
+}
 std::span<const PicaFragmentArtifact> NativeFragmentArtifacts() {
-    static const auto entries = Renderer::ReadSpirvPack(kPack);
+    static const auto entries = [] {
+        gRead = true;
+        auto all = Renderer::ReadSpirvPack(kPack);
+        if (!gTitlePack.empty()) {
+            const auto title = Renderer::ReadSpirvPack(gTitlePack);
+            all.insert(all.end(), title.begin(), title.end());
+        }
+        return all;
+    }();
     static const auto artifacts = PicaFragmentArtifactsFromPack(entries);
     return artifacts;
 }
