@@ -53,6 +53,9 @@
 #include "oot3d_native_pica_vulkan_bridge.h"
 #include "oot3d_native_pica_vulkan_plan.h"
 #include "oot3d_native_vertex_binaries.h"
+#if defined(TRIAEVUM_VARIANT_REPLAY_MM3D)
+#include "mm3d_builtin_shader_packs.h"
+#endif
 
 #include "fast/extension/pica_caster_fragment_binaries.h"
 #include "fast/extension/pica_directional_shadow_caster.h"
@@ -926,6 +929,14 @@ int Run(const Options& options) {
 } // namespace
 
 int main(int argc, char** argv) {
+#if defined(TRIAEVUM_VARIANT_REPLAY_MM3D)
+    // The vertex families the dual-title runtime has: MM3D's built-in family is
+    // installed exactly as the MM3D title session does before renderer use.
+    if (!Oot3dNativeGame::InstallTitleBuiltInVertexPack(Oot3dNativeGame::Mm3dBuiltInVertexPack())) {
+        std::fprintf(stderr, "MM3D built-in vertex pack installed after first use\n");
+        return 2;
+    }
+#endif
     Options options;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
