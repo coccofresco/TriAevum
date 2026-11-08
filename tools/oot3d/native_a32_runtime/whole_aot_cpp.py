@@ -496,6 +496,41 @@ def _emit_special_multiply(item: Instruction) -> list[str]:
     )
 
 
+def _emit_dual_signed_multiply(item: Instruction) -> list[str]:
+    """SMLAD/SMLSD{X}, SMUAD/SMUSD{X} (Ra = 15): the semantics of a32_core_alu.cpp."""
+    raw = item.raw
+    pc = item.pc
+    form = raw & 0x0FF000D0
+    rd = (raw >> 16) & 0xF
+    ra = (raw >> 12) & 0xF
+    rs = (raw >> 8) & 0xF
+    rm = raw & 0xF
+    if 15 in {rd, rs, rm}:
+        raise LoweringError(f"dual signed multiply uses PC at 0x{pc:08X}")
+    exchange = bool(raw & (1 << 5))
+    operator = "-" if form == 0x07000050 else "+"
+    body = [
+        f"const uint32_t left = {_reg(rm)};",
+        f"const uint32_t right = {_reg(rs)};",
+        "const int64_t lowProduct =",
+        "    static_cast<int64_t>(static_cast<int16_t>(left)) *",
+        f"    static_cast<int16_t>(right >> {16 if exchange else 0}U);",
+        "const int64_t highProduct =",
+        "    static_cast<int64_t>(static_cast<int16_t>(left >> 16U)) *",
+        f"    static_cast<int16_t>(right >> {0 if exchange else 16}U);",
+        f"int64_t value = lowProduct {operator} highProduct;",
+    ]
+    if ra != 15:
+        body.append(f"value += static_cast<int32_t>({_reg(ra)});")
+    body.extend(
+        [
+            f"{_reg(rd)} = static_cast<uint32_t>(value);",
+            "Oot3dAotSetSaturationFlag(frame, value != static_cast<int32_t>(value));",
+        ]
+    )
+    return _conditional(raw, body)
+
+
 def _emit_dual_signed_long_multiply(item: Instruction) -> list[str]:
     raw = item.raw
     pc = item.pc
@@ -847,6 +882,51 @@ def _emit_extension(item: Instruction) -> list[str]:
                 f"{_reg(rd)} = value;",
             ],
         )
+    if (raw & 0x0F800F10) == 0x06000F10:  # ARMv6 parallel add/subtract
+        return _emit_parallel_add_subtract(item)
+    if (raw & 0x0FF00FF0) == 0x06800FB0:  # SEL by the GE flags
+        rn = (raw >> 16) & 0xF
+        if 15 in {rn, rd, rm}:
+            raise LoweringError(f"SEL uses PC at 0x{pc:08X}")
+        return _conditional(
+            raw,
+            [
+                f"const uint32_t left = {_reg(rn)};",
+                f"const uint32_t right = {_reg(rm)};",
+                "const uint32_t ge = (state.PreservedCpsr() >> 16U) & 0xFU;",
+                "uint32_t value = 0U;",
+                "for (unsigned lane = 0U; lane < 4U; ++lane) {",
+                "    const uint32_t laneMask = 0xFFU << (lane * 8U);",
+                "    value |= ((ge >> lane) & 1U) != 0U ? left & laneMask : right & laneMask;",
+                "}",
+                f"{_reg(rd)} = value;",
+            ],
+        )
+    saturation16 = raw & 0x0FF00FF0
+    if saturation16 in {0x06A00F30, 0x06E00F30}:  # SSAT16 / USAT16
+        signed16 = saturation16 == 0x06A00F30
+        if 15 in {rd, rm}:
+            raise LoweringError(f"halfword saturation uses PC at 0x{pc:08X}")
+        bits = ((raw >> 16) & 0xF) + (1 if signed16 else 0)
+        low = -(1 << (bits - 1)) if signed16 else 0
+        high = (1 << (bits - 1)) - 1 if signed16 else (1 << bits) - 1
+        body = [
+            f"const uint32_t source = {_reg(rm)};",
+            "uint32_t value = 0U;",
+            "bool saturated = false;",
+        ]
+        for lane in range(2):
+            body.extend(
+                [
+                    f"const int32_t half{lane} = static_cast<int16_t>(source >> {lane * 16}U);",
+                    f"const int32_t clamped{lane} = half{lane} < {low} ? {low} :",
+                    f"    (half{lane} > {high} ? {high} : half{lane});",
+                    f"saturated = saturated || clamped{lane} != half{lane};",
+                    f"value |= (static_cast<uint32_t>(clamped{lane}) & 0xFFFFU) << {lane * 16}U;",
+                ]
+            )
+        body.extend([f"{_reg(rd)} = value;", "Oot3dAotSetSaturationFlag(frame, saturated);"])
+        return _conditional(raw, body)
     extension = raw & 0x0FF000F0
     signed = extension in {0x06800070, 0x06A00070, 0x06B00070}
     unsigned = extension in {0x06C00070, 0x06E00070, 0x06F00070}
@@ -857,10 +937,6 @@ def _emit_extension(item: Instruction) -> list[str]:
         raise LoweringError(f"extension writes PC at 0x{pc:08X}")
     rotate = ((raw >> 10) & 0x3) * 8
     byte16 = extension in {0x06800070, 0x06C00070}
-    if byte16 and rn != 15:
-        raise LoweringError(
-            f"extension-and-add pair at 0x{pc:08X} is unsupported"
-        )
     byte = byte16 or extension in {0x06A00070, 0x06E00070}
     value_type = "int8_t" if byte else "int16_t"
     if unsigned:
@@ -880,9 +956,73 @@ def _emit_extension(item: Instruction) -> list[str]:
         body.append(
             f"uint32_t value = static_cast<uint32_t>(static_cast<{value_type}>(source));"
         )
-    if rn != 15:
+    if byte16 and rn != 15:  # SXTAB16 / UXTAB16: each halfword adds its own lane
+        body.extend(
+            [
+                f"const uint32_t base = {_reg(rn)};",
+                "value = ((base + low) & 0xFFFFU) | (((base >> 16U) + high) << 16U);",
+            ]
+        )
+    elif rn != 15:
         body.append(f"value += {_reg(rn, pc)};")
     body.append(f"{_reg(rd)} = value;")
+    return _conditional(raw, body)
+
+
+def _emit_parallel_add_subtract(item: Instruction) -> list[str]:
+    """cond 0110 0 op1 Rn Rd 1111 op2 1 Rm, the semantics of a32_core_alu.cpp."""
+    raw = item.raw
+    pc = item.pc
+    op1 = (raw >> 20) & 7
+    op2 = (raw >> 5) & 7
+    if op1 in {0, 4} or op2 in {5, 6}:
+        raise LoweringError(f"parallel add/subtract 0x{raw:08X} at 0x{pc:08X} is undefined")
+    rn = (raw >> 16) & 0xF
+    rd = (raw >> 12) & 0xF
+    rm = raw & 0xF
+    if 15 in {rn, rd, rm}:
+        raise LoweringError(f"parallel add/subtract uses PC at 0x{pc:08X}")
+    is_unsigned = op1 >= 5
+    kind = op1 & 3  # 1 plain (sets GE), 2 saturating, 3 halving
+    byte = op2 >= 4
+    lanes = 4 if byte else 2
+    bits = 8 if byte else 16
+    mask = (1 << bits) - 1
+    if is_unsigned:
+        narrow = "uint8_t" if byte else "uint16_t"
+    else:
+        narrow = "int8_t" if byte else "int16_t"
+    body = [
+        f"const uint32_t left = {_reg(rn)};",
+        f"const uint32_t right = {_reg(rm)};",
+        "uint32_t value = 0U;",
+    ]
+    if kind == 1:
+        body.append("uint32_t ge = 0U;")
+    for lane in range(lanes):
+        subtract = op2 in {3, 7} or (op2 == 1 and lane == 0) or (op2 == 2 and lane == 1)
+        right_lane = 1 - lane if op2 in {1, 2} else lane
+        sign = "-" if subtract else "+"
+        body.append(
+            f"int32_t lane{lane} = static_cast<int32_t>(static_cast<{narrow}>(left >> {lane * bits}U)) {sign}"
+            f" static_cast<int32_t>(static_cast<{narrow}>(right >> {right_lane * bits}U));"
+        )
+        if kind == 1:
+            condition = f"lane{lane} >= {mask + 1}" if is_unsigned and not subtract else f"lane{lane} >= 0"
+            ge_bits = (1 if byte else 3) << (lane * (1 if byte else 2))
+            body.append(f"if ({condition}) {{ ge |= 0x{ge_bits:X}U; }}")
+        elif kind == 2:
+            low = 0 if is_unsigned else -(1 << (bits - 1))
+            high = mask if is_unsigned else (1 << (bits - 1)) - 1
+            body.append(
+                f"lane{lane} = lane{lane} < {low} ? {low} : (lane{lane} > {high} ? {high} : lane{lane});"
+            )
+        else:
+            body.append(f"lane{lane} >>= 1;")
+        body.append(f"value |= (static_cast<uint32_t>(lane{lane}) & 0x{mask:X}U) << {lane * bits}U;")
+    body.append(f"{_reg(rd)} = value;")
+    if kind == 1:
+        body.append("state.SetPreservedCpsrBits(0x000F0000U, ge << 16U);")
     return _conditional(raw, body)
 
 
@@ -1553,6 +1693,8 @@ def _emit_non_control(
         return _emit_exclusive(item)
     if (raw & 0x0FF000D0) in {0x07400010, 0x07400050}:
         return _emit_dual_signed_long_multiply(item)
+    if (raw & 0x0FF000D0) in {0x07000010, 0x07000050}:
+        return _emit_dual_signed_multiply(item)
     if (raw & 0x0E000000) == 0x08000000:
         return _emit_block_transfer(item)
     if (raw & 0x0F000010) == 0x06000010:
