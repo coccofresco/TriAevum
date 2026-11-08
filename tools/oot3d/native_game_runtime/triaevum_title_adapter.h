@@ -81,6 +81,20 @@ inline constexpr std::string_view kMm3dCodeBinSha256 =
     return adapter == TitleAdapter::Oot3dEur || adapter == TitleAdapter::Mm3d;
 }
 
+// OoT3D's guest readers (a3fc81ad): the SaveContext night flag and scene
+// time, the player actor layout (+0x28 position, +0xBE yaw), and the
+// developer tours, lab and emitter inventory that drive OoT3D's scenes,
+// entrances and actors. Another title's memory there is something else.
+[[nodiscard]] inline bool TitleReadsOot3dSceneTime(TitleAdapter adapter) noexcept {
+    return adapter == TitleAdapter::Oot3dEur;
+}
+[[nodiscard]] inline bool TitleReadsOot3dPlayerActor(TitleAdapter adapter) noexcept {
+    return adapter == TitleAdapter::Oot3dEur;
+}
+[[nodiscard]] inline bool TitleHasOot3dDeveloperTools(TitleAdapter adapter) noexcept {
+    return adapter == TitleAdapter::Oot3dEur;
+}
+
 [[nodiscard]] inline const char* TitleAdapterName(TitleAdapter adapter) noexcept {
     switch (adapter) {
     case TitleAdapter::Oot3dEur:
