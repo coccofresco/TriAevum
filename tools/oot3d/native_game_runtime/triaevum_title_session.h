@@ -19,10 +19,11 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
-#include <functional>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -95,6 +96,21 @@ public:
   // Title-owned settings not serialized by the shared state+settings owners.
   // Shown before saving/loading and retained in the state metadata.
   [[nodiscard]] virtual std::string_view SavestateSettingsNotice() const { return {}; }
+  // The title's own mod settings a "state + settings" save carries (as
+  // OoT3D's TopScreen settings are): a JSON object, or nullopt for none.
+  [[nodiscard]] virtual std::optional<nlohmann::json>
+  CaptureSavestateTitleSettings() const {
+    return std::nullopt;
+  }
+  // Applies a block CaptureSavestateTitleSettings produced. False (with an
+  // error) leaves the current settings unchanged.
+  virtual bool ApplySavestateTitleSettings(const nlohmann::json &settings,
+                                           std::string *error) {
+    (void)settings;
+    if (error != nullptr)
+      *error = "this title has no state settings";
+    return false;
+  }
   // The actor profiles (the title's own ids) whose rigid geometry may be
   // cached in static shadow layers. None by default: every actor is dynamic.
   [[nodiscard]] virtual StaticShadowActorPolicy StaticShadowActors() const { return {}; }

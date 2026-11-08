@@ -37,6 +37,13 @@ std::string CaptureSavestateSettings(const SavestateSettingsOwners& owners) {
   if (owners.Language != nullptr) {
     document["language"] = owners.Language->Selected();
   }
+  if (!owners.TitleSettingsId.empty() && owners.CaptureTitleSettings) {
+    if (auto settings = owners.CaptureTitleSettings();
+        settings.has_value() && settings->is_object()) {
+      document["title"] = {{"id", owners.TitleSettingsId},
+                           {"settings", std::move(*settings)}};
+    }
+  }
   return document.dump();
 }
 
@@ -124,6 +131,28 @@ SavestateSettingsApplyResult ApplySavestateSettings(
     } else {
       fail("Language: " + owners.Language->Error());
     }
+  }
+  if (const auto title = document.find("title"); title != document.end()) {
+    const bool sameTitle = title->is_object() && title->contains("id") &&
+                           (*title)["id"].is_string() &&
+                           !owners.TitleSettingsId.empty() &&
+                           (*title)["id"] == owners.TitleSettingsId;
+    if (!sameTitle || !owners.ApplyTitleSettings) {
+      result.Lines.push_back(
+          "Title settings: stored for another title, current kept");
+    } else if (const auto settings = title->find("settings");
+               settings == title->end() || !settings->is_object()) {
+      fail("Title settings: damaged block, current kept");
+    } else {
+      std::string error;
+      if (owners.ApplyTitleSettings(*settings, &error)) {
+        result.Lines.push_back("Title settings: applied");
+      } else {
+        fail("Title settings: " + error);
+      }
+    }
+  } else if (owners.ApplyTitleSettings) {
+    result.Lines.push_back("Title settings: not in this state, current kept");
   }
   return result;
 }

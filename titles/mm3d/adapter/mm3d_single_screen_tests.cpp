@@ -7,6 +7,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -125,6 +126,45 @@ void TestGuard() {
     Require(patches.Verify(memory) == 1U, "a site over different code was enabled");
 }
 
+// State + settings: the MM settings a state carries are dekui's live
+// settings (damage multiplier among them), applied through dekui's own
+// parser and live apply; damaged text changes nothing.
+void TestStateSettings() {
+    Require(Mm3dSingleScreen::LoadSettings({}), "dekui defaults did not load");
+    Mm3dSingleScreen::SetDamageMultiplier(4);
+    Require(Difficulty::damage_multiplier.load() == 4, "damage multiplier not live");
+    const auto captured = Mm3dSingleScreen::ActiveSettingsJson();
+    Require(captured.find("\"damage_multiplier\": 4") != std::string::npos,
+            "captured MM settings lost the active damage multiplier");
+    Require(Mm3dSingleScreen::LoadSettings({}), "dekui defaults did not reload");
+    Require(Difficulty::damage_multiplier.load() == 1, "defaults kept the old multiplier");
+    std::string error;
+    Require(Mm3dSingleScreen::ApplySettingsJson(captured, &error), "captured MM settings rejected: " + error);
+    Require(Difficulty::damage_multiplier.load() == 4, "restored MM settings did not reach the live owner");
+    Require(Mm3dSingleScreen::ActiveSettingsJson() == captured, "restored settings are not the active ones");
+    for (const auto* damaged : {"", "{", "[]", "{\"version\":2}", "null"}) {
+        error.clear();
+        Require(!Mm3dSingleScreen::ApplySettingsJson(damaged, &error) && !error.empty(),
+                "damaged MM settings accepted");
+        Require(Difficulty::damage_multiplier.load() == 4 && Mm3dSingleScreen::ActiveSettingsJson() == captured,
+                "damaged MM settings mutated the live owner");
+    }
+    Mm3dSingleScreen::SetDamageMultiplier(1);
+}
+
+// A restored state resets dekui's host state but keeps its settings.
+void TestRestoreReset() {
+    Mm3dSingleScreen singleScreen;
+    Mm3dSingleScreen::SetDamageMultiplier(3);
+    const auto settings = Mm3dSingleScreen::ActiveSettingsJson();
+    const auto before = singleScreen.HostStateGeneration();
+    singleScreen.ResetHostState();
+    Require(singleScreen.HostStateGeneration() == before + 1, "restore did not reset dekui host state");
+    Require(Mm3dSingleScreen::ActiveSettingsJson() == settings && Difficulty::damage_multiplier.load() == 3,
+            "restore reset changed dekui settings");
+    Mm3dSingleScreen::SetDamageMultiplier(1);
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -156,6 +196,8 @@ int main(int argc, char** argv) {
     TestDamage();
     TestDrops();
     TestGuard();
+    TestStateSettings();
+    TestRestoreReset();
     std::cout << "mm3d_single_screen_tests: ok\n";
     return 0;
 }

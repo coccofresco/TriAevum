@@ -6,6 +6,7 @@
 #include "mm3d_restoration.h"
 
 #include <cstdio>
+#include <mutex>
 
 namespace Oot3dNativeGame {
 
@@ -76,6 +77,42 @@ Mm3dSingleScreen::Mm3dSingleScreen(std::function<std::int64_t()> globalTimeUs)
 
 Mm3dSingleScreen::~Mm3dSingleScreen() = default;
 
+namespace {
+// The settings last applied to dekui's live owners; the defaults until then.
+std::mutex gActiveSettingsMutex;
+Mm3dDekui::Settings& ActiveSettings() {
+    static Mm3dDekui::Settings settings = [] {
+        Mm3dDekui::Settings defaults;
+        (void)defaults.LoadFromString(Mm3dDekui::DefaultSettingsJson());
+        return defaults;
+    }();
+    return settings;
+}
+} // namespace
+
+void Mm3dSingleScreen::ResetHostState() {
+    auto facts = mCore->host;
+    mCore = std::make_unique<Mm3dDekui::Core>(std::move(facts));
+    ++mHostStateGeneration;
+}
+
+std::string Mm3dSingleScreen::ActiveSettingsJson() {
+    std::scoped_lock lock(gActiveSettingsMutex);
+    return ActiveSettings().SaveToString();
+}
+
+bool Mm3dSingleScreen::ApplySettingsJson(std::string_view text, std::string* error) {
+    Mm3dDekui::Settings settings;
+    if (!settings.LoadFromString(text)) {
+        if (error != nullptr) *error = "unreadable dekui settings (version 1 presentation.json expected)";
+        return false;
+    }
+    Mm3dDekui::ApplySettings(settings);
+    std::scoped_lock lock(gActiveSettingsMutex);
+    ActiveSettings() = std::move(settings);
+    return true;
+}
+
 bool Mm3dSingleScreen::LoadSettings(const std::filesystem::path& path) {
     Mm3dDekui::Settings settings;
     bool loaded = true;
@@ -88,6 +125,10 @@ bool Mm3dSingleScreen::LoadSettings(const std::filesystem::path& path) {
         }
     }
     Mm3dDekui::ApplyStartupSettings(settings);
+    {
+        std::scoped_lock lock(gActiveSettingsMutex);
+        ActiveSettings() = std::move(settings);
+    }
     return loaded;
 }
 
@@ -105,6 +146,8 @@ void Mm3dSingleScreen::BindRestoration(Mm3dRestorationPort& restoration) {
 
 void Mm3dSingleScreen::SetDamageMultiplier(int multiplier) {
     Mm3dDekui::Difficulty::damage_multiplier = multiplier;
+    std::scoped_lock lock(gActiveSettingsMutex);
+    ActiveSettings().damage_multiplier = multiplier;
 }
 
 std::vector<std::uint32_t> Mm3dSingleScreen::CandidatePcs() {

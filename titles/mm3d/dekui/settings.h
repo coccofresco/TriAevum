@@ -17,6 +17,7 @@
 #include "dungeon_map.h"
 #include "world_map_prompt.h"
 #include <filesystem>
+#include <string>
 #include <string_view>
 #include "submenu_header.h"
 #include "inventory_menu.h"
@@ -112,6 +113,8 @@ struct Settings {
     bool LoadFromString(std::string_view text);
     // Atomic replacement, no direct-write fallback or directory creation.
     bool Save(const std::filesystem::path& path) const;
+    // The text Save writes (LoadFromString reads it back), regardless of save_blocked.
+    std::string SaveToString() const;
     bool SaveBlocked() const noexcept { return save_blocked; }
 private:
     bool save_blocked = false;

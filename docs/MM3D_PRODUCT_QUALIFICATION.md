@@ -35,20 +35,28 @@ settings, host controls and selected game language. Display/window/output/VSync,
 monitor and refresh remain machine-owned. Language changes require a full restart.
 Authored scene-environment files are not copied into states.
 
-External MM-specific dekui/Restoration configuration (including
-`presentation.json`) and damage overrides are **not** in that snapshot. Shared
-graphics camera/FOV preferences remain part of the graphics owner above. The MM adapter supplies an explicit notice to the shared save-state
-panel, save result, state metadata and settings-restore log. This is an omission
-disclosure, not implementation of MM settings persistence. Ordinary state-only
-load leaves current host settings in place. A malformed schema is rejected before
-mutating settings owners; rejecting individual owner fields does not make the
-whole settings application transactional.
+MM's mod settings (dekui's presentation settings, which include the Project
+Restoration options and the damage multiplier) travel with "state + settings"
+under a `title` block keyed by the title id (`mm3d`), exactly as OoT3D's TopScreen
+settings do; they are applied through dekui's own parser and live apply. A block
+for another title is kept out ("stored for another title, current kept"); a
+damaged block fails without changing the live settings; a state without the block
+keeps the current settings and says so. Ordinary state-only load leaves current
+host and MM settings in place. A malformed schema is rejected before mutating
+settings owners; rejecting individual owner fields does not make the whole
+settings application transactional. Tests: `oot3d_mm3d_single_screen_tests`
+(live dekui owner round trip, damaged text) and `triaevum_f1_settings_smoke`
+(shared capture/apply; negative check: the old capture code fails it).
 
 The host state tests use synthetic memory, including an MM-tagged process
 identity, foreign-title/source-snapshot rejection, corrupt/truncated/unsupported
 containers and sentinel checks. These are not native MM cartridge-save round trips.
 The window restore path resets title session and composition owners before resumed
-submission, and resets renderer/history/UI/rumble owners. New title adapters remain
+submission, and resets renderer/history/UI/rumble owners. The MM title session's
+`Reset()` also starts dekui's per-site host state (camera traces, menu, HUD and
+banner animation) afresh, the same state a cold `--load-state` starts from;
+settings and registered sites are kept. Project Restoration's in-flight guest
+calls are not yet covered by that reset (open). New title adapters remain
 responsible for clearing their own lifecycle state in `Reset()`.
 
 Forge's Rust `forge-core` owns data inventory, backup/restore, repair and interrupted

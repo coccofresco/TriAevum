@@ -48,9 +48,15 @@ public:
   Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
   bool NativeFragmentLighting() const override { return true; }
   std::string_view CompanionLightName() const override { return "Tatl"; }
-  std::string_view SavestateSettingsNotice() const override {
-    return "MM-specific dekui/Restoration configuration and damage overrides are not "
-           "included in state + settings; their current configuration is kept.";
+  // dekui's settings (Restoration's options and the damage multiplier
+  // among them) travel with "state + settings", as TopScreen's do for OoT3D.
+  std::optional<nlohmann::json> CaptureSavestateTitleSettings() const override {
+    auto settings = nlohmann::json::parse(Mm3dSingleScreen::ActiveSettingsJson(), nullptr, false);
+    if (!settings.is_object()) return std::nullopt;
+    return settings;
+  }
+  bool ApplySavestateTitleSettings(const nlohmann::json& settings, std::string* error) override {
+    return Mm3dSingleScreen::ApplySettingsJson(settings.dump(), error);
   }
   std::string_view GrassRuleNamespace() const override { return "mm3d"; }
   std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
@@ -343,6 +349,8 @@ public:
     mComposition.Reset();
     mRumble.Reset();
     mPhotoCamera.Reset();
+    // dekui's UI/camera host state belongs to the abandoned timeline.
+    if (mSingleScreen) mSingleScreen->ResetHostState();
   }
 
   nlohmann::json CompositionSummary() const override {

@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <string_view>
 
 #include "mm3d_guest_patches.h"
 
@@ -50,12 +52,26 @@ class Mm3dSingleScreen {
     static bool LoadSettings(const std::filesystem::path& path);
     // dekui's difficulty option (1..16), until the F1 menu owns its settings.
     static void SetDamageMultiplier(int multiplier);
+    // The active dekui settings (what LoadSettings/SetDamageMultiplier and a
+    // restored state applied), as presentation.json text: the MM settings a
+    // "state + settings" save carries, next to OoT3D's TopScreen settings.
+    static std::string ActiveSettingsJson();
+    // A restored state: dekui's per-site host state (camera traces, menu,
+    // HUD and banner animation) starts afresh, exactly as when a state is
+    // loaded at startup; settings and registered sites are kept.
+    void ResetHostState();
+    // Restore-reset witness: incremented by each ResetHostState.
+    [[nodiscard]] unsigned HostStateGeneration() const noexcept { return mHostStateGeneration; }
+    // Applies settings text through dekui's own parser and live apply (the
+    // path its options menu uses). Invalid text changes nothing.
+    static bool ApplySettingsJson(std::string_view text, std::string* error);
 
   private:
     // dekui's headers stay out of the window's translation units.
     std::unique_ptr<Mm3dDekui::Core> mCore;
     std::map<std::uint32_t, std::uint32_t> mReplacements;
     Mm3dRestorationPort* mRestoration = nullptr;
+    unsigned mHostStateGeneration = 0;
 };
 
 } // namespace Oot3dNativeGame

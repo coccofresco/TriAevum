@@ -541,6 +541,42 @@ void CheckSavestatePanel() {
     const auto applied = ApplySavestateSettings(captured, owners);
     Check(applied.Success && std::find(applied.Lines.begin(), applied.Lines.end(),
           owners.TitleSettingsNotice) != applied.Lines.end(), "load did not disclose omitted settings");
+    {
+        // A title settings owner (MM3D: dekui's settings): captured under
+        // "title" with its id, applied only to the same title, damaged
+        // blocks rejected, a state without it keeps the current settings.
+        SavestateSettingsOwners titled = owners;
+        nlohmann::json live = {{"damage_multiplier", 4}};
+        titled.TitleSettingsId = "mm3d";
+        titled.CaptureTitleSettings = [&live] { return std::optional<nlohmann::json>(live); };
+        titled.ApplyTitleSettings = [&live](const nlohmann::json& value, std::string* error) {
+            if (!value.contains("damage_multiplier")) { *error = "missing"; return false; }
+            live = value; return true;
+        };
+        const auto withTitle = CaptureSavestateSettings(titled);
+        const auto parsed = nlohmann::json::parse(withTitle);
+        Check(parsed.at("title").at("id") == "mm3d" && parsed.at("title").at("settings") == live,
+              "state lost the title settings");
+        live = {{"damage_multiplier", 1}};
+        const auto restored = ApplySavestateSettings(withTitle, titled);
+        Check(restored.Success && live.at("damage_multiplier") == 4 &&
+              std::find(restored.Lines.begin(), restored.Lines.end(), "Title settings: applied") != restored.Lines.end(),
+              "title settings were not restored");
+        auto foreign = parsed; foreign["title"]["id"] = "oot3d";
+        live = {{"damage_multiplier", 2}};
+        const auto kept = ApplySavestateSettings(foreign.dump(), titled);
+        Check(kept.Success && live.at("damage_multiplier") == 2, "another title's settings were applied");
+        auto damaged = parsed; damaged["title"]["settings"] = "x";
+        const auto rejected = ApplySavestateSettings(damaged.dump(), titled);
+        Check(!rejected.Success && live.at("damage_multiplier") == 2, "damaged title settings applied");
+        const auto absent = ApplySavestateSettings(captured, titled);
+        Check(absent.Success && live.at("damage_multiplier") == 2 &&
+              std::find(absent.Lines.begin(), absent.Lines.end(),
+                        "Title settings: not in this state, current kept") != absent.Lines.end(),
+              "a state without title settings changed or hid them");
+        Check(nlohmann::json::parse(CaptureSavestateSettings(owners)).count("title") == 0,
+              "a title without settings stored a title block");
+    }
     const auto before = CaptureSavestateSettings(owners);
     for (const auto* invalid : {"{", "[]", "{}", "{\"schema\":null}",
              "{\"schema\":\"1\"}", "{\"schema\":[]}", "{\"schema\":{}}",
