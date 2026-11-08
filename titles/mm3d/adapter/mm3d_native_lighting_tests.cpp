@@ -129,7 +129,8 @@ void TestLocalSourceGuards() {
 void TestRoundTwoSourcesConverted() {
     // F02a: Dno, Boss_Hakugin and Ot were native-retained; they must now be
     // selected as converted sources (fails on the 18-row table).
-    for (const uint16_t id : {uint16_t(0x117),uint16_t(0x16E),uint16_t(0x194),uint16_t(0x15F),uint16_t(0x197)}) {
+    for (const uint16_t id : {uint16_t(0x117),uint16_t(0x16E),uint16_t(0x194),uint16_t(0x15F),uint16_t(0x197),
+                              uint16_t(0x18F),uint16_t(0x122),uint16_t(0x17B)}) {
         bool present = false;
         for (const auto& source : kMm3dLocalLightSources) present |= source.Actor == id;
         Require(present,"round-2 native light source not converted");
@@ -141,14 +142,17 @@ void TestMultiRowActorOffsets() {
     // lights. Every row of one actor must be a distinct (Info,Node) pair, and
     // wiring all of them at once must publish each exactly once at its own
     // identity (no merged/duplicated rows).
-    const std::array<uint32_t,3> bigpoInfo{0x950,0x978,0x9A0}, bigpoNode{0x94C,0x974,0x99C};
-    uint32_t bigpoRows=0;
-    for (const auto& source : kMm3dLocalLightSources) if (source.Actor==0x197) {
-        Require(bigpoRows<3 && source.Info==bigpoInfo[bigpoRows] && source.Node==bigpoNode[bigpoRows],
-                "En_Bigpo row offset is not +0x950/+0x94C + i*0x28");
-        ++bigpoRows;
+    struct Expected { uint16_t Actor; uint32_t Count, Info0, InfoStride, Node0, NodeStride; };
+    for (const Expected e : {Expected{0x197,3,0x950,0x28,0x94C,0x28},Expected{0x122,2,0x508,0x1C,0x504,0x1C},
+                             Expected{0x17B,3,0x271C,0x18,0x2764,4}}) {
+        uint32_t row=0;
+        for (const auto& source : kMm3dLocalLightSources) if (source.Actor==e.Actor) {
+            Require(row<e.Count && source.Info==e.Info0+row*e.InfoStride && source.Node==e.Node0+row*e.NodeStride,
+                    "multi-row actor offset is not base + i*stride (Bigpo/Test6/Hanabi)");
+            ++row;
+        }
+        Require(row==e.Count,"multi-row actor has the wrong number of rows");
     }
-    Require(bigpoRows==3,"En_Bigpo must have exactly three rows");
     for (const auto& first : kMm3dLocalLightSources) {
         std::vector<const Mm3dLocalLightSource*> rows;
         for (const auto& source : kMm3dLocalLightSources)
