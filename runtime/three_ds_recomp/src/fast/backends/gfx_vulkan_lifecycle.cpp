@@ -328,10 +328,11 @@ void GfxRenderingAPIVulkan::Init() {
         // No prepared parts to link: specialized programs complete instead.
         mNativePicaPreparationMode = NativePicaPreparationMode::Complete;
     }
-    std::fprintf(stderr, "TRIAEVUM_TITLE_SHADER_PREPARATION prepared=%u always_available=%u pipeline_cache=%s\n",
+    // A log line (R-G1b-N1): no unconditional stderr output in the products.
+    SPDLOG_INFO("TRIAEVUM_TITLE_SHADER_PREPARATION prepared={} always_available={} pipeline_cache={}",
         unsigned(Renderer3ds::InstalledTitleShaderPreparation().Prepared),
         unsigned(mTitleShaderPreparationPlan.AlwaysAvailablePrograms),
-        VulkanPipelineCachePath(true).filename().string().c_str());
+        VulkanPipelineCachePath(true).filename().string());
     if (mNativePicaPreparationMode != NativePicaPreparationMode::Synchronous && !mPreparationQueue) {
         const unsigned hardware = std::max(1U, std::thread::hardware_concurrency());
         mPreparationQueue = std::make_unique<Renderer3ds::PicaPreparationQueue>(
