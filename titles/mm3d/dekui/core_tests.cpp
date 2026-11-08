@@ -190,6 +190,18 @@ void HelpersAndReplay() {
     const auto unchanged_s=cpu.s;
     core.CallSvc(1,cpu,memory);
     Check(cpu.r==unchanged && cpu.s==unchanged_s,"unknown SVC is inert");
+    unsigned emissions=0;
+    memory.data[cpu.r[4]+4]=0x10008000;memory.data[cpu.r[4]+0x28]=0x10009000;
+    core.host.layout_draw=[&](Memory&,U32 owner,U32 widget,U32 pass){
+        Check(owner==0x10008000&&widget==cpu.r[4]&&pass==~0u,"attached widget without LayoutBase context");++emissions;return false;
+    };
+    core.CallSvc(ButtonEmission::Svc,cpu,memory);
+    auto replay=unchanged;replay[0]=0x10009000;
+    Check(emissions==1&&cpu.r==replay&&cpu.s==unchanged_s&&cpu.flags==0x8fffffffu,"emission displaced load only; SP LR flags VFP intact");
+    core.host.layout_draw=[](Memory&,U32,U32,U32){return true;};
+    core.CallSvc(ButtonEmission::Svc,cpu,memory);replay[0]=0;
+    Check(cpu.r==replay&&cpu.s==unchanged_s&&cpu.flags==0x8fffffffu,"replacement uses native null geometry branch; children and ABI intact");
+    core.ResetButtonEmission();
     Check(!InventoryMenu::RestoreLegacy().empty(),"Qt legacy archive operation explicitly unavailable");
 }
 

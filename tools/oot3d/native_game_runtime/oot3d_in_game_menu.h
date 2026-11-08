@@ -110,6 +110,7 @@ struct InGameMenuOwners {
   // Gameplay rows the title implements outside a mod-owned profile; stored
   // in Controls. Empty for OoT3D (its TopScreen owner has its own rows).
   TitleGameplayOptionSet TitleGameplay{};
+  bool NativeButtonOverlay = false;
 };
 
 class InGameMenu {

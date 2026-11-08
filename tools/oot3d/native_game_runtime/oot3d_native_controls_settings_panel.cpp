@@ -198,8 +198,9 @@ class NativeControlsSettingsPanel final
   NativeControlsSettingsPanel(
       std::shared_ptr<NativeControlConfigRuntime> controls,
       std::shared_ptr<TopScreenUiConfigRuntime> topScreen,
-      TitleGameplayOptionSet titleGameplay)
-      : mControls(std::move(controls)), mTopScreen(std::move(topScreen)), mTitleGameplay(titleGameplay) {}
+      TitleGameplayOptionSet titleGameplay, bool nativeButtonOverlay)
+      : mControls(std::move(controls)), mTopScreen(std::move(topScreen)), mTitleGameplay(titleGameplay),
+        mNativeButtonOverlay(nativeButtonOverlay) {}
 
   [[nodiscard]] const char* Label() const noexcept override {
     return "Controls";
@@ -348,6 +349,7 @@ class NativeControlsSettingsPanel final
         mControlDraft.ControllerTouchpadEnabled = previous.ControllerTouchpadEnabled;
         mControlDraft.ControllerTouchpadIndex = previous.ControllerTouchpadIndex;
         mControlDraft.ButtonPrompts = previous.ButtonPrompts;
+        mControlDraft.NativeButtonLabels = previous.NativeButtonLabels;
         mControlDraft.Rumble = previous.Rumble;
         mControlDraft.QuickPutAway = previous.QuickPutAway;
         mControlDraft.RollDash = previous.RollDash;
@@ -386,9 +388,19 @@ class NativeControlsSettingsPanel final
       mControlDirty = true;
     }
     if (ImGui::IsItemHovered())
-      ImGui::SetTooltip("The buttons the in-game menu and its help show. Automatic follows the device used last.");
+      ImGui::SetTooltip("The button-glyph family for menus and controller labels. Automatic follows the device used last.");
     if (mControlDraft.ButtonPrompts == NativeButtonPrompts::Automatic)
       ImGui::TextDisabled("Now: %s", ThreeDsRecomp::Input::PromptSetLabel(mControls->AutomaticPromptSet()));
+    if (mNativeButtonOverlay) {
+      int labels = mControlDraft.NativeButtonLabels ? 0 : 1;
+      const char* choices[]{"Controller", "Original 3DS"};
+      if (ControlWidgets::Combo("Native button labels", &labels, choices, 2)) {
+        mControlDraft.NativeButtonLabels = labels == 0;
+        mControlDirty = true;
+      }
+      if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("MM3D native HUD and prompt labels. Original 3DS and touch leave native artwork intact.");
+    }
   }
 
   void SynchronizeDrafts() {
@@ -848,6 +860,7 @@ class NativeControlsSettingsPanel final
   // Gameplay rows the title implements itself (MM3D), kept in the controls
   // draft so the Esc menu's Game > Gameplay rows show the same state.
   TitleGameplayOptionSet mTitleGameplay;
+  bool mNativeButtonOverlay = false;
   NativeControlConfig mControlDraft;
   TopScreenUiConfig mTopDraft;
   NativeControlConfig mSavedControls;
@@ -873,9 +886,9 @@ std::shared_ptr<Fast::Extension::GraphicsSettingsPanelTab>
 CreateNativeControlsSettingsPanel(
     std::shared_ptr<NativeControlConfigRuntime> controls,
     std::shared_ptr<TopScreenUiConfigRuntime> topScreen,
-    TitleGameplayOptionSet titleGameplay) {
+    TitleGameplayOptionSet titleGameplay, bool nativeButtonOverlay) {
   return std::make_shared<NativeControlsSettingsPanel>(
-      std::move(controls), std::move(topScreen), titleGameplay);
+      std::move(controls), std::move(topScreen), titleGameplay, nativeButtonOverlay);
 }
 
 } // namespace Oot3dNativeGame

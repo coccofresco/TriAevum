@@ -1,5 +1,6 @@
 // Native A32 window session: one frame of the loop and the renderer-side work it schedules.
 #include "oot3d_native_a32_window_session.h"
+#include "oot3d_overlay_acceptance_driver.h"
 #include "fast/extension/visual_clock.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
@@ -143,6 +144,9 @@ void AppendTopScreenDpadPickerHoldRings(
 } // namespace
 
 bool NativeA32WindowSession::RunFrame() {
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  if(controlConfigRuntime) Oot3dNativeGame::DriveOverlayAcceptance(presentationFrameCount,*controlConfigRuntime);
+#endif
   auto &process = *processStorage;
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
   auto &window = *windowPointer;
@@ -807,6 +811,22 @@ bool NativeA32WindowSession::RunFrame() {
         throw std::runtime_error("integrated N64 UI presentation failed: " +
                                  renderError);
       }
+    });
+  }
+  if (titleSession && titleSession->HasButtonOverlay()) {
+    const auto canvas = Oot3d::Renderer::FitUiPresentationViewport(
+        std::max<uint32_t>(1U, uiRegion.Width), std::max<uint32_t>(1U, uiRegion.Height), 1280.f / 3.f, 240.f);
+    // The same presentation policy as native gameplay HUD spans. Do not
+    // blanket-hide dialogue/menu labels or change their native execution.
+    const bool gameplayHudVisible = !photoModeHudHidden &&
+        (!nativeCandidateDispatch.TopScreenUiProfile || activeTopScreenConfig.RenderHud);
+    auto primitives = titleSession->ButtonOverlay(float(canvas.Height) / 240.f, gameplayHudVisible);
+    auto prepared = n64UiRenderer.PrepareTextures(primitives);
+    renderStream.Submit([&, primitives = std::move(primitives), prepared = std::move(prepared), uiRegion]() mutable {
+      if (rendererFrameSkipped) { n64UiRenderer.Stage(std::move(prepared)); return; }
+      if (!n64UiRenderer.Render(primitives, uiRegion, oot3d::ui::N64UiCanvasMode::Widescreen16x9,
+                                std::move(prepared), &renderError))
+        throw std::runtime_error("native button overlay failed: " + renderError);
     });
   }
   // The game draws every anchored control in every scene, so a control never
@@ -1584,6 +1604,8 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
 
 // Runs the guest until it waits and drains the PICA work it submitted during the refresh.
 void NativeA32WindowSession::RunGuestRefresh() {
+  if (titleSession && controlConfigRuntime)
+    titleSession->ConfigureButtonOverlay(controlConfigRuntime->Snapshot().Config, controlConfigRuntime->ActivePromptSet());
   auto &hostServices = *hostServicesStorage;
   auto &process = *processStorage;
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
@@ -2119,7 +2141,10 @@ void NativeA32WindowSession::RunGuestRefresh() {
   picaStats.RefreshesWithNativeDraws += refreshHadNativeDraws ? 1U : 0U;
   // The native letters of this update (the state its draws are built from),
   // kept for the frame that presents them.
-  if (refreshHadNativeDraws) RecordNativeButtonLabels();
+  if (refreshHadNativeDraws) {
+    RecordNativeButtonLabels();
+    if (titleSession) titleSession->RecordButtonOverlay(lastSubmittedDrawId);
+  }
   phaseTiming.PicaSubmitSeconds += SecondsSince(picaSubmitStart);
 }
 
@@ -2277,6 +2302,8 @@ void NativeA32WindowSession::PresentVisualFrame(
                   presentedNativeLabels->ItemsLabels.clear();
               }
             }
+            if (titleSession) titleSession->SelectButtonOverlay(
+                finished->Draws.empty() ? 0 : finished->Draws.back().SubmissionId);
             frameActors = titleSession
                 ? titleSession->ActorInteractions(process.Memory(), finished->Sequence)
                 : Oot3dNativeGame::CollectNativeActorInteractions(

@@ -1239,7 +1239,8 @@ void NativeA32WindowSession::Setup() {
                   Oot3dNativeGame::Oot3dUiProfile::TopScreen
               ? topScreenConfigRuntime
               : nullptr,
-          titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{}));
+          titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{},
+          titleSession && titleSession->HasButtonOverlay()));
   if (launch.UiProfile ==
       Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
     applicationSettingsTabs.push_back(
@@ -1464,7 +1465,8 @@ void NativeA32WindowSession::Setup() {
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen ? topScreenConfigRuntime : nullptr,
       languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode, std::move(menuHost),
       Oot3dNativeGame::HostAudioOutputPolicy(),
-      titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{}});
+      titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{},
+      titleSession && titleSession->HasButtonOverlay()});
   // The first-play help card belongs to sessions a person plays: scripted
   // runs (captures, fixed steps, replays, the developer lab) never see it.
   // TRIAEVUM_HELP_CARD=1 or 0 overrides that, for qualification.
