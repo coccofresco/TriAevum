@@ -52,6 +52,7 @@ void TestMm3dSceneLighting() {
     Map(memory, 0x006A3000U, 0x1000U);
     Map(memory, 0x00790000U, 0x10000U);  // LightNode pool
     Map(memory, 0x08040000U, 0x10000U);  // play state
+    Map(memory, 0x0071B000U, 0x8000U);   // quad manager (P17b quad dump)
     constexpr uint32_t kPlay = 0x08045A70U;
     constexpr uint32_t kView = kPlay + kMm3dPlayViewOffset;
     Require(memory.Write32(kMm3dCurrentViewPointer, kView), "could not seed the current View");
@@ -157,6 +158,22 @@ void TestMm3dSceneLighting() {
     Require(tracker.Stats().LayoutOwners.size()==13&&tracker.Stats().LayoutOwners.at("HudUnknown")==1&&
             tracker.Stats().LayoutOwners.at("Hud")==1&&tracker.Stats().LayoutOwnersDropped==0,"layout owner dump");
     Require(!IsMm3dGameplayHud(kMm3dQuadQueueDrawEntry,kMm3dUiTag|1U),"mixed sprites never blanket HUD");
+    // P17b quad dump: queue 4's objects named by vtable, quad count and the
+    // first quad's position; a bad object pointer is skipped (negative).
+    {
+        constexpr uint32_t manager=0x0071B000U,object=0x08041000U,positions=0x08041400U;
+        Require(memory.Write32(manager+0x14U+4U*4U,2U)&&memory.Write32(manager+0x578U+4U*0x600U,object)&&
+                memory.Write32(manager+0x578U+4U*0x600U+4U,3U)&&memory.Write32(object,0x006E1234U)&&
+                memory.Write32(object+0x2C8U,1U)&&memory.Write32(object+0x2B8U,positions)&&
+                memory.Write32(positions,std::bit_cast<uint32_t>(282.0F))&&
+                memory.Write32(positions+4U,std::bit_cast<uint32_t>(215.0F)),"quad queue fixture");
+        state.r[1]=4U;
+        (void)pass(kMm3dQuadQueueDrawEntry,0x00110D88U,begin,begin+0x40);
+        Require(tracker.TakeCommandListCompositionSpans(begin,0x40,spans,&error),error);
+        begin+=0x40;
+        Require(tracker.Stats().QuadObjects.size()==1U&&
+                tracker.Stats().QuadObjects.count("q4 vt=006E1234 n=1 at=282,215")==1U,"quad object dump");
+    }
     Require(memory.Write32(resource+0x18,0xFFFFFFF0U),"bad name pointer");
     Require(ReadMm3dUiSubsystem(memory,layout)==Mm3dUiSubsystem::Unknown,"bad name bounded");
     // Clear test spans by reinitializing; legacy scope assertions below stand.

@@ -73,6 +73,10 @@ struct Mm3dNativePicaCompositionStats {
     // (bounded; later names count in LayoutOwnersDropped).
     std::map<std::string, uint64_t> LayoutOwners;
     uint64_t LayoutOwnersDropped = 0;
+    // P17b: objects in the quad queues 4/5 at the queue draw entry, keyed by
+    // queue, vtable, quad count and first-quad position (bounded likewise).
+    std::map<std::string, uint64_t> QuadObjects;
+    uint64_t QuadObjectsDropped = 0;
 };
 
 // Records the command-list byte range each native pass writes, with its
@@ -110,6 +114,7 @@ class Mm3dNativePicaCompositionTracker final
     }
 
   private:
+    void RecordQuadObjects(oot3d::recomp::a32::MemoryBus& memory, uint32_t queue);
     struct QueueOwner {
         uint32_t Model = 0; uint64_t Generation = 0;
         uint64_t Actor = 0; bool Shadow = false;

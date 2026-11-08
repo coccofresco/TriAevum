@@ -112,6 +112,34 @@ bool Mm3dNativePicaCompositionTracker::VerifyHooks(oot3d::recomp::a32::MemoryBus
     return true;
 }
 
+// P17b diagnostic: names the sprites a quad queue (manager 0x0071B000,
+// counts +0x14, objects +0x578, mm3d-dekui native_minimap.h) draws.
+void Mm3dNativePicaCompositionTracker::RecordQuadObjects(
+    oot3d::recomp::a32::MemoryBus& memory, uint32_t queue) {
+    constexpr uint32_t kManager = 0x0071B000U, kCapacity = 0x180U;
+    uint32_t count = 0;
+    if (queue > 7U || !memory.Read32(kManager + 0x14U + queue * 4U, &count) || count > kCapacity) return;
+    for (uint32_t i = 0; i < count; ++i) {
+        uint32_t object = 0, vtable = 0, quads = 0, positions = 0, x = 0, y = 0;
+        if (!memory.Read32(kManager + 0x578U + queue * 0x600U + i * 4U, &object) ||
+            object < 0x100000U || (object & 3U) || object > 0x3FFFFC00U ||
+            !memory.Read32(object, &vtable) || !memory.Read32(object + 0x2C8U, &quads)) continue;
+        float fx = 0.0F, fy = 0.0F;
+        if (quads && memory.Read32(object + 0x2B8U, &positions) && positions >= 0x100000U &&
+            !(positions & 3U) && positions < 0x3FFFFFF0U && memory.Read32(positions, &x) &&
+            memory.Read32(positions + 4U, &y)) {
+            fx = std::bit_cast<float>(x); fy = std::bit_cast<float>(y);
+        }
+        char key[96];
+        std::snprintf(key, sizeof key, "q%u vt=%08X n=%u at=%.0f,%.0f", queue, vtable, quads,
+                      std::isfinite(fx) ? fx : -1.0F, std::isfinite(fy) ? fy : -1.0F);
+        auto found = mStats.QuadObjects.find(key);
+        if (found != mStats.QuadObjects.end()) ++found->second;
+        else if (mStats.QuadObjects.size() < 64U) mStats.QuadObjects.emplace(key, 1U);
+        else ++mStats.QuadObjectsDropped;
+    }
+}
+
 Mm3dNativePicaCompositionTracker::Event
 Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     uint32_t pc, const oot3d::recomp::a32::GuestState& state,
@@ -324,6 +352,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (subsystem != Mm3dUiSubsystem::Unknown)
             mActive->Attribution.NativeValue = kMm3dUiTag | uint32_t(subsystem);
     }
+    if (scope->EntryPc == kMm3dQuadQueueDrawEntry) RecordQuadObjects(memory, state.r[1]);
     if (scope->Layer == Oot3dPicaCompositionLayer::OpaqueWorld) {
         ++mStats.SceneFrames;
         const uint64_t frame = mStats.SceneFrames;
