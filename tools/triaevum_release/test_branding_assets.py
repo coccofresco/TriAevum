@@ -141,9 +141,27 @@ class MM3DBrandingTests(unittest.TestCase):
         self.assertLess(len(background), 500_000)
         text = (MM3D_BRANDING / "mm3d_window_icon_rgba.inc").read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"0x[0-9a-f]{2}", text)), 64 * 64 * 4)
-        # Owner-deferred or without a product path: no Android or Linux outputs.
-        self.assertFalse((MM3D_BRANDING / "linux").exists())
+        # Android is owner-deferred: no Android outputs.
         self.assertFalse((MM3D_BRANDING / "android").exists())
+
+    def test_linux_icons_and_desktop_entry(self):
+        # Owner decisions 2026-11-08: the MM3D product's hicolor icons under
+        # its application ID, and its AppImage desktop entry (titles/mm3d/linux).
+        app_id = "io.github.coccofresco.TriAevum.MM3D"
+        hicolor = MM3D_BRANDING / "linux/hicolor"
+        for size in (64, 128, 256, 512):
+            for name in (app_id, f"{app_id}.Forge"):
+                path = hicolor / f"{size}x{size}/apps/{name}.png"
+                self.assertEqual(png_size(path.read_bytes()), (size, size), path)
+                other = BRANDING / f"linux/hicolor/{size}x{size}/apps/{name.replace('.MM3D', '')}.png"
+                self.assertNotEqual(path.read_bytes(), other.read_bytes(), path)
+        # Negative: no OoT3D-named icon in the MM tree.
+        self.assertEqual(sorted(p.name for p in hicolor.glob("*/apps/*.png") if ".MM3D" not in p.name), [])
+        entry = (ROOT / f"titles/mm3d/linux/appimage/{app_id}.desktop").read_text(encoding="utf-8")
+        main, _, actions = entry.partition("\n[Desktop Action")
+        self.assertIn("\nName=TriAevum \u2014 Moonfall Curse\n", main)
+        self.assertIn(f"\nIcon={app_id}\n", main)
+        self.assertIn(f"\nIcon={app_id}.Forge\n", actions[actions.index(" Forge]"):])
 
     def test_outputs_differ_from_oot3d(self):
         for relative in ("windows/triaevum.ico", "windows/forge.ico", "forge/forge_window_icon.png",

@@ -46,14 +46,18 @@ Pillow/zlib version (generated with Pillow 10.4.0, Python 3.13.8).
 | `forge/forge_window_icon.png` | 256 | The MM3D Forge's window icon (`theme.rs`, `#[cfg(feature = "title-mm3d")]`) |
 | `mm3d_window_icon_rgba.inc` | 64x64 RGBA | `titles/mm3d/adapter/mm3d_window_icon.cpp` (`Mm3dWindowIcon`), returned by the MM3D title session's `WindowIcon()`; the host passes it to `Fast::WindowIconImage` / `SDL_SetWindowIcon` (X11, macOS) |
 
+Linux (owner decisions 2026-11-08, LINUX lane round 10): `linux/hicolor/<N>x<N>/apps/`
+holds `io.github.coccofresco.TriAevum.MM3D.png` and `.Forge.png` at 64, 128, 256 and 512
+(the MM product's application ID, forge-catalog `title.rs` `MM3D.package_identity`),
+consumed by `appimage_package.py --title mm3d` with the desktop entry
+`titles/mm3d/linux/appimage/io.github.coccofresco.TriAevum.MM3D.desktop`
+("TriAevum — Moonfall Curse"; `Exec=AppRun`, the bundled Forge that plays the
+installed game, as OoT3D's entry). The MM Flatpak manifest is not made yet
+(the per-title Flatpak is in the LINUX lane's gap list).
+
 Not generated for MM3D:
 
 - Android launcher icons: Android is owner-deferred.
-- Linux hicolor icons: the per-title release preparation (INTEG's
-  `title_release.py`) has no Linux desktop entry for the MM product (the
-  AppImage and Flatpak entries name only `io.github.coccofresco.TriAevum`).
-  When an MM desktop entry exists, set `"linux": True` for `mm3d` in
-  `generate_branding.py` `TITLES` with its own application id.
 
 ## The Forge window
 

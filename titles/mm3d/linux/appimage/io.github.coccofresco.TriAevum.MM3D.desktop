@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=TriAevum — Moonfall Curse
+Comment=Prepare and play your personal Majora's Mask 3D dump
+Exec=AppRun
+Icon=io.github.coccofresco.TriAevum.MM3D
+Terminal=false
+Categories=Game;
+Actions=Play;Forge;
+
+[Desktop Action Play]
+Name=Play
+Exec=AppRun
+
+[Desktop Action Forge]
+Name=Prepare or repair game
+Exec=AppRun --forge
+Icon=io.github.coccofresco.TriAevum.MM3D.Forge

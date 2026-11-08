@@ -68,6 +68,34 @@ class AppImageTests(unittest.TestCase):
             for forbidden in ("SDL_GAMECONTROLLERCONFIG=", "SDL_VIDEODRIVER=", "DISPLAY=", "unset LD_PRELOAD", "flatpak run"):
                 self.assertNotIn(forbidden, launcher)
 
+    def test_mm3d_appdir_names_its_product_with_its_icons(self):
+        # Owner decisions 2026-11-08: the MM3D product's desktop entry and
+        # icons (titles/mm3d); OoT3D's stay the default.
+        from tools.triaevum_release import appimage_package
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_linux_package(root / "package")
+            appdir = stage_appimage(root / "package", root / "AppDir", title="mm3d")
+            app_id = "io.github.coccofresco.TriAevum.MM3D"
+            entry = (appdir / f"{app_id}.desktop").read_text(encoding="utf-8")
+            self.assertIn("Name=TriAevum \u2014 Moonfall Curse", entry)
+            self.assertIn("Exec=AppRun", entry)
+            self.assertFalse((appdir / "io.github.coccofresco.TriAevum.desktop").exists())
+            for icon in (f"{app_id}.png", ".DirIcon", f"usr/share/icons/hicolor/512x512/apps/{app_id}.png",
+                         f"usr/share/icons/hicolor/64x64/apps/{app_id}.Forge.png"):
+                self.assertTrue((appdir / icon).read_bytes().startswith(b"\x89PNG"), icon)
+            self.assertEqual(sorted(p.name for p in (appdir / "usr/share/icons/hicolor/64x64/apps").iterdir()),
+                             [f"{app_id}.Forge.png", f"{app_id}.png"])
+            # Negatives: an entry naming the other product, an unknown title.
+            wrong = root / "wrong.desktop"
+            wrong.write_text(appimage_package.TITLES["oot3d"]["desktop"].read_text(encoding="utf-8"), encoding="utf-8")
+            with patch.dict(appimage_package.TITLES["mm3d"], {"desktop": wrong}):
+                with self.assertRaisesRegex(ValueError, "does not name its product"):
+                    stage_appimage(root / "package", root / "AppDir2", title="mm3d")
+            self.assertFalse((root / "AppDir2").exists())
+            with self.assertRaisesRegex(ValueError, "Unknown title"):
+                stage_appimage(root / "package", root / "AppDir3", title="other")
+
     def test_rejects_windows_private_data_and_existing_output(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
