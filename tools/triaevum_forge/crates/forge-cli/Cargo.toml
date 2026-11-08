@@ -12,7 +12,7 @@ name = "triaevum-forge"
 path = "src/main.rs"
 
 [features]
-# The per-title MM3D Forge (default: OoT3D).
+# The MM3D Forge (installed game executable "Moonfall_Curse.exe").
 title-mm3d = ["forge-core/title-mm3d"]
 
 [dependencies]

@@ -10,12 +10,27 @@
 use eframe::egui::{self, pos2, vec2, Color32, CornerRadius, Frame, Margin, Rect, Stroke, Vec2};
 
 /// The owner's artwork (tools/triaevum_release/branding).
+#[cfg(not(feature = "title-mm3d"))]
 const BACKGROUND_JPEG: &[u8] = include_bytes!("../../../../triaevum_release/branding/masters/forge_background.jpg");
+#[cfg(not(feature = "title-mm3d"))]
 const WINDOW_ICON_PNG: &[u8] = include_bytes!("../../../../triaevum_release/branding/forge/forge_window_icon.png");
+/// The MM3D Forge's artwork (titles/mm3d/branding, supplied by the project
+/// owner 2026-11-08): Clock Town under the falling moon, the steel Majora's
+/// Mask.
+#[cfg(feature = "title-mm3d")]
+const BACKGROUND_JPEG: &[u8] = include_bytes!("../../../../../titles/mm3d/branding/masters/forge_background.jpg");
+#[cfg(feature = "title-mm3d")]
+const WINDOW_ICON_PNG: &[u8] = include_bytes!("../../../../../titles/mm3d/branding/forge/forge_window_icon.png");
 
 /// The Master Sword in the art, as fractions of its width and height: the
 /// crop keeps it in view.
+#[cfg(not(feature = "title-mm3d"))]
 const FOCUS: Vec2 = vec2(0.775, 0.45);
+/// The clock tower's face in the MM3D art (the moon is above and left of it):
+/// the crop keeps the clock in view as the OoT3D crop keeps the sword (anchor
+/// confirmed by the owner 2026-11-08).
+#[cfg(feature = "title-mm3d")]
+const FOCUS: Vec2 = vec2(0.84, 0.40);
 /// Where the sword lands across a window narrower than the art: near the
 /// right edge, beside the page panel once the window is wide.
 const FOCUS_TARGET_X: f32 = 0.80;
@@ -211,6 +226,22 @@ mod tests {
         assert_eq!((art.width(), art.height()), (1672, 941));
         let icon = window_icon();
         assert_eq!((icon.width, icon.height), (256, 256));
+    }
+
+    /// The MM3D Forge carries its own art (titles/mm3d/branding), not OoT3D's.
+    #[cfg(feature = "title-mm3d")]
+    #[test]
+    fn the_mm3d_forge_compiles_in_its_own_art() {
+        const OOT3D_BACKGROUND: &[u8] =
+            include_bytes!("../../../../triaevum_release/branding/masters/forge_background.jpg");
+        const OOT3D_ICON: &[u8] = include_bytes!("../../../../triaevum_release/branding/forge/forge_window_icon.png");
+        assert_ne!(BACKGROUND_JPEG, OOT3D_BACKGROUND);
+        assert_ne!(WINDOW_ICON_PNG, OOT3D_ICON);
+        let art = image::load_from_memory_with_format(BACKGROUND_JPEG, image::ImageFormat::Jpeg).unwrap();
+        assert_eq!((art.width(), art.height()), (1672, 941));
+        let icon = image::load_from_memory_with_format(WINDOW_ICON_PNG, image::ImageFormat::Png).unwrap();
+        assert_eq!((icon.width(), icon.height()), (256, 256));
+        assert_eq!(FOCUS, vec2(0.84, 0.40));
     }
 
     fn linear(channel: u8) -> f64 {

@@ -12,6 +12,31 @@ use serde_json::{Map, Value};
 
 use crate::pyjson::py_str;
 
+/// The installed Windows game executable takes the PRODUCT name (owner
+/// decision 2026-11-08): a title fact, `windows_executable` of
+/// `titles/<title>/product.json`. The Forge is built per title, so the MM3D
+/// Forge (feature `title-mm3d`) installs "Moonfall_Curse.exe" and the OoT3D
+/// Forge "Echoes_of_Time.exe". The package keeps the build output
+/// `runtime/TriAevum.exe`; Forge's install step renames it.
+#[cfg(not(feature = "title-mm3d"))]
+pub const WINDOWS_PRODUCT_EXECUTABLE: &str = "Echoes_of_Time.exe";
+#[cfg(feature = "title-mm3d")]
+pub const WINDOWS_PRODUCT_EXECUTABLE: &str = "Moonfall_Curse.exe";
+/// The root runtime of Windows installations made before the product names:
+/// removed when Forge places the renamed one.
+pub const LEGACY_WINDOWS_RUNTIME: &str = "TriAevum.exe";
+/// The launch profile name of those installations.
+pub const LEGACY_LAUNCH_PROFILE: &str = "TriAevum.launch.json";
+
+/// The launch profile the runtime finds by itself when started without
+/// arguments: its executable's stem with `.launch.json`
+/// (`DefaultNativeGameLaunchProfilePath`), so it follows the installed name.
+pub fn launch_profile_name(installed_runtime: &str) -> String {
+    let name = installed_runtime.rsplit('/').next().unwrap_or(installed_runtime);
+    let stem = name.strip_suffix(".exe").unwrap_or(name);
+    format!("{stem}.launch.json")
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReleasePlatform {
     pub target: &'static str,
@@ -39,7 +64,7 @@ pub const WINDOWS: ReleasePlatform = ReleasePlatform {
     archiver: "llvm-lib.exe",
     support_library: "triaevum_title_whole_aot_support.lib",
     archive_suffix: ".zip",
-    installed_runtime: "TriAevum.exe",
+    installed_runtime: WINDOWS_PRODUCT_EXECUTABLE,
 };
 
 pub const LINUX: ReleasePlatform = ReleasePlatform {
@@ -188,5 +213,21 @@ mod tests {
         assert_eq!(error.message, "Unsupported release target: aarch64-unknown-linux-gnu");
         let error = catalog_platform(json!({"target": null}).as_object().unwrap()).unwrap_err();
         assert_eq!(error.message, "Unsupported release target: None");
+    }
+
+    /// The product name is the title fact of `titles/<title>/product.json`.
+    #[test]
+    fn windows_executable_is_the_title_product_name() {
+        #[cfg(not(feature = "title-mm3d"))]
+        let (facts, expected) = (include_str!("../../../../../titles/oot3d/product.json"), "Echoes_of_Time.exe");
+        #[cfg(feature = "title-mm3d")]
+        let (facts, expected) = (include_str!("../../../../../titles/mm3d/product.json"), "Moonfall_Curse.exe");
+        let facts: Value = serde_json::from_str(facts).unwrap();
+        assert_eq!(facts["windows_executable"], expected);
+        assert_eq!(WINDOWS.installed_runtime, expected);
+        assert_eq!(WINDOWS.runtime, "runtime/TriAevum.exe");
+        assert_ne!(WINDOWS.installed_runtime, LEGACY_WINDOWS_RUNTIME);
+        assert_eq!(launch_profile_name(WINDOWS.installed_runtime), expected.replace(".exe", ".launch.json"));
+        assert_eq!(launch_profile_name(LINUX.installed_runtime), LEGACY_LAUNCH_PROFILE);
     }
 }

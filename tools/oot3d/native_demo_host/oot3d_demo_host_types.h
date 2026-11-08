@@ -1,5 +1,7 @@
 #pragma once
 
+#include "fast/WindowIcon.h"
+
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -42,6 +44,9 @@ struct Args {
     int32_t AudioDesiredBuffered = 2480;
     int32_t BackendId = -1;
     std::string Renderer = "nri";
+    // The active title's window icon (TitleSession::WindowIcon); null: the
+    // game icon (TriAevumWindowIcon).
+    const Fast::WindowIconImage* WindowIcon = nullptr;
 
     // Fixed simulation steps reproduce a run frame for frame, so the renderer
     // must not let compile timing choose a draw's program. A throughput

@@ -163,9 +163,10 @@ impl Fixture {
         Self { _directory: directory, package, extracted, android }
     }
 
-    /// Windows keeps the launch profile in data/, Linux beside the runtime.
+    /// Windows keeps the launch profile in data/, Linux beside the runtime;
+    /// it is named after the installed executable (the product name).
     pub fn launch_profile(&self) -> PathBuf {
-        installation_state(&self.package, HostOs::current()).join("TriAevum.launch.json")
+        installation_state(&self.package, HostOs::current()).join(launch_profile_name())
     }
 
     pub fn data(&self) -> PathBuf {
@@ -277,4 +278,12 @@ impl NativeServices for FakeRuntime {
     fn prepare_device_pipelines(&self, _: &DeviceJob, _: &CancelToken, _: Report<'_>) -> Result<i64> {
         Err(ForgeError::internal("unexpected device job"))
     }
+}
+
+/// The desktop launch profile's name: the installed executable's stem
+/// (`Echoes_of_Time.launch.json` on Windows, `Moonfall_Curse.launch.json` for
+/// the MM3D Forge, `TriAevum.launch.json` on Linux).
+#[allow(dead_code)]
+pub fn launch_profile_name() -> String {
+    forge_catalog::platform::launch_profile_name(forge_core::layout::host_platform().unwrap().installed_runtime)
 }

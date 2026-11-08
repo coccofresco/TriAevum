@@ -11,6 +11,11 @@ publish.workspace = true
 name = "triaevum-update-helper"
 path = "src/main.rs"
 
+[features]
+# The MM3D Forge's helper: the steel-mask icon (titles/mm3d/branding) and the
+# MM3D product executable name.
+title-mm3d = ["forge-core/title-mm3d"]
+
 [dependencies]
 # Statically linked: the helper runs from the staging folder and depends on
 # no file of the package it replaces.

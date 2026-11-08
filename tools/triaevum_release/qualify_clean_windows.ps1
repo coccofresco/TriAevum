@@ -97,8 +97,10 @@ try {
     $capturePath = Join-Path $outputPath 'framebuffer.bmp'
     # The first launch renders under the preparation screen (about 30 s on
     # the reference PC) before frame 600 can be captured.
-    Invoke-RecordedProcess 'runtime' (Join-Path $installation 'TriAevum.exe') @(
-        '--launch-profile', (Join-Path $installation 'data/TriAevum.launch.json'),
+    # The OoT3D product's installed name (titles/oot3d/product.json); Forge
+    # names the launch profile after it.
+    Invoke-RecordedProcess 'runtime' (Join-Path $installation 'Echoes_of_Time.exe') @(
+        '--launch-profile', (Join-Path $installation 'data/Echoes_of_Time.launch.json'),
         '--frames', '1200', '--max-seconds', '120', '--benchmark-warmup-frames', '60',
         '--output', $statePath, '--screenshot', $capturePath, '--screenshot-start-frame', '600') 240
     $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json

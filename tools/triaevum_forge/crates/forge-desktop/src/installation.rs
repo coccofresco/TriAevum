@@ -84,7 +84,7 @@ mod tests {
         std::fs::write(installation.root.join(packaged), b"{}").unwrap();
         assert!(installation.recipes().ends_with(packaged));
         if cfg!(all(windows, target_arch = "x86_64")) {
-            assert_eq!(installation.runtime_path().unwrap(), installation.root.join("TriAevum.exe"));
+            assert_eq!(installation.runtime_path().unwrap(), installation.root.join(forge_catalog::platform::WINDOWS_PRODUCT_EXECUTABLE));
         }
     }
 }

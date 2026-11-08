@@ -1159,6 +1159,8 @@ void NativeA32WindowSession::Setup() {
       });
 
   hostArgs = launch.Host;
+  // The active title's window icon (OoT3D: none, the game icon).
+  hostArgs.WindowIcon = titleSession ? titleSession->WindowIcon() : nullptr;
   if (const char* productName = Oot3dNativeGame::TitleProductName(titleAdapter)) {
     hostArgs.ApplicationName = productName;
   }

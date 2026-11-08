@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from bundle_paths import distribution_path, distribution_root, installation_root
 from host_layout import installation_state
+from release_platform import host_platform, launch_profile_name
 import forge
 import forge_gui
 
@@ -31,11 +32,11 @@ class BundlePathTests(unittest.TestCase):
                     self.assertEqual(forge_gui.default_gui_data_root(), package / "data")
                     self.assertEqual(forge.default_active_title_state_path(), package / "data/active-title.json")
                     self.assertEqual(forge.default_translation_cache_root(), package / "data/translator-cache")
-                    self.assertEqual(forge.default_runtime_launch_profile_path(), installation_state(package) / "TriAevum.launch.json")
-                    # An older installation keeps its root profile.
+                    self.assertEqual(forge.default_runtime_launch_profile_path(), installation_state(package) / launch_profile_name(host_platform()))
+                    # An older installation keeps its root profile (named after the executable).
                     package.mkdir(parents=True, exist_ok=True)
-                    (package / "TriAevum.launch.json").write_text("{}")
-                    self.assertEqual(forge.default_runtime_launch_profile_path(), package / "TriAevum.launch.json")
+                    (package / launch_profile_name(host_platform())).write_text("{}")
+                    self.assertEqual(forge.default_runtime_launch_profile_path(), package / launch_profile_name(host_platform()))
             self.assertFalse((root / "appdata").exists())
             self.assertFalse((root / "home").exists())
             self.assertFalse((root / "xdg").exists())

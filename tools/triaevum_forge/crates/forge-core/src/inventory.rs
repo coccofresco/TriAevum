@@ -81,7 +81,13 @@ use crate::session::{self, Activity, ACTIVATION_DIRECTORY, INSTALLATION_LOCK};
 pub const FORMAT: &str = "triaevum_inventory_v1";
 pub const REQUEST_FORMAT: &str = "triaevum_forge_inventory_v1";
 
-const DESKTOP_LAUNCH_PROFILE: &str = "TriAevum.launch.json";
+/// The desktop launch profile: named after the installed executable
+/// (`forge_catalog::platform::launch_profile_name`).
+fn desktop_launch_profile() -> String {
+    layout::host_platform()
+        .map(|platform| forge_catalog::platform::launch_profile_name(platform.installed_runtime))
+        .unwrap_or_else(|_| forge_catalog::platform::LEGACY_LAUNCH_PROFILE.to_owned())
+}
 const DESKTOP_CONFIG: &str = "TriAevum.json";
 const ANDROID_HOST_CONFIG: &str = "TriAevum.android.host.json";
 /// The texture title the runtime uses unless `OOT3D_AZAHAR_TITLE_ID` names
@@ -679,10 +685,14 @@ impl Resolver<'_> {
         } else {
             // An installation made before the profile moved to data/ keeps
             // its root profile, which the runtime prefers.
-            let legacy = activation.join(DESKTOP_LAUNCH_PROFILE);
-            let current = self.roots.state.join(DESKTOP_LAUNCH_PROFILE);
+            let legacy = activation.join(desktop_launch_profile());
+            let current = self.roots.state.join(desktop_launch_profile());
+            // One activated before the product names keeps TriAevum.launch.json.
+            let unrenamed = self.roots.state.join(forge_catalog::platform::LEGACY_LAUNCH_PROFILE);
             if legacy.is_file() && !same_path(&legacy, &current) {
                 (legacy, Origin::Legacy)
+            } else if !current.is_file() && unrenamed.is_file() && !same_path(&unrenamed, &current) {
+                (unrenamed, Origin::Legacy)
             } else {
                 (current, Origin::Default)
             }

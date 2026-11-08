@@ -8,7 +8,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [features]
-# Build the per-title MM3D Forge (default: OoT3D).
+# The MM3D Forge: the installed game executable is "Moonfall_Curse.exe".
 title-mm3d = []
 
 [dependencies]

@@ -11,13 +11,19 @@ installations; do not delete user data or republish older release artifacts.
 ## Windows: Portable Is the Default
 
 - Extract into a user-writable folder, run `TriAevumForge.exe`, select the
-  decrypted personal ROM, then run `TriAevum.exe`. No installer, administrator
+  decrypted personal ROM, then run the game, `Echoes_of_Time.exe` (the MM3D
+  product's Forge installs `Moonfall_Curse.exe`). No installer, administrator
   permission, registry registration or compiler is required.
 - The package root holds only `TriAevumForge.exe`, `README.md` and `LICENSE`.
   The runtime and its DLLs are in `runtime/`, notices and the release manifest
-  in `docs/`. Installing a title moves `runtime/TriAevum.exe` to the root (and
-  removes root DLLs an older package left there, which would shadow the new
-  ones); the runtime loads its DLLs from `runtime/`.
+  in `docs/`. Installing a title moves `runtime/TriAevum.exe` to the root under the
+  product's name (`titles/<title>/product.json`: `Echoes_of_Time.exe`,
+  `Moonfall_Curse.exe`; owner decision 2026-11-08), removes the root
+  `TriAevum.exe` an older installation had, and removes root DLLs an older
+  package left there, which would shadow the new ones; the runtime loads its
+  DLLs from `runtime/`. The launch profile is named after the installed
+  executable (`data/Echoes_of_Time.launch.json`), the name the runtime looks
+  for when it is started directly.
 - Application-managed content, configuration, profiles, saves, downloads and
   caches remain beside the application. `data/` owns persistent user data, the
   launch profile and Forge's activation journal and lock; the private-plugin

@@ -1,0 +1,6 @@
+{
+  "_about": "MM3D product facts (owner decision 2026-11-08, BRANDING answer 1): the installed game executable takes the product name. The build output stays TriAevum.exe (runtime/TriAevum.exe in the package); the MM3D Forge (feature title-mm3d) renames it at install (forge-catalog platform.rs WINDOWS_PRODUCT_EXECUTABLE). Guard words: Moonfall Curse, Majora's Mask 3D.",
+  "title": "mm3d",
+  "product_name": "Moonfall Curse",
+  "windows_executable": "Moonfall_Curse.exe"
+}

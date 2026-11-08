@@ -153,13 +153,16 @@ pub fn default_runtime_plugin_path(package_root: &Path) -> Result<PathBuf> {
 /// `forge.default_runtime_launch_profile_path()`: an installation made before
 /// the profile moved to data/ keeps its root profile (the runtime prefers a
 /// profile beside it, so a second one would go stale).
+/// The profile is named after the installed executable (the product name on
+/// Windows), the name the runtime itself looks for when started directly.
 pub fn default_runtime_launch_profile_path(package_root: &Path) -> Result<PathBuf> {
     let activation = package_layout(package_root)?.activation;
-    let legacy = activation.join("TriAevum.launch.json");
+    let name = forge_catalog::platform::launch_profile_name(layout::host_platform()?.installed_runtime);
+    let legacy = activation.join(&name);
     if legacy.is_file() {
         return Ok(legacy);
     }
-    Ok(installation_state(&activation, HostOs::current()).join("TriAevum.launch.json"))
+    Ok(installation_state(&activation, HostOs::current()).join(name))
 }
 
 /// `forge.DEFAULT_RECIPES`. The Rust Forge has no separate distribution

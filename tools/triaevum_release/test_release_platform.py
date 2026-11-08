@@ -12,8 +12,9 @@ import forge
 import forge_gui
 import precompiled_titles
 from common import atomic_write_json, sha256_file
-from release_platform import (WINDOWS, LINUX, MACOS, catalog_platform, for_target, host_platform,
-                              installed_runtime_path, place_installed_runtime)
+from release_platform import (WINDOWS, LINUX, MACOS, catalog_platform, for_target, for_title, host_platform,
+                              installed_runtime_path, launch_profile_name, place_installed_runtime,
+                              product_executable)
 
 
 class ReleasePlatformTests(unittest.TestCase):
@@ -58,14 +59,16 @@ class ReleasePlatformTests(unittest.TestCase):
             (root / "SDL2.dll").write_bytes(b"old library")
             (root / "unrelated.dll").write_bytes(b"user file")
             self.assertEqual(installed_runtime_path(root, WINDOWS), root / WINDOWS.runtime)
-            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
-            self.assertEqual((root / "TriAevum.exe").read_bytes(), b"new runtime")
+            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "Echoes_of_Time.exe")
+            self.assertEqual((root / "Echoes_of_Time.exe").read_bytes(), b"new runtime")
+            # The product name replaces the pre-product root runtime.
+            self.assertFalse((root / "TriAevum.exe").exists())
             self.assertFalse((root / WINDOWS.runtime).exists())
             self.assertFalse((root / "SDL2.dll").exists())
             self.assertTrue((root / "runtime/SDL2.dll").is_file())
             self.assertTrue((root / "unrelated.dll").is_file())
-            self.assertEqual(installed_runtime_path(root, WINDOWS), root / "TriAevum.exe")
-            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
+            self.assertEqual(installed_runtime_path(root, WINDOWS), root / "Echoes_of_Time.exe")
+            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "Echoes_of_Time.exe")
             (root / LINUX.runtime).write_bytes(b"linux runtime")
             self.assertEqual(place_installed_runtime(root, LINUX), root / LINUX.runtime)
             self.assertTrue((root / LINUX.runtime).is_file())
@@ -87,15 +90,39 @@ class ReleasePlatformTests(unittest.TestCase):
                 return unlink(path, *args, **kwargs)
 
             with patch.object(Path, "unlink", loaded):
-                self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
+                self.assertEqual(place_installed_runtime(root, WINDOWS), root / "Echoes_of_Time.exe")
             self.assertFalse((root / "vcruntime140.dll").exists())
             self.assertFalse((root / ".SDL2.dll.1.stale").exists())
             self.assertEqual([path.read_bytes() for path in root.glob(".vcruntime140.dll.*.stale")],
                              [b"old crt"])
-            self.assertEqual((root / "TriAevum.exe").read_bytes(), b"new runtime")
+            self.assertEqual((root / "Echoes_of_Time.exe").read_bytes(), b"new runtime")
             # Once released, the next run removes the renamed library.
-            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "TriAevum.exe")
+            self.assertEqual(place_installed_runtime(root, WINDOWS), root / "Echoes_of_Time.exe")
             self.assertEqual(list(root.glob(".*.stale")), [])
+
+    def test_the_installed_executable_takes_the_product_name(self):
+        # Owner decision 2026-11-08: titles/<title>/product.json.
+        self.assertEqual(product_executable("oot3d"), "Echoes_of_Time.exe")
+        self.assertEqual(WINDOWS.installed_runtime, product_executable("oot3d"))
+        self.assertEqual(launch_profile_name(WINDOWS), "Echoes_of_Time.launch.json")
+        self.assertEqual(launch_profile_name(LINUX), "TriAevum.launch.json")
+        mm3d = for_title("mm3d")
+        self.assertEqual(mm3d.installed_runtime, "Moonfall_Curse.exe")
+        self.assertEqual(mm3d.runtime, "runtime/TriAevum.exe")
+        self.assertEqual(launch_profile_name(mm3d), "Moonfall_Curse.launch.json")
+        self.assertEqual(for_title("mm3d", LINUX), LINUX)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "runtime").mkdir()
+            (root / WINDOWS.runtime).write_bytes(b"new runtime")
+            (root / "TriAevum.exe").write_bytes(b"old runtime")
+            self.assertEqual(place_installed_runtime(root, mm3d), root / "Moonfall_Curse.exe")
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["Moonfall_Curse.exe", "runtime"])
+            # Negative: a title whose facts disagree is refused.
+            (root / "bad").mkdir()
+            (root / "bad/product.json").write_text('{"title": "other", "windows_executable": "x.exe"}')
+            with self.assertRaisesRegex(ValueError, "Invalid product facts for bad"):
+                product_executable("bad", root)
 
     def test_legacy_windows_and_explicit_linux(self):
         self.assertEqual(catalog_platform({}), WINDOWS)
