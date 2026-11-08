@@ -8,6 +8,8 @@
 #include "fast/renderer3ds/pica_surface_appearance.h"
 #include "fast/extension/pica_rim_light.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
+#include "fast/renderer3ds/shadow_caster_stability_trace.h"
+#include "fast/renderer3ds/shadow_caster_view_lag_probe.h"
 #include "fast/renderer3ds/pica_surface_emission.h"
 #include "fast/renderer3ds/pica_native_point_replacement.h"
 #include "fast/extension/grass_interaction_bridge.h"
@@ -16,11 +18,22 @@
 #include "fast/extension/grass_placement_audit.h"
 #include "fast/extension/grass_stage_profile.h"
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 
 namespace Fast {
+namespace {
+// Developer diagnostic, F11 read timing (shadow_caster_view_lag_probe.h).
+[[maybe_unused]] bool ShadowCasterViewLagRequested() {
+    static const bool requested = [] {
+        const char* value = std::getenv("TRIAEVUM_SHADOW_CASTER_VIEW_LAG");
+        return value != nullptr && value[0] != 0 && value[0] != '0';
+    }();
+    return requested;
+}
+} // namespace
 
 bool PublishNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t frameId,
                                    std::unordered_map<uint64_t, uint32_t>& occurrences,
@@ -636,6 +649,32 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         shadowCaster.Dynamic =
             draw.Composition.NativeActorGeometry && !draw.Composition.StaticShadowCacheEligible;
         shadowCaster.OwnerIdentity = draw.Composition.NativeActorIdentity;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+        // F11 read timing (shadow_caster_view_lag_probe.h): rigid casters,
+        // world rebuilt with this frame's and the last frame's view.
+        if (ShadowCasterViewLagRequested() && resolution.Cacheable &&
+            shadowCaster.VersionState == Renderer3ds::VirtualShadowCasterVersionState::Rigid) {
+            static Renderer3ds::ShadowCasterViewLagProbe viewLag;
+            const auto* transform = draw.TemporalVertexProgram.Hooks.TransformProgram();
+            const auto floats = draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset);
+            Renderer3ds::ShadowMatrix postView, model;
+            if (transform && Renderer3ds::VertexGeometry::UniformMatrix(floats, transform->ViewFirstUniform, postView) &&
+                Renderer3ds::VertexGeometry::UniformMatrix(floats, transform->ModelFirstUniform, model)) {
+                viewLag.BeginFrame(mFrameCounter, viewToWorld);
+                const auto& identity = draw.Composition.TemporalIdentity;
+                uint64_t key = geometry.Identity;
+                for (const uint64_t value : {identity.Owner, identity.Instance, identity.Part, identity.Slot,
+                                             identity.Lifetime})
+                    key = Renderer3ds::ShadowCasterStabilityTrace::Mix(key ^ value);
+                viewLag.Observe(key, postView, model);
+                static uint64_t reported = 0;
+                if (mFrameCounter >= reported + 120U) {
+                    reported = mFrameCounter;
+                    std::fprintf(stderr, "%s\n", viewLag.Line().c_str());
+                }
+            }
+        }
+#endif
         std::array<Extension::PicaSceneTextureBinding, 3> sceneTextures{};
         Extension::PicaSceneTextureBinding sceneLightingLut;
         if (alphaTested) {
