@@ -250,14 +250,19 @@ pub fn host_platform() -> Result<ReleasePlatform> {
 }
 
 /// The runtime of an installation: where a (new) package put it until Forge
-/// places it.
+/// places it; for a Windows installation made before the product names, its
+/// root `TriAevum.exe` until then (`forge_catalog::platform::installed_runtime_path`).
 pub fn installed_runtime_path(root: &Path, platform: &ReleasePlatform) -> PathBuf {
     let packaged = root.join(platform.runtime);
     if packaged.is_file() {
-        packaged
-    } else {
-        root.join(platform.installed_runtime)
+        return packaged;
     }
+    let installed = root.join(platform.installed_runtime);
+    let legacy = root.join(forge_catalog::platform::LEGACY_WINDOWS_RUNTIME);
+    if *platform == WINDOWS && !installed.is_file() && legacy.is_file() {
+        return legacy;
+    }
+    installed
 }
 
 /// Refuses to install while the game runs from this installation: Windows
