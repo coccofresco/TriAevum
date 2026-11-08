@@ -245,8 +245,7 @@ public:
       }
       // The product dispatch receipt (dekui / Project Restoration sites on
       // the real module), as the developer build's site log.
-      std::fprintf(stderr, "MM3D product: %zu of %zu guest-patch site(s) enabled; every boundary starts a module block
-",
+      std::fprintf(stderr, "MM3D product: %zu of %zu guest-patch site(s) enabled; every boundary starts a module block\n",
                    enabledSites, mGuestPatches.Statistics().size());
       process.SetNativeFunctionCallback(&Mm3dGuestPatches::Execute,
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
