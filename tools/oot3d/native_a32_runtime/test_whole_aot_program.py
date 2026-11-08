@@ -280,6 +280,55 @@ class WholeAotProgramTest(unittest.TestCase):
         self.assertNotIn("PackedOp", serialized)
         self.assertIn('"semantic": "control"', serialized)
 
+    def test_blx_immediate_is_an_external_thumb_boundary(self) -> None:
+        # 0x1000: blx #imm (H=0) -> Thumb 0x1010; 0x1004: blx #imm (H=1) ->
+        # Thumb 0x1012.  Neither destination is A32 code in the inventory.
+        words = [0] * 6
+        words[0] = 0xFA000002  # blx 0x1010 (thumb)
+        words[1] = 0xFB000001  # blx 0x1012 (thumb, H=1)
+        words[2] = 0xE12FFF1E  # bx lr
+        words[4] = 0x47704770  # thumb: bx lr; bx lr
+        code = b"".join(word.to_bytes(4, "little") for word in words)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory, audit = self._inputs(root, [(0x1000, 0x0C, "caller")])
+            program = build_program(
+                code, inventory, audit, base=BASE, executable_size=len(code)
+            )
+        function = {f.entry: f for f in program.functions}[0x1000]
+        self.assertTrue(function.closed_static_cfg)
+        self.assertEqual(function.unresolved_static_edges, ())
+        self.assertEqual(function.direct_calls, ())
+        edges = sorted(
+            (edge.site, edge.kind, edge.target)
+            for block in program.blocks
+            for edge in block.successors
+            if edge.kind in {"thumb_call", "resume"}
+        )
+        self.assertIn((0x1000, "thumb_call", 0x1011), edges)
+        self.assertIn((0x1004, "thumb_call", 0x1013), edges)
+        self.assertIn((0x1000, "resume", 0x1004), edges)
+        self.assertNotIn(0x1010, {block.pc for block in program.blocks})
+
+    def test_negative_bl_to_unknown_a32_code_still_opens_the_cfg(self) -> None:
+        # The Thumb rule must not hide a genuinely unresolved A32 call.
+        words = [0] * 2
+        words[0] = branch(0x1000, 0x2000, link=True)
+        words[1] = 0xE12FFF1E
+        code = b"".join(word.to_bytes(4, "little") for word in words)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory, audit = self._inputs(root, [(0x1000, 0x08, "caller")])
+            program = build_program(
+                code, inventory, audit, base=BASE, executable_size=len(code)
+            )
+        function = {f.entry: f for f in program.functions}[0x1000]
+        self.assertFalse(function.closed_static_cfg)
+        self.assertEqual(
+            [(e.site, e.kind) for e in function.unresolved_static_edges],
+            [(0x1000, "direct_call")],
+        )
+
     def test_marks_loop_and_cross_function_branch_as_tail_call(self) -> None:
         words = [0] * 10
         words[0] = 0xE2500001  # subs r0, r0, #1

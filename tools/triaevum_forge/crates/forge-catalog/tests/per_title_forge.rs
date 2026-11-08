@@ -96,7 +96,7 @@ fn the_other_titles_dump_is_rejected_by_name() {
 
 /// validate_title bound to the MM3D title-module ARTIFACT CONTRACT
 /// (W/analysis/parity/CATALOGS/RESULTS.md). FIXTURE: the MM3D module is not
-/// built yet, so the plugin/runtime files are stand-in bytes; the binding
+/// fixture (stand-in bytes; see mm3d_real_title_catalog_* for the built module); the binding
 /// (recipe id, dump-only inputs, abi_version 2, target, translator identity,
 /// sizes/digests) is the real validate_title path.
 #[test]
@@ -144,4 +144,36 @@ fn mm3d_title_module_contract_binds_through_validate_title() {
     write(item(2, &"c".repeat(64)));
     std::fs::write(forge_catalog::paths::join_posix(directory.path(), &plugin_name), b"tampered module bytes!!!!").unwrap();
     assert!(forge_catalog::validate_title(directory.path(), &recipe, None, &cancel).is_err(), "tampered module");
+}
+
+/// The REAL MM3D catalog (module window): opt-in with TRIAEVUM_MM3D_TITLE_PACKAGE
+/// = a package root laid out by precompiled_title_layout.title_layout. Binds the
+/// built module through validate_title, then records the cross-title and
+/// tampered-identity negatives on the same catalog.
+#[test]
+fn mm3d_real_title_catalog_binds_through_validate_title() {
+    use forge_catalog::precompiled;
+    use serde_json::Value;
+    let Some(root) = std::env::var_os("TRIAEVUM_MM3D_TITLE_PACKAGE").map(PathBuf::from) else {
+        eprintln!("skip: TRIAEVUM_MM3D_TITLE_PACKAGE not set");
+        return;
+    };
+    let recipe = recipes::load_recipe(&repo().join(MM3D.embedded_recipes), "mm3d-eur-local-6eec27b1").unwrap();
+    let oot = recipes::load_recipes(&repo().join(OOT3D.embedded_recipes)).unwrap();
+    let oot_recipe = oot[0].as_object().unwrap().clone();
+    let cancel = forge_base::CancelToken::new();
+    let bound = forge_catalog::validate_title(&root, &recipe, None, &cancel).unwrap();
+    assert_eq!(bound["recipe"], "mm3d-eur-local-6eec27b1");
+    assert_eq!(bound["abi_version"], 2);
+    let identity = bound["translator_identity_sha256"].as_str().unwrap().to_owned();
+    eprintln!("bound mm3d translator_identity_sha256={identity}");
+    let error = forge_catalog::validate_title(&root, &oot_recipe, None, &cancel).unwrap_err();
+    assert_eq!(error.kind, ErrorKind::UnsupportedRevision, "OoT3D recipe bound to the MM3D catalog");
+    let text = std::fs::read_to_string(root.join(precompiled::CATALOG)).unwrap();
+    let mut catalog: serde_json::Map<String, Value> = serde_json::from_str(&text).unwrap();
+    catalog["titles"][0]["abi_version"] = Value::from(1);
+    assert!(forge_catalog::validate_title(&root, &recipe, Some(&catalog), &cancel).is_err(), "ABI 1 accepted");
+    catalog["titles"][0]["abi_version"] = Value::from(2);
+    catalog["titles"][0]["plugin"]["sha256"] = Value::from("0".repeat(64));
+    assert!(forge_catalog::validate_title(&root, &recipe, Some(&catalog), &cancel).is_err(), "wrong module digest accepted");
 }

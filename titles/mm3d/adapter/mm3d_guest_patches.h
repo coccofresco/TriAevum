@@ -42,6 +42,11 @@ struct Mm3dGuestPatchSite {
     // False for a PC outside guest code (a host return sentinel), which the
     // runtime dispatches without a registry block.
     bool InGuestCode = true;
+    // False when the guest can never continue at Pc + 4 from this site: the
+    // handler never returns Pc + 4 and the replaced instruction is an
+    // unconditional return (an observer on a function epilogue whose next
+    // word is literal data). Such a site needs no boundary at Pc + 4.
+    bool ContinuesAtNext = true;
 };
 
 class Mm3dGuestPatches {

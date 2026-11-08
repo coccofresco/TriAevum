@@ -106,6 +106,14 @@ if(TRIAEVUM_TITLE_MM3D)
             target_sources(${target} PRIVATE "${_source}")
         endif()
     endfunction()
+    # The offline variant replay (regenerate_shader_corpus --variant-records)
+    # judges uber availability against the vertex families the runtime has. The
+    # MM3D title session installs its built-in family (InstallTitleBuiltInVertexPack),
+    # so a dual-title replay tool installs the same pack; exact source
+    # identities keep OoT3D sessions unaffected.
+    triaevum_add_mm3d_builtin_shader_packs(oot3d_native_pica_variant_inventory)
+    target_include_directories(oot3d_native_pica_variant_inventory PRIVATE titles/mm3d/shaders)
+    target_compile_definitions(oot3d_native_pica_variant_inventory PRIVATE TRIAEVUM_VARIANT_REPLAY_MM3D=1)
     # Both outcomes of the rule, on fixture packs (copies of OoT3D's built-in
     # vertex family and native fragment pack) and on no packs.
     set(_mm3d_pack_fixture "${CMAKE_CURRENT_BINARY_DIR}/mm3d_shader_pack_fixture")

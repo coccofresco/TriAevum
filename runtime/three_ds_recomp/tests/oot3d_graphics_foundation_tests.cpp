@@ -6,6 +6,7 @@
 #include "fast/renderer3ds/pica_scene_light_continuity.h"
 #include "fast/renderer3ds/virtual_shadow_keyframes.h"
 #include "fast/renderer3ds/shadow_caster_stability_trace.h"
+#include "fast/renderer3ds/shadow_caster_view_lag_probe.h"
 #include "fast/renderer3ds/pica_factored_interpolation.h"
 #include "fast/renderer3ds/pica_geometry_guide.h"
 #include "fast/extension/pica_directional_shadow_lighting.h"
@@ -7882,6 +7883,60 @@ TEST(Renderer3dsShadowCasterStabilityTrace, CountsConsecutiveUnchangedObservatio
     for (const auto& line : lines)
         newLifetime |= line.find("lifetime=10 ") != std::string::npos && line.find("observed=1 ") != std::string::npos;
     EXPECT_TRUE(newLifetime);
+}
+
+namespace {
+// A camera translated along X by `x` world units: WorldToView and its inverse.
+Fast::Renderer3ds::ShadowMatrix ViewLagTranslation(float x) {
+    auto matrix = Fast::Renderer3ds::VertexGeometry::Identity();
+    matrix[12] = x;
+    return matrix;
+}
+// Runs an accelerating camera over a still actor at X = 5. (A constant-speed pan
+// would offset the wrong reconstruction by a constant amount, which does not
+// re-anchor: only a change of the per-frame camera step does.)
+// `lag` = 1 forms the uniform with the previous frame's view, 0 with this one.
+Fast::Renderer3ds::ShadowCasterViewLagCounts RunViewLag(int lag) {
+    using namespace Fast::Renderer3ds;
+    ShadowCasterViewLagProbe probe;
+    const auto model = ViewLagTranslation(5.0F);
+    for (uint64_t frame = 10; frame < 30; ++frame) {
+        const float camera = 0.05F * float(frame * frame);
+        const float formed = 0.05F * float((frame - lag) * (frame - lag));
+        // WorldToView moves the world by -camera; viewToWorld undoes it. The
+        // renderer frame ids step by 2 (30 Hz game over a 60 Hz renderer).
+        probe.BeginFrame(2U * frame, ViewLagTranslation(camera));
+        probe.Observe(0x51, ViewLagTranslation(-formed), model);
+        probe.Observe(0x51, ViewLagTranslation(-formed), model); // second draw of the same key: ignored
+    }
+    return probe.Counts();
+}
+} // namespace
+
+TEST(Renderer3dsShadowCasterViewLagProbe, SeparatesAPreviousFrameViewFromACurrentOne) {
+    // Lag: the world rebuilt with the previous view is still, the current one moves.
+    const auto lagged = RunViewLag(1);
+    EXPECT_EQ(lagged.Frames, 20U);
+    EXPECT_EQ(lagged.ViewChanges, 19U);
+    EXPECT_EQ(lagged.Pairs, 18U);
+    EXPECT_EQ(lagged.ReanchorPrevious, 0U);
+    EXPECT_EQ(lagged.ReanchorCurrent, 18U);
+    // Negative: matching timing re-anchors under the previous view only.
+    const auto matched = RunViewLag(0);
+    EXPECT_EQ(matched.Pairs, 18U);
+    EXPECT_EQ(matched.ReanchorCurrent, 0U);
+    EXPECT_EQ(matched.ReanchorPrevious, 18U);
+    // A key absent from one caster frame does not pair across the gap.
+    Fast::Renderer3ds::ShadowCasterViewLagProbe probe;
+    probe.BeginFrame(1, ViewLagTranslation(0.0F));
+    probe.Observe(1, ViewLagTranslation(0.0F), ViewLagTranslation(1.0F));
+    probe.BeginFrame(3, ViewLagTranslation(0.0F));
+    probe.Observe(2, ViewLagTranslation(0.0F), ViewLagTranslation(1.0F));
+    probe.BeginFrame(5, ViewLagTranslation(0.0F));
+    probe.Observe(1, ViewLagTranslation(0.0F), ViewLagTranslation(1.0F));
+    EXPECT_EQ(probe.Counts().Pairs, 0U);
+    EXPECT_NE(probe.Line().find("[shadow-caster-view-lag] v=1 frames=3 view_changes=0 pairs=0"), std::string::npos)
+        << probe.Line();
 }
 
 namespace {
