@@ -3,6 +3,7 @@
 // Usage: mm3d_gameplay_options_tests <code.bin>
 #include "mm3d_gameplay_options.h"
 #include <algorithm>
+#include <bit>
 #include <cstdio>
 #include <fstream>
 #include <iterator>
@@ -127,6 +128,48 @@ int main(int argc, char** argv) {
         CHECK(p3.Verify(wrong) == 2);
       }
     }
+  }
+  // State facts (read-only): the quick put away skip sees the cooldown byte,
+  // the input pass classifies run updates by whether the speed site forced
+  // them and keeps the largest Actor speed (+0x70) each produced.
+  {
+    constexpr std::uint32_t pl = 0x08200000U;
+    const std::uint32_t cooldownWord = (pl + kPutAwayCooldownOffset) & ~3U;
+    const std::uint32_t shift = ((pl + kPutAwayCooldownOffset) & 3U) * 8U;
+    GameplayOptions o; Mm3dGuestPatches p; o.Register(p);
+    CHECK(p.Verify(image) == 3);
+    o.Set({true, true});
+    auto skip = [&](std::uint32_t cooldown) {
+      image.ram[cooldownWord] = (0x00ABCDEFU & ~(0xFFU << shift)) | (cooldown << shift);
+      a32::GuestState g{}; g.r[6] = pl; g.r[15] = kQuickPutAwaySite; a32::ExecutionResult x{};
+      CHECK(Mm3dGuestPatches::Execute(kQuickPutAwaySite, g, image, &x, &p));
+    };
+    skip(20U);
+    CHECK(o.Facts().PutAwaySkips == 1 && o.Facts().PutAwaySkipsUnarmed == 0 && o.Facts().MinCooldownAtSkip == 20U);
+    skip(0U); skip(3U);
+    CHECK(o.Facts().PutAwaySkips == 3 && o.Facts().PutAwaySkipsUnarmed == 2 && o.Facts().MinCooldownAtSkip == 0U);
+    auto update = [&](std::uint32_t action, bool a, float speed) {
+      image.ram[pl + kActionFuncOffset] = action;
+      image.Set16(pl + kActionVar2Offset, 0);
+      image.ram[kInputHeld] = a ? kButtonA : 0U;
+      image.ram[pl + kActorSpeedXZOffset] = std::bit_cast<std::uint32_t>(speed);
+      a32::GuestState g{}; g.r[4] = pl; g.r[15] = kRollDashInputSite; a32::ExecutionResult x{};
+      (void)Mm3dGuestPatches::Execute(kRollDashInputSite, g, image, &x, &p);
+      if (action == kActionRun) {
+        a32::GuestState h{}; h.r[15] = kRollDashSpeedSite; a32::ExecutionResult y{};
+        (void)Mm3dGuestPatches::Execute(kRollDashSpeedSite, h, image, &y, &p);
+      }
+    };
+    // Native run (no roll): speed 6 is sampled at the next pass as native.
+    update(kActionRun, true, 0.0F); update(kActionRun, true, 6.0F);
+    // Roll, idle, dashed run: 9 is sampled as dash.
+    update(kActionRoll, true, 6.0F); update(kActionIdle, true, 3.0F); update(kActionRun, true, 4.0F);
+    update(kActionRun, true, 9.0F); update(kActionIdle, false, 7.5F);
+    const auto f = o.Facts();
+    CHECK(f.PlayerUpdates == 7 && f.RollToRun == 1);
+    CHECK(f.RunUpdatesNative == 2 && f.MaxRunSpeedNative == 6.0F);
+    CHECK(f.RunUpdatesDash == 2 && f.MaxRunSpeedDash == 9.0F);
+    CHECK(image.writes.empty());
   }
   std::printf("%s mm3d gameplay options: put_away_dispatches=%llu\n", fails ? "FAILED" : "PASS",
               static_cast<unsigned long long>(options.QuickPutAways()));

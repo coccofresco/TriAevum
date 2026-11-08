@@ -41,6 +41,7 @@
 // Input+0x8 is the held buttons; A is bit 0 on the 3DS pad.
 #include "../adapter/mm3d_guest_patches.h"
 #include <atomic>
+#include <bit>
 #include <cstdint>
 
 namespace Oot3dNativeGame::Mm3dGameplay {
@@ -59,6 +60,13 @@ inline constexpr std::uint32_t kInputHeld = 0x007AC22CU + 0x8U;
 inline constexpr std::uint32_t kButtonA = 0x1U;
 inline constexpr std::uint32_t kActionFuncOffset = 0xE14U;
 inline constexpr std::uint32_t kActionVar2Offset = 0x11E4EU;
+// Read-only state facts for live acceptance (never written): Actor speed
+// (vel_xz, Actor+0x70: Restoration game/actor.h "float vel_xz" after vel at
+// 0x64; zeldaret Actor.speed at the same 0x70) and the put-away cooldown byte
+// player+0xE2F (the strb the quick put away site skips).
+inline constexpr std::uint32_t kActorSpeedXZOffset = 0x70U;
+inline constexpr std::uint32_t kPutAwayCooldownOffset = 0xE2FU;
+inline constexpr std::uint8_t kPutAwayCooldownRearm = 20U;
 inline constexpr std::uint32_t kActionRoll = 0x0020F830U;
 inline constexpr std::uint32_t kActionRun = 0x00231E00U;
 inline constexpr std::uint32_t kActionIdle = 0x001FC924U;
@@ -90,8 +98,66 @@ class GameplayOptions {
   [[nodiscard]] bool Dashing() const noexcept { return mDashing.load(); }
   [[nodiscard]] std::uint64_t DashFrames() const noexcept { return mDashFrames.load(); }
 
+  // State facts the options produce in the guest, sampled read-only:
+  //  - Player_Action_13 updates classified by whether the speed site was
+  //    forced in them, with the largest Actor speed each produced (sampled at
+  //    the next input pass, i.e. after that update ran);
+  //  - roll -> (idle) -> run sequences seen in actionFunc;
+  //  - quick put away skips, and how many found the cooldown byte below its
+  //    re-arm value 20: natively the skipped strb writes 20 on every such
+  //    update, so a skip that still reads < 20 means the previous update's
+  //    re-arm was skipped as well (a state the native game never has there,
+  //    except on the first update after a PUTAWAY count-down).
+  struct StateFacts {
+    std::uint64_t PlayerUpdates = 0;
+    std::uint64_t RunUpdatesNative = 0;
+    std::uint64_t RunUpdatesDash = 0;
+    float MaxRunSpeedNative = 0.0F;
+    float MaxRunSpeedDash = 0.0F;
+    std::uint64_t RollToRun = 0;
+    std::uint64_t PutAwaySkips = 0;
+    std::uint64_t PutAwaySkipsUnarmed = 0;
+    std::uint32_t MinCooldownAtSkip = 0xFFU;
+  };
+  [[nodiscard]] StateFacts Facts() const noexcept {
+    StateFacts f;
+    f.PlayerUpdates = mFactUpdates.load();
+    f.RunUpdatesNative = mFactRunNative.load();
+    f.RunUpdatesDash = mFactRunDash.load();
+    f.MaxRunSpeedNative = mFactMaxNative.load();
+    f.MaxRunSpeedDash = mFactMaxDash.load();
+    f.RollToRun = mFactRollToRun.load();
+    f.PutAwaySkips = mQuickPutAways.load();
+    f.PutAwaySkipsUnarmed = mFactSkipsUnarmed.load();
+    f.MinCooldownAtSkip = mFactMinCooldown.load();
+    return f;
+  }
+
+  // Read-only sampling at the input pass (every Player_Update), on or off.
+  void SampleFacts(std::uint32_t player, oot3d::recomp::a32::MemoryBus& memory) {
+    std::uint32_t action = 0, speedBits = 0;
+    if (!memory.Read32(player + kActionFuncOffset, &action) ||
+        !memory.Read32(player + kActorSpeedXZOffset, &speedBits))
+      return;
+    mFactUpdates.fetch_add(1, std::memory_order_relaxed);
+    if (mFactPrevAction == kActionRun) {
+      const float speed = std::bit_cast<float>(speedBits);
+      auto& count = mFactPrevForced ? mFactRunDash : mFactRunNative;
+      auto& max = mFactPrevForced ? mFactMaxDash : mFactMaxNative;
+      count.fetch_add(1, std::memory_order_relaxed);
+      if (speed > max.load(std::memory_order_relaxed)) max.store(speed, std::memory_order_relaxed);
+    }
+    if (action == kActionRun &&
+        (mFactPrevAction == kActionRoll || (mFactPrevAction == kActionIdle && mFactPrevPrevAction == kActionRoll)))
+      mFactRollToRun.fetch_add(1, std::memory_order_relaxed);
+    mFactPrevPrevAction = mFactPrevAction;
+    mFactPrevAction = action;
+    mFactPrevForced = false;  // the speed site sets it if this update is forced
+  }
+
   // 2Ship DashAfterRoll's OnPassPlayerInputs, on the guest's own fields.
   void PassPlayerInputs(std::uint32_t player, oot3d::recomp::a32::MemoryBus& memory) {
+    SampleFacts(player, memory);
     if (!mRollDash.load(std::memory_order_relaxed)) {
       mDashing.store(false);
       mPrevAction = 0;
@@ -118,10 +184,19 @@ class GameplayOptions {
     site.Pc = kQuickPutAwaySite;
     site.Name = "mm3d.quick_put_away";
     site.Guard.assign(std::begin(kQuickPutAwayGuard), std::end(kQuickPutAwayGuard));
-    site.Handler = [this](oot3d::recomp::a32::GuestState&, oot3d::recomp::a32::MemoryBus&)
+    site.Handler = [this](oot3d::recomp::a32::GuestState& state, oot3d::recomp::a32::MemoryBus& memory)
         -> std::optional<std::uint32_t> {
       if (!mQuickPutAway.load(std::memory_order_relaxed)) return std::nullopt;
       mQuickPutAways.fetch_add(1, std::memory_order_relaxed);
+      // r6 = player (strb r0,[r6,#0xE2F]); read-only fact, see StateFacts.
+      const std::uint32_t at = state.r[6] + kPutAwayCooldownOffset;
+      std::uint32_t word = 0;
+      if (state.r[6] != 0U && memory.Read32(at & ~3U, &word)) {
+        const std::uint32_t cooldown = (word >> ((at & 3U) * 8U)) & 0xFFU;
+        if (cooldown < kPutAwayCooldownRearm) mFactSkipsUnarmed.fetch_add(1, std::memory_order_relaxed);
+        if (cooldown < mFactMinCooldown.load(std::memory_order_relaxed))
+          mFactMinCooldown.store(cooldown, std::memory_order_relaxed);
+      }
       return kQuickPutAwayContinue;
     };
     patches.Add(std::move(site));
@@ -147,6 +222,7 @@ class GameplayOptions {
       if (!mRollDash.load(std::memory_order_relaxed) || !mDashing.load(std::memory_order_relaxed))
         return std::nullopt;
       mDashFrames.fetch_add(1, std::memory_order_relaxed);
+      mFactPrevForced = true;
       return kRollDashSpeedApply;
     };
     patches.Add(std::move(speed));
@@ -160,6 +236,12 @@ class GameplayOptions {
   std::atomic<bool> mDashing{false};
   std::atomic<std::uint64_t> mDashFrames{0};
   std::uint32_t mPrevAction = 0;  // guest thread only
+  std::atomic<std::uint64_t> mFactUpdates{0}, mFactRunNative{0}, mFactRunDash{0}, mFactRollToRun{0},
+      mFactSkipsUnarmed{0};
+  std::atomic<float> mFactMaxNative{0.0F}, mFactMaxDash{0.0F};
+  std::atomic<std::uint32_t> mFactMinCooldown{0xFFU};
+  std::uint32_t mFactPrevAction = 0, mFactPrevPrevAction = 0;  // guest thread only
+  bool mFactPrevForced = false;                                 // guest thread only
 };
 
 } // namespace Oot3dNativeGame::Mm3dGameplay

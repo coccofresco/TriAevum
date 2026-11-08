@@ -1073,6 +1073,11 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                       nativeCandidateDispatch.TopScreenCameraInput
                           .RelativeSamplesConsumed()}}},
                    {"timeline_enabled", inputTimeline.Enabled()},
+                   {"scripted_menu",
+                    {{"presses_queued", nativeControlPollingState.ScriptedMenu.PressesQueued},
+                     {"presses_applied", nativeControlPollingState.ScriptedMenu.PressesApplied},
+                     {"presses_pending", nativeControlPollingState.ScriptedMenu.Steps.size()},
+                     {"open_presented_frames", nativeControlPollingState.ScriptedMenu.OpenFrames}}},
                    {"timeline_path",
                     inputTimeline.SourcePath().generic_string()},
                    {"timeline_segments", inputTimeline.SegmentCount()},

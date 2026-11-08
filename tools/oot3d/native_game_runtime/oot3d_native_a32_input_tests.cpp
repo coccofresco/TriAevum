@@ -301,6 +301,40 @@ void TestHostKeysTimeline() {
     std::filesystem::remove(path);
 }
 
+// A timeline's "menu_presses" are the Esc menu's keys in order, packed on the
+// frame (the window plays them on presented frames while the menu holds the
+// game), never pad buttons; unknown names and more than 16 are refused.
+void TestMenuPressesTimeline() {
+    const auto path = std::filesystem::temp_directory_path() / "triaevum_menu_presses_timeline.json";
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","frame_origin":"run","segments":[
+      {"start_frame":0,"end_frame_exclusive":5,"buttons":[]},
+      {"start_frame":5,"end_frame_exclusive":6,"buttons":[],
+       "menu_presses":["toggle","tab_next","tab_next","tab_next","confirm","toggle"]}]})");
+    const auto timeline = NativeA32InputTimeline::LoadFile(path);
+    const auto before = timeline.Sample(0, 2), esc = timeline.Sample(0, 5), after = timeline.Sample(0, 7);
+    Require(before.MenuPressCount == 0U, "a segment without menu_presses presses nothing");
+    Require(esc.MenuPressCount == 6U && esc.Hid.Buttons == 0U && esc.HostKeys == 0U,
+            "menu presses are not pad buttons or host keys");
+    const uint8_t expected[] = {kNativeMenuPressToggle, kNativeMenuPressTabNext, kNativeMenuPressTabNext,
+                                kNativeMenuPressTabNext, kNativeMenuPressConfirm, kNativeMenuPressToggle};
+    for (uint32_t index = 0; index < 6U; ++index)
+        Require(NativeA32MenuPressAt(esc.MenuPresses, index) == expected[index], "menu presses keep their order");
+    Require(after.MenuPressCount == 0U, "menu presses belong to their segment");
+    Require(NativeA32InputFrame{}.MenuPressCount == 0U, "a live frame carries no scripted menu press");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","segments":[
+      {"start_frame":0,"end_frame_exclusive":1,"menu_presses":["escape"]}]})");
+    bool refused = false;
+    try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
+    Require(refused, "an unknown menu press is refused");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","segments":[
+      {"start_frame":0,"end_frame_exclusive":1,"menu_presses":["up","up","up","up","up","up","up","up","up",
+       "up","up","up","up","up","up","up","up"]}]})");
+    refused = false;
+    try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
+    Require(refused, "more than 16 menu presses are refused");
+    std::filesystem::remove(path);
+}
+
 int main(int argc, char** argv) {
     if (argc == 4 && std::string_view(argv[1]) == "--emit-mouse-aim") {
         EmitMouseAimTimeline(argv[2], argv[3]);
@@ -310,6 +344,7 @@ int main(int argc, char** argv) {
     TestShoulderMappings();
     TestTitleGameplaySetting();
     TestHostKeysTimeline();
+    TestMenuPressesTimeline();
     TestButtonPromptsOwner();
     TestRumbleSetting();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);

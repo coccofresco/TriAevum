@@ -391,6 +391,9 @@ private:
   void ApplyPhotoModeHud();
   bool devFreeCameraToggleHeld = false;
   bool scriptedHideHudHeld = false;  // timeline host key "hide_hud" edge
+  // Timeline "menu_presses": state in NativeControlPollingState::ScriptedMenu.
+  void QueueScriptedMenuPresses(const Oot3dNativeGame::NativeA32InputFrame &inputFrame);
+  void ApplyScriptedMenuStep(Oot3dNativeGame::InGameMenuHostInput &input);
   std::chrono::steady_clock::time_point devFreeCameraLastRefresh{};
   // Moves the free camera from the pad, keyboard and mouse and withholds that
   // input from the game while it is active.

@@ -772,6 +772,17 @@ struct NativeControlPollingState {
   // The in-game menu's controls (Esc / R3, D-pad, A/B, shoulders), from the
   // raw devices every poll.
   Oot3dNativeGame::InGameMenuHostInput Menu;
+  // Timeline "menu_presses" (oot3d_native_a32_input.h): queued once per
+  // segment, played on presented frames so they work while the menu holds the
+  // game. Receipts: presses applied, presented frames with the menu open.
+  struct ScriptedMenuState {
+    std::deque<uint8_t> Steps;
+    int32_t Segment = -1;
+    uint32_t Tick = 0;
+    uint64_t PressesQueued = 0;
+    uint64_t PressesApplied = 0;
+    uint64_t OpenFrames = 0;
+  } ScriptedMenu;
   // Stick clicks to host menus: L3+R3 asks for the settings window (F1),
   // R3 released alone toggles the in-game menu.
   ThreeDsRecomp::Input::PadMenuChord MenuChord;
