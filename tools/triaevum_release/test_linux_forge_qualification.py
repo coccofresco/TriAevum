@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -73,3 +74,35 @@ class LinuxForgeQualificationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "neither a Rust Forge build nor a PyInstaller bundle"):
                 stage(reference, bundle, build, root / "title.so", root / "second", "1" * 40)
             self.assertFalse((root / "second").exists())
+
+    def test_candidate_is_per_title(self):
+        # Forge is per title: the MM3D candidate needs the title-mm3d Rust Forge
+        # (negative: the OoT3D Forge receipt), records the MM product name, and
+        # never falls back to the PyInstaller Forge.
+        with tempfile.TemporaryDirectory() as temporary,              patch("stage_linux_forge_candidate.host_platform", return_value=LINUX),              patch("stage_linux_forge_candidate.create_catalog"):
+            root = Path(temporary)
+            reference, bundle, build = root / "reference", root / "rust-forge", root / "build"
+            for name in ("recipes/mm3d.json", "resources/gamecontrollerdb.txt", "source/titles/t.zip",
+                         "LICENSES/SDL2-zlib.txt", "LICENSE", "LICENSE_SCOPE.md", "THIRD_PARTY_NOTICES.md"):
+                (reference / name).parent.mkdir(parents=True, exist_ok=True)
+                (reference / name).write_text("fixture")
+            for path in (build / LINUX.runtime, build / LINUX.title_module, build / "oot3d_game_module.so",
+                         root / "title.so", bundle / LINUX.forge, bundle / "forge/triaevum-forge"):
+                elf(path)
+            with (root / "title.so").open("ab") as title:
+                title.write(b"title code")
+            receipt = bundle / "forge/rust-forge.json"
+            receipt.write_text('{"features": []}')
+            with self.assertRaisesRegex(ValueError, "not the mm3d Forge"):
+                stage(reference, bundle, build, root / "title.so", root / "wrong", "1" * 40, title_id="mm3d")
+            self.assertFalse((root / "wrong").exists())
+            receipt.write_text('{"features": ["forge-desktop/title-mm3d", "forge-cli/title-mm3d"]}')
+            with self.assertRaisesRegex(ValueError, "not the oot3d Forge"):
+                stage(reference, bundle, build, root / "title.so", root / "wrong", "1" * 40)
+            output = stage(reference, bundle, build, root / "title.so", root / "mm", "1" * 40, title_id="mm3d")
+            candidate = json.loads((output / "linux-candidate.json").read_text())
+            self.assertEqual((candidate["title"], candidate["installed_runtime"]), ("mm3d", "Moonfall_Curse"))
+            self.assertTrue((output / LINUX.runtime).is_file())
+            receipt.unlink()
+            with self.assertRaisesRegex(ValueError, "PyInstaller"):
+                stage(reference, bundle, build, root / "title.so", root / "py", "1" * 40, title_id="mm3d")

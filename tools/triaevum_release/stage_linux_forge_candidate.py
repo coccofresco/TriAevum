@@ -5,16 +5,18 @@ from pathlib import Path
 import shutil
 
 try:
-    from .common import atomic_write_json, sha256_file
+    from .common import atomic_write_json, load_json_object, sha256_file
     from .linux_precompiled_catalog import create_catalog, require_elf
-    from .release_platform import LINUX, host_platform
-    from .rust_forge_build import BINARIES, RECEIPT
+    from .release_platform import LINUX, for_title, host_platform
+    from .rust_forge_build import BINARIES, RECEIPT, target_features
+    from .title_release import title_release
     from .rust_forge_notices import NOTICES, NOTICES_RELATIVE
 except ImportError:
-    from common import atomic_write_json, sha256_file
+    from common import atomic_write_json, load_json_object, sha256_file
     from linux_precompiled_catalog import create_catalog, require_elf
-    from release_platform import LINUX, host_platform
-    from rust_forge_build import BINARIES, RECEIPT
+    from release_platform import LINUX, for_title, host_platform
+    from rust_forge_build import BINARIES, RECEIPT, target_features
+    from title_release import title_release
     from rust_forge_notices import NOTICES, NOTICES_RELATIVE
 
 # The Rust Forge build output (rust_forge_build.py) besides TriAevumForge.
@@ -25,15 +27,31 @@ REPOSITORY = Path(__file__).resolve().parents[2]
 USER_DOCS = ("docs/USER_GUIDE.md", "docs/TRIAEVUM_USER_DATA.md")
 
 
+def require_title_forge(forge_bundle: Path, title_id: str) -> None:
+    """Forge is per title (owner decision 2026-11-08): the Rust Forge build
+    receipt must name the title's Forge features for Linux (title_release.py
+    forge_features), so an OoT3D Forge is never staged as MM3D and vice versa."""
+    expected = list(target_features(LINUX.target, title_release(title_id)["forge_features"]))
+    features = load_json_object(forge_bundle / RECEIPT).get("features", [])
+    if features != expected:
+        raise ValueError(f"The Forge build is not the {title_id} Forge: features {features}, expected {expected}")
+
+
 def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
           title: Path, output: Path, source_commit: str, *,
-          shader_compiler: Path | None = None, shader_dependencies: list[Path] = ()):
+          shader_compiler: Path | None = None, shader_dependencies: list[Path] = (),
+          title_id: str = "oot3d"):
     if host_platform() != LINUX:
         raise ValueError("Stage and qualify Linux candidates on Linux")
     if output.exists():
         raise ValueError("Candidate output must not exist; preserve existing installations")
     # A Rust Forge build, or (for older candidates) a PyInstaller onedir bundle.
     rust = (forge_bundle / RECEIPT).is_file()
+    product = for_title(title_id, LINUX)
+    if rust:
+        require_title_forge(forge_bundle, title_id)
+    elif title_id != "oot3d":
+        raise ValueError("Only the OoT3D candidate may use the PyInstaller Forge; build the title's Rust Forge")
     for path, shared in ((runtime_build / LINUX.runtime, False),
                          (runtime_build / LINUX.title_module, True),
                          (runtime_build / "oot3d_game_module.so", True), (title, True),
@@ -78,6 +96,8 @@ def stage(reference: Path, forge_bundle: Path, runtime_build: Path,
         "format": "triaevum_private_linux_candidate_v1",
         "public_release_qualified": False,
         "source_commit": source_commit,
+        "title": title_id,
+        "installed_runtime": product.installed_runtime,
         "runtime_sha256": sha256_file(output / LINUX.runtime),
         "bootstrap_sha256": sha256_file(output / LINUX.title_module),
         "forge_sha256": sha256_file(output / LINUX.forge),
@@ -93,12 +113,14 @@ def main():
     for argument in ("reference", "forge-bundle", "runtime-build", "title", "output"):
         parser.add_argument("--" + argument, type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
+    parser.add_argument("--title-id", default="oot3d",
+                        help="the product title (oot3d, mm3d); its Rust Forge build must carry the title's features")
     parser.add_argument("--shader-compiler", type=Path)
     parser.add_argument("--shader-dependency", type=Path, action="append", default=[])
     args = parser.parse_args()
     print(stage(args.reference, args.forge_bundle, args.runtime_build, args.title,
                 args.output, args.source_commit, shader_compiler=args.shader_compiler,
-                shader_dependencies=args.shader_dependency))
+                shader_dependencies=args.shader_dependency, title_id=args.title_id))
 
 
 if __name__ == "__main__":
