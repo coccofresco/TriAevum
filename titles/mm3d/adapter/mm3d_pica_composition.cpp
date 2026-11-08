@@ -401,7 +401,12 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
         if (owner != mQueueOwners.end() && owner->second.Generation == mQueueGeneration && owner->second.Model == model) {
             child.Attribution.NativeActorIdentity = owner->second.Actor;
             child.Attribution.NativeActorGeometry = owner->second.Actor != 0;
-            child.Attribution.NativeProjectedShadow = owner->second.Shadow;
+            // The shared presentation omits this role in the per-pixel modes
+            // (OmitsNativeProjectedShadowRole), so it must stay pure: a shadow
+            // span never also carries actor, isolated or atmosphere ownership.
+            child.Attribution.NativeProjectedShadow = owner->second.Shadow && owner->second.Actor == 0 &&
+                !owner->second.Isolated && !owner->second.Atmosphere && WorldLayer(child.Attribution.Layer);
+            if (child.Attribution.NativeProjectedShadow) ++mStats.ProjectedShadowSpans;
             child.Attribution.IsolatedLighting = owner->second.Isolated;
             child.Attribution.ExcludeFromPresentationFxaa |= owner->second.Isolated;
             child.Attribution.PreserveNativeUiSampling |= owner->second.Isolated;

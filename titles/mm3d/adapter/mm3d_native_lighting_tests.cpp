@@ -9,6 +9,10 @@
 #include "oot3d_native_a32_memory.h"
 #include "fast/renderer3ds/pica_resolved_draw_stream.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include "fast/extension/graphics_settings.h"
+#include "fast/extension/pica_rigid_motion.h"
+#include <array>
+#include <cstring>
 #include <bit>
 #include <cmath>
 #include <cstdlib>
@@ -886,6 +890,19 @@ void TestDeferredQueueAndShadowScopes() {
             !spans[1].Attribution.NativeProjectedShadow,"main model lost actor or became blob");
     Require(spans[2].Attribution.NativeProjectedShadow && !spans[2].Attribution.NativeActorGeometry,"blob inherited actor/caster role");
     Require(!spans[0].Attribution.NativeActorGeometry && !spans[3].Attribution.NativeProjectedShadow,"pass prefix/suffix contaminated");
+    Require(tracker.Stats().ProjectedShadowSpans==1,"projected-shadow span count wrong");
+    // Shared presentation policy over the real spans: only the pure blob span is
+    // omitted, and only in Per-pixel/Per-pixel + PBR outside Authentic/native memory.
+    using Fast::Extension::SurfaceLightingMode; using Fast::Extension::OmitsNativeProjectedShadowRole;
+    for(const auto mode:{SurfaceLightingMode::Native,SurfaceLightingMode::PerPixel,SurfaceLightingMode::PerPixelPbr,SurfaceLightingMode::NativePbr})
+        for(int fidelity=0;fidelity<2;++fidelity)for(int memory=0;memory<2;++memory)for(size_t i=0;i<spans.size();++i){
+            const bool omitted=spans[i].Attribution.NativeProjectedShadow&&OmitsNativeProjectedShadowRole(mode,fidelity!=0,memory!=0);
+            const bool perPixel=mode==SurfaceLightingMode::PerPixel||mode==SurfaceLightingMode::PerPixelPbr;
+            Require(omitted==(i==2&&perPixel&&!fidelity&&!memory),
+                    fidelity?"Authentic replay lost the native projected shadow":
+                    memory?"native-memory replay lost the native projected shadow":
+                    "projected-shadow omission outside the per-pixel blob span");
+        }
     s.r[0]=f.Play;observe(0x15E9ECU);cursor(0x14000008U);s.r[0]=f.Queue;s.r[14]=0x11EF3CU;observe(kMm3dRenderListVisitEntry);
     consume(f.Queue+8U,0x14000008U,0x14000020U,false);observe(0x11EF3CU);
     tracker.TakeCommandListCompositionSpans(0,0,spans);
@@ -1063,7 +1080,29 @@ void TestLightFunctionsAndGroup() {
     probe.Reset();
 }
 } // namespace
+// F03 scope: deformed CMB passes get temporal identities like rigid ones, and the
+// shared rigid gate (DecodeCommonRigidOriginClip, the same one OoT3D uses) must
+// reject them for exact motion. MM3D's GzwShader.shbin enters its matrix-palette
+// path on bool uniform b2 (F03_RIGID/gzw_bool.txt: ifu b2 at 0x00E -> calls
+// 0x10F/0x12B -> MOVA + a1/a2-relative reads of c52..c54), c20..c22 = palette[0]
+// (rigid model), c4..c6 = uModelView: the layout the shared gate decodes.
+void TestDeformedPassRejectedByRigidGate() {
+    std::vector<uint8_t> bytes(448U,0U);
+    const std::array<float,16> m{1,0,0,0, 0,1,0,0, 0,0,1,-5, 0,0,0,1};
+    constexpr size_t floats=80U;
+    std::memcpy(bytes.data()+floats,m.data(),sizeof(m));
+    std::memcpy(bytes.data()+floats+4U*16U,m.data(),3U*16U);
+    std::memcpy(bytes.data()+floats+20U*16U,m.data(),3U*16U);
+    std::array<float,4> clip{};
+    const auto mask=[&](uint32_t value){std::memcpy(bytes.data(),&value,sizeof(value));};
+    mask(0U);Require(Fast::Extension::DecodeCommonRigidOriginClip(bytes,false,clip),"rigid Gzw pass rejected");
+    mask(1U|2U|8U);Require(Fast::Extension::DecodeCommonRigidOriginClip(bytes,false,clip),"non-palette bools rejected a rigid pass");
+    mask(4U);Require(!Fast::Extension::DecodeCommonRigidOriginClip(bytes,false,clip),"deformed (b2 palette) pass admitted for exact motion");
+    mask(4U|1U);Require(!Fast::Extension::DecodeCommonRigidOriginClip(bytes,false,clip),"deformed pass with other bools admitted");
+}
+
 int main() {
+    TestDeformedPassRejectedByRigidGate();
     TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestUnobservedInPlaceRecycling(); TestActorEpochRenewedOnIdChange(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
     TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();TestCustomShadowProducers();TestDirectShadowSubmitByResource();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
