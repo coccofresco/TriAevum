@@ -44,3 +44,15 @@ name or classify pixels. No matching magic/doorway name means **unproved**, not
 semantic absence. A stable header fingerprint is not a payload attestation for
 modified assets; those catalogs need regeneration/validation. Keep generated
 asset inventories local; none are distributed in this checkout.
+
+## MM3D title vertex-program family
+
+`vertex_family.py` produces the MM counterpart of OoT3D's built-in
+`oot3d_native_vertex.spvpack` through the same producer
+(`tools/renderer/tev_program/build_vertex_artifacts --translate`, here scoped
+with `--vertex-only` because LineShader has one geometry DVLE). Its only input
+is the user's `romfs.bin`; the five `shaders/*.shbin` programs are guarded by
+SHA-256 in `vertex_family.json`, and the family size (14 vertex + 9 pass
+modules) is checked. `--check <pack>` verifies an existing pack against the
+dump. The fragment families are title-independent built-ins shared with OoT3D.
+Binding the pack (`PreparedShaders`) belongs to the MM title integration.
