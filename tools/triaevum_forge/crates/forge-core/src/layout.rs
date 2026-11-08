@@ -11,7 +11,7 @@ use forge_base::fsutil::{self, file_error};
 use forge_base::{ForgeError, Result};
 use forge_prepare::paths::resolve;
 
-pub const FLATPAK_ID: &str = "io.github.coccofresco.TriAevum";
+pub const FLATPAK_ID: &str = forge_catalog::title::ACTIVE.package_identity;
 const APPIMAGE_PAYLOAD: [&str; 3] = ["usr", "lib", "triaevum"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,7 +98,7 @@ pub fn for_package(package: &Path, env: &dyn Fn(&str) -> Option<String>, os: Hos
             }
             data_home = Path::new(&home).join(".local/share").to_string_lossy().into_owned();
         }
-        let activation = resolve(&Path::new(&data_home).join("TriAevum"))?;
+        let activation = resolve(&Path::new(&data_home).join(forge_catalog::title::ACTIVE.data_namespace))?;
         if activation.starts_with(&appdir) {
             return Err(ForgeError::invalid("AppImage activation must be outside the read-only package")
                 .because(forge_base::Reason::ReadOnlyDestination));
@@ -112,7 +112,7 @@ pub fn for_package(package: &Path, env: &dyn Fn(&str) -> Option<String>, os: Hos
     if data_home.is_empty() || !Path::new(&data_home).is_absolute() {
         return Err(ForgeError::invalid("Flatpak did not provide an absolute XDG_DATA_HOME"));
     }
-    let activation = resolve(&Path::new(&data_home).join("TriAevum"))?;
+    let activation = resolve(&Path::new(&data_home).join(forge_catalog::title::ACTIVE.data_namespace))?;
     if activation.starts_with(&package) {
         return Err(ForgeError::invalid("Flatpak activation must be outside the read-only package")
             .because(forge_base::Reason::ReadOnlyDestination));
@@ -151,7 +151,7 @@ fn macos_layout(package: PathBuf, get: &dyn Fn(&str) -> String) -> Result<HostLa
         if home.is_empty() || !Path::new(&home).is_absolute() {
             return Err(ForgeError::invalid("the macOS app requires an absolute HOME"));
         }
-        Path::new(&home).join("Library/Application Support/TriAevum")
+        Path::new(&home).join("Library/Application Support").join(forge_catalog::title::ACTIVE.data_namespace)
     };
     let activation = resolve(&activation)?;
     if activation.starts_with(&bundle) {

@@ -23,6 +23,7 @@ pub mod pyjson;
 pub mod recipes;
 pub mod region_assets;
 pub mod romfs_identity;
+pub mod title;
 pub mod variants;
 
 pub use adapters::{adapt_extracted_inputs, import_contract, validate_adapter, Adaptation};
@@ -38,3 +39,4 @@ pub use recipes::{
     VerifiedInput,
 };
 pub use romfs_identity::{fingerprint, RomfsFingerprint};
+pub use title::{ForgeTitle, ACTIVE as ACTIVE_TITLE};

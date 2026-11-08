@@ -7,6 +7,10 @@ license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+# Build the per-title MM3D Forge (default: OoT3D).
+title-mm3d = []
+
 [dependencies]
 forge-base = { path = "../forge-base" }
 serde_json.workspace = true

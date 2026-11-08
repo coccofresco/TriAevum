@@ -11,6 +11,10 @@ publish.workspace = true
 name = "TriAevumForge"
 path = "src/main.rs"
 
+[features]
+# The per-title MM3D Forge (default: OoT3D).
+title-mm3d = ["forge-catalog/title-mm3d"]
+
 [dependencies]
 forge-base = { path = "../forge-base" }
 forge-catalog = { path = "../forge-catalog" }

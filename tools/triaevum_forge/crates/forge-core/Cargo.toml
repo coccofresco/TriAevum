@@ -11,6 +11,8 @@ publish.workspace = true
 crate-type = ["rlib", "staticlib", "cdylib"]
 
 [features]
+# The per-title MM3D Forge (default: OoT3D).
+title-mm3d = ["forge-catalog/title-mm3d"]
 default = ["https"]
 # The verified HD texture download of the install job (desktop).
 https = ["forge-mods/https"]

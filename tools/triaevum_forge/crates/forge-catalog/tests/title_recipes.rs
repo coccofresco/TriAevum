@@ -28,7 +28,7 @@ fn title_recipes() -> Vec<(String, PathBuf)> {
         }
     }
     if !found.iter().any(|(game, _)| game == "oot3d") {
-        found.push(("oot3d".into(), repo().join(recipes::EMBEDDED_RECIPES)));
+        found.push(("oot3d".into(), repo().join(forge_catalog::title::OOT3D.embedded_recipes)));
     }
     found.sort();
     found
