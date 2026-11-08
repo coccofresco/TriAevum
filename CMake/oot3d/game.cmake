@@ -89,6 +89,9 @@ if(TRIAEVUM_TITLE_MM3D)
         titles/mm3d/gameplay/mm3d_light_arena_tests.cpp)
     oot3d_target_defaults(mm3d_light_arena_tests FOLDER Tests)
 
+    add_executable(mm3d_rumble_donor_sites_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_rumble_donor_sites_tests.cpp)
+    oot3d_target_defaults(mm3d_rumble_donor_sites_tests FOLDER Tests)
     add_executable(mm3d_rumble_events_tests EXCLUDE_FROM_ALL
         titles/mm3d/gameplay/mm3d_rumble_events_tests.cpp)
     target_include_directories(mm3d_rumble_events_tests PRIVATE tools/three_ds/input)
