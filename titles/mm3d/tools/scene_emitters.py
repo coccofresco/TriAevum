@@ -131,7 +131,10 @@ def category(name: str, additive: bool) -> str | None:
         return "window-lamp"
     if re.search(r"maho_star|mark_lt|mark_tam|magic|glow", name):
         return "magic-glow"
-    if re.search(r"hikari|lightshaft|light_shaft", name):
+    # OoT3D's name recipe (tools/triaevum_release/scene_lights.py category):
+    # any "hikari"/"light" texture is a light shaft. MM names its authored
+    # additive glow cards this way (ka_dailight, kksi_light, mn_light, ...).
+    if re.search(r"hikari|light", name):
         return "light-shaft"
     if re.search(r"fire|fir\d|yougan|magma|lava|hinoko|hono", name):
         return "fire-lava"
@@ -214,7 +217,7 @@ def generate(code: bytes, files) -> dict:
                               source=name, sourceSha256=hashlib.sha256(data).hexdigest(), emitters=emitters))
         except (ValueError, struct.error, UnicodeError) as error:
             rejected.append(dict(source=name, reason=str(error)))
-    return dict(schema="triaevum.scene-lights", version=1, title="mm3d", generatorRevision=1,
+    return dict(schema="triaevum.scene-lights", version=1, title="mm3d", generatorRevision=2,
                 fingerprintMode="mm3d-zsi-header-v1", rooms=rooms, rejected=rejected)
 
 
