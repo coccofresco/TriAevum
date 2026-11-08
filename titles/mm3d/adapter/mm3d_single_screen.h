@@ -12,6 +12,7 @@
 #include <memory>
 #include <span>
 #include <vector>
+#include <span>
 
 namespace Mm3dDekui {
 class Core;
@@ -73,8 +74,9 @@ class Mm3dSingleScreen {
     // path its options menu uses). Invalid text changes nothing.
     static bool ApplySettingsJson(std::string_view text, std::string* error);
     void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet);
-    void RecordButtonOverlay(uint64_t);
-    void SelectButtonOverlay(uint64_t);
+    void SubmitButtonOverlayCommandList(uint32_t,uint32_t);
+    void ObserveButtonOverlayDraw(uint64_t);
+    void SelectButtonOverlay(std::span<const uint64_t>);
     void ResetButtonOverlay();
     std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float, bool gameplayHudVisible = true) const;
     std::map<std::string, uint64_t> ButtonOverlaySummary() const;

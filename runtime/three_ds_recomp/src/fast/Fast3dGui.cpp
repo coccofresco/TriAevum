@@ -14,6 +14,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/settings_window_bounds.h"
 #include "fast/extension/title_grass_rules_file.h"
 #endif
 #include "ship/window/gui/resource/GuiTextureFactory.h"
@@ -116,12 +117,22 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
         // Closing or collapsing F1 must not strand a deferred slider save.
         if (!IsVisible() || !ImGui::IsAnyItemActive()) runtime.SavePending();
         if (IsVisible()) {
-            const auto available = ImGui::GetMainViewport()->WorkSize;
+            const auto* viewport = ImGui::GetMainViewport();
+            const auto available = viewport->WorkSize;
             const ImVec2 maximum(std::max(320.0F, available.x - 16.0F),
                                  std::max(240.0F, available.y - 16.0F));
             ImGui::SetNextWindowSizeConstraints(
                 ImVec2(std::min(520.0F, maximum.x), std::min(400.0F, maximum.y)),
                 maximum);
+            if (mPlacementKnown) {
+                const auto fitted = Extension::FitSettingsWindowPosition(
+                    mPosition, {std::min(mSize[0], maximum.x), std::min(mSize[1], maximum.y)},
+                    {viewport->WorkPos.x, viewport->WorkPos.y}, {available.x, available.y});
+                if (fitted != mPosition) ImGui::SetNextWindowPos(ImVec2(fitted[0], fitted[1]));
+            } else {
+                ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 8.0F, viewport->WorkPos.y + 8.0F),
+                                        ImGuiCond_FirstUseEver);
+            }
         }
         GuiWindow::Draw();
         if (!IsVisible()) Extension::EndGraphicsSettingsPreviews();
@@ -131,10 +142,15 @@ class Oot3dGraphicsSettingsWindow final : public Ship::GuiWindow {
     void InitElement() override {}
     void UpdateElement() override {}
     void DrawElement() override {
+        const auto position = ImGui::GetWindowPos();
+        const auto size = ImGui::GetWindowSize();
+        mPosition = {position.x, position.y}; mSize = {size.x, size.y}; mPlacementKnown = true;
         mPanel.Draw();
     }
 
   private:
+    std::array<float, 2> mPosition{}, mSize{};
+    bool mPlacementKnown = false;
     Extension::GraphicsSettingsPanel mPanel;
 };
 

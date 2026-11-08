@@ -68,6 +68,7 @@ public:
     void CallSvc(U32 swi,Cpu&,Memory&);
     static std::vector<U32> CandidatePcs();
     void ResetButtonEmission() { overlay_layouts.clear(); }
+    U32 ButtonEmissionPass() const { return overlay_layouts.empty()?~0u:overlay_layouts.back().second; }
     HostFacts host;
 private:
     std::int64_t GlobalTimeUs() const { return host.global_time_us ? host.global_time_us() : 0; }
@@ -75,7 +76,9 @@ private:
         return host.widescreen_active ? host.widescreen_active() : Widescreen::Active();
     }
 
-    std::vector<U32> overlay_layouts;
+    // Layout and pass belong together; the manager's last pass is not a
+    // valid owner for a later standalone widget emission.
+    std::vector<std::pair<U32,U32>> overlay_layouts;
     Mm3dDekui::FormCamera::Hook form_camera;
     Mm3dDekui::FormCamera::ArrivalLens arrival_lens;
     Mm3dDekui::FormCamera::OcarinaReturnLens ocarina_return_lens;

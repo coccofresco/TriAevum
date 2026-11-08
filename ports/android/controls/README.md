@@ -12,8 +12,10 @@ surface remains owned by TriAevum's Android host.
   visibility, global/per-control scale and opacity preference behavior.
 - All referenced artwork/density variants and layout integers come from the same
   donor snapshot. No substitute shapes or game-derived textures are introduced.
-- Adaptations are limited to namespace, application context and host callbacks;
-  an unused activity viewmodel and unrelated drawer-lock setting are omitted.
+- Adaptations cover namespace, application context, host callbacks, native-drawn
+  controls and touch cancellation/ownership. An unused activity viewmodel and
+  unrelated drawer-lock setting are omitted. Stick change notification now fires
+  when either axis changes, including a return to centre on only one axis.
 - `AzaharInputAdapter` translates donor IDs to the existing 3DS HID bits. It
   preserves the donor JNI's Y inversion and circular stick normalization. It
   never maps them to keyboard keys or game-specific actions. HOME, screen swap
@@ -35,19 +37,24 @@ surface remains owned by TriAevum's Android host.
    inverse presentation/TopScreen transform, including letterboxing and aspect
    ratio, before producing guest touchscreen coordinates. Never use a fixed
    `x/width`, `y/height` full-window mapping for single-screen UI.
-4. The app must release input on cancel, loss of focus, pause, controller layout
-   changes and teardown, detach the old overlay before `unbind`, and reset the
-   donor pointer trackers before reusing the view. Rebind before resuming.
+4. Use `InputOverlay.cancelTouches()` on activity pause or controller hide. It
+   resets every local pointer/visual state and cancels the sink as a batch, without
+   generating a HOME tap. CANCEL, focus loss, detach, refresh and edit-mode changes
+   use the same boundary. Late motion cannot re-arm until a fresh DOWN. Detach the
+   old overlay before `unbind`; repeated cancellation after unbind is harmless.
 5. Reuse donor preference keys and original editor operations for settings;
    `setIsInEditMode`, `refreshControls`, `resetButtonPlacement` and
    `EmulationMenuSettings` remain available.
 
 ## Status And Remaining Work
 
-The AAR and four JVM adapter tests compile/pass on Linux (JDK 17, Gradle 8.13,
-AGP 8.13.2, Kotlin 2.0.20, API 35 SDK, min API 29). Offline tests also verify the
-donor hashes, resource closure and shared HID ABI. These tests do **not** verify
-real Android MotionEvents, overlay composition, layout-editor UI or gameplay.
+The controls JVM suite passes 12 tests: five adapter tests and seven Robolectric
+API-29 MotionEvent tests of the production view/drawables. The latter cover
+single-axis movement, centre/up, multi-pointer ownership, cancel without HOME tap,
+late motion, edit/refresh, focus loss and detach. Controls and app Kotlin/Java
+compile on Windows (JDK 17, Gradle 8.13, AGP 8.13.2, Kotlin 2.0.20, SDK 35).
+Offline checks verify donor hashes, resource closure and shared HID ABI.
+**JVM Android simulation is not a device/JNI/gameplay qualification.**
 
 The APK now hosts the overlay (`app/.../TriAevumActivity.java`,
 `TouchControls.kt`). Controls reach the game's on-screen pad through JNI
@@ -97,10 +104,11 @@ The activity asks for unbuffered dispatch: each touch gesture (overlay and
 game surface) and, from Android 11, stick motion arrive as they happen instead
 of batched to the next display frame.
 
-Still required: physical multitouch tests. The imported donor's
-existing quirks are not silently changed: for example its joystick change
-notification compares both axes with `&&`; isolate and test any future fix,
-rather than claiming the adapter tests validate that gesture logic.
+Still required: physical multitouch, vibration, JNI/gameplay and layout-editor
+visual acceptance. The single-axis and cancellation defects have failing-before
+and passing-after JVM evidence; adaptation steps remain reproducible in
+`tools/android/azahar_touch_adaptation.py`. MM3D native-HUD touch anchors remain a
+separate integration gap; OoT's TopScreen path does not qualify MM3D.
 
 ## Reproducible Checks
 

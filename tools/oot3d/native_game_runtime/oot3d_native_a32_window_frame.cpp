@@ -821,6 +821,10 @@ bool NativeA32WindowSession::RunFrame() {
     const bool gameplayHudVisible = !photoModeHudHidden &&
         (!nativeCandidateDispatch.TopScreenUiProfile || activeTopScreenConfig.RenderHud);
     auto primitives = titleSession->ButtonOverlay(float(canvas.Height) / 240.f, gameplayHudVisible);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+    if(std::getenv("TRIAEVUM_OVERLAY_ACCEPTANCE"))
+      Oot3dNativeGame::ObserveOverlayAcceptanceNative(primitives.size(),titleSession->CompositionSummary());
+#endif
     auto prepared = n64UiRenderer.PrepareTextures(primitives);
     renderStream.Submit([&, primitives = std::move(primitives), prepared = std::move(prepared), uiRegion]() mutable {
       if (rendererFrameSkipped) { n64UiRenderer.Stage(std::move(prepared)); return; }
@@ -2143,7 +2147,6 @@ void NativeA32WindowSession::RunGuestRefresh() {
   // kept for the frame that presents them.
   if (refreshHadNativeDraws) {
     RecordNativeButtonLabels();
-    if (titleSession) titleSession->RecordButtonOverlay(lastSubmittedDrawId);
   }
   phaseTiming.PicaSubmitSeconds += SecondsSince(picaSubmitStart);
 }
@@ -2302,8 +2305,12 @@ void NativeA32WindowSession::PresentVisualFrame(
                   presentedNativeLabels->ItemsLabels.clear();
               }
             }
-            if (titleSession) titleSession->SelectButtonOverlay(
-                finished->Draws.empty() ? 0 : finished->Draws.back().SubmissionId);
+            if (titleSession && titleSession->HasButtonOverlay()) {
+              std::vector<uint64_t> overlayDraws;
+              overlayDraws.reserve(finished->Draws.size());
+              for(const auto& draw:finished->Draws)overlayDraws.push_back(draw.SubmissionId);
+              titleSession->SelectButtonOverlay(overlayDraws);
+            }
             frameActors = titleSession
                 ? titleSession->ActorInteractions(process.Memory(), finished->Sequence)
                 : Oot3dNativeGame::CollectNativeActorInteractions(

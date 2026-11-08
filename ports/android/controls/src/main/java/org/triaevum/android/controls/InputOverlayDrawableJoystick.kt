@@ -106,7 +106,7 @@ class InputOverlayDrawableJoystick(
         val isActionUp =
             motionEvent == MotionEvent.ACTION_UP || motionEvent == MotionEvent.ACTION_POINTER_UP
         if (isActionDown) {
-            if (!bounds.contains(xPosition, yPosition)) {
+            if (trackId != -1 || !bounds.contains(xPosition, yPosition)) {
                 return false
             }
             pressedState = true
@@ -126,17 +126,7 @@ class InputOverlayDrawableJoystick(
             if (trackId != pointerId) {
                 return false
             }
-            pressedState = false
-            xAxis = 0.0f
-            yAxis = 0.0f
-            angle = 0.0f
-            radius = 0.0f
-            outerBitmap.alpha = opacity
-            boundsBoxBitmap.alpha = 0
-            virtBounds = Rect(origBounds.left, origBounds.top, origBounds.right, origBounds.bottom)
-            bounds = Rect(origBounds.left, origBounds.top, origBounds.right, origBounds.bottom)
-            setInnerBounds()
-            trackId = -1
+            cancelTouch()
             overlay.hapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY_RELEASE)
             return true
         }
@@ -178,9 +168,23 @@ class InputOverlayDrawableJoystick(
                 overlay.hapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             }
 
-            return oldXAxis != this.xAxis && oldYAxis != this.yAxis
+            return oldXAxis != this.xAxis || oldYAxis != this.yAxis
         }
         return false
+    }
+
+    fun cancelTouch() {
+        pressedState = false
+        xAxis = 0.0f
+        yAxis = 0.0f
+        angle = 0.0f
+        radius = 0.0f
+        outerBitmap.alpha = opacity
+        boundsBoxBitmap.alpha = 0
+        virtBounds = Rect(origBounds)
+        bounds = Rect(origBounds)
+        setInnerBounds()
+        trackId = -1
     }
 
     fun onConfigureTouch(event: MotionEvent): Boolean {

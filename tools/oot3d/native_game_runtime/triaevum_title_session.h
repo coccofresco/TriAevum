@@ -26,6 +26,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <span>
 #include <vector>
 
 namespace oot3d::recomp::a32 {
@@ -133,8 +134,8 @@ public:
   // Native-layout controller labels; absent adapters leave OoT3D untouched.
   virtual bool HasButtonOverlay() const { return false; }
   virtual void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet) {}
-  virtual void RecordButtonOverlay(uint64_t) {}
-  virtual void SelectButtonOverlay(uint64_t) {}
+  virtual void ObserveButtonOverlayDraw(uint64_t) {}
+  virtual void SelectButtonOverlay(std::span<const uint64_t>) {}
   virtual std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float, bool /*gameplayHudVisible*/ = true) const { return {}; }
   // Whether the title has prepared shaders: a vertex-program family and
   // fragment-family packs built in, and a scenario corpus and Forge

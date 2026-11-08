@@ -13,6 +13,7 @@
 #include "mm3d_scene_environment_profile.h"
 #include "mm3d_single_screen.h"
 #include "../dekui/button_emission.h"
+#include "../dekui/button_glyph_emission.h"
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
 #include "../gameplay/mm3d_rumble_events.h"
@@ -49,10 +50,16 @@
 namespace Oot3dNativeGame {
 namespace {
 
-class Mm3dTitleSession final : public TitleSession {
+class Mm3dTitleSession final : public TitleSession, public Oot3dPicaCommandListCompositionProvider {
 public:
   const char *GameName() const override { return "Majora's Mask 3D"; }
-  Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
+  Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return this; }
+  bool TakeCommandListCompositionSpans(uint32_t address,uint32_t bytes,
+      std::vector<Oot3dPicaCommandListCompositionSpan>& spans,std::string* error) override {
+    if(!mComposition.TakeCommandListCompositionSpans(address,bytes,spans,error))return false;
+    if(mSingleScreen)mSingleScreen->SubmitButtonOverlayCommandList(address,bytes);
+    return true;
+  }
   bool NativeFragmentLighting() const override { return true; }
   std::string_view CompanionLightName() const override { return "Tatl"; }
   // dekui's settings (Restoration's options and the damage multiplier
@@ -69,8 +76,8 @@ public:
   void ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) override {
     if (mSingleScreen) mSingleScreen->ConfigureButtonOverlay(config, prompts);
   }
-  void RecordButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->RecordButtonOverlay(draw); }
-  void SelectButtonOverlay(uint64_t draw) override { if (mSingleScreen) mSingleScreen->SelectButtonOverlay(draw); }
+  void ObserveButtonOverlayDraw(uint64_t draw) override { if (mSingleScreen) mSingleScreen->ObserveButtonOverlayDraw(draw); }
+  void SelectButtonOverlay(std::span<const uint64_t> draws) override { if (mSingleScreen) mSingleScreen->SelectButtonOverlay(draws); }
   std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float scale, bool gameplayHudVisible) const override {
     return mSingleScreen ? mSingleScreen->ButtonOverlay(scale, gameplayHudVisible) : std::vector<oot3d::ui::UiPrimitive>{};
   }
@@ -222,7 +229,8 @@ public:
       }
       if (mSingleScreen) {
         const auto& registry=Oot3dNativeA32Registry();
-        for (const auto pc:{Mm3dDekui::ButtonEmission::Pc,Mm3dDekui::ButtonEmission::Pc+4})
+        for (const auto pc:{Mm3dDekui::ButtonEmission::Pc,Mm3dDekui::ButtonEmission::Pc+4,
+                            Mm3dDekui::ButtonGlyphEmission::Pc})
           if (!oot3d::recomp::a32::FindBlock(registry,pc))
             throw std::runtime_error("MM3D glyph emission: missing A32 hook/continuation boundary; regenerate from --block-boundaries");
       }

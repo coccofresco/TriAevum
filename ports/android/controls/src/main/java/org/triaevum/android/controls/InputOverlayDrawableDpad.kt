@@ -77,7 +77,7 @@ class InputOverlayDrawableDpad(
         val isActionUp =
             motionEvent == MotionEvent.ACTION_UP || motionEvent == MotionEvent.ACTION_POINTER_UP
         if (isActionDown) {
-            if (!bounds.contains(xPosition, yPosition)) {
+            if (trackId != -1 || !bounds.contains(xPosition, yPosition)) {
                 return false
             }
             isDown = true
@@ -134,6 +134,14 @@ class InputOverlayDrawableDpad(
             return stateChanged
         }
         return false
+    }
+
+    fun cancelTouch() {
+        upButtonState = false
+        downButtonState = false
+        leftButtonState = false
+        rightButtonState = false
+        trackId = -1
     }
 
     fun draw(canvas: Canvas) {

@@ -1,4 +1,5 @@
 #include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/settings_window_bounds.h"
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/title_grass_rules_file.h"
@@ -252,6 +253,9 @@ void CheckControlPersistence() {
     Click("Keyboard");
     Click("Revert changes");
     Check(controls->Snapshot().Config.KeyboardEnabled, "cannot undo before first save");
+    Check(std::none_of(items.begin(), items.end(), [](const auto& entry) {
+        return entry.second.Label == "##Native button labels";
+    }), "MM native labels leaked into the OoT controls owner");
     // Button prompts are saved with the controls and are not a binding: the
     // preset stays and a preset keeps them.
     const auto profileBeforePrompts = controls->Snapshot().Config.Profile;
@@ -370,6 +374,31 @@ void CheckControlPersistence() {
     Click("Save controls");
     Frame(true);
     Check(loggedPanelText.find("cannot") != std::string::npos, "Save error was not visible");
+    // MM's real F1 widget shares the same persistent controls owner, without
+    // installing an OoT TopScreen owner or changing any bindings.
+    auto mm = std::make_shared<NativeControlConfigRuntime>(root / "mm-controls.json", NativeControlDefaults());
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mm, nullptr, true)});
+    Frame(); Frame(); Click("Controls"); Click("Devices");
+    const auto mmBindings = mm->Snapshot().Config.Bindings;
+    Select("##Native button labels", "Original 3DS");
+    Check(!mm->Snapshot().Config.NativeButtonLabels && mm->Snapshot().Config.Bindings == mmBindings,
+          "MM native labels did not preview independently of bindings");
+    Click("Save controls");
+    NativeControlConfigRuntime restarted(root / "mm-controls.json", NativeControlDefaults());
+    Check(restarted.Reload() && !restarted.Snapshot().Config.NativeButtonLabels,
+          "MM native-label save did not survive a fresh controls owner");
+    Select("##Native button labels", "Controller"); Click("Revert changes");
+    Check(!mm->Snapshot().Config.NativeButtonLabels, "MM revert did not reload the saved label choice");
+    Select("##Native button labels", "Controller");
+    std::ofstream(root / "mm-controls.json") << "invalid json";
+    Click("Revert changes"); Frame(true);
+    Check(mm->Snapshot().Config.NativeButtonLabels && loggedPanelText.find("parse") != std::string::npos,
+          "MM failed revert changed the preview or hid the persistence error");
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(blocked, nullptr, true)});
+    Frame(); Frame(); Click("Devices");
+    Select("##Native button labels", "Original 3DS"); Click("Save controls"); Frame(true);
+    Check(!blocked->Snapshot().Config.NativeButtonLabels && loggedPanelText.find("cannot") != std::string::npos,
+          "MM failed save changed the live preview or hid the persistence error");
     // The Display HUD size saves at once; a failed save keeps the size for the
     // session and says why.
     InstallGraphicsSettingsPanelTabs({CreateTopScreenSettingsPanel(top)});
@@ -1984,6 +2013,14 @@ void CheckDevToolsPanel() {
 #endif
 
 int main(int argc, char** argv) try {
+    Check(FitSettingsWindowPosition({60, 60}, {560, 704}, {0, 0}, {1280, 720}) == std::array<float, 2>{60, 8},
+          "F1 footer overflows 720p despite valid size constraints");
+    Check(FitSettingsWindowPosition({200, 100}, {560, 400}, {0, 0}, {1280, 720}) == std::array<float, 2>{200, 100},
+          "valid F1 placement was changed");
+    Check(FitSettingsWindowPosition({-100, 2000}, {300, 200}, {100, 50}, {640, 480}) == std::array<float, 2>{108, 322},
+          "F1 placement ignores work-area origin");
+    Check(FitSettingsWindowPosition({60, 60}, {464, 304}, {0, 0}, {480, 320}) == std::array<float, 2>{8, 8},
+          "compact F1 work-area placement overflows");
     PresentationSettingsTransaction delayedConfirmation(500);
     PresentationSettingsValue previousDisplay;
     auto nextDisplay = previousDisplay;
@@ -2017,6 +2054,12 @@ int main(int argc, char** argv) try {
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     Frame(); Frame();
 
+    if (argc == 2 && std::string_view(argv[1]) == "--controls-persistence") {
+        CheckControlPersistence();
+        ImGui::DestroyContext();
+        std::cout << "F1 controls persistence: passed\n";
+        return 0;
+    }
     if (argc == 2 && std::string_view(argv[1]) == "--grass-masks") {
         const auto ruleDirectory = std::filesystem::temp_directory_path() / "triaevum-f1-title-grass";
         std::filesystem::remove_all(ruleDirectory);

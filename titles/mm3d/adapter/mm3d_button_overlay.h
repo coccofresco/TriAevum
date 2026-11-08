@@ -6,8 +6,15 @@
 #include "mm3d_ui_subsystems.h"
 #include "../dekui/ocarina_prompt.h"
 #include "../dekui/button_emission.h"
+#include "../dekui/hud_buttons.h"
+#include "mm3d_touch_hud.h"
 #include <set>
 #include <tuple>
+#include <memory>
+#include <deque>
+#include <span>
+#include <optional>
+#include <string_view>
 
 namespace Oot3dNativeGame {
 // EUR v1.1 widget emission ABI: 134DE4 supplies each actually rendered pane,
@@ -15,32 +22,157 @@ namespace Oot3dNativeGame {
 // identity is the live registry entry, not pixels, a scene or a texture hash.
 class Mm3dButtonOverlay {
 public:
-  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0; };
+  struct Counters { uint64_t Layouts=0, Labels=0, Parts=0, Hud=0, Rings=0, Frames=0, Presented=0, Pictograms=0, Dpad=0, Text=0, SaturatedAlpha=0, StandaloneLabels=0, EmptyRecords=0, PassRejected=0, GuardRejected=0, Candidates=0, TintRejected=0, PoseRejected=0, UnboundCandidates=0, RingGeometryRejected=0, CapacityRejected=0, DuplicateCandidates=0, InlineGlyphs=0; };
   const Counters& Stats() const { return mStats; }
+  size_t PendingLabels() const { size_t n=0;for(const auto& pane:mPending)n+=pane.Slots.size();return n; }
+  size_t PendingPanes() const { return mSeen.size(); }
+  // Latest native HUD groups seen while touch prompts are active.
+  const Mm3dTouchHudGroups& TouchGroups() const { return mTouchGroups; }
   void Configure(const NativeControlConfig& controls, NativePromptSet prompts) {
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
     mControls = controls; mPrompts = prompts; mActive = active;
+    mTouchObserve = prompts == NativePromptSet::Touch;
+    if (!mTouchObserve) { mTouchGroups = {}; ClearTouchHud(); }
+    mStyle=std::make_shared<Style>(Style{controls,prompts});
   }
-  void Reset() { mPending.clear(); mSeen.clear(); mFrames.Reset(); }
-  void Record(uint64_t draw) {
-    ++mStats.Frames;
-    mFrames.Record(draw, std::move(mPending),mPrompts,mControls); mPending.clear(); mSeen.clear();
+  // Touch prompts: plan the native HUD groups into their touch controls and
+  // hand the placements to dekui's HudButtons transform (the native draws
+  // move, art and animation stay native). Groups are observed through the
+  // applied placement and inverted, so the plan never feeds back on itself.
+  template<class ShapeResolver>
+  void ApplyTouchHud(const ThreeDsRecomp::Input::TouchAnchorSet& anchors, float canvasWidth, ShapeResolver&& shape) {
+    if (!mTouchObserve) { ClearTouchHud(); return; }
+    const auto plan = PlanMm3dTouchHud(mTouchGroups, anchors, canvasWidth, shape);
+    for (size_t i = 0; i < kMm3dTouchHudElementCount; ++i) {
+      mApplied[i] = Mm3dTouchHudNative(plan[i]);
+      const int button = Mm3dTouchHudButtonIndex(Mm3dTouchHudElement(i));
+      if (button < 0) { mApplied[i] = {}; continue; }
+      auto& target = Mm3dDekui::HudButtons::touch[size_t(button)];
+      target.scale = mApplied[i].Scale; target.x = mApplied[i].X; target.y = mApplied[i].Y;
+      target.active = mApplied[i].Active;
+    }
   }
-  void Select(uint64_t draw) { mFrames.Select(draw, true); mStats.Presented += mFrames.Presented().size(); }
+  void ClearTouchHud() {
+    for (auto& placement : Mm3dDekui::HudButtons::touch) placement.active = false;
+    mApplied = {};
+  }
+  const std::array<Mm3dTouchHudNativeMapping, kMm3dTouchHudElementCount>& AppliedTouchHud() const { return mApplied; }
+  // Inline prose I/II (ZR+X / ZR+Y) inside the guest's fixed 16-unit text
+  // advance. Abbreviated (default): one full-height main glyph with a modifier
+  // corner badge. Chord: the "ZR + X" form scaled to fit the same cell.
+  enum class InlineChordStyle : uint8_t { Abbreviated, Chord };
+  void SetInlineChordStyle(InlineChordStyle style) { mInlineChordStyle = style; }
+  InlineChordStyle GetInlineChordStyle() const { return mInlineChordStyle; }
+  static std::optional<InlineChordStyle> ParseInlineChordStyle(std::string_view text) {
+    if (text == "abbreviated" || text == "glyph") return InlineChordStyle::Abbreviated;
+    if (text == "chord") return InlineChordStyle::Chord;
+    return {};
+  }
+  void Reset() { mPending.clear(); mSeen.clear(); mDraws.clear(); mSubmitted.reset(); mPresented.clear(); }
+  // Called at actual GSP submission, BEFORE that list is decoded. A host
+  // refresh may produce zero, one or several lists, or yield halfway through
+  // building the next one. Never drain captures at a host-refresh boundary.
+  void SubmitCommandList(uint32_t begin,uint32_t bytes) {
+    auto snapshot=std::make_shared<Snapshot>();
+    const uint64_t end=uint64_t(begin)+bytes;
+    if(bytes && end<=uint64_t(UINT32_MAX)+1) {
+      for(auto it=mPending.begin();it!=mPending.end();) {
+        if(it->Cursor>=begin && it->Cursor<end) {
+          mSeen.erase(it->Identity);it->Cursor=0;it->Identity={};
+          snapshot->push_back(std::move(*it));it=mPending.erase(it);
+        } else ++it;
+      }
+    }
+    ++mStats.Frames;if(snapshot->empty())++mStats.EmptyRecords;
+    mSubmitted=std::move(snapshot);
+  }
+  // Runs synchronously on successful packet enqueue, before the guest can
+  // submit/reuse another command buffer. No guest addresses survive in draws.
+  void ObserveDraw(uint64_t draw) {
+    if(!mDraws.empty() && draw<=mDraws.back().Last)mDraws.clear();
+    if(!mDraws.empty() && mDraws.back().Data==mSubmitted && mDraws.back().Last+1==draw)
+      mDraws.back().Last=draw;
+    else {
+      if(mDraws.size()==512)mDraws.pop_front();
+      mDraws.push_back({draw,draw,mSubmitted});
+    }
+  }
+  void Select(std::span<const uint64_t> draws) {
+    mPresented.clear();std::set<const Snapshot*> seen;
+    for(auto id:draws) {
+      auto it=std::lower_bound(mDraws.begin(),mDraws.end(),id,[](const auto& group,uint64_t value){return group.Last<value;});
+      if(it!=mDraws.end() && it->First<=id && it->Data && seen.insert(it->Data.get()).second) {
+        mPresented.push_back(it->Data);
+        for(const auto& pane:*it->Data)mStats.Presented+=pane.Slots.size();
+      }
+    }
+  }
   std::vector<oot3d::ui::UiPrimitive> Compose(float pixelsPerUnit, bool gameplayHudVisible = true) const {
     std::vector<oot3d::ui::UiPrimitive> result;
-    AppendNativeButtonOverlay(result, mFrames.Presented(), mFrames.Prompts(), mFrames.Controls(), pixelsPerUnit, gameplayHudVisible);
+    for(const auto& snapshot:mPresented)for(const auto& pane:*snapshot)
+      AppendNativeButtonOverlay(result,pane.Slots,pane.Settings->Prompts,pane.Settings->Controls,pixelsPerUnit,gameplayHudVisible);
     return result;
   }
+  static constexpr uint32_t CommandCursorAddress=0x006A3A88U;
   // True suppresses only this native geometry, never the widget's children.
   template<class M> bool Capture(M& memory, uint32_t layout, uint32_t root, uint32_t pass) {
-    if (!mActive || (pass > 3 && pass != ~0u) || !Mm3dDekui::ButtonEmission::CodeMatches(memory) ||
-        !Mm3dDekui::NativeInventory::Pointer(root,0x140)) return false;
+    if(!mActive && !mTouchObserve)return false;
+    if(pass>3 && pass!=~0u){++mStats.PassRejected;return false;}
+    if(!Mm3dDekui::ButtonEmission::CodeMatches(memory) ||
+        !Mm3dDekui::NativeInventory::Pointer(root,0x140)){++mStats.GuardRejected;return false;}
     const auto flags=memory.Read(root+0xd4);
     if (!flags || !(*flags&1)) return false;
     ++mStats.Layouts;
     Mm3dDekui::OcarinaPrompt::Hook resources;
-    return Pane(memory, layout, root, resources.Parts(memory));
+    const auto before=mStats.Labels;
+    const bool replaced=Pane(memory, layout, root, resources.Parts(memory));
+    if(pass==~0u)mStats.StandaloneLabels+=mStats.Labels-before;
+    return replaced;
+  }
+  // Individual native text records may use the parts atlas inside prose.
+  // Observe at the glyph renderer, not by suppressing the whole text pane.
+  template<class M> bool CaptureInline(M& m,uint32_t node,uint32_t record,bool shadow) {
+    using namespace Mm3dDekui::NativeInventory;
+    if(!mActive || !Pointer(node,0x140) || !Pointer(record,60))return false;
+    Mm3dDekui::OcarinaPrompt::Hook resources;const auto parts=resources.Parts(m);
+    const auto descriptor=parts?m.Read(parts+0x4c):std::optional<uint32_t>{};
+    const auto pixels=descriptor && Pointer(*descriptor,0x24)?m.Read(*descriptor+0x20):std::optional<uint32_t>{};
+    if(!pixels || !*pixels || m.Read(record)!=pixels || m.Read(record+0xc)!=std::optional<uint32_t>(256) ||
+        m.Read(record+0x10)!=std::optional<uint32_t>(128) || m.Read(record+0x38)!=std::optional<uint32_t>(~0u))return false;
+    const auto u=Float(m,record+0x28),v=Float(m,record+0x2c),uw=Float(m,record+0x30),vh=Float(m,record+0x34),
+        ux=Float(m,node+0x110),uy=Float(m,node+0x114),ut=Float(m,node+0x118),
+        vx=Float(m,node+0x11c),vy=Float(m,node+0x120),vt=Float(m,node+0x124);
+    if(!u||!v||!uw||!vh||!ux||!uy||!ut||!vx||!vy||!vt||*uy!=0||*vx!=0||*ux<=0||*vy<=0)return false;
+    const float left=*ux**u+*ut,top=*vy**v+*vt,width=*ux**uw,height=*vy**vh;
+    auto action=PartsButton(left,top,width,height),modifier=NativeControlAction::Count;
+    if(top==32.f/128 && width==16.f/256 && height==16.f/128) {
+      if(left==160.f/256 || left==176.f/256)action=NativeControlAction::X;
+      if(left==192.f/256 || left==208.f/256)action=NativeControlAction::Y;
+      if(left==160.f/256 || left==208.f/256)modifier=NativeControlAction::Zr;
+    }
+    if(action==NativeControlAction::Count || !NativeButtonOverlayGlyph(action,mPrompts,mControls) ||
+        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls)))return false;
+    const auto x=Float(m,record+0x14),y=Float(m,record+0x18),w=Float(m,record+0x20),h=Float(m,record+0x24),
+        xx=Float(m,node+0xe0),xy=Float(m,node+0xe4),yx=Float(m,node+0xf0),yy=Float(m,node+0xf4),
+        tx=Float(m,node+0xec),ty=Float(m,node+0xfc),r=Float(m,node+0x128),g=Float(m,node+0x12c),
+        b=Float(m,node+0x130),a=Float(m,node+0x134);
+    if(!x||!y||!w||!h||!xx||!xy||!yx||!yy||!tx||!ty||!r||!g||!b||!a||*a<=0||*w<=0||*h<=0)return false;
+    NativeButtonOverlaySlot slot;slot.Action=action;slot.Modifier=modifier;
+    slot.ChordAbbreviated=modifier!=NativeControlAction::Count && mInlineChordStyle==InlineChordStyle::Abbreviated;
+    const float cx=*x+*w*.5f,cy=*y+*h*.5f;
+    slot.X=*tx+*xx*cx+*xy*cy+40.f/3.f;slot.Y=*ty+*yx*cx+*yy*cy;
+    slot.Width=std::hypot(*xx,*yx)**w;slot.Height=std::max(slot.Width,std::hypot(*xy,*yy)**h);
+    slot.Color={*r,*g,*b,std::min(*a,1.f)};
+    if(!std::isfinite(slot.X)||!std::isfinite(slot.Y)||slot.Height<=0||slot.Height>128||
+        std::abs(slot.X)>1024||std::abs(slot.Y)>1024||std::max({*r,*g,*b})<=0)return false;
+    const auto cursor=m.Read(CommandCursorAddress);
+    if(!cursor || !Pointer(*cursor,8) || (*cursor&7) || PendingLabels()>=1020 || mPending.size()>=1020)return false;
+    if(shadow)return true; // omit only this proven control glyph's native shadow
+    const Key key{*cursor,record,slot.X,slot.Y};
+    if(mSeen.insert(key).second) {
+      mPending.push_back({*cursor,key,{slot},mStyle});++mStats.Labels;++mStats.InlineGlyphs;
+    }
+    return true;
   }
   static NativeControlAction PartsButton(float u, float v, float w, float h) {
     if (v != 0.f || w != 16.f/256 || h != 16.f/128) return NativeControlAction::Count;
@@ -87,40 +219,88 @@ private:
     else if ((*kind&65535)!=6) return false;
     if ((*kind&65535)==3 && !text) return false;
     auto action=text ? NativeControlAction::Zr : NativeControlAction::Count, modifier=NativeControlAction::Count;
+    auto element=Mm3dTouchHudElement::Count;
     const auto u=Float(m,*geo+0x28),v=Float(m,*geo+0x2c),uw=Float(m,*geo+0x30),vh=Float(m,*geo+0x34);
-    if (!text && parts && *texture==parts && u&&v&&uw&&vh) action=PartsButton(*u,*v,*uw,*vh);
+    if (!text && parts && *texture==parts && u&&v&&uw&&vh) {
+      // Pane::BuildMatrix animates the UV affine separately from shared
+      // geometry (also consumed by ScheduleDetail::Clip). Pictogram.mfl's
+      // nominal x96 cell alone cannot identify its currently displayed button.
+      const auto ux=Float(m,node+0x110),uy=Float(m,node+0x114),ut=Float(m,node+0x118),
+          vx=Float(m,node+0x11c),vy=Float(m,node+0x120),vt=Float(m,node+0x124);
+      if(ux&&uy&&ut&&vx&&vy&&vt && *uy==0 && *vx==0 && *ux>0 && *vy>0) {
+        const float left=*ux**u+*ut,top=*vy**v+*vt,width=*ux**uw,height=*vy**vh;
+        action=PartsButton(left,top,width,height);
+        // Restoration's amber inventory/inline cells, proven parts atlas
+        // row32: I at160, X at176, Y at192, II at208.
+        if(top==32.f/128 && width==16.f/256 && height==16.f/128) {
+          if(left==160.f/256 || left==176.f/256)action=NativeControlAction::X;
+          if(left==192.f/256 || left==208.f/256)action=NativeControlAction::Y;
+          if(left==160.f/256 || left==208.f/256)modifier=NativeControlAction::Zr;
+        }
+      }
+    }
     const auto owner=m.Read(node+4);
-    if (owner && (LayoutNamed(m,*owner,"HudItemIconSet") || LayoutNamed(m,*owner,"ItemIconSet2"))) {
-      if (Named(m,node,"disp_x_pane")) action=NativeControlAction::X;
-      if (Named(m,node,"disp_y_pane")) action=NativeControlAction::Y;
+    // The notebook's attached A badge has animated native UVs. Its nominal
+    // Pictogram.mfl cell is x96, not the final atlas A cell. Use the same
+    // validated anchor binding as NativeNotebook, not a static crop guess.
+    if(action==NativeControlAction::Count && parts && *texture==parts && owner &&
+        LayoutNamed(m,*owner,"Pictogram") && Named(m,node,"pict")) {
+      const auto anchor=m.Read(*owner+0x180);
+      if(anchor && Named(m,*anchor,"disp_a_icon_n"))action=NativeControlAction::A;
+    }
+    if (action==NativeControlAction::Count && owner &&
+        (LayoutNamed(m,*owner,"HudItemIconSet") || LayoutNamed(m,*owner,"ItemIconSet2"))) {
+      if (Named(m,node,"disp_x_pane")) {action=NativeControlAction::X;element=Mm3dTouchHudElement::ItemX;}
+      if (Named(m,node,"disp_y_pane")) {action=NativeControlAction::Y;element=Mm3dTouchHudElement::ItemY;}
       // Restoration uses ZR+X/Y for I/II, NOT OoT's direct ZR/ZL mapping.
-      if (Named(m,node,"disp_1_pane")) {action=NativeControlAction::X;modifier=NativeControlAction::Zr;}
-      if (Named(m,node,"disp_2_pane")) {action=NativeControlAction::Y;modifier=NativeControlAction::Zr;}
+      if (Named(m,node,"disp_1_pane")) {action=NativeControlAction::X;modifier=NativeControlAction::Zr;element=Mm3dTouchHudElement::ItemI;}
+      if (Named(m,node,"disp_2_pane")) {action=NativeControlAction::Y;modifier=NativeControlAction::Zr;element=Mm3dTouchHudElement::ItemII;}
     }
     const bool dpad=owner && LayoutNamed(m,*owner,"HudDpad") && Named(m,node,"pane_dpad");
-    if(dpad) action=NativeControlAction::DpadUp;
+    if(dpad) {action=NativeControlAction::DpadUp;element=Mm3dTouchHudElement::Dpad;}
     const bool hud = action != NativeControlAction::Count && !text && (!parts || *texture != parts);
     if (owner && LayoutNamed(m,*owner,"MessageWindow") && Named(m,node,"e_waitIcon"))
       action=NativeControlAction::A;
     bool ring=false;
     if (owner && LayoutNamed(m,*owner,"AActionIconBase") && Named(m,node,"bb00_ybtn")) {
-      action=NativeControlAction::A;ring=true;
+      action=NativeControlAction::A;ring=true;element=Mm3dTouchHudElement::ActionA;
     }
     if (owner && LayoutNamed(m,*owner,"BActionIcon") && Named(m,node,"a_button_base_pane")) {
-      action=NativeControlAction::B;ring=true;
+      action=NativeControlAction::B;ring=true;element=Mm3dTouchHudElement::ActionB;
     }
-    if (action==NativeControlAction::Count || (!dpad && !NativeButtonOverlayGlyph(action,mPrompts,mControls)) ||
-        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls))) return false;
+    if(action!=NativeControlAction::Count)++mStats.Candidates;
+    if (action==NativeControlAction::Count) return false;
+    if (mTouchObserve && element==Mm3dTouchHudElement::Count) return false;
+    if (!mTouchObserve && ((!dpad && !NativeButtonOverlayGlyph(action,mPrompts,mControls)) ||
+        (modifier!=NativeControlAction::Count && !NativeButtonOverlayGlyph(modifier,mPrompts,mControls)))) {
+      ++mStats.UnboundCandidates; return false;
+    }
     auto x=Float(m,*geo+0x14),y=Float(m,*geo+0x18),w=Float(m,*geo+0x20),h=Float(m,*geo+0x24);
     if (text) { x=(*text)[0]; y=(*text)[1]; w=(*text)[2]; h=(*text)[3]; }
     const auto xx=Float(m,node+0xe0),xy=Float(m,node+0xe4),yx=Float(m,node+0xf0),yy=Float(m,node+0xf4),
         tx=Float(m,node+0xec),ty=Float(m,node+0xfc),r=Float(m,node+0x128),g=Float(m,node+0x12c),
         b=Float(m,node+0x130),a=Float(m,node+0x134);
     if (!x||!y||!w||!h||!xx||!xy||!yx||!yy||!tx||!ty||!r||!g||!b||!a ||
-        *a<=0 || *a>1 || std::max({*r,*g,*b})<=0 || *w<=0 || *h<=0) return false;
+        *a<=0 || *w<=0 || *h<=0) {++mStats.PoseRejected;return false;}
+    if(std::max({*r,*g,*b})<=0){++mStats.TintRejected;return false;}
+    if(mTouchObserve) {
+      // Touch prompts: native letters stay; only record where each HUD group
+      // is for the touch-anchor plan. Never suppresses native geometry.
+      const float gx=*x+*w*.5f,gy=*y+*h*.5f;
+      Mm3dTouchHudGroup group{true,*tx+*xx*gx+*xy*gy+40.f/3.f,*ty+*yx*gx+*yy*gy,
+          std::max(std::hypot(*xx,*yx)**w,std::hypot(*xy,*yy)**h)*.5f};
+      // Undo this frame's touch placement: the plan is of the dekui pose.
+      if(const auto& applied=mApplied[size_t(element)];applied.Active&&applied.Scale>0) {
+        group.X=(group.X-40.f/3.f-applied.X)/applied.Scale+40.f/3.f;
+        group.Y=(group.Y-applied.Y)/applied.Scale;group.Radius/=applied.Scale;
+      }
+      if(std::isfinite(group.X)&&std::isfinite(group.Y)&&std::isfinite(group.Radius)&&group.Radius>0&&group.Radius<128)
+        mTouchGroups[size_t(element)]=group;
+      return false;
+    }
     // A/B letters occupy the top of the 38x38 native ring. The crop is a
     // title asset fact (HUD atlas A:24..32,0..10; B:64..72,0..10).
-    if (ring) { if (*w!=38 || *h!=38) return false; *x+=16; *w=8; *h=10; }
+    if (ring) { if (*w!=38 || *h!=38) {++mStats.RingGeometryRejected;return false;} *x+=16; *w=8; *h=10; }
     const float cx=*x+*w*.5f, cy=*y+*h*.5f;
     NativeButtonOverlaySlot slot;
     slot.Action=action;slot.Modifier=modifier;
@@ -131,14 +311,37 @@ private:
     const float width=std::hypot(*xx,*yx)* *w, height=std::hypot(*xy,*yy)* *h;
     slot.Height=ring?std::hypot(width,height)+1.f:std::max(width,height);
     slot.Width=ring?0:width;
+    if(modifier!=NativeControlAction::Count) {
+      // A HUD/hotbar I cell is a narrow letter, not a text advance. Keep
+      // readable key height in the surrounding icon area. Keep the main key
+      // over the native mixed-art letter; move inward only at canvas edges.
+      // Inline prose uses the
+      // separate CaptureInline path and remains within its reserved advance.
+      const auto main=NativeButtonOverlayGlyph(action,mPrompts,mControls);
+      const auto mod=NativeButtonOverlayGlyph(modifier,mPrompts,mControls);
+      const float right=Menu::ButtonGlyphWidth(*main,slot.Height)*.5f;
+      const float left=right+Menu::ButtonGlyphWidth(*mod,slot.Height)+.6f*slot.Height;
+      if(std::isfinite(left) && left+right<400.f+80.f/3.f)
+        slot.X=std::clamp(slot.X,left,400.f+80.f/3.f-right);
+      slot.Width=0;slot.ChordMainAnchor=true;
+    }
     slot.SuffixPlus=text.has_value();
     if(text) {slot.PlusX=*tx+*xx*(*text)[4]+*xy*cy+40.f/3.f;slot.PlusY=*ty+*yx*(*text)[4]+*yy*cy;}
-    slot.Color={*r,*g,*b,*a};
-    if (slot.Height<=0 || slot.Height>128 || std::abs(slot.X)>1024 || std::abs(slot.Y)>1024) return false;
-    if(mPending.size()>=252)return false;
+    // Native animation/world-alpha products can overshoot one. The native
+    // color conversion saturates; rejecting the pane makes every label blink
+    // back to its placeholder art instead of following that conversion.
+    if(*a>1)++mStats.SaturatedAlpha;
+    slot.Color={*r,*g,*b,std::min(*a,1.f)};
+    if (slot.Height<=0 || slot.Height>128 || std::abs(slot.X)>1024 || std::abs(slot.Y)>1024) {++mStats.PoseRejected;return false;}
+    const auto cursor=m.Read(CommandCursorAddress);
+    if(!cursor || !Pointer(*cursor,8) || (*cursor&7)){++mStats.GuardRejected;return false;}
+    if(PendingLabels()>=1020 || mPending.size()>=1020){++mStats.CapacityRejected;return false;}
     bool suppress=!ring;
-    // A shared embedded tree may be visited by its parent and by its own draw.
-    if (mSeen.insert({node,slot.X,slot.Y}).second) {
+    const Key key{*cursor,node,slot.X,slot.Y};
+    // Dedup only the same emission destination, not a later native frame
+    // which happens to reuse the same pane and position before host draining.
+    if (mSeen.insert(key).second) {
+      PendingPane pane{*cursor,key,{},mStyle};
       if(dpad) {
         // Four independently bound directions, positioned within the native
         // D-pad pane. Never replace the mask/instrument content around it.
@@ -149,29 +352,44 @@ private:
           auto key=slot;key.Action=actions[i];key.Height=slot.Height*.36f;key.Width=key.Height;
           key.X+=(*xx*dx[i]* *w+*xy*dy[i]* *h)*.32f;
           key.Y+=(*yx*dx[i]* *w+*yy*dy[i]* *h)*.32f;
-          if(NativeButtonOverlayGlyph(key.Action,mPrompts,mControls)) {mPending.push_back(key);++mStats.Labels;++mStats.Dpad;}
+          if(NativeButtonOverlayGlyph(key.Action,mPrompts,mControls)) {pane.Slots.push_back(key);++mStats.Labels;++mStats.Dpad;}
           else suppress=false;
         }
       } else {
-        mPending.push_back(slot); ++mStats.Labels;
+        pane.Slots.push_back(slot); ++mStats.Labels;
         if (ring) ++mStats.Rings; else if (hud) ++mStats.Hud; else ++mStats.Parts;
         if(owner && LayoutNamed(m,*owner,"Pictogram")) ++mStats.Pictograms;
         if(text) ++mStats.Text;
       }
+      mPending.push_back(std::move(pane));
     }
+    else ++mStats.DuplicateCandidates;
     // Mixed A/B ring art remains native. A partially unbound D-pad retains
     // its cross; pure labels/pictograms and the exact ZR+ legend are replaced.
     if(dpad) for(auto direction:{NativeControlAction::DpadUp,NativeControlAction::DpadDown,
         NativeControlAction::DpadLeft,NativeControlAction::DpadRight})
       if(!NativeButtonOverlayGlyph(direction,mPrompts,mControls))suppress=false;
+    if(dpad && !suppress)++mStats.UnboundCandidates;
     return suppress;
   }
   Counters mStats;
   NativeControlConfig mControls;
   NativePromptSet mPrompts=NativePromptSet::Touch;
   bool mActive=false;
-  std::vector<NativeButtonOverlaySlot> mPending;
-  std::set<std::tuple<uint32_t,float,float>> mSeen;
-  NativeButtonOverlayFrames mFrames;
+  bool mTouchObserve=false;
+  Mm3dTouchHudGroups mTouchGroups{};
+  std::array<Mm3dTouchHudNativeMapping, kMm3dTouchHudElementCount> mApplied{};
+  InlineChordStyle mInlineChordStyle=InlineChordStyle::Abbreviated;
+  struct Style { NativeControlConfig Controls;NativePromptSet Prompts; };
+  using Key=std::tuple<uint32_t,uint32_t,float,float>;
+  struct PendingPane { uint32_t Cursor;Key Identity;std::vector<NativeButtonOverlaySlot> Slots;std::shared_ptr<const Style> Settings; };
+  using Snapshot=std::vector<PendingPane>;
+  struct DrawGroup { uint64_t First,Last;std::shared_ptr<const Snapshot> Data; };
+  std::shared_ptr<const Style> mStyle;
+  Snapshot mPending;
+  std::set<Key> mSeen;
+  std::shared_ptr<const Snapshot> mSubmitted;
+  std::deque<DrawGroup> mDraws;
+  std::vector<std::shared_ptr<const Snapshot>> mPresented;
 };
 } // namespace Oot3dNativeGame

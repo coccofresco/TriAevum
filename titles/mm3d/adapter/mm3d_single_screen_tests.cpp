@@ -2,6 +2,7 @@
 #include "core.h"
 #include "mm3d_restoration.h"
 #include "mm3d_single_screen.h"
+#include "../dekui/button_glyph_emission.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -165,6 +166,48 @@ void TestRestoreReset() {
     Mm3dSingleScreen::SetDamageMultiplier(1);
 }
 
+void TestInlineGlyphAbi() {
+    namespace G=Mm3dDekui::ButtonGlyphEmission;
+    WordMemory memory;
+    for(auto [pc,word]:G::Guards)memory.Words[pc]=word;
+    constexpr uint32_t node=0x10000000,groups=0x10060000,entries=groups+0x100,
+        resource=groups+0x200,descriptor=groups+0x400,record=groups+0x500,pixels=0x11000000;
+    memory.Words[Mm3dDekui::NotebookPrompt::RegistryLiteral]=Mm3dDekui::NotebookPrompt::Registry;
+    memory.Words[Mm3dDekui::NotebookPrompt::Registry+0x28]=groups;
+    memory.Words[Mm3dDekui::NotebookPrompt::Registry+0x2c]=entries;
+    memory.Words[groups]=12;memory.Words[entries+44]=resource;memory.Words[resource+4]=11<<16;
+    memory.Words[resource+12+0x4c]=descriptor;memory.Words[descriptor+0x20]=pixels;
+    memory.Words[record]=pixels;memory.Words[record+0xc]=256;memory.Words[record+0x10]=128;
+    memory.Words[record+0x38]=~0u;memory.Words[0x006a3a88]=0x14001000;
+    const auto f=[&](uint32_t at,float value){memory.Words[at]=std::bit_cast<uint32_t>(value);};
+    for(auto off:{0xe0u,0xf4u,0x110u,0x120u,0x128u,0x12cu,0x130u,0x134u})f(node+off,1);
+    for(auto off:{0xe4u,0xf0u,0xecu,0xfcu,0x114u,0x118u,0x11cu,0x124u})f(node+off,0);
+    f(record+0x14,0);f(record+0x18,0);f(record+0x20,16);f(record+0x24,16);
+    f(record+0x28,144.f/256);f(record+0x2c,0);f(record+0x30,16.f/256);f(record+0x34,16.f/128);
+    const auto original=memory.Words;
+    for(auto [pc,word]:G::Guards) {
+        auto bad=memory;bad.Words[pc]=word^1;
+        Mm3dSingleScreen adapter;Mm3dGuestPatches patches;adapter.Register(patches);
+        Require(patches.Verify(bad)==0,"each inline glyph guard must fail closed");
+    }
+    Mm3dSingleScreen adapter;Mm3dGuestPatches patches;adapter.Register(patches);
+    Require(patches.Verify(memory)==1,"only inline glyph site enabled in isolated fixture");
+    adapter.ConfigureButtonOverlay(NativeControlDefaults(),NativePromptSet::Keyboard);
+    for(auto caller:{G::ShadowReturn,G::MainReturn}) {
+        a32::GuestState state;for(unsigned i=0;i<16;++i)state.r[i]=100+i;
+        state.r[1]=17;state.r[2]=node;state.r[3]=record;state.r[14]=caller;
+        state.cpsr=0xa0000010;state.vfp.fill(0x3f800000);
+        const auto before=state;a32::ExecutionResult result;
+        Require(Mm3dGuestPatches::Execute(G::Pc,state,memory,&result,&patches) && result.pc==caller && state.r[0]==17,
+            "inline renderer returns unchanged native command count to its exact caller");
+        for(unsigned i=1;i<15;++i)Require(state.r[i]==before.r[i],"inline replacement changed a preserved register");
+        Require(state.cpsr==before.cpsr && state.vfp==before.vfp && memory.Words==original,
+            "inline replacement changed flags/VFP/guest bytes");
+    }
+    a32::GuestState prose;prose.r[14]=G::MainReturn;prose.r[2]=node;prose.r[3]=record;
+    memory.Words[record]=pixels+8;a32::ExecutionResult result;
+    Require(!Mm3dGuestPatches::Execute(G::Pc,prose,memory,&result,&patches),"ordinary font invokes original renderer");
+}
 } // namespace
 
 int main(int argc, char** argv) {
@@ -198,6 +241,7 @@ int main(int argc, char** argv) {
     TestGuard();
     TestStateSettings();
     TestRestoreReset();
+    TestInlineGlyphAbi();
     std::cout << "mm3d_single_screen_tests: ok\n";
     return 0;
 }

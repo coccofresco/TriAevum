@@ -97,7 +97,8 @@ public final class TriAevumActivity extends SDLActivity {
                 // The game's library is not loaded yet: nothing runs to pause.
             }
         }
-        if (touchAdapter != null) touchAdapter.releaseAll();
+        if (touchOverlay != null) touchOverlay.cancelTouches();
+        else if (touchAdapter != null) touchAdapter.releaseAll();
         if (touchInput != null) touchInput.pause();
         super.onPause();
     }

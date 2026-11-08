@@ -190,6 +190,11 @@ void HelpersAndReplay() {
     const auto unchanged_s=cpu.s;
     core.CallSvc(1,cpu,memory);
     Check(cpu.r==unchanged && cpu.s==unchanged_s,"unknown SVC is inert");
+    // A completed bottom-manager pass must not classify a later standalone
+    // widget as bottom-screen. There is no active LayoutBase context here.
+    cpu.r[0]=0;cpu.r[1]=5;
+    core.CallSvc(NativeInventory::FirstSVC+1,cpu,memory);
+    cpu.r=unchanged;
     unsigned emissions=0;
     memory.data[cpu.r[4]+4]=0x10008000;memory.data[cpu.r[4]+0x28]=0x10009000;
     core.host.layout_draw=[&](Memory&,U32 owner,U32 widget,U32 pass){
