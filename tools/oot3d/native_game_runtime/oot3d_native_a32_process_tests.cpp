@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstdio>
 #include <exception>
 #include <iostream>
 #include <span>
@@ -1192,8 +1193,47 @@ void TestFallbackBoundary() {
     const auto result = process.Run();
     Expect(result.Kind == Oot3dNativeGame::NativeA32ProcessRunKind::Faulted &&
                services.FallbackCount == 1 &&
-               result.Error == "expected test fallback fault",
+               result.Error.rfind("expected test fallback fault lr=0x", 0) == 0,
            "missing block must cross the typed host boundary and fail closed");
+    // The fault's support report: registers and the dispatch transition
+    // that reached the fault, on the one fatal line.
+    Expect(result.Error.find(" sp=0x00008000 cpsr=0x00000000") != std::string::npos &&
+               result.Error.find(" r12=0x00000000 ") != std::string::npos &&
+               result.Error.find(" trail=1:00001000>00001000/3") != std::string::npos &&
+               result.Error.find('\n') == std::string::npos,
+           "a fault reports lr, r0-r12, sp, cpsr and its dispatch transitions");
+}
+
+// The fault trail keeps the last kCapacity transitions, oldest first, and
+// its text holds guest values only. negative=true checks the same contract
+// against a trail that dropped its transitions and must fail.
+bool FaultTrailContract(bool negative) {
+    Oot3dNativeGame::NativeA32FaultTrail trail;
+    constexpr uint32_t kRecorded = 40U;
+    if (!negative) {
+        for (uint32_t i = 0; i < kRecorded; ++i)
+            trail.Record(0x00100000U + i * 4U, 0x00200000U + i * 4U, static_cast<uint8_t>(i % 9U));
+    }
+    std::array<uint32_t, 16> registers{};
+    for (uint32_t i = 0; i < 16; ++i) registers[i] = 0x11111111U * (i % 15U);
+    registers[14] = 0x0015127CU;
+    const auto text = trail.Describe(registers, 0x600000D3U);
+    const uint32_t oldest = kRecorded - static_cast<uint32_t>(Oot3dNativeGame::NativeA32FaultTrail::kCapacity);
+    char first[32];
+    std::snprintf(first, sizeof(first), "trail=32:%08X>%08X/%u", 0x00100000U + oldest * 4U,
+                  0x00200000U + oldest * 4U, oldest % 9U);
+    return trail.Size() == 32U && Oot3dNativeGame::NativeA32FaultTrail::kCapacity >= 16U &&
+           text.find(" lr=0x0015127C r0=0x00000000 r1=0x11111111") != std::string::npos &&
+           text.find(" sp=0xDDDDDDDD cpsr=0x600000D3") != std::string::npos &&
+           text.find(first) != std::string::npos &&
+           text.find("0020009C/3") != std::string::npos &&
+           // No path-like text before the trail (it holds ':' and '/').
+           text.substr(0, text.find(" trail=")).find_first_of("\\/:") == std::string::npos &&
+           text.find('\n') == std::string::npos;
+}
+
+void TestFaultTrail() {
+    Expect(FaultTrailContract(false), "the fault trail reports registers and the last transitions");
 }
 
 struct BlockEntryProbe {
@@ -2042,10 +2082,18 @@ int main(int argc, char** argv) {
             std::cout << "oot3d_native_a32_process_tests: TLS ok\n";
             return 0;
         }
+        if (argc == 2 && std::string_view(argv[1]) == "--fault-trail-negative") {
+            // Recorded negative: a trail without transitions fails the contract.
+            const bool passed = FaultTrailContract(true);
+            std::cout << "oot3d_native_a32_process_tests: fault-trail negative "
+                      << (passed ? "unexpectedly passed" : "rejected") << '\n';
+            return passed ? 0 : 1;
+        }
         TestMemoryContract();
         TestMemoryFastBlockEquivalence();
         TestMemoryRangeGenerations();
         TestStoppedThreadRunKind();
+        TestFaultTrail();
 #if defined(OOT3D_NATIVE_A32_AOT_TESTS)
         TestWholeAotShiftAndFlagSemantics();
 #if defined(OOT3D_NATIVE_WHOLE_AOT_TESTS)

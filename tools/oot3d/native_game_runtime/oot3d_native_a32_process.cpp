@@ -536,6 +536,10 @@ NativeA32ProcessRunResult NativeA32Process::Fault(
     const oot3d::recomp::a32::ExecutionResult& exit,
     uint32_t hostTransitions, std::string error) {
     CurrentThreadStatus() = NativeA32ThreadStatus::Faulted;
+    if (mPrimaryThreadStatus != NativeA32ThreadStatus::Empty) {
+        const auto& state = CurrentThreadState();
+        error += mFaultTrail.Describe(state.r, state.cpsr);
+    }
     return {NativeA32ProcessRunKind::Faulted, exit, hostTransitions,
             std::move(error)};
 }
@@ -602,6 +606,7 @@ NativeA32ProcessRunResult NativeA32Process::Run(
         const auto dispatchStart = mTimingEnabled
                                        ? TimingClock::now()
                                        : TimingClock::time_point{};
+        const uint32_t dispatchFrom = state.r[15];
         CpuPhaseProbe::Scope cpuDispatch(CpuPhaseProbe::Phase::Aot);
         const auto exit =
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
@@ -623,6 +628,7 @@ NativeA32ProcessRunResult NativeA32Process::Run(
             mNativeBlockCallback, mNativeBlockUser);
 #endif
         cpuDispatch.Stop();
+        mFaultTrail.Record(dispatchFrom, exit.pc, static_cast<uint8_t>(exit.kind));
         if (mTimingEnabled) {
             ++mTimingStats.DispatchCalls;
             mTimingStats.DispatchNanoseconds +=

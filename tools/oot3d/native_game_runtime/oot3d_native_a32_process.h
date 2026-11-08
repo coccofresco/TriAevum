@@ -1,5 +1,6 @@
 #pragma once
 
+#include "oot3d_native_a32_fault_trail.h"
 #include "oot3d_native_a32_memory.h"
 
 #include <array>
@@ -247,6 +248,8 @@ class NativeA32Process {
     const oot3d::recomp::a32::Registry& mRegistry;
     NativeA32HostServices& mHostServices;
     NativeA32Memory mMemory;
+    // The last dispatch transitions, appended to a fault's report.
+    NativeA32FaultTrail mFaultTrail;
     oot3d::recomp::a32::GuestState mPrimaryThreadState;
     NativeA32ThreadStatus mPrimaryThreadStatus = NativeA32ThreadStatus::Empty;
     uint32_t mPrimaryThreadPriority = 0;
