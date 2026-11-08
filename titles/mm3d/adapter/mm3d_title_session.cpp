@@ -19,6 +19,7 @@
 #include "../gameplay/mm3d_light_arena.h"
 #include "../gameplay/mm3d_actor_visibility.h"
 #include "../gameplay/mm3d_foliage_distance.h"
+#include "../dekui/hud_adjustments.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
@@ -73,6 +74,11 @@ public:
     return IsMm3dGameplayHud(sourcePc, nativeValue);
   }
   bool OwnsSceneProjection() const override { return true; }
+  // dekui draws the single-screen minimap by rewriting the native quad
+  // queue (native_minimap.h); photo Hide HUD drops it there.
+  void SetGameplayHudVisible(bool visible) override {
+    Mm3dDekui::HudAdjustments::photo_hud_hidden.store(!visible);
+  }
   void SetPresentation(const TitlePresentationSettings& settings) override {
     mPresentationSettings=settings;
     ApplyMm3dPresentationSettings(settings);

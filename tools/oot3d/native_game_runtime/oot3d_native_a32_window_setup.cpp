@@ -1942,6 +1942,7 @@ void NativeA32WindowSession::ApplyPhotoModeHud() {
   // the TopScreen compositor does not draw, follow render_hud as well.
   picaPresentationScheduler.SetNativeGameplayHudVisible(
       !hidden && (!nativeCandidateDispatch.TopScreenUiProfile || activeTopScreenConfig.RenderHud));
+  if (titleSession) titleSession->SetGameplayHudVisible(!hidden);
 }
 
 void NativeA32WindowSession::ApplySelectedUiProfile() {
