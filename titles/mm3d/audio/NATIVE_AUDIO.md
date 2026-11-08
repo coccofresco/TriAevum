@@ -55,6 +55,31 @@ Build the optional `mm3d_native_effect_tests` target with the MM A32 registry,
 then pass the local EUR `code.bin`. This is an offline kernel test, not a game
 launch and not proof of an audible room transition or physical audio device.
 
+## Cross-reference to the mm3d-decomp (USA v1.0) by meaning
+
+Donor: `external/mm3d-decomp-dl` commit 28182d85 (unannotated Ghidra `fn_0x*.c`,
+v1.0 USA). Every row was re-found by structure, never by copying an address; the
+EUR v1.1 addresses above remain the only addresses used by code and tests.
+
+| Owner | EUR v1.1 | v1.0 decomp | Guard words matched |
+|---|---|---|---|
+| Default initializer | `0x1628b0` | `FUN_001629f8` (+0x148) | stores 0x3c, 4000, 100; three float literals; flag byte at word 8 |
+| Mixer dispatch | `0x1d63bc` | `FUN_001d65ec` (+0x230) | lock(+0x44); channels base, +0x280, +0x500, +0x780; `param_2*8`; +0x34 delay first, else +0x38 stereo; unlock |
+| Delay | `0x1d9a80` | `FUN_001d9cb0` (+0x230) | return unless +0x56; channel count +0x55; rings +0x1c, filters +0x2c, index +0x40, gain +0x44 `>>7`, 0x280 block stride |
+| Stereo reverb | `0x1d9b70` | `FUN_001d9da0` (+0x230) | return unless **+0x104** |
+| Parameter conversion | `0x1d9da0` | `FUN_001d9fd0` (+0x230) | +0x9c = n*0xa0 (160-sample blocks), +0xa0 = 0, powf call, zero-fill (+0x28,+0x2c) |
+| `powf` | `0x1cdce0` | `FUN_001cdee8` (+0x208) | called from parameter conversion on +0xac |
+| Zero fill | `0x16e4e0` | `FUN_0016e63c` (+0x15c) | tail call of parameter conversion |
+| Recursive lock / unlock | `0x192be0` / `0x192c40` | `FUN_00192d3c` / `FUN_00192d9c` (+0x15c) | bracket the mixer dispatch |
+| Per-voice loop (24) | `0x1d6308` (calls `0x1da138`) | `FUN_001d6538` (+0x230, calls `FUN_001da368`) | `param_1 + i*4 + 0x15dc` -> +0x68, `i < 0x18`; the look-alike `FUN_001d638c` calls an unrelated `FUN_001cbd48` and is rejected |
+
+The relocation deltas are constant inside each code region (+0x15c low runtime,
++0x208/+0x230 audio module), which confirms that these are the same functions
+moved by the v1.1 rebuild, not look-alikes. The decomp supplies the layout
+semantics (delay **or** stereo per mixer channel, 160-sample blocks, stereo
+enable at +0x104), which match what the offline native test executes. It does
+not add an audible or device-level proof.
+
 ## Shared platform proof and remaining acceptance
 
 Existing offline suites cover DSP differential mixing and save/load, codecs,
