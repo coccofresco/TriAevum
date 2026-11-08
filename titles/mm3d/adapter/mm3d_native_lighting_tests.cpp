@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <vector>
 
 using namespace Oot3dNativeGame;
 using namespace Fast::Renderer3ds;
@@ -132,6 +133,51 @@ void TestRoundTwoSourcesConverted() {
         bool present = false;
         for (const auto& source : kMm3dLocalLightSources) present |= source.Actor == id;
         Require(present,"round-2 native light source not converted");
+    }
+}
+
+void TestMultiRowActorOffsets() {
+    // Auditor r2: per-row offset assertions for actors with several native
+    // lights. Every row of one actor must be a distinct (Info,Node) pair, and
+    // wiring all of them at once must publish each exactly once at its own
+    // identity (no merged/duplicated rows).
+    const std::array<uint32_t,3> bigpoInfo{0x950,0x978,0x9A0}, bigpoNode{0x94C,0x974,0x99C};
+    uint32_t bigpoRows=0;
+    for (const auto& source : kMm3dLocalLightSources) if (source.Actor==0x197) {
+        Require(bigpoRows<3 && source.Info==bigpoInfo[bigpoRows] && source.Node==bigpoNode[bigpoRows],
+                "En_Bigpo row offset is not +0x950/+0x94C + i*0x28");
+        ++bigpoRows;
+    }
+    Require(bigpoRows==3,"En_Bigpo must have exactly three rows");
+    for (const auto& first : kMm3dLocalLightSources) {
+        std::vector<const Mm3dLocalLightSource*> rows;
+        for (const auto& source : kMm3dLocalLightSources)
+            if (source.Actor==first.Actor && source.Update==first.Update) rows.push_back(&source);
+        if (rows.size()<2 || rows.front()!=&first) continue;
+        for (size_t i=0;i<rows.size();++i) for (size_t j=i+1;j<rows.size();++j)
+            Require(rows[i]->Info!=rows[j]->Info && rows[i]->Node!=rows[j]->Node,"multi-row actor repeats an offset");
+        Fixture f; Mm3dNativeA32LightingProbe probe;
+        f.W16(f.Actor,first.Actor); f.W8(f.Actor+2,first.Category); f.W16(f.Actor+0x1C,1);
+        f.W32(f.Actor+0x140,first.Update); f.W32(f.Actor+0x13C,first.Destroy);
+        f.W32(f.Play+0x20C0+first.Category*12,1); f.W32(f.Play+0x20C4+first.Category*12,f.Actor);
+        f.W32(f.Play+0xA88,f.Nodes);
+        for (size_t i=0;i<rows.size();++i) {
+            for (const auto& guard : rows[i]->Guards) f.W32(guard[0],guard[1]);
+            const uint32_t node=f.Nodes+uint32_t(i)*0x10U;
+            f.Link(node,f.Actor+rows[i]->Info,i+1<rows.size()?node+0x10U:0U);
+            f.W32(f.Actor+rows[i]->Node,node); f.Point(f.Actor+rows[i]->Info+4,int16_t(100+i));
+        }
+        probe.CaptureSceneLights(f.Play,f.Memory);
+        const auto binding=probe.CaptureRenderer(0,f.Memory);
+        Require(binding.ScenePoints && binding.ScenePoints->Count==rows.size(),"multi-row actor not published once per row");
+        for (size_t i=0;i<rows.size();++i) {
+            uint32_t hits=0;
+            for (uint32_t k=0;k<binding.ScenePoints->Count;++k) {
+                const auto& light=binding.ScenePoints->Lights[k];
+                if (light.SourceIdentity==f.Actor+rows[i]->Info+4) { ++hits; Require(light.Radius==100+i,"row published with another row's radius"); }
+            }
+            Require(hits==1,"multi-row actor row identity missing or duplicated");
+        }
     }
 }
 
@@ -296,6 +342,7 @@ void TestSceneSnapshots() {
     TestSyntheticFireAndFairies();
     TestLocalSourceGuards();
     TestRoundTwoSourcesConverted();
+    TestMultiRowActorOffsets();
     TestEachProvenSourcePublication();
     TestRoomEmitterPublication();
     Fixture f; Mm3dNativeA32LightingProbe probe;
