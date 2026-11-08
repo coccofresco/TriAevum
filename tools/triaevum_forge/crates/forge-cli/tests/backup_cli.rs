@@ -27,8 +27,10 @@ fn backup_preview_restore_and_recover() {
     let data = package.join("data");
     write(&data.join("savedata/system/save00.bin"), b"first");
     write(&data.join("config/TriAevum.json"), b"{}");
-    write(&package.join("recipes/oot3d.json"),
-        br#"{"format":"triaevum_supported_revisions_v1","recipes":[{"id":"fixture","game":"oot3d"}]}"#);
+    // This Forge title's packaged recipes (recipes/oot3d.json or recipes/mm3d.json).
+    let title = forge_catalog::title::ACTIVE;
+    write(&package.join(title.packaged_recipes), format!(
+        r#"{{"format":"triaevum_supported_revisions_v1","recipes":[{{"id":"fixture","game":"{}"}}]}}"#, title.id).as_bytes());
     let zip = directory.path().join("backup.zip");
     let root = package.to_string_lossy().into_owned();
     let zip_text = zip.to_string_lossy().into_owned();

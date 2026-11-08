@@ -43,7 +43,8 @@ fn package(root: &Path) {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(path, bytes).unwrap();
     };
-    write("recipes/oot3d.json", b"{\"format\": \"triaevum_supported_revisions_v1\", \"recipes\": []}");
+    // This Forge title's packaged recipes (recipes/oot3d.json or recipes/mm3d.json).
+    write(forge_catalog::title::ACTIVE.packaged_recipes, b"{\"format\": \"triaevum_supported_revisions_v1\", \"recipes\": []}");
     let catalog = json!({
         "format": "triaevum_precompiled_titles_v1",
         "install_model": "precompiled_title_rom_import_v1",

@@ -1241,6 +1241,7 @@ name = "forge-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "forge-catalog",
  "forge-core",
  "forge-native",
  "serde_json",
