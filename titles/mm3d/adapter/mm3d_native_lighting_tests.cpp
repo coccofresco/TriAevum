@@ -943,6 +943,53 @@ void TestCustomShadowProducers() {
     }
 }
 
+// Direct shadow submitters (COMPOSITION/DIRECT_SHADOW/scan.txt): an actor that
+// submits the shared shadow CMB through 0x0020A898 itself, bypassing the shared
+// routines, is a blob by the model's resource tuple learned from a proved
+// routine submit. mode 0: same resources -> shadow; mode 1: other resources ->
+// actor geometry; mode 2: no proved submit before -> actor geometry.
+void TestDirectShadowSubmitByResource() {
+    for (int mode = 0; mode < 3; ++mode) {
+        Fixture f; Mm3dNativePicaCompositionTracker tracker; auto& s=f.State;
+        Require(tracker.VerifyHooks(f.Memory),"valid signatures rejected");
+        const auto observe=[&](uint32_t pc){return tracker.ObserveBlockEntry(pc,s,f.Memory);};
+        const auto cursor=[&](uint32_t p){f.W32(kMm3dCommandListCursorAddress,p);};
+        s.r[0]=f.Play;observe(0x15E9ECU);
+        s.r[0]=f.Actor;s.r[2]=0x1F8E28U;observe(0x182C44U);
+        const uint32_t proved=f.Model+0x400U,direct=f.Model+0x800U;
+        f.W32(proved,0x63BED4U);f.W32(proved+0xA0U,f.Renderer);f.W32(proved+0x90U,0x0C000100U);
+        f.W32(direct,0x63BED4U);f.W32(direct+0xA0U,f.Renderer);f.W32(direct+0x90U,mode==1?0x0C000200U:0x0C000100U);
+        f.W32(f.Queue+4U,0);
+        uint32_t n=0;
+        const auto submit=[&](uint32_t model,uint32_t lr){
+            s.r[0]=model;s.r[14]=lr;observe(0x20A898U);
+            s.r[0]=f.Queue;s.r[1]=model;s.r[14]=0x20A8F8U;observe(0x224104U);
+            f.W32(f.Queue+8U+n*4U,model);++n;f.W32(f.Queue+4U,n);observe(0x223EDCU);
+        };
+        if (mode!=2) submit(proved,0x0021EFACU);
+        submit(direct,0x0020A000U);
+        observe(0x182C48U);
+        cursor(0x14000000U);s.r[0]=f.Queue;s.r[14]=0x11EF3CU;observe(kMm3dRenderListVisitEntry);
+        uint32_t at=0x14000008U;
+        for (uint32_t i=0;i<n;++i){
+            const uint32_t slot=f.Queue+8U+i*4U;
+            cursor(at);Require(f.Memory.Read32(slot,&s.r[0]),"consumer model");s.r[4]=f.Queue;s.r[5]=slot;
+            observe(0x5EF0CCU);at+=0x18U;cursor(at);observe(0x5EF0D0U);
+        }
+        cursor(at+8U);observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0,0,spans);
+        const Oot3dPicaCommandListCompositionSpan* last=nullptr;
+        for (const auto& span:spans) if (span.Attribution.NativeProjectedShadow || span.Attribution.NativeActorGeometry) last=&span;
+        Require(last!=nullptr,"direct shadow coverage");
+        if (mode==0) Require(last->Attribution.NativeProjectedShadow && !last->Attribution.NativeActorGeometry,
+                             "direct shadow-CMB submit inherited actor role");
+        else Require(!last->Attribution.NativeProjectedShadow && last->Attribution.NativeActorGeometry,
+                     mode==1?"foreign resources became a blob":"unproved resources became a blob");
+        Require((tracker.Stats().DirectShadowSubmits==1U)==(mode==0),"direct shadow counter");
+    }
+}
+
 // P1.0/P1.1: each selected light's function, and BakedOutdoorRoom from the
 // environment group, with guard words and Unknown fallback.
 void TestLightFunctionsAndGroup() {
@@ -1018,7 +1065,7 @@ void TestLightFunctionsAndGroup() {
 } // namespace
 int main() {
     TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestUnobservedInPlaceRecycling(); TestActorEpochRenewedOnIdChange(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
-    TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();TestCustomShadowProducers();
+    TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();TestCustomShadowProducers();TestDirectShadowSubmitByResource();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();
     std::cout << "mm3d_native_lighting_tests: ok\n";

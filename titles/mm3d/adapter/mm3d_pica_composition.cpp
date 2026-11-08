@@ -161,6 +161,7 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             memory.Read16(play + 0x148U, &scene) && memory.Read32(play + 0x138U, &frame);
         if (!valid || play != mPlay || scene != mScene || frame < mPlayFrame) {
             mActorLifetimes.clear(); mModelLifetimes.clear(); mSpans.clear();
+            if (!valid || scene != mScene) mShadowResources.clear();
             ++mStats.LifecycleInvalidations;
         }
         // Room slots (RoomContext at Play+0xC260: curRoom, prevRoom at +0x64,
@@ -225,7 +226,17 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
     } else if (pc == 0x00182C48U && !mActorDrawStack.empty()) mActorDrawStack.pop_back();
     if (pc == 0x0020A898U) {
         const uint32_t lr = state.r[14];
-        mModelSubmit = ModelSubmit{state.r[0], lr, lr == 0x0021EFACU || lr == 0x001F3898U || lr == 0x001F3AB0U};
+        // The shared shadow routines (ActorShadow_Draw / _DrawFeet) prove a
+        // shadow by return site. An actor that submits the same shadow CMB
+        // through 0x0020A898 directly is matched by the model's resource tuple
+        // learned from those proved submits, never by model address or LR alone.
+        const bool routine = lr == 0x0021EFACU || lr == 0x001F3898U || lr == 0x001F3AB0U;
+        std::array<uint32_t, 7> resources{};
+        const bool readable = ReadModelResources(state.r[0], memory, resources);
+        const bool known = readable && std::find(mShadowResources.begin(), mShadowResources.end(), resources) != mShadowResources.end();
+        if (routine && readable && !known && mShadowResources.size() < 16U) mShadowResources.push_back(resources);
+        if (!routine && known) ++mStats.DirectShadowSubmits;
+        mModelSubmit = ModelSubmit{state.r[0], lr, routine || known};
     } else if (pc == 0x0020A8B8U) {
         // The same scene-queue helper can also be entered directly.
         if (!mModelSubmit || state.r[1] != mModelSubmit->Model || state.r[14] != mModelSubmit->ReturnPc)
