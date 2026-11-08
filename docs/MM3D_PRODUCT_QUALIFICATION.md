@@ -343,3 +343,27 @@ ff5e7a8f, deeeb68e parity/dl 1da09ade. The dual tree is configured with registry
 build exits 0. 40/40 affected suites exit 0. The negative (built-in packs `--negative`) exits 1. The O2 ran once on the
 OoT-only tree at deeeb68e (TriAevum.exe sha256 c62d0264...) and passed: 3/3 cap-p13 frames identical, reproducible=1,
 uber_draws=0, watch_exit=0. Evidence: `W/analysis/parity/INTEG/r7/`.
+
+## Round-6 per-cut qualification of 89573e5d (2026-11-08)
+
+Correction: 89573e5d (merge of catalogs 0d53938e) was described in round 5 as a test-only merge covered by the
+deeeb68e O2. It is not: it also brings c6dd094a (offline variant-replay tool), 5d8b549a and 88b48850 (shared
+`whole_aot_program.py`/`whole_aot_cpp.py`: BLX-to-Thumb calls, epilogue observers without Pc+4, MM guest-patch
+exports), b6f242e8 and efc72b6c (developer-only shadow-caster view-lag probe in `gfx_vulkan_pica_draw.cpp`,
+`#if TRIAEVUM_RENDERER_DEVELOPER_TOOLS`). Requalified at that tip: dual tree (registry `a32_generated_overlay`) and the
+OoT-only tree rebuilt, both exit 0; 41/41 affected suites exit 0, including `oot3d_mm3d_guest_patches_tests` and
+`oot3d_graphics_foundation_tests`; the negative (built-in packs `--negative`) exits 1; whole-AOT generator Python tests
+59 passed. ONE O2 on the OoT-only tree (TriAevum.exe sha256 1af9f7fd...): 3/3 cap-p13 frames identical,
+reproducible=1, uber_draws=0, watch_exit=0. Later commits of this round touch only the Forge Python and title data
+(per-title whole-AOT frontend), not the game executable. Evidence: `W/analysis/parity/INTEG/r10/`.
+
+## Per-title whole-AOT source frontend (2026-11-08, integ round 6)
+
+The Forge's whole-AOT source frontend (`whole_aot_source_backend.load_default_frontend`) is selected by title. The
+prepared recipe id chooses it (`forge.recipe_title`): a recipe listed in MM3D's `recipes/mm3d.json` or
+`titles/mm3d/forge/supported_revisions.json` selects MM3D; every other recipe keeps OoT3D's frontend unchanged; a recipe
+listed by two titles is refused. MM3D's inputs are title facts in `titles/mm3d/a32/whole_aot_frontend.json` (inventory,
+guest-patch supplemental entries, boundary audit, product manifest, selection, base 0x100000); every role must be a file
+under `titles/mm3d`. The MM3D product manifest and selection are the zero-residual product contract (G2) and do not
+exist yet, so the MM3D frontend is refused with their names until G2 lands. Tests: `test_whole_aot_title_frontend.py`
+(10 passed); the negative (the OoT hardwire restored) fails 3 tests. Evidence: `W/analysis/parity/INTEG/r10/forge/`.
