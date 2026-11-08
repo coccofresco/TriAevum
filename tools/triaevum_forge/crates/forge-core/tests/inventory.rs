@@ -248,7 +248,7 @@ fn appimage_activates_in_xdg_data_with_explicit_external_choices() {
     let package = root.join(".mount_TriAevum/usr/lib/triaevum");
     std::fs::create_dir_all(&package).unwrap();
     let home = root.join("home/jdoe");
-    let activation = home.join(".local/share/TriAevum");
+    let activation = home.join(".local/share").join(forge_catalog::title::ACTIVE.data_namespace);
     let data = activation.join("data");
     profile(&activation.join("TriAevum.launch.json"), "data/", "TriAevum.json", &[]);
     let external_states = root.join("external/states");
@@ -316,7 +316,7 @@ fn flatpak_activates_in_its_sandbox_and_honours_ship_home_and_environment_overri
     let package = root.join("app/lib/triaevum");
     std::fs::create_dir_all(&package).unwrap();
     let sandbox = root.join("var/app").join(FLATPAK_ID).join("data");
-    let activation = sandbox.join("TriAevum");
+    let activation = sandbox.join(forge_catalog::title::ACTIVE.data_namespace);
     let data = activation.join("data");
     let controls = root.join("elsewhere/controls.json");
     let extra = ["--controls-config".to_string(), text(&controls)];

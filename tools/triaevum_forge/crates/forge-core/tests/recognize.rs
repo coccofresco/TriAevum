@@ -76,7 +76,8 @@ impl Fixture {
         let recipes = json!({"format": "triaevum_supported_revisions_v1", "recipes": [
             {"id": "fixture-eur", "title": "Fixture", "region": "EUR", "inputs": inputs}]});
         std::fs::create_dir_all(package.join("recipes")).unwrap();
-        std::fs::write(package.join("recipes/oot3d.json"), recipes.to_string()).unwrap();
+        // The active Forge title's packaged recipes (recipes/oot3d.json or recipes/mm3d.json).
+        std::fs::write(package.join(forge_catalog::title::ACTIVE.packaged_recipes), recipes.to_string()).unwrap();
         let rom = root.join("game.cci");
         std::fs::write(&rom, cartridge(&code())).unwrap();
         let extracted = root.join("extracted");

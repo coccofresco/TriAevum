@@ -239,3 +239,18 @@ product-config MM smoke ok. Evidence: `W/analysis/parity/INTEG/r3cut/`.
 
 F07 Windows row: **NOT QUALIFIED**. No installed-product run was made, because no MM whole-AOT title module or
 translator identity exists to install.
+
+## Per-title Forge, session round 3 (2026-11-08)
+
+- Update/state verification no longer assumes OoT3D. `package_inventory` required `recipes/oot3d.json` in every
+  update package, and installation state reported a missing `recipes/oot3d.json`. Both now use the Forge title's
+  packaged recipes (`recipes/oot3d.json` or `recipes/mm3d.json`). Without this fix, every MM3D Forge update would
+  have been refused. The OoT3D value is unchanged, so the OoT3D Forge's behaviour and messages are identical.
+- forge-core fixtures (recognition, inventory activation paths, update roles) follow the active title, so the MM
+  Forge runs the same suites as the OoT3D Forge. The pre-fix MM run is the recorded negative (14 update failures:
+  "The package has no recipes/oot3d.json").
+- validate_title is bound to the CATALOGS artifact contract through a FIXTURE module
+  (`per_title_forge.rs::mm3d_title_module_contract_binds_through_validate_title`). The real MM module is still not
+  built: CATALOGS is blocked on the object-cache disk plan, which is an owner question.
+
+F07 Windows row: still **NOT QUALIFIED**. There is no MM title module to install, so no installed run was made.

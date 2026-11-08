@@ -264,7 +264,9 @@ pub fn check_update_manifest(manifest: &ReleaseManifest, host_target: &str) -> R
         }
         check_public_member(&record.path, &record.role)?;
     }
-    for required in ["recipes/precompiled-titles.json", "recipes/oot3d.json"] {
+    // The Forge title's own supported revisions (recipes/oot3d.json or recipes/mm3d.json):
+    // an update package of the other title has no recipes this Forge can use.
+    for required in ["recipes/precompiled-titles.json", forge_catalog::title::ACTIVE.packaged_recipes] {
         if manifest.file(required).is_none() {
             return Err(package_error(format!("The package has no {required}")));
         }

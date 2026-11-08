@@ -416,7 +416,8 @@ impl<'a> Context<'a> {
         };
         let (platform, catalog) = catalog;
         if !recipes_path(&self.package).is_file() {
-            let details = "The package has no supported game revisions (recipes/oot3d.json)";
+            let details =
+                format!("The package has no supported game revisions ({})", forge_catalog::title::ACTIVE.packaged_recipes);
             return Ok(incompatible(IncompatibleReason::MissingCatalogue, details));
         }
         if platform != self.platform {

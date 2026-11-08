@@ -67,7 +67,7 @@ fn extra_files(new: bool) -> Vec<(&'static str, &'static str, Vec<u8>)> {
 
 fn roles() -> Vec<(String, &'static str)> {
     vec![
-        ("recipes/oot3d.json".into(), "revision_recipe"),
+        (forge_catalog::title::ACTIVE.packaged_recipes.into(), "revision_recipe"),
         ("recipes/precompiled-titles.json".into(), "precompiled_catalog"),
         (host().runtime.into(), "runtime_executable"),
         (host().native_module.into(), "forge_runtime_module"),
