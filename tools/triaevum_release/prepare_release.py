@@ -23,7 +23,8 @@ try:
     from .shader_release_layout import bind_renderer_compiler
     from .shader_corpus_layout import bind_shader_corpus
     from .precomputed_tables import bind_precomputed_tables
-    from .forge import load_recipe, DEFAULT_RECIPES
+    from .forge import load_recipe
+    from .title_release import restoration_members, retarget_recipe, title_release
     from . import release_signature
 except ImportError:
     from rust_forge_build import build as build_rust_forge
@@ -41,7 +42,8 @@ except ImportError:
     from shader_corpus_layout import bind_shader_corpus
     from precomputed_tables import bind_precomputed_tables
     import release_signature
-    from forge import load_recipe, DEFAULT_RECIPES
+    from forge import load_recipe
+    from title_release import restoration_members, retarget_recipe, title_release
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -95,6 +97,13 @@ def dlss_layout(targets: dict) -> list[dict]:
 
 
 def prepare(args) -> dict:
+    title = title_release(args.title)
+    recipe_file = title["recipes"]
+    recipe_id = args.recipe or title["default_recipe"]
+    if args.title == "mm3d" and args.restoration_resources is None:
+        raise ValueError("The MM3D release bundles Project Restoration: pass --restoration-resources")
+    if args.title != "mm3d" and args.restoration_resources is not None:
+        raise ValueError("--restoration-resources belongs to the MM3D release only")
     crt_artifacts = visual_cpp_runtime_artifacts(args.vc_redist_dir.resolve())
     build_dir = args.build_dir.resolve()
     work = args.work.resolve()
@@ -125,8 +134,12 @@ def prepare(args) -> dict:
     # The Rust Forge (window, launcher and command line) with its build receipt
     # and crate notices; the public import path runs no Python.
     forge = build_rust_forge(work / "forge-rust", target=WINDOWS.target, source_commit=commit,
-                             cargo=args.cargo, target_dir=args.cargo_target_dir)
+                             cargo=args.cargo, target_dir=args.cargo_target_dir,
+                             features=title["forge_features"])
     layout["files"].extend(forge["files"])
+    retarget_recipe(layout["files"], args.title)
+    if args.restoration_resources is not None:
+        layout["files"].extend(restoration_members(args.restoration_resources))
     artifacts = {
         "TriAevum.exe": Path(targets["runtime"]),
         "triaevum_title_aot.dll": Path(targets["stub"]),
@@ -165,16 +178,16 @@ def prepare(args) -> dict:
     layout["files"].extend(title_layout(
         runtime=Path(targets["runtime"]), native_module=artifacts["oot3d_game_module.dll"],
         plugin_manifest=args.title_build, generated_manifest=args.title_sources,
-        build_source=args.title_build_source, recipe=load_recipe(DEFAULT_RECIPES, args.recipe),
+        build_source=args.title_build_source, recipe=load_recipe(recipe_file, recipe_id),
         work=work / "precompiled", profile_data=args.title_profile))
     catalog_path = work / "precompiled/precompiled-titles.json"
-    definitions = load_json_object(DEFAULT_RECIPES)
+    definitions = load_json_object(recipe_file)
     catalog, definitions = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
     catalog, definitions, input_files = bind_input_coverage(catalog, definitions)
     qualified_recipes = work / "qualified-recipes.json"
     atomic_write_json(qualified_recipes, definitions)
     for item in layout["files"]:
-        if item["path"] == "recipes/oot3d.json":
+        if item["path"] == title["recipe_path"]:
             item["source"] = str(qualified_recipes.resolve())
     layout["files"].extend(input_files)
     catalog, shader_files = bind_renderer_compiler(catalog,
@@ -231,7 +244,11 @@ def main() -> int:
     parser.add_argument("--title-profile", type=Path,
                         help="Profile the title was built with (build-title --profile-data); required for a "
                              "profile-guided title, shipped with its translated source")
-    parser.add_argument("--recipe", default="oot3d-eur-project-baseline-16a6b0aa")
+    parser.add_argument("--title", choices=("oot3d", "mm3d"), default="oot3d",
+                        help="The title whose own Forge release is prepared (one title per release)")
+    parser.add_argument("--recipe", help="Recipe id (default: the title's own recipe)")
+    parser.add_argument("--restoration-resources", type=Path,
+                        help="MM3D only: Project Restoration member tree (romfs/...), fingerprint-verified")
     parser.add_argument("--shader-pack", type=Path, required=True,
                         help="Publisher input: bundled portable corpus, never a user choice")
     parser.add_argument("--pipeline-manifest", type=Path, action="append", required=True)

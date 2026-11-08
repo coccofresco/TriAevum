@@ -93,8 +93,14 @@ def _rustc_release(cargo: str) -> str:
     return match[1]
 
 
+def feature_arguments(features) -> list[str]:
+    """Cargo arguments for a title's Forge features (none for OoT3D)."""
+    return ["--features", ",".join(features)] if features else []
+
+
 def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo",
-          target_dir: Path | None = None, policy_path: Path = DEFAULT_POLICY) -> dict:
+          target_dir: Path | None = None, policy_path: Path = DEFAULT_POLICY,
+          features: tuple[str, ...] = ()) -> dict:
     platform = for_target(target)
     if target not in BINARIES:
         raise ValueError(f"No desktop Rust Forge build for {target}")
@@ -114,7 +120,8 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
                    "CARGO_ENCODED_RUSTFLAGS": "\x1f".join(rustflags(target, target_dir))}
     environment.pop("RUSTFLAGS", None)
     command = [cargo, "build", "--release", "--locked", "--target", target,
-               *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)]]
+               *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)],
+               *feature_arguments(features)]
     subprocess.run(command, cwd=FORGE_ROOT, env=environment, check=True)
 
     policy = load_json_object(policy_path)
