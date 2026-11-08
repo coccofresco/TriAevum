@@ -12,6 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from whole_aot_program import (
     build_program,
+    check_thumb_range_guards,
     load_inline_argument_calls,
     load_observed_sites,
     load_thumb_ranges,
@@ -521,6 +522,8 @@ class WholeAotProgramTest(unittest.TestCase):
         words = [0] * 18
         words[0] = 0xE12FFF1E
         words[8] = 0x1040  # pointer word naming 0x1040
+        # The Thumb range holds Thumb code (BX lr) the Thumb decoder accepts.
+        words[12:16] = [0x47704770] * 4
         words[16] = 0xE0039001  # decodes as A32 "and r9, r3, r1"
         words[17] = 0xE12FFF1E
         code = b"".join(word.to_bytes(4, "little") for word in words)
@@ -540,6 +543,49 @@ class WholeAotProgramTest(unittest.TestCase):
         self.assertNotIn(0x1040, excluded.pointer_roots)
         self.assertNotIn(0x1040, {f.entry for f in excluded.functions})
         self.assertIn(0x1040, plain.pointer_roots)
+
+    def test_audited_dispatch_entries_become_block_starts_and_roots(self) -> None:
+        # 0x1000 mov r0,#1; 0x1004 mov r1,#2 (a return slot inside linear
+        # flow); 0x1008 bx lr; 0x100C mov r0,#7 (no static edge); 0x1010 bx lr.
+        words = [0xE3A00001, 0xE3A01002, 0xE12FFF1E, 0xE3A00007, 0xE12FFF1E]
+        code = b"".join(word.to_bytes(4, "little") for word in words)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            inventory, audit = self._inputs(
+                root, [(BASE, 12, "f"), (BASE + 4, 4, "slot"), (BASE + 12, 4, "dead")])
+            plain_audit = root / "plain.csv"
+            plain_audit.write_text(
+                "entry,classification\n0x1004,switch_owned_case\n0x100C,switch_owned_case\n",
+                encoding="utf-8")
+            plain = build_program(code, inventory, plain_audit, base=BASE)
+            audit.write_text(
+                "entry,classification\n0x1004,multi_return_slot\n0x100C,unreferenced_code\n",
+                encoding="utf-8")
+            audited = build_program(code, inventory, audit, base=BASE)
+        # Negative: an already reachable switch-case row does not split the
+        # block, so pc 0x1004 would miss the dispatch.
+        self.assertNotIn(BASE + 4, {block.pc for block in plain.blocks})
+        pcs = {block.pc for block in audited.blocks}
+        self.assertTrue({BASE + 4, BASE + 12} <= pcs)
+        functions = {function.entry: function for function in audited.functions}
+        self.assertEqual(functions[BASE + 4].origin, "audited_dispatch_entry")
+        self.assertEqual(functions[BASE + 12].origin, "audited_dispatch_entry")
+
+    def test_thumb_range_guards_are_checked(self) -> None:
+        code = bytes.fromhex("10b5") + bytes(30)
+        with tempfile.TemporaryDirectory() as temporary:
+            facts = Path(temporary) / "thumb.csv"
+            facts.write_text(
+                "kind,start,end,size,name,guard\n"
+                "range,0x1000,0x1001,2,a,0xB510\nrange,0x1002,0x1003,2,b,\n",
+                encoding="utf-8")
+            self.assertEqual(check_thumb_range_guards(facts, code, BASE), 1)
+            facts.write_text(
+                "kind,start,end,size,name,guard\nrange,0x1000,0x1001,2,a,0xB500\n",
+                encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "guard at 0x00001000"):
+                check_thumb_range_guards(facts, code, BASE)
+
 
 if __name__ == "__main__":
     unittest.main()

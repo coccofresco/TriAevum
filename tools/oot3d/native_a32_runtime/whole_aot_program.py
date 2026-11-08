@@ -29,6 +29,7 @@ if str(UPSTREAM_SRC) not in sys.path:
 
 from oot3d_pack import a32_cpp_aot as pinned  # noqa: E402
 from oot3d_pack.arm_decode import DecodedInstruction  # noqa: E402
+import whole_aot_thumb as thumb_flow_module  # noqa: E402
 from oot3d_pack.arm_ir import (  # noqa: E402
     arm_core_runtime_category,
     arm_core_supported,
@@ -205,6 +206,9 @@ class AotBlock:
     instructions: tuple[AotInstruction, ...]
     successors: tuple[AotEdge, ...]
     body_sha256: str
+    # Thumb blocks (odd pcs) carry their decoded records: the lowering cannot
+    # re-read them from code.bin in 4-byte A32 steps.  Empty for A32 blocks.
+    thumb: tuple[thumb_flow_module.ThumbInstruction, ...] = ()
 
     def to_dict(self, include_instructions: bool) -> dict[str, object]:
         categories = Counter(item.semantic for item in self.instructions)
@@ -219,6 +223,9 @@ class AotBlock:
         }
         if include_instructions:
             result["instructions"] = [item.to_dict() for item in self.instructions]
+        if self.thumb:
+            result["state"] = "thumb"
+            result["thumb_instructions"] = [item.to_dict() for item in self.thumb]
         return result
 
 
@@ -681,8 +688,12 @@ def _function_closure(
                     closed = False
                 continue
             if edge.kind == "thumb_call":
-                # External Thumb boundary: dispatched at run time, so it
-                # neither opens the CFG nor adds an A32 callee.
+                # A32 BLX #imm into Thumb.  A translated Thumb function (its
+                # odd entry is a block of this program) is a direct callee;
+                # otherwise it is an external Thumb boundary dispatched at
+                # run time that neither opens the CFG nor adds a callee.
+                if edge.target in entry_to_block:
+                    direct_calls.add((edge.site, edge.target))
                 continue
             if edge.kind in {"indirect_call", "indirect_branch"}:
                 indirect_sites.add((edge.site, edge.kind))
@@ -742,6 +753,39 @@ def _body_hash(block_ids: Iterable[int], blocks: tuple[AotBlock, ...]) -> str:
     return digest.hexdigest()
 
 
+def _thumb_blocks(
+    flow: "thumb_flow_module.ThumbFlow", first_index: int
+) -> tuple[AotBlock, ...]:
+    blocks: list[AotBlock] = []
+    for offset, (pc, items) in enumerate(thumb_flow_module.make_blocks(flow)):
+        digest = hashlib.sha256()
+        digest.update(pc.to_bytes(4, "little"))
+        for item in items:
+            digest.update(item.size.to_bytes(1, "little"))
+            digest.update(item.thumb.to_bytes(4, "little"))
+        terminal = items[-1]
+        edges = tuple(
+            AotEdge(terminal.pc, kind, target, condition)
+            for kind, target, condition in flow.edges(terminal)
+        )
+        instructions = tuple(
+            AotInstruction(
+                pc=item.pc, raw=item.thumb, semantic=f"thumb_{item.kind}",
+                mnemonic=item.mnemonic, condition=item.condition, opcode=None,
+                rd=None, rn=None, rm=None, imm=None, setflags=False, load=None,
+                target=item.target, svc_id=None, family="thumb", operand_text=None,
+            )
+            for item in items
+        )
+        blocks.append(AotBlock(
+            index=first_index + offset, pc=pc,
+            end_pc=(terminal.address + terminal.size) | 1,
+            instructions=instructions, successors=edges,
+            body_sha256=digest.hexdigest(), thumb=tuple(items),
+        ))
+    return tuple(blocks)
+
+
 def load_observed_sites(path: Path, code: bytes) -> frozenset[int]:
     """Catalogued pcs that must start a block, for this exact code image.
 
@@ -792,6 +836,11 @@ def load_inline_argument_calls(path: Path | None, code: bytes,
     return calls
 
 
+# Boundary-audit classifications whose entries become dispatchable block
+# starts (see build_program).  Absent from OoT3D's audit: a no-op there.
+DISPATCH_ENTRY_CLASSES = ("multi_return_slot", "unreferenced_code")
+
+
 def load_thumb_ranges(path: Path | None) -> tuple[tuple[int, int], ...]:
     """Title Thumb code ranges (CSV kind,start,end with an inclusive end)."""
     if path is None:
@@ -801,6 +850,42 @@ def load_thumb_ranges(path: Path | None) -> tuple[tuple[int, int], ...]:
             (int(row["start"], 0), int(row["end"], 0) + 1)
             for row in csv.DictReader(source)
             if row.get("kind", "range") == "range"
+        )
+
+
+def check_thumb_range_guards(path: Path | None, code: bytes, base: int) -> int:
+    """Verify the optional ``guard`` column (first halfword of the range).
+
+    Returns the number of guarded rows; a mismatch raises ValueError."""
+    if path is None:
+        return 0
+    checked = 0
+    with path.open(newline="", encoding="utf-8-sig") as source:
+        for row in csv.DictReader(source):
+            guard = (row.get("guard") or "").strip()
+            if not guard:
+                continue
+            start = int(row["start"], 0)
+            offset = start - base
+            if offset < 0 or offset + 2 > len(code):
+                raise ValueError(f"{path}: guarded range 0x{start:08X} is outside code")
+            actual = int.from_bytes(code[offset:offset + 2], "little")
+            if actual != int(guard, 0):
+                raise ValueError(
+                    f"{path}: guard at 0x{start:08X} is 0x{actual:04X}, expected {guard}")
+            checked += 1
+    return checked
+
+
+def load_thumb_entries(path: Path | None) -> tuple[int, ...]:
+    """Starts of the title's Thumb functions (CSV rows of kind function)."""
+    if path is None:
+        return ()
+    with path.open(newline="", encoding="utf-8-sig") as source:
+        return tuple(
+            int(row["start"], 0)
+            for row in csv.DictReader(source)
+            if row.get("kind") == "function"
         )
 
 
@@ -814,6 +899,7 @@ def build_program(
     observed_sites: Iterable[int] = (),
     inline_argument_calls: dict[int, int] | None = None,
     thumb_ranges: Iterable[tuple[int, int]] = (),
+    thumb_entries: Iterable[int] = (),
 ) -> AotProgram:
     if executable_size is None:
         executable_size = len(code)
@@ -831,10 +917,21 @@ def build_program(
         for pc in range(start - start % 4, end, 4)
     }
     pointer_root_domain = flow_slots - thumb_slots
+    # Thumb code is decoded by its own strict decoder (whole_aot_thumb).  Its
+    # BLX #imm callees are A32 entries the A32 flow must reach.
+    thumb_spans = tuple(thumb_ranges)
+    thumb_discovery = (
+        thumb_flow_module.discover(code, base, thumb_spans, thumb_entries)
+        if thumb_spans else None
+    )
+    thumb_flow = thumb_discovery.flow if thumb_discovery else None
+    thumb_arm_targets = (
+        tuple(sorted(thumb_flow.arm_call_targets)) if thumb_flow else ()
+    )
     flow, literal_data, literal_sources, iterations = pinned._address_aware_flow(
         decoder,
         flow_slots,
-        (function.entry for function in callable_functions),
+        (*(function.entry for function in callable_functions), *thumb_arm_targets),
         pointer_root_domain,
         inline_argument_calls=inline_argument_calls,
     )
@@ -844,17 +941,29 @@ def build_program(
     # Seed only missing, explicitly classified internal cases, never data or
     # arbitrary excluded intervals. Keep them distinct from public ABI roots.
     with boundary_audit_path.open(newline="", encoding="utf-8-sig") as source:
-        internal_cases = {
-            int(row["entry"], 0)
-            for row in csv.DictReader(source)
-            if row.get("classification") == "switch_owned_case"
-        }
+        audit_rows = list(csv.DictReader(source))
+    internal_cases = {
+        int(row["entry"], 0)
+        for row in audit_rows
+        if row.get("classification") == "switch_owned_case"
+    }
+    # Executable entries the runtime may dispatch although no static edge
+    # names them: return slots of a multi-return helper (the callee returns
+    # to BL + 8 + 4 * k) and code no static reference reaches.  They are
+    # block starts and roots even when linear flow already decodes them.
+    dispatch_entries = {
+        int(row["entry"], 0)
+        for row in audit_rows
+        if row.get("classification") in DISPATCH_ENTRY_CLASSES
+    }
+    internal_cases |= dispatch_entries
     internal_cases -= flow.decoded_reachable | flow.unknown_stops
     internal_cases &= flow_slots - literal_data
     if internal_cases:
         flow, literal_data, literal_sources, extra_iterations = pinned._address_aware_flow(
             decoder, flow_slots,
-            (*[function.entry for function in callable_functions], *sorted(internal_cases)),
+            (*[function.entry for function in callable_functions],
+             *thumb_arm_targets, *sorted(internal_cases)),
             pointer_root_domain,
             inline_argument_calls=inline_argument_calls,
         )
@@ -866,7 +975,7 @@ def build_program(
         )
         raise ValueError(f"inline argument words are also reached as code: {overlap}")
     literal_data = set(literal_data) | flow.inline_argument_words
-    observed = frozenset(observed_sites)
+    observed = frozenset(observed_sites) | frozenset(dispatch_entries)
     if observed - flow.decoded_reachable:
         missing = ", ".join(f"0x{pc:08X}" for pc in sorted(observed - flow.decoded_reachable))
         raise ValueError(f"observed sites are not reachable code: {missing}")
@@ -890,18 +999,64 @@ def build_program(
         for edge in block.successors
         if edge.kind == "direct_call" and edge.target in entry_to_block
     }
-    roots = set(inventory_by_entry) | set(flow.pointer_roots) | direct_targets | internal_cases
+    roots = (set(inventory_by_entry) | set(flow.pointer_roots) | direct_targets
+             | internal_cases | dispatch_entries)
+    missing_thumb_callees = set(thumb_arm_targets) - set(entry_to_block)
+    if missing_thumb_callees:
+        raise ValueError(
+            "Thumb BLX callees are not A32 block entries: "
+            + ", ".join(f"0x{pc:08X}" for pc in sorted(missing_thumb_callees))
+        )
+    roots |= set(thumb_arm_targets)
     roots &= set(entry_to_block)
     blocks = _normalize_complementary_branch_chains(blocks, roots | observed)
+    if thumb_flow is not None:
+        # Second pass: the listed ranges are a lower bound.  Thumb flow and
+        # address-taken Thumb pointers may reach executable bytes that no
+        # A32 block or A32 literal owns.
+        arm_owned = bytearray(executable_size)
+        for block in blocks:
+            arm_owned[block.pc - base:block.end_pc - base] = (
+                b"\x01" * (block.end_pc - block.pc))
+        for word in literal_data:
+            if base <= word < base + executable_size:
+                arm_owned[word - base:word - base + 4] = b"\x01" * 4
+
+        def unowned(address: int) -> bool:
+            offset = address - base
+            return 0 <= offset < executable_size and not arm_owned[offset] and (
+                offset + 1 >= executable_size or not arm_owned[offset + 1])
+
+        thumb_discovery = thumb_flow_module.discover(
+            code, base, thumb_spans, thumb_entries, region=unowned)
+        thumb_flow = thumb_discovery.flow
+        late_callees = set(thumb_flow.arm_call_targets) - set(entry_to_block)
+        if late_callees:
+            raise ValueError(
+                "Thumb BLX callees are not A32 block entries: "
+                + ", ".join(f"0x{pc:08X}" for pc in sorted(late_callees))
+            )
+        roots |= set(thumb_flow.arm_call_targets)
+        blocks = blocks + _thumb_blocks(thumb_flow, len(blocks))
+        entry_to_block = {block.pc: block.index for block in blocks}
+        if len(entry_to_block) != len(blocks):
+            raise AssertionError("duplicate basic-block entry")
+        roots |= set(thumb_flow.entries)
+        literal_data = set(literal_data) | set(thumb_flow.literal_words)
 
     def root_record(entry: int) -> tuple[int | None, str, str]:
         record = inventory_by_entry.get(entry)
         if record is not None:
             return record.end, record.name, "inventory"
+        if entry in dispatch_entries:
+            return None, f"dispatch_entry_{entry:08X}", "audited_dispatch_entry"
         if entry in internal_cases:
             return None, f"internal_switch_{entry:08X}", "internal_dispatch"
         if entry in flow.pointer_roots:
             return None, f"address_taken_{entry:08X}", "address_taken"
+        if entry & 1 and thumb_discovery is not None:
+            origin = thumb_discovery.origins.get(entry, "bl_target")
+            return None, f"thumb_{entry & ~1:08X}", f"thumb_{origin}"
         return None, f"direct_target_{entry:08X}", "direct_target"
 
     function_entries = set(roots)
@@ -1115,6 +1270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return 0
     code = args.code.read_bytes()
+    check_thumb_range_guards(args.thumb_ranges, code, args.base)
     program = build_program(
         code,
         args.inventory,
@@ -1126,6 +1282,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.inline_argument_calls, code, args.base
         ),
         thumb_ranges=load_thumb_ranges(args.thumb_ranges),
+        thumb_entries=load_thumb_entries(args.thumb_ranges),
     )
     manifest = program.to_manifest(args.include_instructions)
     contents = (

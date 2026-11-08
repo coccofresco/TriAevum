@@ -11,6 +11,7 @@ from typing import Iterable
 
 from whole_aot_optimization_ir import Flag, analyze_function
 from whole_aot_memory_regions import carried_pair_copy, region_memory_safe
+import whole_aot_thumb as thumb_decoder
 
 
 PROGRAM_FORMAT = "oot3d_whole_aot_program_v1"
@@ -35,6 +36,12 @@ def _cpp_flag_mask(mask: Flag) -> str:
 class Instruction:
     pc: int
     raw: int
+    # Thumb instructions (whole_aot_thumb.py): pc carries bit 0, raw is the
+    # A32 proxy encoding, kind selects Thumb-specific lowering and target is
+    # the control target or constant.  None for every A32 instruction.
+    kind: str | None = None
+    target: int | None = None
+    size: int = 4
 
 
 @dataclass(frozen=True)
@@ -1664,6 +1671,8 @@ def _emit_non_control(
     item: Instruction, live_flags: Flag = Flag.NZCV
 ) -> list[str]:
     raw = item.raw
+    if item.kind is not None and item.kind not in {"a32", "ldr_literal", "pop_pc"}:
+        return _emit_thumb_value(item)
     if raw == 0xF57FF01F:  # CLREX
         return [
             "{",
@@ -1765,6 +1774,11 @@ def _emit_terminal(
     item = block.instructions[-1]
     raw = item.raw
     pc = item.pc
+    if item.kind is not None:
+        return _emit_thumb_terminal(
+            block, block_pcs, direct_calls, function_symbols,
+            external_entries, live_flags,
+        )
 
     # Architecturally inert hints can use encodings that overlap ordinary
     # loads to r15. Route them before the control-transfer decoders.
@@ -1799,6 +1813,21 @@ def _emit_terminal(
                 f"BLX immediate at 0x{pc:08X} has no matching thumb_call edge"
             )
         return_pc = pc + 4
+        if target in function_symbols:
+            return [
+                "++context.Stats.DirectCalls;",
+                f"state.R[14] = 0x{return_pc:08X}U;",
+                "commitState();",
+                "const Oot3dWholeAotFlow callFlow = "
+                f"Execute_{function_symbols[target]}(frame, context, state, "
+                f"0x{target:08X}U);",
+                "reloadState();",
+                "if (callFlow.Kind != Oot3dWholeAotFlowKind::Returned ||",
+                f"    callFlow.Pc != 0x{return_pc:08X}U) {{",
+                "    return callFlow;",
+                "}",
+                _goto(return_pc, block_pcs),
+            ]
         return [
             "++context.Stats.DirectCalls;",
             f"state.R[14] = 0x{return_pc:08X}U;",
@@ -2019,6 +2048,114 @@ def _emit_terminal(
         raise LoweringError(f"block 0x{block.pc:08X} has no unique fallthrough")
     target = int(fallthrough_edges[0]["target"])
     return [*lines, _goto(target, block_pcs)]
+
+
+def _emit_thumb_value(item: Instruction) -> list[str]:
+    """Thumb forms whose value is the Thumb PC (no A32 proxy computes it)."""
+    rd = (item.raw >> 12) & 0xF
+    if item.target is None or rd == 15:
+        raise LoweringError(f"Thumb value form at 0x{item.pc:08X} has no value")
+    if item.kind == "const":  # ADR rd, #imm: Align(PC, 4) + imm
+        return [f"{_reg(rd)} = 0x{item.target:08X}U;"]
+    if item.kind == "add_pc":  # ADD rd, pc: rd + (address + 4)
+        return [f"{_reg(rd)} = {_reg(rd)} + 0x{item.target:08X}U;"]
+    raise LoweringError(f"Thumb kind {item.kind} at 0x{item.pc:08X} is not a value form")
+
+
+def _thumb_call(
+    link: int, call: str, block_pcs: set[int],
+    statistic: str, prefix: list[str], suffix: list[str],
+) -> list[str]:
+    return [
+        f"++context.Stats.{statistic};",
+        f"state.R[14] = 0x{link:08X}U;",
+        *prefix,
+        f"const Oot3dWholeAotFlow callFlow = {call};",
+        *suffix,
+        "if (callFlow.Kind != Oot3dWholeAotFlowKind::Returned ||",
+        f"    callFlow.Pc != 0x{link:08X}U) {{",
+        "    return callFlow;",
+        "}",
+        _goto(link, block_pcs),
+    ]
+
+
+def _emit_thumb_terminal(
+    block: Block,
+    block_pcs: set[int],
+    direct_calls: dict[int, int],
+    function_symbols: dict[int, str],
+    external_entries: frozenset[int],
+    live_flags: Flag = Flag.NZCV,
+) -> list[str]:
+    """Thumb control transfers.  Every Thumb pc carries bit 0, so link
+    values (next | 1), fallthroughs and Thumb targets are odd; an A32 BLX
+    callee is even.  Returns compare the link value the caller wrote."""
+    item = block.instructions[-1]
+    pc = item.pc
+    kind = item.kind
+    link = pc + item.size  # odd: the Thumb return address with bit 0
+    if kind == "b":
+        return [_goto(int(item.target), block_pcs)]
+    if kind == "udf":
+        # Permanently undefined: the guest traps here (no fallback path).
+        return [f"return {{Oot3dWholeAotFlowKind::Unsupported, 0x{pc:08X}U, 0x{item.raw:08X}U}};"]
+    if kind == "bcc":
+        branch = _goto(int(item.target), block_pcs)
+        normalized = (
+            any(edge.get("kind") == "branch" and edge.get("condition") is None
+                for edge in block.successors)
+            and not any(edge.get("kind") == "fallthrough" for edge in block.successors)
+        )
+        if normalized:
+            return [branch]
+        return [*_conditional(item.raw, [branch]), _goto(link, block_pcs)]
+    if kind in {"bl", "blx_imm"}:
+        target = int(item.target)
+        if direct_calls.get(pc) != target:
+            raise LoweringError(f"Thumb call at 0x{pc:08X} has no matching program edge")
+        if target in function_symbols:
+            call = (f"Execute_{function_symbols[target]}(frame, context, state, "
+                    f"0x{target:08X}U)")
+            return _thumb_call(link, call, block_pcs, "DirectCalls",
+                               ["commitState();"], ["reloadState();"])
+        if target in external_entries:
+            call = (f"Oot3dAotCallExternal(context, 0x{target:08X}U, frame, state, "
+                    "commitState, reloadState)")
+            return _thumb_call(link, call, block_pcs, "DirectCalls", [], [])
+        raise LoweringError(f"Thumb call target 0x{target:08X} is not selected or external")
+    if kind == "blx_reg":
+        register = item.raw & 0xF
+        # The target is read before LR is written (BLX lr is architecturally
+        # the old LR value).
+        return [
+            f"const uint32_t callTarget = {_reg(register)};",
+            "++context.Stats.IndirectCalls;",
+            f"state.R[14] = 0x{link:08X}U;",
+            "commitState();",
+            "const Oot3dWholeAotFlow callFlow =",
+            "    ExecuteOot3dWholeAotIndirect(callTarget, frame, context, state);",
+            "reloadState();",
+            "if (callFlow.Kind != Oot3dWholeAotFlowKind::Returned ||",
+            f"    callFlow.Pc != 0x{link:08X}U) {{",
+            "    return callFlow;",
+            "}",
+            _goto(link, block_pcs),
+        ]
+    if kind == "bx":
+        register = item.raw & 0xF
+        if register == 14:
+            return [f"return Oot3dAotReturned({_reg(register)});"]
+        return [f"return Oot3dAotBranch({_reg(register)});"]
+    if kind == "pop_pc":
+        return _emit_non_control(item, live_flags)
+    lines = _emit_non_control(item, live_flags)
+    fallthrough_edges = [
+        edge for edge in block.successors if edge.get("kind") == "fallthrough"
+    ]
+    if len(fallthrough_edges) != 1:
+        raise LoweringError(f"Thumb block 0x{block.pc:08X} has no unique fallthrough")
+    return [*lines, _goto(int(fallthrough_edges[0]["target"]), block_pcs)]
 
 
 def _symbol(name: str, entry: int) -> str:
@@ -2944,6 +3081,32 @@ def _existing_shard_assignments(
     return assignments
 
 
+def _load_thumb_instructions(
+    block_record: dict[str, object], code: bytes, base: int
+) -> tuple[Instruction, ...]:
+    """Re-decode a Thumb block from code.bin and check the program record."""
+    records = block_record.get("thumb_instructions") or []
+    if not records:
+        raise ValueError(f"Thumb block 0x{int(block_record['pc']):08X} has no records")
+    instructions: list[Instruction] = []
+    expected = int(block_record["pc"])
+    for record in records:
+        pc = int(record["pc"])
+        if pc != expected or not pc & 1:
+            raise ValueError(f"Thumb record 0x{pc:08X} is not contiguous")
+        decoded = thumb_decoder.decode(code, base, pc & ~1)
+        if (decoded.thumb != int(record["thumb"]) or decoded.raw != int(record["raw"])
+                or decoded.kind != record["kind"] or decoded.size != int(record["size"])
+                or decoded.target != record.get("target")):
+            raise ValueError(f"Thumb record 0x{pc:08X} does not match code.bin")
+        instructions.append(Instruction(pc, decoded.raw, decoded.kind,
+                                        decoded.target, decoded.size))
+        expected = decoded.next_pc
+    if expected != int(block_record["end_pc"]):
+        raise ValueError(f"Thumb block 0x{int(block_record['pc']):08X} end mismatch")
+    return tuple(instructions)
+
+
 def _load_functions(
     program: dict[str, object], selection: dict[str, object], code: bytes
 ) -> tuple[tuple[Function, ...], frozenset[int]]:
@@ -2991,17 +3154,20 @@ def _load_functions(
             block_record = blocks_by_id[block_id]
             pc = int(block_record["pc"])
             end_pc = int(block_record["end_pc"])
-            start = pc - base
-            end = end_pc - base
-            if start < 0 or end > len(code) or (end - start) % 4:
-                raise ValueError(f"block 0x{pc:08X} is outside code.bin")
-            instructions = tuple(
-                Instruction(
-                    pc=pc + offset,
-                    raw=int.from_bytes(code[start + offset:start + offset + 4], "little"),
+            if block_record.get("state") == "thumb":
+                instructions = _load_thumb_instructions(block_record, code, base)
+            else:
+                start = pc - base
+                end = end_pc - base
+                if start < 0 or end > len(code) or (end - start) % 4:
+                    raise ValueError(f"block 0x{pc:08X} is outside code.bin")
+                instructions = tuple(
+                    Instruction(
+                        pc=pc + offset,
+                        raw=int.from_bytes(code[start + offset:start + offset + 4], "little"),
+                    )
+                    for offset in range(0, end - start, 4)
                 )
-                for offset in range(0, end - start, 4)
-            )
             blocks.append(
                 Block(
                     block_id,
