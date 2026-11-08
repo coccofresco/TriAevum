@@ -254,6 +254,47 @@ void TestReturnSiteNeedsNoContinuation() {
     Require(has(0x0011EF3CU) && has(0x0011EF40U), "a body observer lost its continuation");
 }
 
+// G4a-F4: in product mode a handler's continuation must be declared: Pc + 4
+// only with HandlerReturnsNext, otherwise a declared target or the entry LR.
+std::uint64_t RunReturning(bool returnsNext, std::uint32_t next, bool check) {
+    Mm3dGuestPatches patches;
+    Mm3dGuestPatchSite site;
+    site.Pc = kSite;
+    site.Name = "continuation";
+    site.Guard = {{kSite, kCmpR1R2}};
+    site.HandlerReturnsNext = returnsNext;
+    site.Handler = [next](a32::GuestState&, a32::MemoryBus&) -> std::optional<std::uint32_t> { return next; };
+    patches.Add(std::move(site));
+    patches.AddTargets({kSite + 0x40U});
+    patches.SetProductReturnCheck(check);
+    WordMemory memory;
+    memory.Words = {{kSite, kCmpR1R2}};
+    Require(patches.Verify(memory) == 1U, "the continuation site was not enabled");
+    a32::GuestState state{};
+    state.r[14] = 0x00123457U; // a Thumb return address
+    a32::ExecutionResult result{};
+    Require(Mm3dGuestPatches::Execute(kSite, state, memory, &result, &patches), "the handler did not run");
+    Require(state.r[15] == next, "the continuation changed");
+    const auto statistics = patches.Statistics();
+    Require(statistics.size() == 1U && statistics[0].ReturnViolations == patches.ReturnViolations(),
+            "the site statistics lost the violation count");
+    return patches.ReturnViolations();
+}
+
+void TestProductReturnCheck() {
+    // Declared continuations.
+    Require(RunReturning(true, kSite + 4U, true) == 0U, "Pc + 4 refused for a HandlerReturnsNext site");
+    Require(RunReturning(false, kSite + 0x40U, true) == 0U, "a declared target refused");
+    Require(RunReturning(false, 0x00123456U, true) == 0U, "the entry LR refused");
+    Require(RunReturning(true, 0x00123457U, true) == 0U, "the entry LR (Thumb bit) refused");
+    // Negatives (mutants): Pc + 4 from a site that declares it never returns
+    // there, and an undeclared PC, are counted.
+    Require(RunReturning(false, kSite + 4U, true) == 1U, "Pc + 4 accepted from a !HandlerReturnsNext site");
+    Require(RunReturning(true, kSite + 0x80U, true) == 1U, "an undeclared continuation accepted");
+    // Outside product mode the registry runtime keeps every continuation.
+    Require(RunReturning(false, kSite + 4U, false) == 0U, "the registry runtime checked continuations");
+}
+
 void TestHandlerNeverReturningNext() {
     // MM3D product F07 r16 (startup self-check): the photo camera and the
     // roll-dash sites decline or continue elsewhere. The product runs a
@@ -284,6 +325,7 @@ void TestHandlerNeverReturningNext() {
 int main() {
     TestProductBoundaries();
     TestHandlerNeverReturningNext();
+    TestProductReturnCheck();
     TestReturnSiteNeedsNoContinuation();
     TestReplacement();
     TestGuard();

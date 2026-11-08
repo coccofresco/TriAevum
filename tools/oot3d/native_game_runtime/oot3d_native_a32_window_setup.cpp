@@ -1214,7 +1214,7 @@ void NativeA32WindowSession::Setup() {
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // The developer tours, lab and emitter inventory drive OoT3D's guest
   // (scenes, entrances, actors): unavailable for another title.
-  const bool oot3dDeveloperTools = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
+  const bool oot3dDeveloperTools = Oot3dNativeGame::TitleHasOot3dDeveloperTools(titleAdapter);
   if (const char *tour = std::getenv("TRIAEVUM_DEV_FREECAM_TOUR");
       oot3dDeveloperTools && tour != nullptr && *tour != '\0') {
     std::string text = tour;
@@ -1434,8 +1434,12 @@ void NativeA32WindowSession::Setup() {
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
   if (programPreparation != nullptr) {
+    // Fixed-step sessions, and every OoT3D session (release decision D4:
+    // OoT3D renders only its bit-exact specialized programs), complete a
+    // draw's specialized program instead of the always-available one.
     programPreparation->SetFrameReproducibleProgramSelection(
-        hostArgs.FrameReproducible());
+        hostArgs.FrameReproducible() ||
+        Oot3dNativeGame::TitleDrawsCompleteSpecializedPrograms(titleAdapter, titleSession.get()));
   }
   // The title pass programs serve the shared renderer passes (shadow
   // casters among them) of every title: registering them is a lookup table,

@@ -233,6 +233,8 @@ public:
         mRestoration->ApplyDataPatches(process.Memory());
       }
       const std::size_t enabledSites = mGuestPatches.Verify(process.Memory(), nullptr);
+      // Each continuation a handler returns must be one its site declares.
+      mGuestPatches.SetProductReturnCheck(true);
       const auto entries = Oot3dCompiledFunctionEntryPoints(true, false);
       const auto missing = mGuestPatches.MissingProductBoundaries(
           std::vector<uint32_t>(entries.begin(), entries.end()));
@@ -618,7 +620,8 @@ public:
            {"missing_block", site.MissingBlock},
            {"prepared", site.Prepared},
            {"replacements", site.Replacements},
-           {"declined", site.Declined}});
+           {"declined", site.Declined},
+           {"return_violations", site.ReturnViolations}});
       // Read-only state facts of the gameplay rows (mm3d_gameplay_options.h):
       // what the option did to the player, not only that it dispatched.
       if (site.Name == "mm3d.quick_put_away" || site.Name == "mm3d.roll_dash.speed") {

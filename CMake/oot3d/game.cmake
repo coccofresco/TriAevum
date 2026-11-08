@@ -193,6 +193,19 @@ target_link_libraries(triaevum_title_shader_preparation_tests PRIVATE
     oot3d_native_game_runtime oot3d_ui_menu oot3d_native_control_config)
 oot3d_target_defaults(triaevum_title_shader_preparation_tests FOLDER Tests)
 
+# The title adapter resolved from the code.bin hash, and its OoT3D gates.
+add_executable(triaevum_title_adapter_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_title_adapter_tests.cpp)
+if(TRIAEVUM_TITLE_MM3D)
+    target_compile_definitions(triaevum_title_adapter_tests PRIVATE TRIAEVUM_TITLE_MM3D=1)
+endif()
+oot3d_target_defaults(triaevum_title_adapter_tests FOLDER Tests)
+
+# Whole-AOT observable-exit accounting: exact and lock-free (G2-F5).
+add_executable(triaevum_pc_counter_table_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_pc_counter_table_tests.cpp)
+oot3d_target_defaults(triaevum_pc_counter_table_tests FOLDER Tests)
+
 # Developer overrides are inert in the product (G4a-F3, R1): the product
 # build and the developer build of the same test (the negative control).
 add_executable(triaevum_developer_overrides_tests EXCLUDE_FROM_ALL

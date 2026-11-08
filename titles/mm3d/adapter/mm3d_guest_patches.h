@@ -69,6 +69,8 @@ class Mm3dGuestPatches {
         bool Prepared = true;
         std::uint64_t Replacements = 0;
         std::uint64_t Declined = 0;
+        // Product return check: continuations the site does not declare.
+        std::uint64_t ReturnViolations = 0;
     };
 
     // Throws std::invalid_argument for a second site at the same PC, a
@@ -98,6 +100,18 @@ class Mm3dGuestPatches {
     std::vector<std::uint32_t> MissingProductBoundaries(
         const std::vector<std::uint32_t>& sortedEntryPoints) const;
     bool Empty() const noexcept { return mSites.empty(); }
+    // Whole-AOT product mode (G4a-F4): every continuation a handler returns
+    // must be one its site declares: Pc + 4 only when HandlerReturnsNext,
+    // otherwise a declared target (AddTargets) or the LR the handler was
+    // entered with. The title module's boundaries were checked against those
+    // declarations (MissingProductBoundaries), so any other PC would leave
+    // compiled code at a PC that is no module entry. A violation is counted
+    // per site (Statistics, runtime.json) and reported on stderr once.
+    void SetProductReturnCheck(bool enabled) noexcept { mProductReturnCheck = enabled; }
+    std::uint64_t ReturnViolations() const noexcept { return mReturnViolations; }
+    // Whether a continuation is declared for the site (the check above).
+    bool DeclaredContinuation(const Mm3dGuestPatchSite& site, std::uint32_t next,
+                              std::uint32_t lrAtEntry) const noexcept;
     // The next time the guest thread (its TLS pointer) reaches the site at
     // pc, its own instruction runs: a site whose work ran elsewhere (a
     // coroutine that called guest code) resumes the guest at itself.
@@ -119,6 +133,8 @@ class Mm3dGuestPatches {
     Entry* Find(std::uint32_t pc) noexcept;
     std::vector<Entry> mSites; // sorted by PC
     std::vector<std::uint32_t> mTargets;
+    bool mProductReturnCheck = false;
+    std::uint64_t mReturnViolations = 0;
 };
 
 // Whether the condition field of an A32 instruction word passes for CPSR,

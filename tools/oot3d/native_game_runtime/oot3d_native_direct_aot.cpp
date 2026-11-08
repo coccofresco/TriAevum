@@ -4,6 +4,7 @@
 #include "recomp/a32_runtime.h"
 #include "triaevum_title_whole_aot_abi.h"
 #include "triaevum_title_plugin_loader.h"
+#include "triaevum_pc_counter_table.h"
 #include <stdexcept>
 #if defined(_WIN32)
 #include <windows.h>
@@ -19,8 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
-#include <map>
-#include <mutex>
+#include <atomic>
 #include <optional>
 #include <span>
 #include <vector>
@@ -28,10 +28,11 @@
 namespace Oot3dNativeGame {
 namespace {
 
+// Lock-free (G2-F5): a fixed per-PC table over the title's observable exit
+// sites and an atomic unwind total; no mutex or allocation per exit.
 struct ObservableExitCounters {
-  std::mutex Mutex;
-  uint64_t UnwindNanoseconds = 0;
-  std::map<uint32_t, uint64_t> ExitsByPc;
+  std::atomic<uint64_t> UnwindNanoseconds{0};
+  PcCounterTable<256> ExitsByPc;
 };
 
 ObservableExitCounters &ObservableExits() {
@@ -302,11 +303,7 @@ bool Oot3dWholeAotPluginExecutionActive() noexcept {
     uint32_t pc, const a32::GuestState &state) {
   const Oot3dWholeAotProgramV2 *program = WholeAotProgram();
   if (program != nullptr) {
-    {
-      auto &counters = ObservableExits();
-      std::scoped_lock lock(counters.Mutex);
-      ++counters.ExitsByPc[pc];
-    }
+    ObservableExits().ExitsByPc.Add(pc);
     gObservableExitRequestedAt = std::chrono::steady_clock::now();
     program->ObservableExit(pc, &state);
   }
@@ -315,13 +312,9 @@ bool Oot3dWholeAotPluginExecutionActive() noexcept {
 
 Oot3dWholeAotObservableExitReport Oot3dWholeAotPluginObservableExitReport() {
   auto &counters = ObservableExits();
-  std::scoped_lock lock(counters.Mutex);
   Oot3dWholeAotObservableExitReport report;
-  report.UnwindNanoseconds = counters.UnwindNanoseconds;
-  for (const auto &[pc, exits] : counters.ExitsByPc) {
-    report.Exits += exits;
-    report.ExitsByPc.emplace_back(pc, exits);
-  }
+  report.UnwindNanoseconds = counters.UnwindNanoseconds.load(std::memory_order_relaxed);
+  report.ExitsByPc = counters.ExitsByPc.Snapshot(&report.Exits);
   return report;
 }
 
@@ -354,10 +347,9 @@ bool ExecuteOot3dWholeAotFunction(
     if (gObservableExitRequestedAt.has_value()) {
       const auto unwind = std::chrono::steady_clock::now() - *gObservableExitRequestedAt;
       gObservableExitRequestedAt.reset();
-      auto &counters = ObservableExits();
-      std::scoped_lock lock(counters.Mutex);
-      counters.UnwindNanoseconds += static_cast<uint64_t>(
-          std::chrono::duration_cast<std::chrono::nanoseconds>(unwind).count());
+      ObservableExits().UnwindNanoseconds.fetch_add(
+          static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(unwind).count()),
+          std::memory_order_relaxed);
     }
     return executed;
   }

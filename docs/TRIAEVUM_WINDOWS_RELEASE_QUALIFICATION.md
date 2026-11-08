@@ -365,3 +365,21 @@ refused as an unknown revision; #58: Korean).
 | #51 | F1 enters fullscreen instead of opening the menu | E4 | L2: the window toggles from the key event (`three_ds_sdl_controller_tests`) | F1 tap in the product (L7, or a host-key input for L5) |
 | #53 | Forge cannot write the module in a deep path | A2 | L2 | L6 installation into a padded root |
 | #56 | HD texture packs do not reach the TopScreen HUD | new | not analysed | investigate; L5 with a pack that replaces one HUD texture |
+
+## 9. Echoes of Time 0.8.0-beta.2: release-fix tests (2026-11-09)
+
+The beta.2 qualification battery adds these tests to L2. The root
+`*_tests` executables register with CTest (`CMake/oot3d/tests.cmake`), so the
+L1 build step builds them even though they are `EXCLUDE_FROM_ALL`; a missing
+one is reported as not run.
+
+| Test | Covers |
+| --- | --- |
+| `triaevum_data_routing_tests` | Shared EoT behaviour from `e65b70db` (filed as Android work): desktop save states migrate to `D/savestates` (the desktop Forge publishes `--savestate-directory`), and the log and crash directories are routed. Its update-path counterpart is a beta.1.2 to beta.2 update run whose log shows `TRIAEVUM_SAVESTATE_MIGRATION ... Completed` and loads from `D/savestates` |
+| `triaevum_title_adapter_tests` | The title adapter is resolved from the code.bin SHA-256: OoT3D EUR, MM3D, unknown and malformed hashes, hash case; the OoT3D scene-time/night, player and developer-tool gates are on for the EUR adapter only |
+| `triaevum_title_shader_preparation_tests` | Release decision D4: OoT3D draws render only the bit-exact specialized program, in interactive play too; MM3D and generic titles keep the hybrid policy |
+| `triaevum_developer_overrides_tests`, `triaevum_developer_overrides_dev_tests` | A product build ignores `TRIAEVUM_ROMFS_OVERLAY`, `TRIAEVUM_MM3D_PRESENTATION`, `TRIAEVUM_MM3D_DAMAGE_MULTIPLIER` and `TRIAEVUM_A32_PC_DUMP`; the PC-dump parser never throws (the developer twin is the negative control) |
+| `triaevum_pc_counter_table_tests` | Whole-AOT observable-exit accounting is exact and lock-free; prints its per-exit cost against the previous mutex and map |
+| `oot3d_mm3d_guest_patches_tests`, `mm3d_gameplay_options_tests` | MM3D product mode: a guest-patch handler continues only at a declared PC (Pc + 4 only with `HandlerReturnsNext`) |
+| `cmake -P CMake/tests/triaevum_product_title_test.cmake` | Configure refuses a `TRIAEVUM_PRODUCT_TITLE` that `TRIAEVUM_TITLES` leaves out |
+| Forge `cargo test -p forge-native --test installed_runtime` (both titles) | The installed TopScreen route follows the active title's fact: OoT3D requires `--topscreen-config`, MM3D refuses it |
