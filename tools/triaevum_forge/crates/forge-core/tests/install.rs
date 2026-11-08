@@ -95,6 +95,10 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     // The TopScreen UI profile is a per-title fact: OoT3D's profile selects it
     // and routes its file; a title without it (MM3D, dekui) has neither option.
     let shift = common::topscreen_shift();
+    // MM3D's per-game mod is dekui: its runtime refuses the TopScreen profile.
+    if forge_catalog::title::ACTIVE.id == forge_catalog::title::MM3D.id {
+        assert!(!arguments.iter().any(|a| *a == "--ui-profile" || a.starts_with("--topscreen")), "{arguments:?}");
+    }
     if forge_catalog::title::ACTIVE.topscreen_ui {
         assert_eq!(arguments[8..10], ["--ui-profile", "topscreen"]);
         assert_eq!(arguments[12..14], ["--topscreen-config", "${runtime_dir}/data/config/topscreen_ui.json"]);
