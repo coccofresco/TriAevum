@@ -91,8 +91,7 @@ int main() try {
         for (auto& worker : workers) worker.join();
         const auto joinMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - abandoned).count();
-        std::printf("abandon: prepared=%zu of %zu join_ms=%lld
-", prepared.load(), kParts, static_cast<long long>(joinMs));
+        std::printf("abandon: prepared=%zu of %zu join_ms=%lld\n", prepared.load(), kParts, static_cast<long long>(joinMs));
         Check(Fast::Renderer3ds::PicaStartupPreparationAbandoned(), "the abandon is visible");
         Check(prepared.load() < 100U && joinMs < 2000, "an abandoned startup preparation stops taking parts");
         size_t index = 0;
