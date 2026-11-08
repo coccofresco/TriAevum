@@ -178,6 +178,7 @@ class Mm3dNativePicaCompositionTracker final
     uint64_t mNextLifetime = 0;
     uint32_t mPlay = 0, mPlayFrame = 0;
     uint16_t mScene = 0;
+    int16_t mRoom = -1;
     std::unordered_map<uint32_t, ActorLifetime> mActorLifetimes;
     std::unordered_map<uint32_t, ModelLifetime> mModelLifetimes;
     uint64_t mQueueGeneration = 0;

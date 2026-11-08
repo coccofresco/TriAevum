@@ -162,6 +162,19 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             mActorLifetimes.clear(); mModelLifetimes.clear(); mSpans.clear();
             ++mStats.LifecycleInvalidations;
         }
+        // Room change (Play+0xC260 curRoom.num, same field CaptureMm3dEmitterRoom
+        // uses): a room/background CMB loaded into a reused buffer is a new
+        // instance. Scene-owned model lifetimes end; actors keep their own
+        // destroy-site boundaries (Actor_Kill on room unload, zeldaret-mm z_actor).
+        uint8_t room = 0xFFU;
+        const int16_t currentRoom = valid && memory.Read8(play + 0xC260U, &room) && room <= 127U ? int16_t(room) : int16_t(-1);
+        if (currentRoom != mRoom) {
+            for (auto it = mModelLifetimes.begin(); it != mModelLifetimes.end();) {
+                if (it->second.Owner & (1ULL << 63U)) it = mModelLifetimes.erase(it); else ++it;
+            }
+            if (mRoom >= 0) ++mStats.LifecycleInvalidations;
+        }
+        mRoom = currentRoom;
         mPlay = valid ? play : 0U; mScene = scene; mPlayFrame = frame;
         ++mQueueGeneration;
         mQueueOwners.clear(); mActorDrawStack.clear(); mModelSubmit.reset(); mModelScope.reset();
@@ -802,7 +815,7 @@ void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     // Never rewind the monotonic allocator on state load: the same guest
     // addresses after restore must not match an earlier presented sample.
     mActorLifetimes.clear(); mModelLifetimes.clear();
-    mPlay = mPlayFrame = 0; mScene = 0;
+    mPlay = mPlayFrame = 0; mScene = 0; mRoom = -1;
     mActive.reset();
     mSpans.clear();
     mSceneLighting = {};

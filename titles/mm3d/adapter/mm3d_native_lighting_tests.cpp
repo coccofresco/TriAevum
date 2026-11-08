@@ -132,6 +132,29 @@ void TestCompositionTemporalLifetimes() {
     beginFrame(); enqueue(); const auto beforeScene = consume().TemporalIdentity;
     f.W16(f.Play + 0x148U, 0x61); beginFrame(); enqueue();
     Require(consume().TemporalIdentity.Lifetime != beforeScene.Lifetime, "scene change retained lifetime");
+    // Room change: scene-owned room model gets a new generation; a live
+    // actor's own lifetime is untouched (its destroy hooks own that boundary).
+    {
+        const auto bgEnqueue = [&] {
+            beginFrame(); f.W32(f.Queue + 4U, 0);
+            s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+            f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
+            return consume().TemporalIdentity;
+        };
+        f.W8(f.Play + 0xC260U, 0);
+        const auto roomA = bgEnqueue();
+        Require(bgEnqueue().Lifetime == roomA.Lifetime, "room model lifetime unstable within a room");
+        beginFrame(); enqueue(); const auto actorA = consume().TemporalIdentity;
+        f.W8(f.Play + 0xC260U, 1);
+        beginFrame(); enqueue();
+        Require(consume().TemporalIdentity.Lifetime == actorA.Lifetime, "room change reset a live actor lifetime");
+        f.W8(f.Play + 0xC260U, 0); bgEnqueue(); const auto roomA2 = bgEnqueue();
+        f.W8(f.Play + 0xC260U, 1);
+        const auto roomB = bgEnqueue();
+        Require(roomB.Available() && roomB.Lifetime != roomA2.Lifetime, "room change kept room model lifetime");
+        f.W8(f.Play + 0xC260U, 0);
+        Require(bgEnqueue().Lifetime != roomA.Lifetime, "returning room reused stale lifetime");
+    }
     const auto beforeRollback = consume().TemporalIdentity;
     frame = 1; beginFrame(); enqueue();
     Require(consume().TemporalIdentity.Lifetime != beforeRollback.Lifetime, "frame rollback retained lifetime");
