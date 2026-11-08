@@ -1134,6 +1134,10 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
   auto &window = *windowPointer;
   auto &dspHle = *dspHleStorage;
+  // Scripted runs only: a timeline's host_frame_delay_ms stalls the host to
+  // stress the frame limiter; a live (unscripted) frame never carries it.
+  if (inputFrame.Scripted && inputFrame.HostFrameDelayMs != 0U)
+    std::this_thread::sleep_for(std::chrono::milliseconds(inputFrame.HostFrameDelayMs));
   UpdateDevFreeCamera(inputFrame);
   const uint32_t topScreenButtons = inputFrame.Hid.Buttons;
   const uint32_t topScreenPressed =

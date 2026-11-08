@@ -157,6 +157,14 @@ uint32_t ReadHostKeys(const nlohmann::json& segment) {
     return mask;
 }
 
+uint32_t ReadHostFrameDelay(const nlohmann::json& segment) {
+    if (!segment.contains("host_frame_delay_ms")) return 0U;
+    const auto& value = segment.at("host_frame_delay_ms");
+    if (!value.is_number_unsigned() || value.get<uint64_t>() > kNativeA32MaxHostFrameDelayMs)
+        throw std::runtime_error("native input timeline host_frame_delay_ms must be an unsigned count <= 250");
+    return static_cast<uint32_t>(value.get<uint64_t>());
+}
+
 bool ReadOptionalBool(const nlohmann::json& segment, const char* key) {
     if (!segment.contains(key)) {
         return false;
@@ -608,6 +616,7 @@ NativeA32InputTimeline NativeA32InputTimeline::LoadFile(
         segment.Hid.GyroscopeValid = ReadMotionVector(source, "gyroscope_dps", segment.Hid.GyroscopeDegreesPerSecond);
         segment.Hid.AccelerometerValid = ReadMotionVector(source, "accelerometer_g", segment.Hid.Accelerometer);
         segment.HostKeys = ReadHostKeys(source);
+        segment.HostFrameDelayMs = ReadHostFrameDelay(source);
         timeline.mSegments.push_back(segment);
         previousEnd = segment.EndFrameExclusive;
         first = false;
@@ -663,6 +672,7 @@ NativeA32InputFrame NativeA32InputTimeline::Sample(uint32_t guestFrame,
             static_cast<const ThreeDsRecomp::Input::InputFrame&>(segment);
         result.ScriptSegmentIndex = static_cast<int32_t>(index);
         result.HostKeys = segment.HostKeys;
+        result.HostFrameDelayMs = segment.HostFrameDelayMs;
         break;
     }
     return result;

@@ -49,7 +49,12 @@ struct NativeA32InputFrame : ThreeDsRecomp::Input::InputFrame {
     bool Scripted = false;
     int32_t ScriptSegmentIndex = -1;
     uint32_t HostKeys = 0;
+    // Scripted-run-only host stall (test infrastructure like host_keys, never a
+    // product setting): the host sleeps this long before the refresh, so a
+    // timeline can stress the native-30 limiter and its deadline rebase.
+    uint32_t HostFrameDelayMs = 0;
 };
+inline constexpr uint32_t kNativeA32MaxHostFrameDelayMs = 250U;
 
 bool ResolveNativeGameplayMouseOwnership(
     bool nativeFrontendTouchEnabled, bool hostGuiVisible,
@@ -278,6 +283,7 @@ class NativeA32InputTimeline {
         uint32_t StartFrame = 0;
         uint32_t EndFrameExclusive = 0;
         uint32_t HostKeys = 0;
+        uint32_t HostFrameDelayMs = 0;
     };
 
     std::filesystem::path mSourcePath;

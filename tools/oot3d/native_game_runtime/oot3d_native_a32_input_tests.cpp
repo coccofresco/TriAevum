@@ -284,6 +284,20 @@ void TestHostKeysTimeline() {
     bool refused = false;
     try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
     Require(refused, "an unknown host key is refused");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","frame_origin":"run","segments":[
+      {"start_frame":0,"end_frame_exclusive":5,"buttons":[]},
+      {"start_frame":5,"end_frame_exclusive":9,"buttons":[],"host_frame_delay_ms":40}]})");
+    const auto stall = NativeA32InputTimeline::LoadFile(path);
+    Require(stall.Sample(0, 2).HostFrameDelayMs == 0U, "no stall outside the stall segment");
+    Require(stall.Sample(0, 6).HostFrameDelayMs == 40U && stall.Sample(0, 6).Scripted,
+            "a scripted stall segment carries its host delay");
+    Require(stall.Sample(0, 9).HostFrameDelayMs == 0U, "the stall ends with its segment");
+    Require(NativeA32InputFrame{}.HostFrameDelayMs == 0U, "a live frame never stalls");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","segments":[
+      {"start_frame":0,"end_frame_exclusive":1,"host_frame_delay_ms":1000}]})");
+    refused = false;
+    try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
+    Require(refused, "a stall above 250 ms is refused");
     std::filesystem::remove(path);
 }
 
