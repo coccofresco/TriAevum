@@ -3,6 +3,7 @@
 // Copyright 2016-2026 Citra Emulator Project / Azahar Emulator Project.
 #pragma once
 #include "host_interfaces.h"
+#include "button_emission.h"
 #include "tatl_reminders.h"
 #include "bomber_approach.h"
 #include "owl_intro.h"
@@ -66,6 +67,8 @@ public:
     // Continue at r15 afterwards; unknown SVCs are inert, for caller routing.
     void CallSvc(U32 swi,Cpu&,Memory&);
     static std::vector<U32> CandidatePcs();
+    void ResetButtonEmission() { overlay_layouts.clear(); }
+    U32 ButtonEmissionPass() const { return overlay_layouts.empty()?~0u:overlay_layouts.back().second; }
     HostFacts host;
 private:
     std::int64_t GlobalTimeUs() const { return host.global_time_us ? host.global_time_us() : 0; }
@@ -73,6 +76,9 @@ private:
         return host.widescreen_active ? host.widescreen_active() : Widescreen::Active();
     }
 
+    // Layout and pass belong together; the manager's last pass is not a
+    // valid owner for a later standalone widget emission.
+    std::vector<std::pair<U32,U32>> overlay_layouts;
     Mm3dDekui::FormCamera::Hook form_camera;
     Mm3dDekui::FormCamera::ArrivalLens arrival_lens;
     Mm3dDekui::FormCamera::OcarinaReturnLens ocarina_return_lens;

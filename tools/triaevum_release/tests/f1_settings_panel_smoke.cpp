@@ -1,4 +1,5 @@
 #include "fast/extension/graphics_settings_window.h"
+#include "fast/extension/settings_window_bounds.h"
 #include "fast/extension/graphics_settings_runtime.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/title_grass_rules_file.h"
@@ -7,6 +8,7 @@
 #include "oot3d_photo_mode_panel.h"
 #include "oot3d_game_language_panel.h"
 #include "oot3d_savestate_panel.h"
+#include "oot3d_savestate_settings.h"
 #include "triaevum_audio_settings_panel.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS) && defined(TRIAEVUM_TITLE_MM3D)
 #include "oot3d_dev_tools_panel.h"
@@ -251,6 +253,9 @@ void CheckControlPersistence() {
     Click("Keyboard");
     Click("Revert changes");
     Check(controls->Snapshot().Config.KeyboardEnabled, "cannot undo before first save");
+    Check(std::none_of(items.begin(), items.end(), [](const auto& entry) {
+        return entry.second.Label == "##Native button labels";
+    }), "MM native labels leaked into the OoT controls owner");
     // Button prompts are saved with the controls and are not a binding: the
     // preset stays and a preset keeps them.
     const auto profileBeforePrompts = controls->Snapshot().Config.Profile;
@@ -369,6 +374,31 @@ void CheckControlPersistence() {
     Click("Save controls");
     Frame(true);
     Check(loggedPanelText.find("cannot") != std::string::npos, "Save error was not visible");
+    // MM's real F1 widget shares the same persistent controls owner, without
+    // installing an OoT TopScreen owner or changing any bindings.
+    auto mm = std::make_shared<NativeControlConfigRuntime>(root / "mm-controls.json", NativeControlDefaults());
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mm, nullptr, {}, true)});
+    Frame(); Frame(); Click("Controls"); Click("Devices");
+    const auto mmBindings = mm->Snapshot().Config.Bindings;
+    Select("##Native button labels", "Original 3DS");
+    Check(!mm->Snapshot().Config.NativeButtonLabels && mm->Snapshot().Config.Bindings == mmBindings,
+          "MM native labels did not preview independently of bindings");
+    Click("Save controls");
+    NativeControlConfigRuntime restarted(root / "mm-controls.json", NativeControlDefaults());
+    Check(restarted.Reload() && !restarted.Snapshot().Config.NativeButtonLabels,
+          "MM native-label save did not survive a fresh controls owner");
+    Select("##Native button labels", "Controller"); Click("Revert changes");
+    Check(!mm->Snapshot().Config.NativeButtonLabels, "MM revert did not reload the saved label choice");
+    Select("##Native button labels", "Controller");
+    std::ofstream(root / "mm-controls.json") << "invalid json";
+    Click("Revert changes"); Frame(true);
+    Check(mm->Snapshot().Config.NativeButtonLabels && loggedPanelText.find("parse") != std::string::npos,
+          "MM failed revert changed the preview or hid the persistence error");
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(blocked, nullptr, {}, true)});
+    Frame(); Frame(); Click("Devices");
+    Select("##Native button labels", "Original 3DS"); Click("Save controls"); Frame(true);
+    Check(!blocked->Snapshot().Config.NativeButtonLabels && loggedPanelText.find("cannot") != std::string::npos,
+          "MM failed save changed the live preview or hid the persistence error");
     // The Display HUD size saves at once; a failed save keeps the size for the
     // session and says why.
     InstallGraphicsSettingsPanelTabs({CreateTopScreenSettingsPanel(top)});
@@ -390,6 +420,36 @@ void CheckControlPersistence() {
     Check(blockedTop->Snapshot().Config.HudScale == kTopScreenHudScaleNative &&
               loggedPanelText.find("could not be saved") != std::string::npos,
           "a failed HUD size save was not visible");
+    // MM3D: no TopScreen owner; the rows the title implements itself (quick
+    // put away) are the controls owner's, previewed live and saved with it,
+    // the same state the Esc menu's Game > Gameplay row shows.
+    auto mmControls = std::make_shared<NativeControlConfigRuntime>(root / "mm3d-controls.json", NativeControlDefaults());
+    const auto labelVisible = [&](const char* label) {
+        Frame();
+        for (const auto& [id, item] : items) if (item.Label == label) return true;
+        return false;
+    };
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mmControls, nullptr, {.QuickPutAway = true, .RollDash = true})});
+    size = ImVec2(760, 680);
+    Frame(); Frame();
+    Click("Controls");
+    if (!labelVisible("Quick put away")) Click("Gameplay");
+    Check(!mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away does not start off");
+    Click("Quick put away");
+    Check(mmControls->Snapshot().Config.QuickPutAway, "MM3D quick put away did not preview through the controls owner");
+    Check(!mmControls->Snapshot().Config.RollDash, "MM3D roll dash does not start off");
+    Click("Roll dash");
+    Check(mmControls->Snapshot().Config.RollDash, "MM3D roll dash did not preview through the controls owner");
+    Click("Save controls");
+    NativeControlConfig mmSaved;
+    Check(LoadNativeControlConfig(root / "mm3d-controls.json", &mmSaved) && mmSaved.QuickPutAway,
+          "Save controls did not persist MM3D quick put away");
+    Check(mmSaved.RollDash, "Save controls did not persist MM3D roll dash");
+    // A title without such rows (OoT3D outside TopScreen) shows none.
+    InstallGraphicsSettingsPanelTabs({CreateNativeControlsSettingsPanel(mmControls, nullptr)});
+    Frame(); Frame();
+    Check(!labelVisible("Quick put away"), "a title without gameplay rows showed quick put away");
+    Check(!labelVisible("Roll dash"), "a title without gameplay rows showed roll dash");
     InstallGraphicsSettingsPanelTabs({});
 }
 
@@ -532,13 +592,80 @@ void CheckAudioPanel() {
 // with its default, the listing that picks the state F8 loads, and status.
 void CheckSavestatePanel() {
     using namespace Oot3dNativeGame;
+    SavestateSettingsOwners owners;
+    owners.TitleSettingsNotice = "Adapter settings are omitted; current configuration is kept.";
+    const auto captured = CaptureSavestateSettings(owners);
+    Check(nlohmann::json::parse(captured).at("title_settings_notice") == owners.TitleSettingsNotice,
+          "state metadata lost the settings omission notice");
+    const auto applied = ApplySavestateSettings(captured, owners);
+    Check(applied.Success && std::find(applied.Lines.begin(), applied.Lines.end(),
+          owners.TitleSettingsNotice) != applied.Lines.end(), "load did not disclose omitted settings");
+    {
+        // A title settings owner (MM3D: dekui's settings): captured under
+        // "title" with its id, applied only to the same title, damaged
+        // blocks rejected, a state without it keeps the current settings.
+        SavestateSettingsOwners titled = owners;
+        nlohmann::json live = {{"damage_multiplier", 4}};
+        titled.TitleSettingsId = "mm3d";
+        titled.CaptureTitleSettings = [&live] { return std::optional<nlohmann::json>(live); };
+        titled.ApplyTitleSettings = [&live](const nlohmann::json& value, std::string* error) {
+            if (!value.contains("damage_multiplier")) { *error = "missing"; return false; }
+            live = value; return true;
+        };
+        const auto withTitle = CaptureSavestateSettings(titled);
+        const auto parsed = nlohmann::json::parse(withTitle);
+        Check(parsed.at("title").at("id") == "mm3d" && parsed.at("title").at("settings") == live,
+              "state lost the title settings");
+        live = {{"damage_multiplier", 1}};
+        const auto restored = ApplySavestateSettings(withTitle, titled);
+        Check(restored.Success && live.at("damage_multiplier") == 4 &&
+              std::find(restored.Lines.begin(), restored.Lines.end(), "Title settings: applied") != restored.Lines.end(),
+              "title settings were not restored");
+        auto foreign = parsed; foreign["title"]["id"] = "oot3d";
+        live = {{"damage_multiplier", 2}};
+        const auto kept = ApplySavestateSettings(foreign.dump(), titled);
+        Check(kept.Success && live.at("damage_multiplier") == 2, "another title's settings were applied");
+        auto damaged = parsed; damaged["title"]["settings"] = "x";
+        const auto rejected = ApplySavestateSettings(damaged.dump(), titled);
+        Check(!rejected.Success && live.at("damage_multiplier") == 2, "damaged title settings applied");
+        const auto absent = ApplySavestateSettings(captured, titled);
+        Check(absent.Success && live.at("damage_multiplier") == 2 &&
+              std::find(absent.Lines.begin(), absent.Lines.end(),
+                        "Title settings: not in this state, current kept") != absent.Lines.end(),
+              "a state without title settings changed or hid them");
+        Check(nlohmann::json::parse(CaptureSavestateSettings(owners)).count("title") == 0,
+              "a title without settings stored a title block");
+    }
+    const auto before = CaptureSavestateSettings(owners);
+    for (const auto* invalid : {"{", "[]", "{}", "{\"schema\":null}",
+             "{\"schema\":\"1\"}", "{\"schema\":[]}", "{\"schema\":{}}",
+             "{\"schema\":true}", "{\"schema\":1.0}", "{\"schema\":2}"}) {
+        const auto rejected = ApplySavestateSettings(invalid, owners);
+        Check(!rejected.Success && CaptureSavestateSettings(owners) == before,
+              "damaged settings threw, succeeded or mutated a live owner");
+    }
+    auto saved = GraphicsSettingsRuntime::Instance().Snapshot();
+    auto current = saved;
+    current.DisplayIndex = saved.DisplayIndex + 1;
+    current.RefreshRate = saved.RefreshRate + 1;
+    current.Window = saved.Window == WindowMode::Windowed ? WindowMode::Borderless : WindowMode::Windowed;
+    current.OutputWidth = saved.OutputWidth + 16;
+    current.OutputHeight = saved.OutputHeight + 16;
+    current.VSync = !saved.VSync;
+    const auto merged = MergeSavedGraphicsSettings(saved, current);
+    Check(merged.DisplayIndex == current.DisplayIndex && merged.RefreshRate == current.RefreshRate &&
+          merged.Window == current.Window && merged.OutputWidth == current.OutputWidth &&
+          merged.OutputHeight == current.OutputHeight && merged.VSync == current.VSync,
+          "state settings replaced machine display selection");
     const auto root = std::filesystem::temp_directory_path() /
         ("triaevum-savestates-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto defaultFolder = root / "exe" / "savestates";
     auto library = std::make_shared<SavestateLibrary>(root / "config" / "savestates.json", defaultFolder);
-    InstallGraphicsSettingsPanelTabs({CreateSavestatePanel(library)});
+    InstallGraphicsSettingsPanelTabs({CreateSavestatePanel(library, owners.TitleSettingsNotice)});
     Frame(); Frame();
-    Click("Game"); Click("Save states"); Frame();
+    Click("Game"); Click("Save states"); Frame(true);
+    Check(loggedPanelText.find(owners.TitleSettingsNotice) != std::string::npos,
+          "save-state settings omission is not visible before the action");
     Check(Find("Load last state (F8)").Disabled && Find("Load last state + settings (Shift+F8)").Disabled,
           "load buttons enabled without any state");
     const auto expectRequest = [&](const char* button, SavestateRequestKind kind, bool withSettings) {
@@ -1265,13 +1392,47 @@ void CheckMm3dSceneEnvironment() {
     // MM3D's time is unknown here: not time-driven, no night profile.
     environment->ObserveScene(0x2A);
     // MM3D's scene is lit by native fragment lights (TitleSession::NativeFragmentLighting).
-    InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment,{.NativeFragmentLighting=true})});
+    InstallGraphicsSettingsPanelTabs({CreateSceneEnvironmentPanel(environment,{.NativeFragmentLighting=true,.CompanionLightName="Tatl"})});
     size=ImVec2(760,2600);
     Frame();Frame();Click("Lighting");Click("Lights & Shadows");Frame(true);
     Check(!environment->Snapshot().Profile.Enabled && !graphics.SnapshotForRendering().Environment.Enabled,
           "MM3D widget enabled a missing profile");
     Check(loggedPanelText.find("Fixed scene lighting")!=std::string::npos,
           "MM3D widget presented unknown time as time-driven");
+    // Same four owners and controls as OoT, in the title's vocabulary.
+    // Points remain editable with the ambient/directional profile disabled.
+    Check(loggedPanelText.find("Navi point lights")==std::string::npos,
+          "foreign companion label leaked into MM panel");
+    for (const char* name : {"Tatl", "Fairy", "Flame", "Architecture"}) {
+        const auto before = environment->Snapshot().Profile.PointLights;
+        const size_t i = std::string_view(name)=="Tatl" ? 0 : std::string_view(name)=="Fairy" ? 1 :
+                         std::string_view(name)=="Flame" ? 2 : 3;
+        EditScalar((std::string(name)+" intensity").c_str(), "2.5");
+        EditScalar((std::string(name)+" radius scale").c_str(), "1.75");
+        Click((std::string(name)+" point lights").c_str());
+        const auto after = graphics.SnapshotForRendering().Environment.PointLights;
+        Check(!after[i].Enabled && after[i].Intensity==2.5F && after[i].RadiusScale==1.75F,
+              "point group controls did not publish independently of the scene profile");
+        for (size_t j=0;j<4;++j) if (j!=i)
+            Check(after[j]==before[j],"point widget changed another group");
+        Click((std::string(name)+" point lights").c_str());
+    }
+    const auto points = environment->Snapshot().Profile.PointLights;
+    Click("Save profile");
+    Check(environment->Reload() && environment->Snapshot().Profile.PointLights==points,
+          "MM point controls did not survive save/reload");
+    for (auto preset : {GraphicsPreset::Authentic, GraphicsPreset::Enhanced, GraphicsPreset::Toon,
+                        GraphicsPreset::Custom, GraphicsPreset::EnhancedForMobile}) {
+        graphics.Apply(GraphicsSettingsService::Preset(preset));
+        Check(environment->Snapshot().Profile.PointLights==points,
+              "graphics preset stole environment-owned point settings");
+        if (preset!=GraphicsPreset::Authentic &&
+            UsesFullSceneLighting(graphics.Snapshot().Effects.SurfaceLighting))
+            Check(graphics.SnapshotForRendering().Environment.PointLights==points,
+                  "modern preset lost independent point settings");
+    }
+    graphics.Apply(settings);
+    Frame();
     Click("Use scene environment");
     Check(environment->Snapshot().Profile.Enabled,"MM3D profile control did not enable explicit override");
     // Every profile shape now uses the balance evaluator; no unavailable
@@ -1852,6 +2013,14 @@ void CheckDevToolsPanel() {
 #endif
 
 int main(int argc, char** argv) try {
+    Check(FitSettingsWindowPosition({60, 60}, {560, 704}, {0, 0}, {1280, 720}) == std::array<float, 2>{60, 8},
+          "F1 footer overflows 720p despite valid size constraints");
+    Check(FitSettingsWindowPosition({200, 100}, {560, 400}, {0, 0}, {1280, 720}) == std::array<float, 2>{200, 100},
+          "valid F1 placement was changed");
+    Check(FitSettingsWindowPosition({-100, 2000}, {300, 200}, {100, 50}, {640, 480}) == std::array<float, 2>{108, 322},
+          "F1 placement ignores work-area origin");
+    Check(FitSettingsWindowPosition({60, 60}, {464, 304}, {0, 0}, {480, 320}) == std::array<float, 2>{8, 8},
+          "compact F1 work-area placement overflows");
     PresentationSettingsTransaction delayedConfirmation(500);
     PresentationSettingsValue previousDisplay;
     auto nextDisplay = previousDisplay;
@@ -1885,6 +2054,12 @@ int main(int argc, char** argv) try {
     ImGui::GetIO().Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
     Frame(); Frame();
 
+    if (argc == 2 && std::string_view(argv[1]) == "--controls-persistence") {
+        CheckControlPersistence();
+        ImGui::DestroyContext();
+        std::cout << "F1 controls persistence: passed\n";
+        return 0;
+    }
     if (argc == 2 && std::string_view(argv[1]) == "--grass-masks") {
         const auto ruleDirectory = std::filesystem::temp_directory_path() / "triaevum-f1-title-grass";
         std::filesystem::remove_all(ruleDirectory);

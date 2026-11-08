@@ -19,6 +19,7 @@
 #include "oot3d_photo_mode_panel.h"
 #include "oot3d_savestate_library.h"
 #include "oot3d_top_screen_config.h"
+#include "triaevum_title_presentation.h"
 #include "oot3d_ui/ui_primitives.h"
 
 #include "fast/extension/graphics_settings_runtime.h"
@@ -106,6 +107,10 @@ struct InGameMenuOwners {
   // The host audio service's output policy (master volume, mute); null
   // leaves the Audio rows out.
   std::shared_ptr<Ship::AudioOutputPolicy> Audio;
+  // Gameplay rows the title implements outside a mod-owned profile; stored
+  // in Controls. Empty for OoT3D (its TopScreen owner has its own rows).
+  TitleGameplayOptionSet TitleGameplay{};
+  bool NativeButtonOverlay = false;
 };
 
 class InGameMenu {

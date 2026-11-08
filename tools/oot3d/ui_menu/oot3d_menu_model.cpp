@@ -419,16 +419,18 @@ bool Model::UpdatePointer(const Pointer& pointer, double elapsedSeconds) {
         moved = false;
         if (dragging) mHover = {};
     }
-    // The modal takes every pointer action: its buttons highlight under the
-    // pointer and a click decides; nothing behind it reacts.
+    // The modal takes pointer presses/releases, never the idle presence of
+    // a desktop mouse. Idle input must reach Update's modal keyboard/pad
+    // branch (which still prevents any action behind the modal).
     if (mModal.has_value()) {
+        const bool activePointer = pointer.Pressed || lifted || click;
         if (mHover.Kind != HitKind::ModalConfirm && mHover.Kind != HitKind::ModalCancel) {
             mHover = {};
-            return true;
+            return activePointer;
         }
         if (moved) mModalConfirm = mHover.Kind == HitKind::ModalConfirm;
         if (click) ResolveModal(mHover.Kind == HitKind::ModalConfirm);
-        return true;
+        return activePointer;
     }
     auto* tab = CurrentTab();
     bool overArrow = false;

@@ -49,7 +49,7 @@ pub const TOPSCREEN_STANDARD_LAYOUT_FIELDS: [&str; 13] = [
 pub const TOPSCREEN_HUD_SIZES: [f64; 2] = [1.0, 0.7];
 
 /// Launch-profile options whose value is a file or directory.
-const PATH_OPTIONS: [&str; 23] = [
+const PATH_OPTIONS: [&str; 24] = [
     "--title-plugin",
     "--a32-process-manifest",
     "--resource-root",
@@ -63,6 +63,7 @@ const PATH_OPTIONS: [&str; 23] = [
     "--ui-texture-pack",
     "--water-texture-catalog",
     "--scene-light-catalog",
+    "--title-program-pack",
     "--romfs-overlay",
     "--title-romfs-layer",
     "--title-message-edits",
@@ -173,6 +174,7 @@ pub struct RuntimeAssets {
     pub title_romfs_layer: Option<PathBuf>,
     pub title_message_edits: Option<PathBuf>,
     pub pica_shader_pack: Option<PathBuf>,
+    pub title_program_pack: Option<PathBuf>,
     /// Mutable renderer cache: routed, never pinned by hash.
     pub renderer_cache_directory: Option<PathBuf>,
 }
@@ -461,6 +463,10 @@ pub fn publish_private_runtime(
     if let Some(path) = &lights {
         route("--scene-light-catalog", path)?;
     }
+    let title_programs = existing_file(&assets.title_program_pack, "Title program pack is missing before activation")?;
+    if let Some(path) = &title_programs {
+        route("--title-program-pack", path)?;
+    }
     let overlay = existing_file(&assets.romfs_overlay, "RomFS mod overlay is missing before activation")?;
     if let Some(path) = &overlay {
         route("--romfs-overlay", path)?;
@@ -580,6 +586,7 @@ pub fn publish_private_runtime(
         ("romfs_overlay", &overlay),
         ("title_message_edits", &messages),
         ("pica_shader_pack", &shader_pack),
+        ("title_program_pack", &title_programs),
     ] {
         if let Some(path) = path {
             runtime.insert(key.into(), pinned(path)?);

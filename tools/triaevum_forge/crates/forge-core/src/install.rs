@@ -690,6 +690,8 @@ pub fn install_precompiled_title(
         scene_light_catalog: scene_lights,
         romfs_overlay,
         pica_shader_pack: shader_pack,
+        title_program_pack: item.get("title_program_pack")
+            .map(|record| checked_file(root, record, cancel)).transpose().map_err(verify)?,
         renderer_cache_directory: Some(renderer_cache),
     };
     let runtime_plugin = resolve(request.runtime_plugin)?;

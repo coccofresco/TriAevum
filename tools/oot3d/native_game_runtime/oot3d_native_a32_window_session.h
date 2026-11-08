@@ -331,10 +331,11 @@ private:
   std::optional<Oot3dNativeGame::NativeA32ProcessImageManifest> manifest{};
   std::optional<Oot3dNativeGame::NativeScenarioCatalog> scenarioCatalog;
   std::optional<Oot3dNativeGame::NativeScenarioBootstrap> scenarioBootstrap;
+  bool devFreeCameraOwnedInput = false; // product photo camera also uses this gate
+  uint64_t titleRumbleContextRevision = UINT64_MAX;
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // F1 > Dev Tools warping (developer builds only).
   std::shared_ptr<Oot3dNativeGame::DevWarpTitleAbi> devToolsTitle;
-  bool devFreeCameraOwnedInput = false;
   // TRIAEVUM_SURFACE_TRACE: a surface-lighting trace requested at a host frame.
   std::string devSurfaceTracePath;
   uint32_t devSurfaceTraceFrame = 0;
@@ -389,6 +390,7 @@ private:
   void PublishTopScreenUiConfig();
   void ApplyPhotoModeHud();
   bool devFreeCameraToggleHeld = false;
+  bool scriptedHideHudHeld = false;  // timeline host key "hide_hud" edge
   std::chrono::steady_clock::time_point devFreeCameraLastRefresh{};
   // Moves the free camera from the pad, keyboard and mouse and withholds that
   // input from the game while it is active.

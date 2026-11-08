@@ -82,6 +82,7 @@ void PrintOot3dNativeGameUsage() {
                  "[--renderer-cache-directory <directory>] "
                  "[--water-texture-catalog <water_textures.txt>] "
                  "[--scene-light-catalog <scene_lights.json>] "
+                 "[--title-program-pack <title.spvpack>] "
                  "[--title-message-edits <message_edits.json>] "
                  "[--title-romfs-layer <prepared-directory>] "
                  "[--pica-aot-shader-strict] "
@@ -233,6 +234,9 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
                 std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
         } else if (arg == "--scene-light-catalog" && index + 1 < argc) {
             launch.SceneLightCatalogPath =
+                std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
+        } else if (arg == "--title-program-pack" && index + 1 < argc) {
+            launch.TitleProgramPackPath =
                 std::filesystem::absolute(std::filesystem::u8path(argv[++index])).lexically_normal();
         } else if (arg == "--title-romfs-layer" && index + 1 < argc) {
             launch.TitleRomFsLayerPath =

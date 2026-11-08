@@ -1,9 +1,11 @@
 #pragma once
+#include "../dekui/host_interfaces.h"
 
 #include "oot3d_native_pica_frontend.h"
 #include "mm3d_native_a32_lighting.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -68,6 +70,20 @@ struct Mm3dNativePicaCompositionStats {
     // the environment's directional lights the last of them carried.
     uint64_t LightBindings = 0;
     uint32_t SceneDirectionalLights = 0;
+    uint64_t TemporalModelSpans = 0;
+    uint64_t IsolatedModelSpans = 0;
+    uint64_t AtmosphereModelSpans = 0;
+    uint64_t LifecycleInvalidations = 0;
+    // P17 owner dump: draws per layout resource name at the owner draw entry
+    // (bounded; later names count in LayoutOwnersDropped).
+    std::map<std::string, uint64_t> LayoutOwners;
+    uint64_t LayoutOwnersDropped = 0;
+    uint64_t PrimitiveEntries = 0, PrimitiveSpans = 0, TemporalPrimitiveSpans = 0;
+    uint64_t UnownedPrimitives = 0, InvalidPrimitives = 0;
+    uint64_t AtmosphereQuadSpans = 0, UiQuadSpans = 0, InvalidQuadOwners = 0;
+    uint64_t QuadQueueMoves = 0, NativeUiQuadMoves = 0;
+    std::array<uint64_t, 8> UnknownQuadSpans{};
+    std::array<uint64_t, 8> PrimitiveCallerEntries{};
 };
 
 // Records the command-list byte range each native pass writes, with its
@@ -97,6 +113,8 @@ class Mm3dNativePicaCompositionTracker final
         std::vector<Oot3dPicaCommandListCompositionSpan>& spans,
         std::string* error = nullptr) override;
 
+    void CommitQuadQueueMoves(std::span<const Mm3dDekui::NativeQuadQueueMove> moves,
+        oot3d::recomp::a32::MemoryBus& memory);
     void Reset() noexcept;
     [[nodiscard]] const Mm3dNativePicaCompositionStats& Stats() const noexcept;
     // The environment group latched for this play visit (Unknown = nullopt).
@@ -109,8 +127,28 @@ class Mm3dNativePicaCompositionTracker final
         uint32_t Model = 0; uint64_t Generation = 0;
         uint64_t Actor = 0; bool Shadow = false;
         uint32_t List = 0;
+        uint64_t Lifetime = 0;
+        bool Isolated = false, Atmosphere = false;
+    };
+    struct QuadOwner {
+        uint32_t Model = 0;
+        uint64_t Generation = 0;
+        Oot3dPicaCompositionAttribution Attribution;
+    };
+    struct EnvironmentProducer { uint32_t Entry = 0, Return = 0; };
+    struct PrimitiveScope {
+        uint32_t Context = 0, Begin = 0, OuterReturn = 0;
+        Oot3dPicaCompositionAttribution Attribution;
+        Fast::Renderer3ds::PicaNativeLightBinding Lighting;
+    };
+    struct ActorLifetime { uint64_t Identity = 0, Lifetime = 0; };
+    struct ModelLifetime {
+        uint64_t Owner = 0, OwnerEpoch = 0, Lifetime = 0;
+        // Handles released by the guarded CMB model destructor, +90..+A8.
+        std::array<uint32_t, 7> Resources{};
     };
     struct ModelSubmit { uint32_t Model = 0, ReturnPc = 0; bool Shadow = false; };
+    struct OverlaySubmit { uint32_t Model = 0, List = 0, ReturnPc = 0; };
     struct ModelScope {
         uint32_t ReturnPc = 0, Slot = 0, Begin = 0;
         Oot3dPicaCompositionAttribution Attribution;
@@ -131,13 +169,38 @@ class Mm3dNativePicaCompositionTracker final
                 const Oot3dPicaCompositionAttribution& attribution,
                 const Fast::Renderer3ds::PicaNativeLightBinding& lightBinding);
     void CaptureSceneLighting(oot3d::recomp::a32::MemoryBus& memory);
+    bool ObservePrimitive(uint32_t pc, const oot3d::recomp::a32::GuestState& state,
+                          oot3d::recomp::a32::MemoryBus& memory);
+    void FlushPrimitives(oot3d::recomp::a32::MemoryBus& memory);
+    void ValidateTemporalAttribution(Oot3dPicaCompositionAttribution& attribution,
+                                    oot3d::recomp::a32::MemoryBus& memory);
+    bool ObserveQuads(uint32_t pc, const oot3d::recomp::a32::GuestState& state,
+                      oot3d::recomp::a32::MemoryBus& memory);
 
+    uint64_t NextLifetime() noexcept;
+    void InvalidateActor(uint32_t actor);
     bool mHooksVerified = false, mFineSuppressed = false;
+    uint64_t mNextLifetime = 0;
+    uint32_t mPlay = 0, mPlayFrame = 0;
+    uint16_t mScene = 0;
+    struct RoomSlots { bool Valid = false; int8_t Current = -1, Previous = -1; };
+    RoomSlots mRooms;
+    std::unordered_map<uint32_t, ActorLifetime> mActorLifetimes;
+    std::unordered_map<uint32_t, ModelLifetime> mModelLifetimes;
     uint64_t mQueueGeneration = 0;
     std::vector<uint64_t> mActorDrawStack;
     std::unordered_map<uint32_t, QueueOwner> mQueueOwners;
     std::optional<ModelSubmit> mModelSubmit;
+    std::optional<OverlaySubmit> mOverlaySubmit;
     std::optional<ModelScope> mModelScope;
+    std::vector<EnvironmentProducer> mEnvironmentProducers;
+    std::unordered_map<uint32_t, QuadOwner> mQuadOwners;
+    std::optional<ModelScope> mQuadScope;
+    uint32_t mQuadQueue = 0;
+    uint64_t mQuadGeneration = 0;
+    std::vector<Mm3dDekui::NativeQuadQueueMove> mQuadSortMoves;
+    std::optional<PrimitiveScope> mPrimitiveScope;
+    std::vector<Oot3dPicaCommandListCompositionSpan> mPendingPrimitives;
     Mm3dNativeA32LightingProbe mLighting;
     std::optional<ActiveScope> mActive;
     // The scene frame's lighting, captured when its opaque pass begins.

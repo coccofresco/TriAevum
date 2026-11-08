@@ -168,6 +168,9 @@ foreach(_variant_target oot3d_native_pica_variant_inventory oot3d_native_pica_va
         runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment_binaries.cpp
         runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment.spvpack)
     triaevum_add_spirv_pack(${_variant_target}
+        runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment_binaries.cpp
+        runtime/three_ds_recomp/src/fast/extension/pica_native_lighting_uber.spvpack)
+    triaevum_add_spirv_pack(${_variant_target}
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment_binaries.cpp
         runtime/three_ds_recomp/src/fast/renderer3ds/pica_native_fragment.spvpack)
     target_include_directories(${_variant_target} PRIVATE tools/oot3d/native_game_runtime titles/oot3d/topscreen titles/oot3d/gameplay titles/oot3d/environment)
@@ -208,13 +211,16 @@ set_property(TARGET oot3d_native_pica_program_descriptor_tests PROPERTY
 # Reuse the host build for pack gates; no second GPU-test build directory is
 # needed just to regenerate/check shader artifacts after a pass change.
 if(THREE_DS_RECOMP_BUILD_TESTS AND TARGET three_ds_recomp_shaderc)
-    foreach(_artifact fragment pass)
+    foreach(_artifact fragment pass vertex)
         add_executable(triaevum_build_${_artifact}_artifacts EXCLUDE_FROM_ALL
             tools/renderer/tev_program/build_${_artifact}_artifacts.cpp)
         target_link_libraries(triaevum_build_${_artifact}_artifacts PRIVATE
             oot3d_native_pica_frontend three_ds_recomp_runtime three_ds_recomp_shaderc)
         oot3d_target_defaults(triaevum_build_${_artifact}_artifacts FOLDER Tools)
     endforeach()
+    triaevum_add_spirv_pack(triaevum_build_vertex_artifacts
+        tools/oot3d/native_pica_frontend/oot3d_native_vertex_binaries.cpp
+        tools/oot3d/native_pica_frontend/oot3d_native_vertex.spvpack)
 endif()
 
 add_executable(oot3d_native_pica_aot_shader_pack_tests EXCLUDE_FROM_ALL

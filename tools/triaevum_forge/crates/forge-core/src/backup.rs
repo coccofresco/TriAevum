@@ -49,7 +49,9 @@ pub const SCHEMA: u64 = 1;
 pub const MANIFEST: &str = "manifest.json";
 pub const PLAN_FORMAT: &str = "triaevum_backup_plan_v1";
 pub const RESULT_FORMAT: &str = "triaevum_backup_result_v1";
-/// The game this Forge's backups belong to (its package's `recipes/oot3d.json`).
+/// Legacy recipe catalogs and the original `open_backup` API are OoT-only.
+/// New/multi-title catalogs declare `game` on every recipe; never infer it
+/// from a display name, recipe id, texture override or a backup being opened.
 pub const GAME: &str = "oot3d";
 /// The logical name of the Android touch preferences, stored as JSON.
 pub const TOUCH_PREFERENCES: &str = "touch_preferences";
@@ -222,6 +224,7 @@ impl Unit {
 /// What a backup would hold, and the offered and excluded locations.
 #[derive(Clone, Debug)]
 pub struct BackupPlan {
+    pub game: String,
     pub platform: Platform,
     pub units: Vec<Unit>,
     /// Optional entries that can be added (present and not inside a unit).
@@ -245,6 +248,7 @@ impl BackupPlan {
         let path = |path: &Path| path.to_string_lossy().into_owned();
         json!({
             "format": PLAN_FORMAT,
+            "game": self.game,
             "platform": self.platform.code(),
             "bytes": self.bytes(),
             "files": self.files(),
@@ -277,6 +281,7 @@ fn selected(entry: &Entry, chosen: &[String]) -> bool {
 /// what a folder unit leaves out. `touch` is the app's serialized touch
 /// preferences (Android). Lists the files (reads folders, writes nothing).
 pub fn backup_plan(inventory: &Inventory, chosen: &[String], touch: Option<&Map<String, Value>>) -> Result<BackupPlan> {
+    let target = backup_target(inventory)?;
     let roots = &inventory.roots;
     let mut units = Vec::new();
     let mut optional = Vec::new();
@@ -353,7 +358,7 @@ pub fn backup_plan(inventory: &Inventory, chosen: &[String], touch: Option<&Map<
             skipped,
         });
     }
-    Ok(BackupPlan { platform: roots.platform, units, optional, excluded, needs_touch_preferences })
+    Ok(BackupPlan { game: target.game, platform: roots.platform, units, optional, excluded, needs_touch_preferences })
 }
 
 /// The zip member of a manifest entry.
@@ -399,6 +404,8 @@ pub fn create_backup(
     progress: Progress<'_>,
     cancel: &CancelToken,
 ) -> Result<Value> {
+    // Refuse unknown/ambiguous title identity before even creating a lock.
+    backup_target(inventory).map_err(|error| error.during(Operation::Backup))?;
     let os = os_of(inventory.roots.platform);
     let _quiet = crate::session::quiesce(&inventory.roots.activation, os, Operation::Backup)?;
     let plan = backup_plan(inventory, &request.optional, request.touch_preferences.as_ref())
@@ -408,7 +415,7 @@ pub fn create_backup(
     let partial = destination.with_file_name(format!(".{}.partial", name.to_string_lossy()));
     let outcome = write_archive(inventory, &plan, request, &partial, progress, cancel)
         .and_then(|manifest| {
-            let opened = open_backup(&partial, None, cancel)
+            let opened = open_backup_for_game(&partial, &plan.game, None, cancel)
                 .map_err(|error| ForgeError::integrity(format!("The new backup did not verify: {}", error.message)))?;
             if opened.manifest.entries.len() != manifest.entries.len() {
                 return Err(ForgeError::integrity("The new backup did not verify: its entries differ"));
@@ -428,6 +435,7 @@ pub fn create_backup(
     let bytes = std::fs::metadata(destination).map(|metadata| metadata.len()).unwrap_or(0);
     Ok(json!({
         "format": RESULT_FORMAT,
+        "game": manifest.game,
         "path": destination.to_string_lossy(),
         "bytes": bytes,
         "files": manifest.entries.len(),
@@ -496,7 +504,7 @@ fn write_archive(
         created: crate::log::timestamp(std::time::SystemTime::now()),
         engine_version: env!("CARGO_PKG_VERSION").to_string(),
         package_version: crate::state::package_version(&inventory.roots.package),
-        game: GAME.to_string(),
+        game: plan.game.clone(),
         recipe: installed_recipe(&inventory.roots.data),
         platform: inventory.roots.platform,
         units,
@@ -568,6 +576,7 @@ impl Manifest {
             "created": self.created,
             "engine_version": self.engine_version,
             "package_version": self.package_version,
+            "game": self.game,
             "recipe": self.recipe,
             "platform": self.platform.code(),
             "files": self.entries.len(),
@@ -645,7 +654,7 @@ fn optional_text(map: &Map<String, Value>, key: &str) -> Result<Option<String>> 
     }
 }
 
-fn parse_manifest(bytes: &[u8], supported_recipes: Option<&[String]>) -> Result<Manifest> {
+fn parse_manifest(bytes: &[u8], expected_game: &str, supported_recipes: Option<&[String]>) -> Result<Manifest> {
     let manifest = forge_base::legacy_json::load_object(bytes)
         .map_err(|error| damaged(format!("The backup manifest is not readable: {error}")))?;
     if manifest.get("format").and_then(Value::as_str) != Some(FORMAT) {
@@ -663,7 +672,7 @@ fn parse_manifest(bytes: &[u8], supported_recipes: Option<&[String]>) -> Result<
         _ => return Err(damaged("The backup manifest has no valid schema")),
     }
     let game = text(&manifest, "game")?;
-    if game != GAME {
+    if game != expected_game {
         return Err(refused(ErrorKind::IncompatibleTarget, format!("This backup belongs to another game ({game})"))
             .because(Reason::OtherGame));
     }
@@ -784,6 +793,20 @@ impl std::io::Write for WriteAdapter<'_> {
 /// `supported_recipes` (the package's revisions) refuses a backup of a
 /// revision this package cannot play. Reads only.
 pub fn open_backup(path: &Path, supported_recipes: Option<&[String]>, cancel: &CancelToken) -> Result<OpenedBackup> {
+    open_backup_for_game(path, GAME, supported_recipes, cancel)
+}
+
+/// Verifies a backup against a game supplied by the destination's recipe
+/// contract, never by the archive itself. The legacy API above stays OoT-only.
+pub fn open_backup_for_game(
+    path: &Path,
+    expected_game: &str,
+    supported_recipes: Option<&[String]>,
+    cancel: &CancelToken,
+) -> Result<OpenedBackup> {
+    if !game_key_ok(expected_game) {
+        return Err(ForgeError::invalid("The backup target has no valid game identity"));
+    }
     let mut archive = open_archive(path)?;
     let mut names = HashSet::new();
     for index in 0..archive.len() {
@@ -807,7 +830,7 @@ pub fn open_backup(path: &Path, supported_recipes: Option<&[String]>, cancel: &C
             .read_to_end(&mut bytes)
             .map_err(|error| damaged(format!("The backup manifest cannot be read: {error}")))?;
     }
-    let manifest = parse_manifest(&bytes, supported_recipes)?;
+    let manifest = parse_manifest(&bytes, expected_game, supported_recipes)?;
     let mut expected: HashSet<String> =
         manifest.entries.iter().map(|entry| member_name(&entry.unit, &entry.path)).collect();
     expected.insert(MANIFEST.to_string());
@@ -821,6 +844,79 @@ pub fn open_backup(path: &Path, supported_recipes: Option<&[String]>, cancel: &C
         copy_member(&mut archive, entry, &mut std::io::sink(), cancel)?;
     }
     Ok(OpenedBackup { path: path.to_path_buf(), manifest })
+}
+
+/// The game and only its supported revisions, resolved independently of an
+/// archive. One data root belongs to one active game. A mixed-title package
+/// without an active revision is ambiguous, not permission to restore either.
+pub(crate) struct BackupTarget {
+    pub game: String,
+    pub recipes: Vec<String>,
+}
+
+fn game_key_ok(game: &str) -> bool {
+    !game.is_empty() && game.len() <= 64
+        && game.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
+}
+
+pub(crate) fn backup_target(inventory: &Inventory) -> Result<BackupTarget> {
+    let invalid = |message: &str| ForgeError::new(ErrorKind::IncompatibleTarget, message)
+        .because(Reason::OtherGame);
+    let recipes = forge_catalog::recipes::load_recipes(&crate::install::recipes_path(&inventory.roots.package))?;
+    // The old schema was exclusively OoT. Preserve that contract only for
+    // entirely legacy catalogs; partial annotation in a new catalog is unsafe.
+    let explicit = recipes.iter().any(|recipe| recipe.get("game").is_some());
+    let mut games = BTreeMap::new();
+    for recipe in &recipes {
+        let id = recipe.get("id").and_then(Value::as_str).filter(|id| !id.is_empty())
+            .ok_or_else(|| invalid("A backup recipe has no revision identity"))?;
+        let game = if explicit {
+            recipe.get("game").and_then(Value::as_str)
+                .ok_or_else(|| invalid("Every recipe in a title-aware catalog must declare its game"))?
+        } else {
+            GAME
+        };
+        if !game_key_ok(game) || games.insert(id.to_string(), game.to_string()).is_some() {
+            return Err(invalid("The backup recipe catalog has an invalid game or duplicate revision"));
+        }
+    }
+    let active_path = inventory.roots.data.join("active-title.json");
+    let game = if active_path.try_exists().map_err(|error| file_error("Cannot inspect", &active_path, error))? {
+        let active = load_json_object(&active_path)?;
+        if active.get("format").and_then(Value::as_str) != Some(crate::active_title::ACTIVE_TITLE_FORMAT) {
+            return Err(invalid("The active title has no valid identity"));
+        }
+        let id = active.get("recipe").and_then(Value::as_str)
+            .ok_or_else(|| invalid("The active title has no revision identity"))?;
+        let game = games.get(id).ok_or_else(|| invalid("The active revision is absent from the package's recipes"))?;
+        if active.get("game").is_some_and(|value| value.as_str() != Some(game.as_str())) {
+            return Err(invalid("The active title and its recipe disagree about the game"));
+        }
+        game.clone()
+    } else {
+        let unique: HashSet<_> = games.values().collect();
+        if unique.len() != 1 {
+            return Err(invalid("Backup recovery needs an active revision or an unambiguous single-game package"));
+        }
+        (*unique.into_iter().next().expect("one game")).clone()
+    };
+    let recipes = games.into_iter().filter_map(|(id, owner)| (owner == game).then_some(id)).collect();
+    Ok(BackupTarget { game, recipes })
+}
+
+/// Checks even a directly supplied restore plan against the installation.
+pub(crate) fn check_backup_target(inventory: &Inventory, manifest: &Manifest) -> Result<()> {
+    let target = backup_target(inventory)?;
+    if manifest.game != target.game || manifest.recipe.as_ref().is_some_and(|id| !target.recipes.contains(id)) {
+        return Err(refused(ErrorKind::IncompatibleTarget, "This backup belongs to another game or unsupported revision")
+            .because(Reason::OtherGame));
+    }
+    Ok(())
+}
+
+pub(crate) fn open_installation_backup(inventory: &Inventory, path: &Path, cancel: &CancelToken) -> Result<OpenedBackup> {
+    let target = backup_target(inventory)?;
+    open_backup_for_game(path, &target.game, Some(&target.recipes), cancel)
 }
 
 /// The revisions the package at `package` supports.

@@ -12,6 +12,18 @@ struct Options {float flip_peak=1.2f;std::array<float,3> preset_flip_peaks{1.2f,
 inline std::array<GearMenu::AtomicPose,Count> buttons;
 inline std::atomic<float> scale{1},flip_peak{1.2f},center_x{350},center_y{55},spacing{24},rotation{0};
 inline std::atomic<bool> diamond_enabled{false};
+// TriAevum: touch-control placement composed AFTER dekui's own pose/diamond
+// (world' = touch o dekui), owned by the MM3D touch-HUD plan while touch
+// prompts are active (Mm3dButtonOverlay::ApplyTouchHud); inactive otherwise,
+// so dekui's layout settings stay the sole owner of the controller HUD.
+struct TouchPlacement {std::atomic<bool> active{false};std::atomic<float> scale{1},x{0},y{0};};
+inline std::array<TouchPlacement,Count> touch;
+inline NativeInventory::Hook::Affine ComposeTouch(unsigned i,const NativeInventory::Hook::Affine& d){
+    if(i>=Count||!touch[i].active.load())return d;
+    const float s=touch[i].scale.load(),x=touch[i].x.load(),y=touch[i].y.load();
+    if(!std::isfinite(s)||!std::isfinite(x)||!std::isfinite(y)||!(s>0))return d;
+    return {s*d.xx,s*d.xy,s*d.yx,s*d.yy,s*d.tx+x,s*d.ty+y};
+}
 inline std::array<float,2> DiamondPoint(unsigned i,const Diamond& d){
     float x=i==2?-d.spacing:i==4?d.spacing:0;
     float y=i==1?-d.spacing:i==5?d.spacing:0;
@@ -125,7 +137,7 @@ struct Hook {
                 if(!std::isfinite(ox)||!std::isfinite(oy))return;
                 tx=target[0]+ox-p.scale*cx;ty=target[1]+oy-p.scale*cy;
             }
-            const NativeInventory::Hook::Affine mapping{p.scale,0,0,p.scale,tx,ty};
+            const auto mapping=ComposeTouch(i,NativeInventory::Hook::Affine{p.scale,0,0,p.scale,tx,ty});
             std::vector<U32> seen;
             for(U32 node:{icon,base})if(node&&!helper.helper.helper.Transform(m,node,writes,seen,mapping))return;
         }

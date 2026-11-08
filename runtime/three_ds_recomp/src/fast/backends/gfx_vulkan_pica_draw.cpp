@@ -1,5 +1,6 @@
 // Native PICA on Vulkan: draw submission, composition anchors, interactive grass and shadow maps.
 #ifdef ENABLE_OOT3D_VULKAN
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "gfx_vulkan_pica_internal.h"
 #include "fast/renderer3ds/pica_exclude_scissor.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
@@ -78,7 +79,8 @@ bool GfxRenderingAPIVulkan::PublishPicaCompositionSequence(
                 "native PICA composition schedule failed: " +
                 compileError);
         }
-        if (mTemporalMotionEnabled && !mPicaTemporalHistory.PrepareSequence(sequence, mFrameCounter) &&
+        if (mTemporalMotionEnabled && !mPicaTemporalHistory.PrepareSequence(
+                sequence, mFrameCounter, &mPicaSceneFrame.TemporalSample()) &&
             mPicaTemporalHistory.DuplicateTargetSequences == 1U)
             std::fprintf(stderr, "TRIAEVUM_TEMPORAL_DUPLICATE_TARGET frame=%llu: a target was presented twice in one "
                          "host frame; its second sequence draws without motion history\n",
@@ -151,15 +153,52 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     // When an overlay (native UI, the isolated title logo) reaches the target
     // before its transfer, that surface is proven only by the scene
     // completion recorded at this boundary.
-    if (!mNativeFidelityProfile && (sceneEffects || mPresentationWorldSurface) &&
+    const bool fxaaBeforeUi = mSpatialAaMode == 1U && draw.Composition.ExcludeFromPresentationFxaa;
+    if (!mNativeFidelityProfile && (sceneEffects || mPresentationWorldSurface || fxaaBeforeUi) &&
         NativeSceneOverlayDraw(draw)) {
         const auto* beforeUi = mNativePicaCompositionSchedule.FindAnchorBeforeDraw(
             Extension::EffectStage::BeforeUi, reference.Target, draw.SubmissionId);
         if (beforeUi != nullptr) {
-            GpuTextureCopySourceImport composed;
-            if (sceneEffects) {
+            // The opted-in native overlay owns an output-density attachment.
+            // Reconstruct the reduced scene FIRST; native blend/alpha/depth then
+            // compose the UI directly over it, without changed-pixel inference.
+            if (mPresentationUpscaler && draw.Composition.PreserveNativeUiSampling &&
+                mNativePicaSampleCount == VK_SAMPLE_COUNT_1_BIT &&
+                Extension::IsNativeTopScreenTarget({target.Key.Width, target.Key.Height})) {
+                GpuTextureCopySourceImport reconstructed;
                 std::string error;
-                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, composed, &error, beforeUi))
+                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, reconstructed,
+                        &error, beforeUi, false, true))
+                    throw std::runtime_error(error);
+                auto& ui = GetOrCreateNativePicaRenderTarget(draw, 0, 0, true);
+                EndNativePicaRenderPass();
+                if (reconstructed.Width != ui.Width || reconstructed.Height != ui.Height ||
+                    !mNriPicaDisplayCopyPass.Execute({mCurrentFrame, mFrameCounter,
+                        reconstructed.Image, ui.ColorImage, reconstructed.Format,
+                        {ui.Width, ui.Height, ui.Width, ui.Height}, reconstructed.ShaderRead, true, true}))
+                    throw std::runtime_error("output-resolution native UI scene commit failed");
+                CopyNativePicaUiDepth(target, ui);
+                ui.ContentWriteSerial = ++mGpuTextureCopyWriteSerial;
+                ui.SceneEffectsResolvedSerial = ui.ContentWriteSerial;
+                ui.PresentationEffectsResolvedSerial = ui.ContentWriteSerial;
+                ui.NativeUiSamplingSerial = ui.ContentWriteSerial;
+                ui.PresentationFxaaExcludedSerial = ui.ContentWriteSerial;
+                ui.UiSourceSerial = target.ContentWriteSerial;
+                ui.SampleView = target.SampleView;
+                if (const char* audit = std::getenv("TRIAEVUM_NATIVE_UI_GRID_AUDIT"); audit && *audit == '1') {
+                    static uint32_t count = 0;
+                    if (count++ < 8U)
+                        std::fprintf(stderr, "TRIAEVUM_NATIVE_UI_RASTER scene=%ux%u ui=%ux%u serial=%llu\n",
+                            target.Width, target.Height, ui.Width, ui.Height,
+                            static_cast<unsigned long long>(target.ContentWriteSerial));
+                }
+                TryRenderWorldDebugLines(ui);
+                return;
+            }
+            GpuTextureCopySourceImport composed;
+            if (sceneEffects || fxaaBeforeUi) {
+                std::string error;
+                if (!ComposeNativePicaSceneForCopy(target, draw.SubmissionId, composed, &error, beforeUi, fxaaBeforeUi))
                     throw std::runtime_error(error);
             }
             if (composed.Image == VK_NULL_HANDLE || composed.Image == target.ColorImage) {
@@ -1189,6 +1228,9 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 (void)Renderer3ds::ExcludePicaSceneDirectionalsLitNatively(
                     *surfaceLighting, std::span(directions.data(), directionCount));
             }
+            if (surfaceLighting)
+                Renderer3ds::PreservePicaNativeFragmentSceneReference(
+                    *surfaceLighting, nativePointDraw, balanceWaterEligible && !waterSurface.ReachesWater);
             // Water in a mixed mesh (a room's water and banks in one draw),
             // or a whole water draw (on its own plane when it has no body).
             if (surfaceLighting && waterSurface.WorldBounds.Available && mSurfaceLightingView &&
@@ -2109,10 +2151,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         finishCpuStage(cpuTimings.GrassSurfaceMilliseconds);
 
-        auto& renderTarget = GetOrCreateNativePicaRenderTarget(draw);
+        auto& sceneTarget = GetOrCreateNativePicaRenderTarget(draw);
         finishCpuStage(cpuTimings.RenderTargetStateMilliseconds);
-        ExecuteNativePicaBeforeDrawAnchors(renderTarget, draw,
+        ExecuteNativePicaBeforeDrawAnchors(sceneTarget, draw,
             cpuTimings.DirectionalShadowMilliseconds, cpuTimings.GrassRenderMilliseconds);
+        auto& renderTarget = !nativeMemoryOnly && NativeSceneOverlayDraw(draw)
+            ? ResolveNativePicaUiTarget(sceneTarget) : sceneTarget;
         if (collectCpuTimings) cpuStageStart = CpuClock::now();
         renderTarget.WBuffering = draw.WBuffering;
         // The isolated title logo once the boundary before it has resolved the
@@ -2211,7 +2255,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 backgroundAcquisition, &specializedPending);
             if (specializedPending) selectedPipeline = nullptr;
         }
-        if (selectedPipeline == nullptr && UsesAlwaysAvailablePrograms()) {
+        if (selectedPipeline == nullptr && Renderer3ds::DrawsUseAlwaysAvailablePrograms(
+                                               UsesAlwaysAvailablePrograms(), mFrameReproducibleProgramSelection)) {
             auto unavailable = NativePicaUberUnavailable::NoParametricProgram;
             if (!draw.UberFragmentShaderSource.empty()) {
                 // The always-available program executes the specialized
@@ -3000,12 +3045,29 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             const bool retainResolvedScene = overlayDraw &&
                 renderTarget.SceneEffectsResolvedSerial != 0U &&
                 renderTarget.SceneEffectsResolvedSerial == renderTarget.ContentWriteSerial;
+            const bool retainPresentation = overlayDraw &&
+                renderTarget.PresentationEffectsResolvedSerial != 0U &&
+                renderTarget.PresentationEffectsResolvedSerial == renderTarget.ContentWriteSerial;
             const bool retainSceneBeforeUi = overlayDraw &&
                 renderTarget.SceneBeforeUiSerial != 0U &&
                 renderTarget.SceneBeforeUiSerial == renderTarget.ContentWriteSerial;
+            const bool excludePresentationFxaa = overlayDraw &&
+                (draw.Composition.ExcludeFromPresentationFxaa ||
+                 (renderTarget.PresentationFxaaExcludedSerial != 0U &&
+                  renderTarget.PresentationFxaaExcludedSerial == renderTarget.ContentWriteSerial));
+            const bool preserveNativeUiSampling = overlayDraw &&
+                (draw.Composition.PreserveNativeUiSampling ||
+                 (renderTarget.NativeUiSamplingSerial != 0U &&
+                  renderTarget.NativeUiSamplingSerial == renderTarget.ContentWriteSerial));
             renderTarget.ContentWriteSerial = ++mGpuTextureCopyWriteSerial;
+            if (preserveNativeUiSampling)
+                renderTarget.NativeUiSamplingSerial = renderTarget.ContentWriteSerial;
+            if (excludePresentationFxaa)
+                renderTarget.PresentationFxaaExcludedSerial = renderTarget.ContentWriteSerial;
             if (retainResolvedScene)
                 renderTarget.SceneEffectsResolvedSerial = renderTarget.ContentWriteSerial;
+            if (retainPresentation)
+                renderTarget.PresentationEffectsResolvedSerial = renderTarget.ContentWriteSerial;
             if (retainSceneBeforeUi)
                 renderTarget.SceneBeforeUiSerial = renderTarget.ContentWriteSerial;
             const bool fullTargetRaster =

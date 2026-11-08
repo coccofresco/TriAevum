@@ -73,6 +73,13 @@ void WriteTriAevumProductInfo(std::ostream& output) {
     const nlohmann::json info = {
         {"format", "triaevum_product_info_v1"},
         {"runtime", "oot3d_native_game"},
+        // The title adapters this build contains (TRIAEVUM_TITLES); a
+        // per-title Forge refuses a runtime without its title.
+#if defined(TRIAEVUM_TITLE_MM3D)
+        {"titles", {"oot3d", "mm3d"}},
+#else
+        {"titles", {"oot3d"}},
+#endif
         {"source_commit", kTriAevumSourceCommit},
         {"whole_aot_plugin_abi", kTriAevumProductPlugin ? 2 : 0},
 #if defined(OOT3D_REQUIRE_WHOLE_AOT_PLUGIN_V2)

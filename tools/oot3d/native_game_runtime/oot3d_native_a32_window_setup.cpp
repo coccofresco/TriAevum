@@ -9,6 +9,7 @@
 #include "oot3d_savestate_migration.h"
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/title_grass_rules_file.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "oot3d/renderer/azahar_texture_pack.h"
 #include "ship/config/Config.h"
 
@@ -148,6 +149,8 @@ void NativeA32WindowSession::Setup() {
   std::cerr << "TRIAEVUM_TITLE_ADAPTER " << Oot3dNativeGame::TitleAdapterName(titleAdapter)
             << " code_sha256=" << manifest->CodeBinSha256 << '\n';
   titleSession = Oot3dNativeGame::CreateTitleSession(titleAdapter);
+  if (titleSession) picaPresentationScheduler.SetGameplayHudClassifier(
+      [title=titleSession.get()](uint32_t pc,uint32_t value) { return title->IsGameplayHud(pc,value); });
   // Before any settings load: configurations older than schema 15 take the
   // title's shipped grass source and mask rules. OoT3D's rules are keyed by
   // its own textures; another title's configuration drops an unedited copy
@@ -1107,6 +1110,10 @@ void NativeA32WindowSession::Setup() {
   }
   auto &submissionQueue = submissionQueueStorage.emplace(
       picaMemoryView, true);
+  if(titleSession && titleSession->HasButtonOverlay())
+    submissionQueue.SetDrawSubmissionObserver([this](uint64_t draw) {
+      titleSession->ObserveButtonOverlayDraw(draw);
+    });
   // Generated title code links its own checked memory helpers. Only a module
   // advertising the observer contract can preserve GPU/CPU byte ownership.
 #if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
@@ -1191,7 +1198,8 @@ void NativeA32WindowSession::Setup() {
   if (titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur ||
       titleAdapter == Oot3dNativeGame::TitleAdapter::Mm3d) {
     applicationSettingsTabs.push_back(Oot3dNativeGame::CreateSceneEnvironmentPanel(
-        sceneEnvironment, {.NativeFragmentLighting = titleSession && titleSession->NativeFragmentLighting()}));
+        sceneEnvironment, {.NativeFragmentLighting = titleSession && titleSession->NativeFragmentLighting(),
+                           .CompanionLightName = titleSession ? std::string(titleSession->CompanionLightName()) : "Navi"}));
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // The developer tours, lab and emitter inventory drive OoT3D's guest
@@ -1259,7 +1267,9 @@ void NativeA32WindowSession::Setup() {
           launch.UiProfile ==
                   Oot3dNativeGame::Oot3dUiProfile::TopScreen
               ? topScreenConfigRuntime
-              : nullptr));
+              : nullptr,
+          titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{},
+          titleSession && titleSession->HasButtonOverlay()));
   if (launch.UiProfile ==
       Oot3dNativeGame::Oot3dUiProfile::TopScreen) {
     applicationSettingsTabs.push_back(
@@ -1267,7 +1277,9 @@ void NativeA32WindowSession::Setup() {
             topScreenConfigRuntime));
   }
   applicationSettingsTabs.push_back(
-      Oot3dNativeGame::CreateSavestatePanel(savestateLibrary));
+      Oot3dNativeGame::CreateSavestatePanel(
+          savestateLibrary, titleSession ? std::string(titleSession->SavestateSettingsNotice())
+                                        : std::string{}));
   applicationSettingsTabs.push_back(Oot3dNativeGame::CreateGameLanguagePanel(languageSettings));
 #if defined(__ANDROID__)
   constexpr bool kOfferAudioFocusMute = false;
@@ -1342,6 +1354,10 @@ void NativeA32WindowSession::Setup() {
   if (const char* title = Oot3dNativeGame::TitleGraphicsWindowTitle(titleAdapter)) {
     Fast::Extension::InstallGraphicsSettingsWindowTitle(title);
   }
+  // The renderer reads it when the context starts it.
+  Fast::Renderer3ds::InstallTitleShaderPreparation(
+      {Oot3dNativeGame::TitlePreparedShaders(titleAdapter, titleSession.get()),
+       std::string(Oot3dNativeGame::TitlePipelineCacheNamespace(titleAdapter, titleSession.get()))});
   InitContextForDemo(hostArgs);
   // What the title itself provides to the graphics settings: the effects
   // that need a scene view, and the scene FOV, stay inactive without it.
@@ -1390,17 +1406,23 @@ void NativeA32WindowSession::Setup() {
   alwaysAvailablePrograms =
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
+  if (programPreparation != nullptr) {
+    programPreparation->SetFrameReproducibleProgramSelection(
+        hostArgs.FrameReproducible());
+  }
+  // The title pass programs serve the shared renderer passes (shadow
+  // casters among them) of every title: registering them is a lookup table,
+  // and MM3D's draws hit them.
   if (programPreparation != nullptr)
     programPreparation->RegisterTitlePassPrograms(
         Oot3dNativeGame::NativePicaTitlePassPrograms());
-  // The startup program family (vertex programs, effect supersets) is
-  // OoT3D's: another title's draws never match it, so preparing it would
-  // only hold that guest at startup. Its draws prepare their own programs.
+  // Another title prepares only its publisher-provided vertex family, never
+  // OoT's unrelated programs. Without such a pack it retains the old behavior.
   if (programPreparation != nullptr &&
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
       (launch.PicaParametricTev || alwaysAvailablePrograms)) {
-    programPreparation->PrepareNativePicaPrograms(
-        Oot3dNativeGame::NativePicaVertexProgramFamily());
+    const auto family = Oot3dNativeGame::NativePicaVertexProgramFamily(
+        titleAdapter != Oot3dNativeGame::TitleAdapter::Oot3dEur);
+    if (!family.empty()) programPreparation->PrepareNativePicaPrograms(family);
   }
   // Initial preparation: from here until the renderer's startup work is ready
   // and the first frames run within budget, the window shows its progress.
@@ -1470,7 +1492,9 @@ void NativeA32WindowSession::Setup() {
       controlConfigRuntime,
       launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen ? topScreenConfigRuntime : nullptr,
       languageSettings, savestateLibrary, nativeCandidateDispatch.DevFreeCamera, photoMode, std::move(menuHost),
-      Oot3dNativeGame::HostAudioOutputPolicy()});
+      Oot3dNativeGame::HostAudioOutputPolicy(),
+      titleSession ? titleSession->SupportedGameplayOptions() : Oot3dNativeGame::TitleGameplayOptionSet{},
+      titleSession && titleSession->HasButtonOverlay()});
   // The first-play help card belongs to sessions a person plays: scripted
   // runs (captures, fixed steps, replays, the developer lab) never see it.
   // TRIAEVUM_HELP_CARD=1 or 0 overrides that, for qualification.
@@ -1965,6 +1989,7 @@ void NativeA32WindowSession::ApplyPhotoModeHud() {
   // the TopScreen compositor does not draw, follow render_hud as well.
   picaPresentationScheduler.SetNativeGameplayHudVisible(
       !hidden && (!nativeCandidateDispatch.TopScreenUiProfile || activeTopScreenConfig.RenderHud));
+  if (titleSession) titleSession->SetGameplayHudVisible(!hidden);
 }
 
 void NativeA32WindowSession::ApplySelectedUiProfile() {
@@ -2009,6 +2034,12 @@ void NativeA32WindowSession::UpdateScenePresentation() {
           std::max<uint32_t>(1, presentationPicture.Width),
           std::max<uint32_t>(1, presentationPicture.Height));
   widescreenProjection.Projection.FovMultiplier = graphics.FovMultiplier;
+  widescreenProjection.Projection.TitleOwnsSceneProjection = titleSession && titleSession->OwnsSceneProjection();
+  if (titleSession) {
+    const auto& presentation = widescreenProjection.Projection.Presentation;
+    titleSession->SetPresentation({graphics.FovMultiplier, presentation.HorizontalFovExpansion,
+                                   presentation.VerticalFovExpansion, graphics.ExtendedDrawDistance});
+  }
   auto &visibility = widescreenProjection.ActorVisibility;
   visibility.ExtendedDrawDistance = graphics.ExtendedDrawDistance;
   visibility.Presentation = widescreenProjection.Projection.Presentation;

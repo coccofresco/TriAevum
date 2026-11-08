@@ -43,7 +43,8 @@ object OverlayHost {
     }
 
     private fun input() = checkNotNull(sink) { "Android input overlay is not bound" }
-    fun releaseAll() = input().releaseAll()
+    // A delayed detach/focus callback may follow unbind; cancellation is idempotent.
+    fun releaseAll() { sink?.releaseAll() }
     fun onGamePadEvent(device: String, id: Int, state: Int): Boolean {
         require(device == TouchScreenDevice)
         // These are presentation/host actions, dispatched separately by Azahar.

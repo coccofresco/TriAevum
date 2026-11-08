@@ -29,6 +29,13 @@ class PicaProgramPreparationBackend {
     // True when draws should carry their always-available (parametric)
     // fragment program next to the specialized one (hybrid preparation).
     [[nodiscard]] virtual bool UsesAlwaysAvailablePrograms() const { return false; }
+    // A frame-reproducible session (fixed steps): a draw whose specialized
+    // program is not ready completes it instead of rendering the
+    // always-available one (title_shader_preparation.h). Startup preparation
+    // is unchanged. Set before the first draw.
+    virtual void SetFrameReproducibleProgramSelection(bool reproducible) {
+        (void)reproducible;
+    }
     // Pass programs a title derives from its own programs (shadow casters,
     // surface lighting), built with its vertex family at development time.
     virtual void RegisterTitlePassPrograms(std::span<const Renderer::PassShaderArtifact> programs) { (void)programs; }

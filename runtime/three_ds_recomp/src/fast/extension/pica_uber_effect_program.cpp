@@ -10,6 +10,7 @@
 #include "fast/renderer3ds/pica_material_guide.h"
 #include "fast/renderer3ds/pica_pbr_shading.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
+#include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/renderer3ds/point_shadow_map.h"
 
 #include <bit>
@@ -160,10 +161,24 @@ std::string ReliefPrologue(bool integerTexture0) {
 
 bool PicaUberEffectSupports(const PicaEffectDecisions& decisions,
                             const PicaUberEffectProgramRequest& request) noexcept {
-    // Never bind a legacy superset to raw-irradiance uniforms. The backend
-    // already completes the specialized program when no superset covers it.
-    if (decisions.FragmentLightingOperand || decisions.PbrNativeBalance || decisions.PbrNativeUnlit) return false;
-    if (decisions.NativeFragmentLitShadows) return false;
+    // Raw/native lighting has a separate finite family. Exact policy matching
+    // is essential: a legacy program must never see raw-irradiance uniforms.
+    if (decisions.FragmentLightingOperand != request.FragmentLightingOperand ||
+        decisions.FragmentLightingBalance != request.FragmentLightingBalance ||
+        decisions.NativeFragmentLitShadows != request.NativeFragmentLitShadows ||
+        decisions.PbrNativeBalance != request.PbrNativeBalance ||
+        decisions.PbrNativeUnlit != request.PbrNativeUnlit) return false;
+    const bool rawPolicy = request.FragmentLightingOperand || request.NativeFragmentLitShadows;
+    const bool pbrPolicy = request.PbrNativeBalance || request.PbrNativeUnlit;
+    const bool nativePolicy = rawPolicy || request.FragmentLightingBalance || pbrPolicy;
+    if (nativePolicy && !request.SurfaceInputs) return false;
+    if ((rawPolicy && decisions.Has(Decision::Pbr)) || (pbrPolicy && !decisions.Has(Decision::Pbr))) return false;
+    if (request.PbrNativeBalance && (!decisions.PbrNativeLighting || request.PbrNativeUnlit ||
+        rawPolicy || !request.FragmentLightingBalance)) return false;
+    if (request.PbrNativeUnlit && (decisions.PbrNativeLighting || rawPolicy || request.FragmentLightingBalance)) return false;
+    if (request.FragmentLightingBalance && ((!request.FragmentLightingOperand && !request.PbrNativeBalance) ||
+        !request.BaseHooks.NativeLightingCapture.Valid(request.BaseSource.size(),
+            request.BaseHooks.Offset(PicaShaderHook::PicaLighting)))) return false;
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     if (decisions.ShadowProbe) return false;
 #endif
@@ -171,6 +186,7 @@ bool PicaUberEffectSupports(const PicaEffectDecisions& decisions,
     if (!hooks.ValidFor(request.BaseSource)) return false;
     const auto base = Capabilities(request, hooks);
     const bool surface = request.SurfaceInputs;
+    if ((rawPolicy || request.FragmentLightingBalance) && !base.MaterialNormal) return false;
     constexpr uint32_t surfaceBits = Decision::SurfaceLighting | Decision::Pbr | Decision::AlbedoReplay |
         Decision::DirectionalShadow | Decision::PointShadow | Decision::ReflectionPbr | Decision::EnvironmentMix;
     if (!surface && (decisions.Bits & surfaceBits) != 0U) return false;
@@ -239,10 +255,22 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
         return {};
     const auto base = Capabilities(request, hooks);
     const bool surface = request.SurfaceInputs;
+    const bool rawPolicy = request.FragmentLightingOperand || request.NativeFragmentLitShadows;
+    const bool pbrPolicy = request.PbrNativeBalance || request.PbrNativeUnlit;
+    if ((rawPolicy || request.FragmentLightingBalance || pbrPolicy) && !surface) return {};
+    if ((rawPolicy || request.FragmentLightingBalance) && !base.MaterialNormal) return {};
+    if (rawPolicy && pbrPolicy) return {};
+    if (request.PbrNativeBalance && (!base.NativeLighting || request.PbrNativeUnlit || !request.FragmentLightingBalance)) return {};
+    if (request.PbrNativeUnlit && request.FragmentLightingBalance) return {};
+    const auto& capture = hooks.NativeLightingCapture;
+    if (request.FragmentLightingBalance && ((!request.FragmentLightingOperand && !request.PbrNativeBalance) ||
+        !capture.Valid(source.size(), lighting) || capture.Begin < prologue ||
+        capture.Diffuse < capture.Begin || capture.Specular < capture.Diffuse)) return {};
     const std::string depth = base.ExplicitDepth ? "gl_FragDepth" : "gl_FragCoord.z";
     const std::string tev(source.substr(lighting, afterTev - lighting));
     const auto pbr = surface
-        ? Renderer3ds::BuildPicaPbrUberShader(PbrControls(), base.NativeLighting, request.PrimitiveIds)
+        ? Renderer3ds::BuildPicaPbrUberShader(PbrControls(), base.NativeLighting, request.PrimitiveIds,
+              request.PbrNativeBalance, request.PbrNativeUnlit)
         : Renderer3ds::PicaPbrUberShader{};
 
     // Declarations: every output, input and function any branch uses.
@@ -272,7 +300,8 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
     declarations += kNormalGuideSurfaceFromDerivatives;
     declarations += Renderer3ds::PicaMaterialGuideShaderLibrary;
     if (surface) {
-        declarations += Renderer3ds::PicaSurfaceLightingDeclarations();
+        declarations += Renderer3ds::PicaSurfaceLightingDeclarations(
+            request.FragmentLightingOperand, request.FragmentLightingBalance);
         declarations += kTypedNormalHelper;
         declarations += PicaDirectionalShadowLightingDeclarations();
         declarations += "\nvec3 pica_surface_shadow(int slot) {\n"
@@ -311,7 +340,8 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
         atLighting += pbr.MainDeclarations;
         atLighting += pbr.UnlitInputs;
         atLighting += Guarded(Bit(Decision::SurfaceLighting) + " && !" + Bit(Decision::Pbr),
-                              Renderer3ds::PicaSurfaceLightingBody());
+                              Renderer3ds::PicaSurfaceLightingBody(request.FragmentLightingOperand,
+                                  request.FragmentLightingBalance && !request.PbrNativeBalance, request.NativeFragmentLitShadows));
     }
     if (base.MaterialNormal)
         atLighting += Guarded(Bit(Decision::ToonMaterialPath),
@@ -467,7 +497,23 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
     result += declarations;
     result.append(source.substr(global, prologue - global));
     result += atPrologue;
-    result.append(source.substr(prologue, lighting - prologue));
+    if (request.FragmentLightingBalance) {
+        // Balanced GGX also needs captured secondary for TEV material factors.
+        // Use the exact maintained capture equations of specialized programs,
+        // at frontend-owned sites, before the TEV/native-alpha replay region.
+        size_t cursor = prologue;
+        const auto insert = [&](size_t at, std::string_view text) {
+            result.append(source.substr(cursor, at - cursor));
+            result += text;
+            cursor = at;
+        };
+        insert(capture.Begin, Renderer3ds::kPicaFragmentBalanceCaptureBegin);
+        insert(capture.Diffuse, Renderer3ds::kPicaFragmentBalanceCaptureDiffuse);
+        insert(capture.Specular, Renderer3ds::kPicaFragmentBalanceCaptureSpecular);
+        result.append(source.substr(cursor, lighting - cursor));
+    } else {
+        result.append(source.substr(prologue, lighting - prologue));
+    }
     // Hook offsets follow native comments without a line break.
     result += "\n" + atLighting;
     result.append(source.substr(lighting, afterTev - lighting));

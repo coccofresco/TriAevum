@@ -150,6 +150,14 @@ std::filesystem::path SavestateLibrary::NewStatePath(
   return candidate;
 }
 
+std::filesystem::path SavestateLibrary::SaveRequestPath(
+    const SavestateRequest &request,
+    std::chrono::system_clock::time_point now) const {
+  if (!request.Path.empty())
+    return request.Path;
+  return NewStatePath(request.WithSettings, now);
+}
+
 bool SavestateLibrary::NameCarriesSettings(const std::filesystem::path& path) {
   return PathToUtf8(path.stem()).find(kSettingsSuffix) != std::string::npos;
 }

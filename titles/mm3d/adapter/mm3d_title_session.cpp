@@ -12,15 +12,31 @@
 #include "mm3d_scene_environment.h"
 #include "mm3d_scene_environment_profile.h"
 #include "mm3d_single_screen.h"
+#include "../dekui/button_emission.h"
+#include "../dekui/button_glyph_emission.h"
 #include "mm3d_title_contracts.h"
 #include "../gameplay/mm3d_actor_interactions.h"
+#include "../gameplay/mm3d_rumble_events.h"
+#include "../gameplay/mm3d_gameplay_options.h"
+#include "../gameplay/mm3d_light_arena.h"
+#include "../gameplay/mm3d_actor_visibility.h"
+#include "../gameplay/mm3d_foliage_distance.h"
+#include "../dekui/hud_adjustments.h"
 #include "oot3d_dev_warp.h"
 #include "oot3d_native_a32_process.h"
 #include "oot3d_native_a32_registry.h"
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+#include "oot3d_native_compiled_functions.h"
+#endif
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_pica_draw_state.h"
+#include "mm3d_photo_camera_hook.h"
+#include "mm3d_presentation_settings.h"
+#include "mm3d_timing_observer.h"
+#include "mm3d_frame_pacing.h"
+#include "mm3d_ui_subsystems.h"
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
-#include "mm3d_dev_camera_hook.h"
+#include "mm3d_dev_tools.h"
 #endif
 
 #include <algorithm>
@@ -37,11 +53,37 @@
 namespace Oot3dNativeGame {
 namespace {
 
-class Mm3dTitleSession final : public TitleSession {
+class Mm3dTitleSession final : public TitleSession, public Oot3dPicaCommandListCompositionProvider {
 public:
   const char *GameName() const override { return "Majora's Mask 3D"; }
-  Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return &mComposition; }
+  Oot3dPicaCommandListCompositionProvider *CompositionProvider() override { return this; }
+  bool TakeCommandListCompositionSpans(uint32_t address,uint32_t bytes,
+      std::vector<Oot3dPicaCommandListCompositionSpan>& spans,std::string* error) override {
+    if(!mComposition.TakeCommandListCompositionSpans(address,bytes,spans,error))return false;
+    if(mSingleScreen)mSingleScreen->SubmitButtonOverlayCommandList(address,bytes);
+    return true;
+  }
   bool NativeFragmentLighting() const override { return true; }
+  std::string_view CompanionLightName() const override { return "Tatl"; }
+  // dekui's settings (Restoration's options and the damage multiplier
+  // among them) travel with "state + settings", as TopScreen's do for OoT3D.
+  std::optional<nlohmann::json> CaptureSavestateTitleSettings() const override {
+    auto settings = nlohmann::json::parse(Mm3dSingleScreen::ActiveSettingsJson(), nullptr, false);
+    if (!settings.is_object()) return std::nullopt;
+    return settings;
+  }
+  bool ApplySavestateTitleSettings(const nlohmann::json& settings, std::string* error) override {
+    return Mm3dSingleScreen::ApplySettingsJson(settings.dump(), error);
+  }
+  bool HasButtonOverlay() const override { return true; }
+  void ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) override {
+    if (mSingleScreen) mSingleScreen->ConfigureButtonOverlay(config, prompts);
+  }
+  void ObserveButtonOverlayDraw(uint64_t draw) override { if (mSingleScreen) mSingleScreen->ObserveButtonOverlayDraw(draw); }
+  void SelectButtonOverlay(std::span<const uint64_t> draws) override { if (mSingleScreen) mSingleScreen->SelectButtonOverlay(draws); }
+  std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float scale, bool gameplayHudVisible) const override {
+    return mSingleScreen ? mSingleScreen->ButtonOverlay(scale, gameplayHudVisible) : std::vector<oot3d::ui::UiPrimitive>{};
+  }
   std::string_view GrassRuleNamespace() const override { return "mm3d"; }
   std::vector<Fast::Extension::GrassInteractor> ActorInteractions(
       oot3d::recomp::a32::MemoryBus& memory, uint64_t sourceFrame) const override {
@@ -58,6 +100,43 @@ public:
 #endif
     return contacts;
   }
+  // No MM3D shader corpus yet: no vertex-program family in the built-in uber
+  // set, no fragment-family pack, no scenario corpus or Forge preparation
+  // (PARITY_PLAN P7.1/P7.2). Return true once those exist: that restores
+  // always-available programs for MM3D (its startup program family must then
+  // be prepared by the window session next to OoT3D's).
+  bool PreparedShaders() const override { return false; }
+  // MM3D's own pipeline cache files, apart from OoT3D's.
+  std::string_view PipelineCacheNamespace() const override { return "mm3d"; }
+
+  bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const override {
+    return IsMm3dGameplayHud(sourcePc, nativeValue);
+  }
+  bool OwnsSceneProjection() const override { return true; }
+  // dekui draws the single-screen minimap by rewriting the native quad
+  // queue (native_minimap.h); photo Hide HUD drops it there.
+  void SetGameplayHudVisible(bool visible) override {
+    Mm3dDekui::HudAdjustments::photo_hud_hidden.store(!visible);
+  }
+  void SetPresentation(const TitlePresentationSettings& settings) override {
+    mPresentationSettings=settings;
+    ApplyMm3dPresentationSettings(settings);
+    mLightArena.SetEnabled(settings.ExtendedDrawDistance);
+    mVisibility.SetExtended(settings.ExtendedDrawDistance);
+    mFoliage.SetExtended(settings.ExtendedDrawDistance);
+  }
+  std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) override {
+    return mRumble.Poll(memory, enabled);
+  }
+  // The host's one gameplay settings store (F1 and Esc share it): the rows
+  // MM3D implements reach the title-owned sites; the rest stay inert.
+  void SetGameplayOptions(const TitleGameplayOptions& options) override {
+    mGameplay.Set({options.QuickPutAway, options.RollDash});
+  }
+  [[nodiscard]] TitleGameplayOptionSet SupportedGameplayOptions() const override {
+    return {.QuickPutAway = true, .RollDash = true};
+  }
 
   void InstallHooks(TitleSessionHookSetup &setup) override {
     // MM3D's perspective frustum builder: the scene widens to the output
@@ -65,6 +144,9 @@ public:
     // scene camera, so they are not published as the scene view.
     auto &blockEntryHooks = setup.BlockEntryHooks;
     blockEntryHooks.push_back(kMm3dMtx44Frustum);
+    for (const auto& site : Mm3dVisibility::Sites) blockEntryHooks.push_back(site.Pc);
+    for (const auto& site : Mm3dFoliage::Sites) blockEntryHooks.push_back(site.Pc);
+    for (const auto& site : Mm3dTiming::Sites) blockEntryHooks.push_back(site.Pc);
     const auto compositionHooks = Mm3dNativePicaCompositionHookPcs();
     blockEntryHooks.insert(blockEntryHooks.end(), compositionHooks.begin(),
                            compositionHooks.end());
@@ -93,11 +175,13 @@ public:
       // dekui animates with the emulated clock: here the deterministic
       // presentation clock (a 60 Hz frame each).
       mSingleScreen.emplace(setup.PresentationClock);
+      mSingleScreen->SetQuadQueueObserver([this](auto moves, auto& memory) {
+        mComposition.CommitQuadQueueMoves(moves, memory);
+      });
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
-#if defined(TRIAEVUM_DEVELOPER_TOOLS)
-      RegisterMm3dDevCamera(mGuestPatches, *setup.DevToolsTitle, setup.FreeCamera);
-#endif
+      RegisterMm3dPhotoCamera(mGuestPatches, mPhotoCamera, setup.FreeCamera);
+      mGameplay.Register(mGuestPatches);
       mGuestCalls.Install(mGuestPatches);
       mRestoration.emplace(mGuestCalls);
       mRestoration->Register(mGuestPatches);
@@ -137,7 +221,26 @@ public:
     }
     if (!mGuestPatches.Empty()) {
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
-      throw std::runtime_error("MM3D adapter: guest patch sites need the A32 registry dispatch");
+      // The product runs the compiled title module: each site the mounted
+      // image enables must be a module function boundary, where the product
+      // dispatcher consults the native-function callback.
+      if (mRestoration.has_value()) {
+        mRestoration->ApplyDataPatches(process.Memory());
+      }
+      mGuestPatches.Verify(process.Memory(), nullptr);
+      const auto entries = Oot3dCompiledFunctionEntryPoints(true, false);
+      const auto missing = mGuestPatches.MissingProductBoundaries(
+          std::vector<uint32_t>(entries.begin(), entries.end()));
+      if (!missing.empty()) {
+        char pc[16];
+        std::snprintf(pc, sizeof(pc), "0x%08X", missing.front());
+        throw std::runtime_error(std::string("MM3D product: the title module lacks ") +
+                                 std::to_string(missing.size()) +
+                                 " guest-patch boundary(ies), first at " + pc +
+                                 "; rebuild the MM3D title module with the Mm3dGuestPatches boundaries");
+      }
+      process.SetNativeFunctionCallback(&Mm3dGuestPatches::Execute,
+                                        &mGuestPatches, mGuestPatches.EnabledPcs());
 #else
       // Each site whose code matches the mounted image replaces its
       // instruction; the registry starts a block at every site.
@@ -145,6 +248,13 @@ public:
       // patches first, then every site's check.
       if (mRestoration.has_value()) {
         mRestoration->ApplyDataPatches(process.Memory());
+      }
+      if (mSingleScreen) {
+        const auto& registry=Oot3dNativeA32Registry();
+        for (const auto pc:{Mm3dDekui::ButtonEmission::Pc,Mm3dDekui::ButtonEmission::Pc+4,
+                            Mm3dDekui::ButtonGlyphEmission::Pc})
+          if (!oot3d::recomp::a32::FindBlock(registry,pc))
+            throw std::runtime_error("MM3D glyph emission: missing A32 hook/continuation boundary; regenerate from --block-boundaries");
       }
       mGuestPatches.Verify(process.Memory(), &Oot3dNativeA32Registry());
       if (!mComposition.VerifyHooks(process.Memory(), &Oot3dNativeA32Registry()))
@@ -169,6 +279,25 @@ public:
                                         &mGuestPatches, mGuestPatches.EnabledPcs());
 #endif
     }
+    const bool visibility = mVisibility.Verify(process.Memory(), [](uint32_t pc) {
+      return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+    });
+    Mm3dDekui::ActorDrawDistance::result_policy_owned.store(visibility);
+    if (!visibility) std::fprintf(stderr, "MM3D actor visibility disabled: guard or registry block mismatch\n");
+    if (!mFoliage.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D foliage distance disabled: guard or registry block mismatch\n");
+    if (!mTiming.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D timing receipts disabled: guard or registry block mismatch\n");
+    if (!mFramePacing.Verify(process.Memory(), [](uint32_t pc) {
+          return oot3d::recomp::a32::FindBlock(Oot3dNativeA32Registry(), pc) != nullptr;
+        })) std::fprintf(stderr, "MM3D frame pacing disabled: EUR guard or registry mismatch\n");
+    mHostMemory = &process.Memory();
+    if (!mLightArena.Verify(process.Memory()))
+      std::fprintf(stderr, "MM3D light overflow disabled: EUR arena contract mismatch\n");
+    mRumble.Verify(process.Memory());
+    if (!mRumble.Verified()) std::fprintf(stderr, "MM3D rumble disabled: EUR guard mismatch\n");
     mActorInteractionGuards = Mm3dActorInteractionGuardsHold(process.Memory());
     if (!mActorInteractionGuards)
       std::fprintf(stderr, "MM3D actor interactions disabled: EUR collider guard words do not match\n");
@@ -176,6 +305,19 @@ public:
   }
 
   void ObserveBlockEntry(TitleBlockEntry &entry) override {
+    mTiming.Observe(entry.Pc, entry.State, entry.Memory);
+    mFramePacing.Observe(entry.Pc, entry.State, entry.Memory);
+    mVisibility.Observe(entry.Pc, entry.State, entry.Memory, mLightArena.Verified());
+    mFoliage.Observe(entry.Pc, entry.State, entry.Memory);
+    // Same allocator PC, one dispatch: relocate BEFORE lighting invalidates the
+    // destination owner. Never duplicate the existing lighting hook registration.
+    if (entry.Pc == kMm3dLightAllocatorSite.Pc && mHostMemory) {
+      const auto result = mLightArena.BeforeAllocation(entry.Memory, entry.State.r[1],
+          [this](bool create) { return EnsureLightOverflow(create); });
+      using R = Mm3dLightArena::Result;
+      if (result == R::Unavailable || result == R::Exhausted)
+        throw std::runtime_error("MM3D light arena: cannot allocate a distinct overflow record");
+    }
     if (mComposition.ObserveBlockEntry(entry.Pc, entry.State, entry.Memory) !=
             Mm3dNativePicaCompositionTracker::Event::OpaqueWorldBegins ||
         entry.SceneView == nullptr)
@@ -187,10 +329,10 @@ public:
     const auto environment = CaptureMm3dSceneEnvironment(memory);
     TraceMm3dSceneEnvironment(environment, entry.HostFrame, entry.Pc, entry.State.r[14]);
     if (entry.PendingSceneFrustum.has_value()) {
-      // The scene's camera for its opaque pass: the current View's field of
-      // view and clip planes, at the aspect (and widening) of the frustum the
-      // pass draws with, and its eye and target. The default View (no current
-      // one) has a placeholder eye and target, so it publishes no camera.
+      // The stereo frustum only proves the native pass boundary. Decode the
+      // actual fovy/aspect projection at View+BC, which already includes the
+      // renderer multiplier, picture shape and scripted 49 base. View+18 is
+      // the game's animated FOV, not the presented FOV.
       const auto &frustum = *entry.PendingSceneFrustum;
       uint32_t currentView = 0;
       bool read = memory.Read32(kMm3dCurrentViewPointer, &currentView);
@@ -200,29 +342,30 @@ public:
         read = read && memory.Read32(address, &word);
         value = std::bit_cast<float>(word);
       };
-      float view[3] = {};
+      float view[3] = {}, projectionY = 0;
       std::array<float, 3> eye{}, at{};
-      readFloat(base + kMm3dViewFovyOffset, view[0]);
+      readFloat(base + 0xBCU, view[0]);
+      readFloat(base + 0xD0U, projectionY);
       readFloat(base + kMm3dViewNearOffset, view[1]);
       readFloat(base + kMm3dViewFarOffset, view[2]);
       for (uint32_t axis = 0; axis < 3U; ++axis) {
         readFloat(base + kMm3dViewEyeOffset + axis * 4U, eye[axis]);
         readFloat(base + kMm3dViewAtOffset + axis * 4U, at[axis]);
       }
-      const float frustumHeight = frustum.Top - frustum.Bottom;
-      if (read && view[0] > 1.0F && view[0] < 179.0F && view[1] > 0.0F &&
-          view[2] > view[1] && frustumHeight > 0.0F) {
-        const float top = view[1] * std::tan(view[0] * 0.5F * 3.14159265F / 180.0F);
-        const float scale = 2.0F * top / frustumHeight;
+      const auto presented = DecodeSymmetricPerspective(view[0], projectionY, view[1], view[2]);
+      if (read && presented) {
+        uint32_t nativeFov=0;
+        if(memory.Read32(base+0x18,&nativeFov))
+          mProjectionHistory.Record(mPresentationSettings,entry.HostFrame,std::bit_cast<float>(nativeFov),*presented);
+        const float top = presented->Top;
+        const float right = presented->Right;
         if (currentView != 0U) {
           entry.SceneView->ObservePerspectiveCamera(
-              frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-              frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+              frustum.Pc, frustum.ReturnAddress, -right, right, -top, top,
               view[1], view[2], eye, at);
         } else {
           entry.SceneView->ObservePerspective(
-              frustum.Pc, frustum.ReturnAddress, frustum.Left * scale,
-              frustum.Right * scale, frustum.Bottom * scale, frustum.Top * scale,
+              frustum.Pc, frustum.ReturnAddress, -right, right, -top, top,
               view[1], view[2]);
         }
       }
@@ -294,11 +437,108 @@ public:
   }
 #endif
 
-  void Reset() override { mComposition.Reset(); }
+  std::optional<bool> PhotoCameraOwnsInput(oot3d::recomp::a32::MemoryBus& memory) const override {
+    GuestByteAccess guest(memory);
+    return mPhotoCamera.OwnsInput(guest);
+  }
+  void Reset() override {
+    if (const char* audit = std::getenv("TRIAEVUM_MM3D_COMPOSITION_AUDIT"); audit && std::string_view(audit) == "1")
+      std::fprintf(stderr, "TRIAEVUM_MM3D_COMPOSITION_RESET %s\n", CompositionSummary().dump().c_str());
+    mComposition.Reset();
+    mRumble.Reset();
+    mPhotoCamera.Reset();
+    mVisibility.Reset();
+    mProjectionHistory.Reset();
+    mTiming.Reset();
+    mFramePacing.Reset();
+    // dekui's UI/camera host state belongs to the abandoned timeline.
+    if (mSingleScreen) mSingleScreen->ResetHostState();
+    // Restoration's suspended guest calls too (the restored guest threads
+    // never return to them); the save waits for them to finish.
+    mGuestCalls.Reset();
+    mGuestPatches.ResetPending();
+    if (mSingleScreen) mSingleScreen->ResetButtonOverlay();
+  }
+  bool SavestateCapturePending() const override { return mGuestCalls.Active() != 0U; }
 
   nlohmann::json CompositionSummary() const override {
     const auto &stats = mComposition.Stats();
+    const auto &photo = mPhotoCamera.Stats();
+    const auto &pacing = mFramePacing.Stats();
+    auto projections=nlohmann::json::array();
+    for(unsigned i=0;i<mProjectionHistory.Count();++i) {
+      const auto& s=mProjectionHistory.Segments()[i];
+      projections.push_back({{"first_frame",s.FirstFrame},{"last_frame",s.LastFrame},{"samples",s.Samples},
+          {"native_fov",s.NativeFov},{"presented_fov",s.PresentedFov},{"aspect",s.Aspect},
+          {"fov_multiplier",s.Settings.FovMultiplier},{"horizontal_expansion",s.Settings.HorizontalExpansion},
+          {"vertical_expansion",s.Settings.VerticalExpansion},{"edd",s.Settings.ExtendedDrawDistance}});
+    }
     return nlohmann::json{
+        {"frame_pacing", {{"verified",mFramePacing.Verified()}, {"simulation_hz",30},
+            {"native_interval_writes",0}, {"begins",pacing.FramePacingFramesObserved},
+            {"decisions",pacing.FramePacingDecisionsObserved}, {"commits",pacing.FramePacingCommitsObserved},
+            {"interval_writes",pacing.FramePacingWrites}, {"deadline_writes",pacing.FramePacingDeadlineWrites},
+            {"read_failures",pacing.ReadFailures}, {"write_failures",pacing.WriteFailures},
+            {"rejected",mFramePacing.Rejected}, {"unpaired",mFramePacing.Unpaired},
+            {"resets",mFramePacing.Resets}, {"output_samples",mFramePacing.OutputSamples},
+            {"output_violations",mFramePacing.OutputViolations}}},
+        {"timing", {{"verified",mTiming.Verified()}, {"read_only",true},
+            {"game_calls",mTiming.GameCalls}, {"game_samples",mTiming.GameSamples},
+            {"player_calls",mTiming.PlayerCalls}, {"player_samples",mTiming.PlayerSamples},
+            {"limiter_calls",mTiming.LimiterCalls}, {"limiter_samples",mTiming.LimiterSamples},
+            {"commit_input_intervals",mTiming.CommitIntervals}, {"wait_decisions",mTiming.WaitDecisions},
+            {"non_native30_samples",mTiming.NonNative30Samples}, {"read_failures",mTiming.ReadFailures},
+            {"epoch_changes",mTiming.EpochChanges}, {"resets",mTiming.Resets},
+            {"game",{{"valid",mTiming.Game.Valid},{"state",mTiming.Game.State},
+                {"frame",mTiming.Game.Frame},{"main",mTiming.Game.Main},
+                {"vsync",mTiming.Game.Vsync},{"interval",mTiming.Game.Interval}}},
+            {"player",{{"valid",mTiming.Player.Valid},{"address",mTiming.Player.Player},
+                {"play",mTiming.Player.Play},{"frame",mTiming.Player.Frame},
+                {"form",mTiming.Player.Form},{"speed_xz",mTiming.Player.SpeedXZ},
+                {"flags",mTiming.Player.Flags},{"focus_actor",mTiming.Player.FocusActor},
+                {"ledge_type",mTiming.Player.Ledge&0xFF},{"ledge_timer",mTiming.Player.Ledge>>8}}},
+            {"limiter",{{"valid",mTiming.Limiter.Valid},{"state",mTiming.Limiter.State},
+                {"maximum",mTiming.Limiter.Maximum},{"interval",mTiming.Limiter.Interval},
+                {"deadline",mTiming.Limiter.Deadline},{"vsync",mTiming.Limiter.Vsync},
+                {"native_interval",mTiming.Limiter.Native}}}}},
+        {"photo_camera", {{"calls",photo.Calls},{"active_calls",photo.ActiveCalls},
+            {"inactive_calls",photo.InactiveCalls},{"rejected",photo.Rejected},{"applied",photo.Applied},
+            {"restored",photo.Restored},{"rebased",photo.Rebased},{"resets",photo.Resets},
+            {"write_failures",photo.WriteFailures},{"max_eye_distance",photo.MaxEyeDistance},
+            {"max_player_distance",photo.MaxPlayerDistance},{"last_eye",photo.LastEye},
+            {"last_native_eye",photo.LastNativeEye}}},
+        {"layout_owners", {{"draws",stats.LayoutOwners},{"dropped",stats.LayoutOwnersDropped}}},
+        {"scene_projections",std::move(projections)},
+        {"scene_projection_segments_discarded",mProjectionHistory.DiscardedSegments()},
+        {"foliage_distance", {{"verified", mFoliage.Verified()},
+             {"table_changes", mFoliage.Stats.TableChanges},
+             {"radius_changes", mFoliage.Stats.RadiusChanges},
+             {"pressure_native", mFoliage.Stats.PressureNative},
+             {"invalid", mFoliage.Stats.Invalid}}},
+        {"actor_visibility", {{"verified", mVisibility.Verified()},
+             {"calls", mVisibility.mStats.Calls}, {"results", mVisibility.mStats.Results},
+             {"native_inside", mVisibility.mStats.NativeInside},
+             {"native_mode_results", mVisibility.mStats.NativeModeResults},
+             {"extended_mode_results", mVisibility.mStats.ExtendedModeResults},
+             {"max_horizontal", mVisibility.mStats.MaxHorizontal},
+             {"max_vertical", mVisibility.mStats.MaxVertical},
+             {"actor_grants", mVisibility.mStats.ActorGrants},
+             {"grass_grants", mVisibility.mStats.GrassGrants},
+             {"wood_grants", mVisibility.mStats.WoodGrants},
+             {"restored", mVisibility.mStats.Restored},
+             {"invalid", mVisibility.mStats.Invalid},
+             {"native_mismatch", mVisibility.mStats.NativeMismatch},
+             {"unknown_callers", mVisibility.mStats.UnknownCallers},
+             {"identity_changes", mVisibility.mStats.IdentityChanges}}},
+        {"light_arena", {{"verified", mLightArena.Verified()},
+                         {"native_allocations", mLightArena.Stats().NativeAllocations},
+                         {"banks_seen", mLightArena.Stats().BanksSeen},
+                         {"overflow_allocations", mLightArena.Stats().OverflowAllocations},
+                         {"relocations", mLightArena.Stats().Relocations},
+                         {"invalid", mLightArena.Stats().Invalid},
+                         {"unavailable", mLightArena.Stats().Unavailable},
+                         {"exhausted", mLightArena.Stats().Exhausted}}},
+        {"button_overlay", mSingleScreen ? nlohmann::json(mSingleScreen->ButtonOverlaySummary()) : nlohmann::json::object()},
         {"scope_entries", stats.ScopeEntries},
         {"scope_exits", stats.ScopeExits},
         {"recorded_spans", stats.RecordedSpans},
@@ -310,6 +550,22 @@ public:
         {"scene_frames", stats.SceneFrames},
         {"read_failures", stats.ReadFailures},
         {"light_bindings", stats.LightBindings},
+        {"atmosphere_quad_spans", stats.AtmosphereQuadSpans},
+        {"ui_quad_spans", stats.UiQuadSpans},
+        {"quad_queue_moves", stats.QuadQueueMoves},
+        {"native_ui_quad_moves", stats.NativeUiQuadMoves},
+        {"unknown_quad_spans", stats.UnknownQuadSpans},
+        {"invalid_quad_owners", stats.InvalidQuadOwners},
+        {"primitive_caller_entries", stats.PrimitiveCallerEntries},
+        {"primitive_entries", stats.PrimitiveEntries},
+        {"primitive_spans", stats.PrimitiveSpans},
+        {"temporal_primitive_spans", stats.TemporalPrimitiveSpans},
+        {"unowned_primitives", stats.UnownedPrimitives},
+        {"invalid_primitives", stats.InvalidPrimitives},
+        {"temporal_model_spans", stats.TemporalModelSpans},
+        {"isolated_model_spans", stats.IsolatedModelSpans},
+        {"atmosphere_model_spans", stats.AtmosphereModelSpans},
+        {"lifecycle_invalidations", stats.LifecycleInvalidations},
         {"scene_directional_lights", stats.SceneDirectionalLights}};
   }
 
@@ -334,6 +590,32 @@ public:
   }
 
 private:
+  bool EnsureLightOverflow(bool create) {
+    using A = Mm3dLightArena;
+    auto& memory = *mHostMemory;
+    if (!memory.IsMapped(A::MappingBase, A::MappingSize)) {
+      // MapRegion rejects ANY overlap, including partial mappings. Do not unmap
+      // or appropriate another subsystem's range on failure.
+      if (!create || !memory.MapRegion({"mm3d_light_overflow", A::MappingBase,
+                                        A::MappingSize, true, false, {}})) return false;
+      if (!memory.Write32(A::MappingBase, A::Magic0) ||
+          !memory.Write32(A::MappingBase + 4, A::Magic1)) return false;
+    }
+    // Revalidate after savestate restore; host-side booleans are not ownership.
+    bool exact = false;
+    for (const auto& region : memory.RegionInfos())
+      if (region.BaseAddress == A::MappingBase && region.Size == A::MappingSize &&
+          region.Writable && !region.Executable) exact = true;
+    uint32_t magic0=0, magic1=0;
+    return exact && memory.Read32(A::MappingBase,&magic0) && magic0==A::Magic0 &&
+           memory.Read32(A::MappingBase+4,&magic1) && magic1==A::Magic1;
+  }
+  NativeA32Memory* mHostMemory = nullptr;
+  Mm3dLightArena mLightArena;
+  Mm3dVisibility::Source mVisibility;
+  Mm3dFoliage::Source mFoliage;
+  TitlePresentationSettings mPresentationSettings;
+  PresentedProjectionHistory mProjectionHistory;
   Mm3dNativePicaCompositionTracker mComposition;
   // MM3D's single-screen mode: its settings and the typed replacements of
   // guest instructions that read them.
@@ -341,6 +623,11 @@ private:
   Mm3dGuestCalls mGuestCalls;
   std::optional<Mm3dRestorationPort> mRestoration;
   Mm3dGuestPatches mGuestPatches;
+  Mm3dRumble::Source mRumble;
+  Mm3dPhotoCamera mPhotoCamera;
+  Mm3dGameplay::GameplayOptions mGameplay;
+  Mm3dTiming::Observer mTiming;
+  Mm3dTiming::FramePacing mFramePacing;
   bool mImageMounted = false;
   bool mActorInteractionGuards = false;
 };

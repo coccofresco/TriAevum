@@ -6,6 +6,8 @@
 namespace Mm3dDekui {
 U32 Core::Instruction(Memory& memory,U32 pc,U32 word) {
 
+    if (pc==ButtonEmission::Pc && word==ButtonEmission::Word && ButtonEmission::CodeMatches(memory))
+        return 0xef000000|ButtonEmission::Svc;
     if (pc >= 0x007cf000U) return word; // ref appended Restoration range
     if(VegetationDrawDistance::Instruction(pc,word)!=word&&VegetationDrawDistance::CodeMatches(memory,pc))
         return VegetationDrawDistance::Instruction(pc,word);
@@ -196,6 +198,15 @@ U32 Core::Instruction(Memory& memory,U32 pc,U32 word) {
 void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
 
     auto& r=cpu.Regs();
+    if(swi==ButtonEmission::Svc) {
+        const bool replaced=host.layout_draw && host.layout_draw(memory,
+            overlay_layouts.empty()?memory.Read(r[4]+4).value_or(0):overlay_layouts.back().first,r[4],
+            overlay_layouts.empty()?~0u:overlay_layouts.back().second);
+        // Native null-geometry path skips only this pane, not its children.
+        // Otherwise replay the displaced LDR exactly. Flags/VFP/SP unchanged.
+        r[0]=replaced?0:memory.Read(r[4]+0x28).value_or(0);
+        return;
+    }
     if(swi>=VegetationDrawDistance::FirstSVC&&swi<VegetationDrawDistance::FirstSVC+VegetationDrawDistance::Hooks.size()) {
         VegetationDrawDistance::Load(memory,swi-VegetationDrawDistance::FirstSVC,r,cpu.ExtRegs(),PropDrawDistance::multiplier.load());return;
     }
@@ -490,9 +501,12 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],&item_present_hook);
                 regs[2]=file_select_prompt_hook.Root(guest,file_select_hook,options_hook,regs[4],
                     regs[2]!=regs[4]+8?regs[2]:regs[13],regs[2],WidescreenActive());
+                if(overlay_layouts.size()==64)overlay_layouts.clear();
+                overlay_layouts.emplace_back(regs[4],inventory_hook.pass);
                 if(regs[2]!=regs[4]+8)regs[13]=regs[2];
                 break;
             case 3:
+                if(!overlay_layouts.empty())overlay_layouts.pop_back();
                 if(const auto sp=file_select_prompt_hook.End(guest))regs[13]=sp;
                 if(const auto sp=select_help_hook.scratch.End(guest))regs[13]=sp;
                 if(const auto sp=menu_help_hook.scratch.End(guest))regs[13]=sp;
@@ -707,12 +721,28 @@ void Core::CallSvc(U32 swi,Cpu& cpu,Memory& memory) {
         }
         if(swi==Mm3dDekui::CameraLive::ProjectionSVC) {
             // SVC is a synchronization boundary: R4 and S0 are live here.
-            // Emulate the replaced VLDR, changing only its destination register.
+            // Emulate VLDR; product supplies the live scene aspect as well.
             const U32 native=memory.Read32(cpu.Regs()[4]+0x18);
             auto& guest=memory;
             const auto projection=cpu.Regs()[4];
             const float configured=Mm3dDekui::CameraLive::ConfiguredFov(guest,projection);
-            const auto output=Mm3dDekui::CameraLive::ProjectionValue(native,configured);
+            U32 output=native;
+            if(Mm3dDekui::CameraLive::renderer_owned.load()) {
+                if(Mm3dDekui::CameraLive::PrimaryGameplayProjection(guest,projection)) {
+                    const float h=Mm3dDekui::CameraLive::Expansion(Mm3dDekui::CameraLive::horizontal_expansion.load());
+                    const float v=Mm3dDekui::CameraLive::Expansion(Mm3dDekui::CameraLive::vertical_expansion.load());
+                    output=Mm3dDekui::CameraLive::PresentedProjectionValue(native,
+                        Mm3dDekui::CameraLive::ScriptedCamera(guest),
+                        Mm3dDekui::CameraLive::renderer_fov_multiplier.load(),v);
+                    const U32 aspect=std::bit_cast<U32>((400.f/240.f)*h/v);
+                    // First call uses S1; second reloads View.aspect at +14.
+                    // Native code recomputes it on the next View projection.
+                    if(guest.Read(projection+0x14)!=std::optional<U32>(aspect))guest.Write(projection+0x14,aspect);
+                    cpu.ExtRegs()[1]=aspect;
+                }
+            } else {
+                output=Mm3dDekui::CameraLive::ProjectionValue(native,configured);
+            }
             cpu.ExtRegs()[0]=output;
             // Manual form capture remains available for all supported forms, including Deku.
             if(Mm3dDekui::FormCamera::diagnostics.load()) {
@@ -764,6 +794,7 @@ std::vector<U32> Core::CandidatePcs() {
         0x001262c8U, // ref 0x001262f0; native_inventory
         0x001262d4U, // ref 0x001262fc; native_inventory
         0x001267ecU, // ref 0x00126814; native_inventory
+        ButtonEmission::Pc,
         0x001391f4U, // ref 0x0013921c; menu_sound
         0x00141d44U, // ref 0x00141d88; pause_capture
         0x001619a4U, // ref 0x00161aec; menu_page_switch

@@ -261,6 +261,7 @@ if(TRIAEVUM_TITLE_MM3D)
         titles/mm3d/restoration)
     target_link_libraries(oot3d_mm3d_single_screen PUBLIC
         oot3d_mm3d_guest_patches
+        oot3d_ui_menu oot3d_native_control_config oot3d_ui_topscreen
         nlohmann_json::nlohmann_json)
     oot3d_target_defaults(oot3d_mm3d_single_screen FOLDER Tools)
 
@@ -269,6 +270,11 @@ if(TRIAEVUM_TITLE_MM3D)
     )
     target_include_directories(oot3d_mm3d_v110_address_tests PRIVATE titles/mm3d/dekui)
     oot3d_target_defaults(oot3d_mm3d_v110_address_tests FOLDER Tests)
+
+    add_executable(mm3d_button_overlay_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_button_overlay_tests.cpp)
+    target_link_libraries(mm3d_button_overlay_tests PRIVATE oot3d_mm3d_single_screen oot3d_ui_topscreen)
+    oot3d_target_defaults(mm3d_button_overlay_tests FOLDER Tests)
 
     add_executable(oot3d_mm3d_dekui_core_tests EXCLUDE_FROM_ALL
         titles/mm3d/dekui/core_tests.cpp

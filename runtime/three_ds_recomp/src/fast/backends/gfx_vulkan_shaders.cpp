@@ -336,32 +336,31 @@ void GfxRenderingAPIVulkan::FinishNativePicaAotShaders() {
         const auto& counters = mNativePicaPreparationCounters;
         const auto bridge = mNriPicaPipelineBridge.PipelineStatistics();
         std::fprintf(stderr,
-            "TRIAEVUM_HYBRID_PREPARATION specialized_draws=%llu uber_draws=%llu completed_draws=%llu "
-            "complete_ms=%.3f max_complete_ms=%.3f program_tasks=%llu uber_programs=%llu "
-            "uber_unavailable=%llu/%llu/%llu/%llu/%llu/%llu pipeline_tasks=%llu pipeline_created=%llu "
-            "pipeline_completions=%llu pending=%zu uber_acquire_ms=%.3f max_uber_acquire_ms=%.3f "
-            "uber_effects=surface:%llu,pbr:%llu,relief:%llu,toon:%llu\n",
-            static_cast<unsigned long long>(counters.SpecializedDraws),
-            static_cast<unsigned long long>(counters.UberDraws),
-            static_cast<unsigned long long>(counters.CompletedDraws),
-            counters.CompleteMilliseconds, counters.MaximumCompleteMilliseconds,
-            static_cast<unsigned long long>(counters.ProgramTasks),
-            static_cast<unsigned long long>(counters.UberPrograms),
-            static_cast<unsigned long long>(counters.UberUnavailable[0]),
-            static_cast<unsigned long long>(counters.UberUnavailable[1]),
-            static_cast<unsigned long long>(counters.UberUnavailable[2]),
-            static_cast<unsigned long long>(counters.UberUnavailable[3]),
-            static_cast<unsigned long long>(counters.UberUnavailable[4]),
-            static_cast<unsigned long long>(counters.UberUnavailable[5]),
-            static_cast<unsigned long long>(bridge.BackgroundRequests),
-            static_cast<unsigned long long>(bridge.BackgroundCreated),
-            static_cast<unsigned long long>(bridge.BackgroundCompletions),
-            mPreparationQueue->Pending(), counters.UberAcquireMilliseconds,
-            counters.MaximumUberAcquireMilliseconds,
-            static_cast<unsigned long long>(counters.UberSurfaceDraws),
-            static_cast<unsigned long long>(counters.UberPbrDraws),
-            static_cast<unsigned long long>(counters.UberReliefDraws),
-            static_cast<unsigned long long>(counters.UberToonDraws));
+                     "TRIAEVUM_HYBRID_PREPARATION specialized_draws=%llu uber_draws=%llu completed_draws=%llu "
+                     "complete_ms=%.3f max_complete_ms=%.3f program_tasks=%llu uber_programs=%llu "
+                     "uber_unavailable=%llu/%llu/%llu/%llu/%llu/%llu pipeline_tasks=%llu pipeline_created=%llu "
+                     "pipeline_completions=%llu pending=%zu uber_acquire_ms=%.3f max_uber_acquire_ms=%.3f "
+                     "uber_effects=surface:%llu,pbr:%llu,relief:%llu,toon:%llu reproducible=%d\n",
+                     static_cast<unsigned long long>(counters.SpecializedDraws),
+                     static_cast<unsigned long long>(counters.UberDraws),
+                     static_cast<unsigned long long>(counters.CompletedDraws), counters.CompleteMilliseconds,
+                     counters.MaximumCompleteMilliseconds, static_cast<unsigned long long>(counters.ProgramTasks),
+                     static_cast<unsigned long long>(counters.UberPrograms),
+                     static_cast<unsigned long long>(counters.UberUnavailable[0]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[1]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[2]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[3]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[4]),
+                     static_cast<unsigned long long>(counters.UberUnavailable[5]),
+                     static_cast<unsigned long long>(bridge.BackgroundRequests),
+                     static_cast<unsigned long long>(bridge.BackgroundCreated),
+                     static_cast<unsigned long long>(bridge.BackgroundCompletions), mPreparationQueue->Pending(),
+                     counters.UberAcquireMilliseconds, counters.MaximumUberAcquireMilliseconds,
+                     static_cast<unsigned long long>(counters.UberSurfaceDraws),
+                     static_cast<unsigned long long>(counters.UberPbrDraws),
+                     static_cast<unsigned long long>(counters.UberReliefDraws),
+                     static_cast<unsigned long long>(counters.UberToonDraws),
+                     mFrameReproducibleProgramSelection ? 1 : 0);
     }
 }
 
@@ -446,17 +445,16 @@ GfxRenderingAPIVulkan::NativePicaShaderProgram* GfxRenderingAPIVulkan::ResolveUb
              ~static_cast<uint32_t>(Extension::PicaShaderInstrumentationFeature::TemporalVertex)) != 0U;
         // Effects compose as data in the superset program of the parametric
         // base: one program per structural configuration and vertex interface.
-        const Extension::PicaUberEffectProgramRequest supersetRequest{
+        const auto supersetRequest = Extension::WithPicaUberLightingPolicy({
             draw.UberFragmentShaderSource, draw.UberFragmentShaderHooks, variant.TemporalVertexApplied,
-            variant.SurfaceVertexApplied, variant.SurfaceVertexApplied && mPbrSeamsAvailable};
+            variant.SurfaceVertexApplied, variant.SurfaceVertexApplied && mPbrSeamsAvailable}, variant.Decisions);
         const bool superset = fragmentInstrumented &&
             Extension::PicaUberEffectSupports(variant.Decisions, supersetRequest);
         std::span<const uint32_t> fragment;
         bool nriApplied = false;
         if (superset) {
             const auto artifactKey = std::make_tuple(base.Id, base.SecondaryHash, base.Size,
-                static_cast<uint8_t>((supersetRequest.TemporalInputs ? 1U : 0U) |
-                    (supersetRequest.SurfaceInputs ? 2U : 0U) | (supersetRequest.PrimitiveIds ? 4U : 0U)));
+                Extension::PicaUberEffectVariantKey(supersetRequest));
             auto artifact = mUberSupersetArtifacts.find(artifactKey);
             if (artifact == mUberSupersetArtifacts.end()) {
                 const auto composed = Extension::BuildPicaNriFragmentShaderVariant(

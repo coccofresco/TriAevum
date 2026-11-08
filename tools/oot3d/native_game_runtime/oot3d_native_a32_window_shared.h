@@ -466,6 +466,7 @@ struct NativeSceneProjectionState {
   // whose frusta also serve other views holds the latest one until its
   // composition tracker reaches the opaque world pass, and publishes that.
   bool FrustumIsSceneView = true;
+  bool TitleOwnsSceneProjection = false;
   using PendingFrustum = Oot3dNativeGame::TitleSceneFrustum;
   std::optional<PendingFrustum> PendingSceneFrustum;
   uint64_t FrustumCalls = 0;
@@ -802,6 +803,7 @@ struct NativeControlPollingState {
   // active pad.
   ThreeDsRecomp::Input::RumbleStrength RumbleStrength = ThreeDsRecomp::Input::RumbleStrength::Off;
   ThreeDsRecomp::Input::RumbleRequests Rumble;
+  ThreeDsRecomp::Input::GameplayRumbleAdmission RumbleAdmission;
   // The input device log (game log, at startup and on hot-plug) and, with
   // TRIAEVUM_INPUT_TRACE=1, the SDL key events and each bound key's edges.
   ThreeDsRecomp::Input::InputDeviceLog DeviceLog;

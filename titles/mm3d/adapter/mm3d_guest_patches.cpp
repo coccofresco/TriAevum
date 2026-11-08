@@ -88,6 +88,32 @@ std::vector<std::uint32_t> Mm3dGuestPatches::BlockBoundaries() const {
     return boundaries;
 }
 
+std::vector<std::uint32_t> Mm3dGuestPatches::MissingProductBoundaries(
+    const std::vector<std::uint32_t>& sortedEntryPoints) const {
+    std::vector<std::uint32_t> needed;
+    bool anyEnabled = false;
+    for (const auto& entry : mSites) {
+        if (!entry.Stats.Enabled || !entry.Site.InGuestCode) {
+            continue;
+        }
+        anyEnabled = true;
+        needed.push_back(entry.Site.Pc);
+        needed.push_back(entry.Site.Pc + 4U);
+    }
+    if (anyEnabled) {
+        needed.insert(needed.end(), mTargets.begin(), mTargets.end());
+    }
+    std::sort(needed.begin(), needed.end());
+    needed.erase(std::unique(needed.begin(), needed.end()), needed.end());
+    std::vector<std::uint32_t> missing;
+    for (const auto pc : needed) {
+        if (!std::binary_search(sortedEntryPoints.begin(), sortedEntryPoints.end(), pc)) {
+            missing.push_back(pc);
+        }
+    }
+    return missing;
+}
+
 std::vector<Mm3dGuestPatches::SiteStatistics> Mm3dGuestPatches::Statistics() const {
     std::vector<SiteStatistics> stats;
     stats.reserve(mSites.size());
@@ -133,6 +159,12 @@ bool Mm3dGuestPatches::Execute(std::uint32_t pc, a32::GuestState& state, a32::Me
 void Mm3dGuestPatches::SkipOnce(std::uint32_t pc, std::uint32_t thread) {
     if (auto* entry = Find(pc)) {
         entry->SkipThreads.push_back(thread);
+    }
+}
+
+void Mm3dGuestPatches::ResetPending() noexcept {
+    for (auto& entry : mSites) {
+        entry.SkipThreads.clear();
     }
 }
 

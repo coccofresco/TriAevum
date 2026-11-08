@@ -2,6 +2,7 @@
 #include "mm3d_lighting_hook_sites.h"
 #include "mm3d_pica_composition.h"
 #include "mm3d_title_contracts.h"
+#include "mm3d_ui_subsystems.h"
 
 #include "oot3d_native_a32_memory.h"
 #include "recomp/a32_runtime.h"
@@ -81,9 +82,13 @@ void TestMm3dSceneLighting() {
     writeLight(0x08049000U, 0, 0, 127, 255, 255, 255);
 
     Map(memory, 0x00100000U, 0x00540000U);
+    Map(memory, 0x0067C000U, 0x1000U);
+    Map(memory, 0x00689000U, 0x1000U);
     for (const auto& hook : kMm3dLightingHookSites)
         for (uint32_t i = 0; i < 4U; ++i)
             Require(memory.Write32(hook.Pc + i * 4U, hook.Words[i]), "seed MM hook guard");
+    for (const auto [pc, word] : kMm3dCompositionOwnerGuards)
+        Require(memory.Write32(pc, word), "seed composition owner guard");
     Require(memory.Write8(kPlay + 0x13DU, 4U) && memory.Write32(kPlay + 0x4A8U, kPlay) &&
             memory.Write32(kPlay + 0x138U, 1U), "seed verified MM play owner");
     Mm3dNativePicaCompositionTracker tracker;
@@ -92,6 +97,7 @@ void TestMm3dSceneLighting() {
     const auto pass = [&](uint32_t entry, uint32_t returnPc, uint32_t begin, uint32_t end) {
         Require(memory.Write32(kMm3dCommandListCursorAddress, begin), "could not seed the cursor");
         state.r[14] = returnPc;
+        if (entry == kMm3dQuadQueueDrawEntry) state.r[1] = returnPc == 0x00110D88U ? 4U : 5U;
         const auto event = tracker.ObserveBlockEntry(entry, state, memory);
         Require(memory.Write32(kMm3dCommandListCursorAddress, end), "could not advance the cursor");
         (void)tracker.ObserveBlockEntry(returnPc, state, memory);
@@ -136,6 +142,35 @@ void TestMm3dSceneLighting() {
     Require(tracker.TakeCommandListCompositionSpans(0x14000000U, 0x300U, spans, &error), error);
     Require(spans.size() == 3U && !spans[2].LightBinding.WorldToView && !spans[2].LightBinding.SceneDirectionals,
             "a frame without a current View carried lighting");
+
+    // Bounded, exact resource-name classification: only known HUD owners.
+    constexpr uint32_t layout=0x08040000,resource=0x08040100,nameAddress=0x08040200;
+    Require(memory.Write32(layout+4,resource)&&memory.Write32(resource+0x18,nameAddress),"layout fixture");
+    uint32_t begin=0x15000000;
+    for(std::string_view name:{"Hud","Hud2","HudItemIconSet","Telop","MessageWindow","MenuItem","MenuMask","MenuCollect","FileSelect","MenuSchedule","MenuOcarina","MenuStartup","HudUnknown"}) {
+        for(uint32_t i=0;i<name.size();++i)Require(memory.Write8(nameAddress+i,uint8_t(name[i])),"layout name");
+        Require(memory.Write8(nameAddress+uint32_t(name.size()),0),"name terminator");
+        state.r[1]=layout;
+        (void)pass(kMm3dLayoutOwnerDrawEntry,0x00126998U,begin,begin+0x40);
+        Require(tracker.TakeCommandListCompositionSpans(begin,0x40,spans,&error),error);
+        const auto& attribution=spans.back().Attribution;
+        const bool hud=name=="Hud"||name=="Hud2"||name=="HudItemIconSet"||name=="Telop";
+        Require(IsMm3dGameplayHud(attribution.SourcePc,attribution.NativeValue)==hud,"HUD-only attribution");
+        Require(attribution.ExcludeFromPresentationFxaa,"HUD attribution retains native UI FXAA exclusion");
+        begin+=0x40;
+    }
+    // P17 owner dump: every owner draw's resource name is counted, known or not.
+    Require(tracker.Stats().LayoutOwners.size()==13&&tracker.Stats().LayoutOwners.at("HudUnknown")==1&&
+            tracker.Stats().LayoutOwners.at("Hud")==1&&tracker.Stats().LayoutOwnersDropped==0,"layout owner dump");
+    Require(!IsMm3dGameplayHud(kMm3dQuadQueueDrawEntry,kMm3dUiTag|1U),"mixed sprites never blanket HUD");
+    Require(memory.Write32(resource+0x18,0xFFFFFFF0U),"bad name pointer");
+    Require(ReadMm3dUiSubsystem(memory,layout)==Mm3dUiSubsystem::Unknown,"bad name bounded");
+    // Clear test spans by reinitializing; legacy scope assertions below stand.
+    tracker.Reset();
+    state.r[1]=0;
+    (void)pass(kMm3dSkyboxDrawEntry,0x00110DF8U,0x14000000U,0x14000040U);
+    (void)pass(kMm3dRenderListVisitEntry,0x0011EF3CU,0x14000100U,0x14000180U);
+    (void)pass(kMm3dRenderListVisitEntry,0x0011EF3CU,0x14000200U,0x14000240U);
 
     // A 2D layout queue (its owners, from either loop, and its finishers)
     // and the top screen's sprite queues are the interface.

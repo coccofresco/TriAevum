@@ -45,8 +45,8 @@ use forge_base::{CancelToken, ErrorKind, ForgeError, Operation, Reason, Result};
 use serde_json::{json, Map, Value};
 
 use crate::backup::{
-    copy_member, is_within, list_files, open_archive, open_backup, os_of, same_path, stamp, supported_recipes,
-    ManifestEntry, OpenedBackup, Progress, UnitKind, TOUCH_PREFERENCES,
+    check_backup_target, copy_member, is_within, list_files, open_archive, open_installation_backup,
+    os_of, same_path, stamp, ManifestEntry, OpenedBackup, Progress, UnitKind, TOUCH_PREFERENCES,
 };
 use crate::inventory::{Backup as Class, Category, Entry, EntryKind, Inventory};
 use crate::layout::HostOs;
@@ -369,6 +369,7 @@ pub fn plan_restore(
     options: &RestoreOptions,
     cancel: &CancelToken,
 ) -> Result<RestorePlan> {
+    check_backup_target(inventory, &backup.manifest)?;
     let manifest = &backup.manifest;
     let same_platform = manifest.platform == inventory.roots.platform;
     let mut planner = Planner { inventory, backup, cancel, warnings: Vec::new() };
@@ -604,8 +605,7 @@ pub fn restore_preview(
     options: &RestoreOptions,
     cancel: &CancelToken,
 ) -> Result<RestorePlan> {
-    let supported = supported_recipes(&inventory.roots.package);
-    let opened = open_backup(backup, supported.as_deref(), cancel)?;
+    let opened = open_installation_backup(inventory, backup, cancel)?;
     plan_restore(inventory, &opened, options, cancel).map_err(|error| error.during(Operation::Restore))
 }
 
@@ -845,8 +845,7 @@ pub fn restore(
     progress: Progress<'_>,
     cancel: &CancelToken,
 ) -> Result<Value> {
-    let supported = supported_recipes(&inventory.roots.package);
-    let opened = open_backup(backup, supported.as_deref(), cancel)?;
+    let opened = open_installation_backup(inventory, backup, cancel)?;
     let os = os_of(inventory.roots.platform);
     let _quiet = crate::session::quiesce(&inventory.roots.activation, os, Operation::Restore)?;
     let data_root = &inventory.roots.data;

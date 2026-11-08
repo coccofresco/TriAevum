@@ -54,6 +54,53 @@ target_link_libraries(oot3d_native_game_runtime_tests PRIVATE oot3d_native_game_
 oot3d_target_defaults(oot3d_native_game_runtime_tests FOLDER Tests)
 
 if(TRIAEVUM_TITLE_MM3D)
+    add_executable(mm3d_presentation_settings_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_presentation_settings_tests.cpp)
+    target_include_directories(mm3d_presentation_settings_tests PRIVATE tools/oot3d/native_game_runtime)
+    target_link_libraries(mm3d_presentation_settings_tests PRIVATE oot3d_mm3d_single_screen)
+    oot3d_target_defaults(mm3d_presentation_settings_tests FOLDER Tests)
+
+    add_executable(mm3d_photo_camera_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_photo_camera_tests.cpp)
+    target_include_directories(mm3d_photo_camera_tests PRIVATE tools/oot3d/native_game_runtime)
+    oot3d_target_defaults(mm3d_photo_camera_tests FOLDER Tests)
+
+    add_executable(mm3d_foliage_distance_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_foliage_distance_tests.cpp)
+    target_include_directories(mm3d_foliage_distance_tests PRIVATE tools/oot3d/native_game_runtime)
+    oot3d_target_defaults(mm3d_foliage_distance_tests FOLDER Tests)
+
+    add_executable(mm3d_actor_visibility_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_actor_visibility_tests.cpp)
+    target_include_directories(mm3d_actor_visibility_tests PRIVATE tools/oot3d/native_game_runtime)
+    oot3d_target_defaults(mm3d_actor_visibility_tests FOLDER Tests)
+
+    add_executable(mm3d_frame_pacing_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_frame_pacing_tests.cpp)
+    target_include_directories(mm3d_frame_pacing_tests PRIVATE tools/oot3d/native_game_runtime)
+    target_link_libraries(mm3d_frame_pacing_tests PRIVATE oot3d_native_game_runtime)
+    oot3d_target_defaults(mm3d_frame_pacing_tests FOLDER Tests)
+
+    add_executable(mm3d_timing_observer_tests EXCLUDE_FROM_ALL
+        titles/mm3d/adapter/mm3d_timing_observer_tests.cpp)
+    oot3d_target_defaults(mm3d_timing_observer_tests FOLDER Tests)
+
+    add_executable(mm3d_light_arena_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_light_arena_tests.cpp)
+    oot3d_target_defaults(mm3d_light_arena_tests FOLDER Tests)
+
+    add_executable(mm3d_gameplay_options_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_gameplay_options_tests.cpp)
+    target_link_libraries(mm3d_gameplay_options_tests PRIVATE oot3d_mm3d_guest_patches)
+    oot3d_target_defaults(mm3d_gameplay_options_tests FOLDER Tests)
+    add_executable(mm3d_rumble_donor_sites_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_rumble_donor_sites_tests.cpp)
+    oot3d_target_defaults(mm3d_rumble_donor_sites_tests FOLDER Tests)
+    add_executable(mm3d_rumble_events_tests EXCLUDE_FROM_ALL
+        titles/mm3d/gameplay/mm3d_rumble_events_tests.cpp)
+    target_include_directories(mm3d_rumble_events_tests PRIVATE tools/three_ds/input)
+    oot3d_target_defaults(mm3d_rumble_events_tests FOLDER Tests)
+
     # MM3D adapter read/lifetime guards; no process, renderer or ROM needed.
     add_executable(mm3d_scene_environment_tests EXCLUDE_FROM_ALL
         titles/mm3d/adapter/mm3d_scene_environment_tests.cpp)
@@ -73,6 +120,16 @@ add_executable(triaevum_presentation_clock_tests EXCLUDE_FROM_ALL
     tools/triaevum_release/tests/presentation_clock_main.cpp)
 target_link_libraries(triaevum_presentation_clock_tests PRIVATE oot3d_native_game_runtime)
 oot3d_target_defaults(triaevum_presentation_clock_tests NO_WARNING_OVERRIDE FOLDER Tests)
+
+# Which titles start the renderer with prepared shaders (title session capability).
+add_executable(triaevum_title_shader_preparation_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_title_shader_preparation_tests.cpp)
+target_include_directories(triaevum_title_shader_preparation_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/runtime/three_ds_recomp/include")
+# TitleSession also exposes native button overlays (menu glyph/UI contracts).
+target_link_libraries(triaevum_title_shader_preparation_tests PRIVATE
+    oot3d_native_game_runtime oot3d_ui_menu oot3d_native_control_config)
+oot3d_target_defaults(triaevum_title_shader_preparation_tests FOLDER Tests)
 
 add_executable(oot3d_native_audio_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_audio_tests.cpp

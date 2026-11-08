@@ -9,19 +9,24 @@
 // Which title sessions a build contains is TRIAEVUM_TITLES.
 
 #include "native_scene_environment_state.h"
+#include "native_button_overlay.h"
 #include "oot3d_environment_time.h"
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
 #include "fast/extension/grass_types.h"
+#include "gameplay_rumble.h"
+#include "triaevum_title_presentation.h"
 
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
-#include <functional>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <span>
 #include <vector>
 
 namespace oot3d::recomp::a32 {
@@ -88,6 +93,26 @@ public:
   // The shared renderer's native fragment lighting operand and lit shadow
   // receivers, which this title's shaders need.
   [[nodiscard]] virtual bool NativeFragmentLighting() const { return false; }
+  // Display name of point group zero, not a separate settings owner.
+  [[nodiscard]] virtual std::string_view CompanionLightName() const { return "Navi"; }
+  // Title-owned settings not serialized by the shared state+settings owners.
+  // Shown before saving/loading and retained in the state metadata.
+  [[nodiscard]] virtual std::string_view SavestateSettingsNotice() const { return {}; }
+  // The title's own mod settings a "state + settings" save carries (as
+  // OoT3D's TopScreen settings are): a JSON object, or nullopt for none.
+  [[nodiscard]] virtual std::optional<nlohmann::json>
+  CaptureSavestateTitleSettings() const {
+    return std::nullopt;
+  }
+  // Applies a block CaptureSavestateTitleSettings produced. False (with an
+  // error) leaves the current settings unchanged.
+  virtual bool ApplySavestateTitleSettings(const nlohmann::json &settings,
+                                           std::string *error) {
+    (void)settings;
+    if (error != nullptr)
+      *error = "this title has no state settings";
+    return false;
+  }
   // The actor profiles (the title's own ids) whose rigid geometry may be
   // cached in static shadow layers. None by default: every actor is dynamic.
   [[nodiscard]] virtual StaticShadowActorPolicy StaticShadowActors() const { return {}; }
@@ -105,6 +130,54 @@ public:
     (void)memory; (void)sourceFrame;
     return {};
   }
+
+  // Native-layout controller labels; absent adapters leave OoT3D untouched.
+  virtual bool HasButtonOverlay() const { return false; }
+  virtual void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet) {}
+  virtual void ObserveButtonOverlayDraw(uint64_t) {}
+  virtual void SelectButtonOverlay(std::span<const uint64_t>) {}
+  virtual std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float, bool /*gameplayHudVisible*/ = true) const { return {}; }
+  // Whether the title has prepared shaders: a vertex-program family and
+  // fragment-family packs built in, and a scenario corpus and Forge
+  // preparation behind the persistent pipeline cache
+  // (fast/renderer3ds/title_shader_preparation.h). Without them the renderer
+  // uses no always-available programs; every program a draw uses is still
+  // compiled when the draw needs it. OoT3D (no session) has them.
+  [[nodiscard]] virtual bool PreparedShaders() const { return false; }
+  // The title's pipeline cache namespace: its own pipeline cache files in
+  // the renderer cache directory, never another title's (non-empty; lower
+  // case letters, digits, '_' and '-'). OoT3D (no session) keeps the
+  // original file names.
+  [[nodiscard]] virtual std::string_view PipelineCacheNamespace() const = 0;
+
+  [[nodiscard]] virtual bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const {
+    (void)sourcePc; (void)nativeValue; return false;
+  }
+  virtual void SetPresentation(const TitlePresentationSettings& settings) { (void)settings; }
+  // Photo mode Hide HUD for HUD a title draws host-side (outside the PICA
+  // layout owners IsGameplayHud classifies). Default: nothing to hide.
+  virtual void SetGameplayHudVisible(bool visible) { (void)visible; }
+  // A title may apply the renderer/window policy at its native scene projection
+  // loads. Its unrelated stereo/base-frustum helper must then stay untouched.
+  [[nodiscard]] virtual bool OwnsSceneProjection() const { return false; }
+
+  // Optional product photo-camera input gate. nullopt preserves legacy title
+  // handling; false releases gameplay input to menus/cutscenes/transitions.
+  [[nodiscard]] virtual std::optional<bool> PhotoCameraOwnsInput(
+      oot3d::recomp::a32::MemoryBus& memory) const { (void)memory; return std::nullopt; }
+
+  // Input owns admission/strength/playback. Disabled must reset history without
+  // reading guest memory; absent producers return no events.
+  [[nodiscard]] virtual std::vector<ThreeDsRecomp::Input::RumblePulse> RumblePulses(
+      oot3d::recomp::a32::MemoryBus& memory, bool enabled) {
+    (void)memory; (void)enabled;
+    return {};
+  }
+
+  // Gameplay rows a title implements outside a mod-owned profile (OoT3D's
+  // TopScreen runtime owns its own); default none, so no row is shown.
+  virtual void SetGameplayOptions(const TitleGameplayOptions& options) { (void)options; }
+  [[nodiscard]] virtual TitleGameplayOptionSet SupportedGameplayOptions() const { return {}; }
 
   // Adds the title's block-entry hooks and guest patches.
   virtual void InstallHooks(TitleSessionHookSetup &setup) { (void)setup; }
@@ -153,6 +226,9 @@ public:
   }
   // A savestate was restored.
   virtual void Reset() {}
+  // Host-held title work that a state cannot carry is in flight (a host
+  // continuation of guest code): the save waits for the next boundary.
+  [[nodiscard]] virtual bool SavestateCapturePending() const { return false; }
 
   // runtime.json: the title's composition and guest patch statistics.
   [[nodiscard]] virtual nlohmann::json CompositionSummary() const { return nullptr; }
@@ -163,5 +239,21 @@ public:
 // adapter needs none (OoT3D EUR, generic titles). Throws when the title's
 // adapter is not part of this build.
 std::unique_ptr<TitleSession> CreateTitleSession(TitleAdapter adapter);
+
+// Whether the running title has prepared shaders (TitleSession::PreparedShaders):
+// its session says so; OoT3D's adapter, still wired into the window session
+// itself, has them; a generic title has none.
+[[nodiscard]] inline bool TitlePreparedShaders(TitleAdapter adapter, const TitleSession *session) {
+  return session != nullptr ? session->PreparedShaders() : adapter == TitleAdapter::Oot3dEur;
+}
+
+// The running title's pipeline cache namespace (TitleSession::
+// PipelineCacheNamespace): its session's; OoT3D keeps the original file
+// names (empty); a generic title has its own files, apart from OoT3D's.
+[[nodiscard]] inline std::string_view TitlePipelineCacheNamespace(TitleAdapter adapter,
+                                                                 const TitleSession *session) {
+  if (session != nullptr) return session->PipelineCacheNamespace();
+  return adapter == TitleAdapter::Oot3dEur ? std::string_view{} : std::string_view{"generic"};
+}
 
 } // namespace Oot3dNativeGame

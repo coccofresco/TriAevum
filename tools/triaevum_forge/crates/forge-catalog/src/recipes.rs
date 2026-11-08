@@ -18,10 +18,10 @@ use crate::paths::{expanduser, join_posix, resolve};
 use crate::pyjson::{eq_int, get, py_eq, py_str, py_strip, repr_str, truthy, type_name};
 
 pub const FORMAT: &str = "triaevum_supported_revisions_v1";
-/// The package's own supported inputs, beside Forge.
-pub const PACKAGED_RECIPES: &str = "recipes/oot3d.json";
+/// The package's own supported inputs, beside Forge (this Forge's title).
+pub const PACKAGED_RECIPES: &str = crate::title::ACTIVE.packaged_recipes;
 /// The source-tree fallback: not the complete list of a qualified package.
-pub const EMBEDDED_RECIPES: &str = "tools/triaevum_release/supported_revisions.json";
+pub const EMBEDDED_RECIPES: &str = crate::title::ACTIVE.embedded_recipes;
 
 /// `forge.DEFAULT_RECIPES`: the packaged recipes when present, otherwise the
 /// distribution's embedded definitions.
@@ -103,7 +103,14 @@ fn contract_digest(contract: &Map<String, Value>) -> String {
     contract.get("sha256").map(py_str).unwrap_or_default().to_lowercase()
 }
 
-fn unsupported_revision(program_id: u64) -> ForgeError {
+/// No recipe matched. A dump of another known title is named, with the Forge
+/// that prepares it (per-title Forge, owner decision 2026-11-08).
+fn unsupported_revision_for(program_id: u64, code_sha256: Option<&str>) -> ForgeError {
+    let active = crate::title::ACTIVE;
+    if let Some(foreign) = code_sha256.and_then(|digest| crate::title::foreign_title(&active, digest)) {
+        return ForgeError::new(ErrorKind::UnsupportedRevision, crate::title::foreign_title_message(&active, &foreign))
+            .because(Reason::IdentityMismatch);
+    }
     ForgeError::new(
         ErrorKind::UnsupportedRevision,
         format!("the decrypted ROM does not match any supported game revision (program ID {program_id:016X})"),
@@ -152,7 +159,7 @@ pub fn recognize_recipes(
         }
     }
     if matches.is_empty() {
-        return Err(unsupported_revision(program_id));
+        return Err(unsupported_revision_for(program_id, Some(&code_digest)));
     }
     Ok(matches)
 }
@@ -195,7 +202,7 @@ pub fn match_extracted_recipe(
         }
     }
     match matches.as_slice() {
-        [] => Err(unsupported_revision(extracted.program_id)),
+        [] => Err(unsupported_revision_for(extracted.program_id, Some(&extracted.code.sha256))),
         [recipe] => Ok((*recipe).clone()),
         _ => Err(ForgeError::integrity("the decrypted ROM matches multiple revision recipes")),
     }

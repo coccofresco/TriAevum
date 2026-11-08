@@ -187,6 +187,8 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
                   extension/pica_toon_fragment extension/pica_uber_fragment extension/pica_caster_fragment)
         triaevum_add_spirv_pack(three_ds_recomp_runtime fast/${_pack}_binaries.cpp fast/${_pack}.spvpack)
     endforeach()
+    triaevum_add_spirv_pack(three_ds_recomp_runtime fast/extension/pica_uber_fragment_binaries.cpp
+        fast/extension/pica_native_lighting_uber.spvpack)
     target_link_libraries(three_ds_recomp_runtime PRIVATE ${CMAKE_DL_LIBS})
     target_link_libraries(three_ds_recomp_runtime PUBLIC Vulkan::Vulkan PRIVATE three_ds_recomp_shaderc)
     if(THREE_DS_RECOMP_ENABLE_NRI)

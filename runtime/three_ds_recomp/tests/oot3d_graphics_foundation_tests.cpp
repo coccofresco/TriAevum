@@ -3345,6 +3345,77 @@ TEST(Oot3dUpscalerGuides, ResampleShaderCompiles) {
 }
 #endif
 
+TEST(Oot3dNativeUiOverlay, OutputRasterCompanionRequiresExactContentLifetime) {
+    using Fast::Extension::NativeUiCompanionCurrent;
+    EXPECT_TRUE(NativeUiCompanionCurrent(10, 10, 11, 11));
+    EXPECT_TRUE(NativeUiCompanionCurrent(10, 10, 12, 12)); // next native overlay
+    EXPECT_FALSE(NativeUiCompanionCurrent(13, 10, 12, 12)); // world/clear/fill
+    EXPECT_FALSE(NativeUiCompanionCurrent(10, 10, 13, 12)); // unowned companion write
+    EXPECT_FALSE(NativeUiCompanionCurrent(0, 0, 0, 0)); // reset/restore
+    EXPECT_FALSE(NativeUiCompanionCurrent(10, 0, 12, 12)); // no association
+    EXPECT_FALSE(NativeUiCompanionCurrent(10, 10, 0, 0)); // no completed presentation
+    using namespace Fast::Extension;
+    GraphicsSettings settings{};
+    settings.AntiAliasing = AntiAliasingMode::Upscaler;
+    settings.UpscalerMode = UpscalerQuality::Quality;
+    const auto reduced = ResolveNativePicaRenderExtent({512, 400}, {1280, 720},
+        ResolveInternalResolutionScale(settings, true));
+    const auto ui = ResolveNativePicaRenderExtent({512, 400}, {1280, 720}, 1.0F);
+    EXPECT_LT(reduced.Width, ui.Width);
+    EXPECT_LT(reduced.Height, ui.Height);
+    EXPECT_EQ(ui.Width, 768U);
+    EXPECT_EQ(ui.Height, 1280U);
+}
+
+TEST(Oot3dNativeUiOverlay, PresentationGridIsExplicitAndAvoidsASecondUiFilter) {
+    using namespace Fast::Extension;
+    const std::array<uint32_t, 2> intermediate{360U, 600U}, presentation{720U, 1200U};
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(false, 360, 600, 0, 0, 1200, 720, false).Extent, intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, 0, 1200, 720, false).Extent, presentation);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, .25F, 1200, 719.5F, false).Extent, presentation);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, 0, 1200, 0, false).Extent, intermediate);
+    EXPECT_EQ(ResolveNativeUiOverlayGrid(true, 360, 600, 0, 0, 1200, INFINITY, false).Extent, intermediate);
+    const auto sample = [](const auto& values, uint32_t pixel, uint32_t extent) {
+        const auto tap = ResolveNativeUiOverlayTap(pixel, extent, uint32_t(values.size()));
+        const auto at = [&](int32_t index) { return values[size_t(std::clamp(index, 0, int32_t(values.size()) - 1))]; };
+        return at(tap.First) * (1.0F - tap.Fraction) + at(tap.First + 1) * tap.Fraction;
+    };
+    const std::array native{0.0F, 1.0F, 1.0F, 0.0F};
+    std::array<float, 6> oldOverlay{};
+    std::array<float, 12> directOverlay{};
+    for (uint32_t x = 0; x < oldOverlay.size(); ++x) oldOverlay[x] = sample(native, x, oldOverlay.size());
+    for (uint32_t x = 0; x < directOverlay.size(); ++x) directOverlay[x] = sample(native, x, directOverlay.size());
+    bool oldPathDiffers = false;
+    for (uint32_t x = 0; x < directOverlay.size(); ++x) {
+        const float reference = sample(native, x, directOverlay.size());
+        EXPECT_FLOAT_EQ(sample(directOverlay, x, directOverlay.size()), reference);
+        oldPathDiffers |= std::abs(sample(oldOverlay, x, directOverlay.size()) - reference) > 0.01F;
+    }
+    EXPECT_TRUE(oldPathDiffers);
+}
+
+TEST(Oot3dNativeUiOverlay, FractionalViewportKeepsOriginalSamplePhaseAndFlip) {
+    using namespace Fast::Extension;
+    const std::array<std::array<float, 4>, 4> cases{{
+        {0, 0, 1280, 720}, {0, .281F, 1280, 719.438F},
+        {.5F, .5F, 1200, 720}, {.3F, .2F, 1199.4F, 719.6F}}};
+    for (const auto& v : cases) for (bool flip : {false, true}) {
+        const auto grid = ResolveNativeUiOverlayGrid(true, 360, 640, v[0], v[1], v[2], v[3], flip);
+        ASSERT_TRUE(grid.Direct);
+        for (uint32_t x : {0U, grid.Extent[1] / 2, grid.Extent[1] - 1})
+            for (uint32_t y : {0U, grid.Extent[0] / 2, grid.Extent[0] - 1}) {
+                const float px = float(grid.Extent[0] - 1 - y);
+                const float py = float(flip ? grid.Extent[1] - 1 - x : x);
+                const float u = (px + .5F + grid.SourceOffset[0]) / grid.SourceExtent[0];
+                const float w = (py + .5F + grid.SourceOffset[1]) / grid.SourceExtent[1];
+                const float expectedU = 1 - (grid.Viewport[1] + float(y) + .5F - v[1]) / v[3];
+                const float expectedV = (grid.Viewport[0] + float(x) + .5F - v[0]) / v[2];
+                EXPECT_NEAR(u, expectedU, 1e-6F);
+                EXPECT_NEAR(w, flip ? 1 - expectedV : expectedV, 1e-6F);
+            }
+    }
+}
+
 TEST(Oot3dNativeUiOverlay, MapsTheUpscaledTexelOntoItsDisplayFootprint) {
     using namespace Fast::Extension;
     // An identity extent lands on the texel itself with no neighbour weight.
@@ -4406,6 +4477,14 @@ TEST(Oot3dPicaScanout, PolicySuppressesAllEffectsAlreadyComposited) {
     EXPECT_EQ(output.AmbientOcclusion, 0U);
     EXPECT_EQ(output.Reflections, 0U);
     EXPECT_EQ(output.Outline, 0U);
+
+    input.GuideDiagnostic = true;
+    output = Fast::Extension::BuildPicaScanoutPushConstants(input);
+    EXPECT_EQ(output.Outline, 1U) << "bound diagnostics survive pre-UI composition";
+    EXPECT_EQ(output.AmbientOcclusion, 0U);
+    EXPECT_EQ(output.Reflections, 0U);
+    input.GuideDiagnostic = false;
+    EXPECT_EQ(Fast::Extension::BuildPicaScanoutPushConstants(input).Outline, 0U);
 
     input.EffectsComposited = false;
     output = Fast::Extension::BuildPicaScanoutPushConstants(input);
@@ -6486,6 +6565,29 @@ TEST(Oot3dDisplayEffectPlan,
               (std::vector<std::string>{
                   "Guides", "WorkingColor", "HiZ", "Motion",
                   "TemporalUpscaler", "Scanout"}));
+}
+
+TEST(Oot3dSceneSurfaces, NativeUiCompanionDoesNotRetireSceneAtTheSameGuestAddress) {
+    using namespace Fast::Extension;
+    std::vector<uintptr_t> retired;
+    const auto retire = [&](const SceneSurface& surface) { retired.push_back(surface.NativeImage); };
+    SceneSurfaceRegistry scene(retire), ui(retire);
+    SceneSurface reduced{{4, 8, SceneSurfaceKind::Color}, 100, 512, 853, 1, 0, true};
+    SceneSurface companion{reduced};
+    companion.NativeImage = 200;
+    companion.Width = 768;
+    companion.Height = 1280;
+    const auto sceneGeneration = scene.Publish(reduced).Generation;
+    ui.Publish(companion);
+    EXPECT_TRUE(retired.empty()); // both may be referenced by the recording command
+    ASSERT_TRUE(scene.Find(reduced.Key).has_value());
+    EXPECT_EQ(scene.Find(reduced.Key)->Generation, sceneGeneration);
+    EXPECT_EQ(scene.Find(reduced.Key)->NativeImage, 100U);
+    ui.Retire(companion.Key);
+    EXPECT_EQ(retired, (std::vector<uintptr_t>{200}));
+    ASSERT_TRUE(scene.Find(reduced.Key).has_value());
+    scene.Retire(reduced.Key);
+    EXPECT_EQ(retired, (std::vector<uintptr_t>{200, 100}));
 }
 
 TEST(Oot3dSceneSurfaces, ReplacementRetiresOldGeneration) {

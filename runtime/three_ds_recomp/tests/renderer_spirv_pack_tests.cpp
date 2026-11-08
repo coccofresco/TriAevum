@@ -8,12 +8,14 @@
 #include "fast/extension/pica_uber_fragment_binaries.h"
 #include "fast/renderer/builtin_pass_binaries.h"
 #include "fast/renderer/pass_shader_artifact.h"
+#include "fast/renderer/title_program_pack.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
 #include "oot3d_native_vertex_binaries.h"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
 
 using namespace Fast::Renderer;
 
@@ -62,6 +64,41 @@ bool Same(const SpirvPackEntry& a, const SpirvPackEntry& b) {
 }
 
 } // namespace
+
+TEST(SpirvPack, ExternalTitleProgramsOwnStorageAndRejectMalformedOrWrongStages) {
+    const auto path = std::filesystem::path(testing::TempDir()) / "triaevum-title-program-test.spvpack";
+    const auto save = [&](const std::vector<unsigned char>& bytes) {
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+        ASSERT_TRUE(file.good());
+    };
+    SpirvPackEntry entry;
+    entry.Kind = SpirvPackKind::PicaVertex;
+    const auto artifact = Oot3dNativeGame::TitleVertexArtifacts().front();
+    entry.Identity = {artifact.Source.Id, artifact.Source.SecondaryHash, artifact.Source.Size};
+    entry.Spirv = artifact.Spirv;
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    const TitleProgramPack loaded(path);
+    ASSERT_EQ(loaded.Entries().size(), 1U);
+    EXPECT_TRUE(std::equal(loaded.Entries()[0].Spirv.begin(), loaded.Entries()[0].Spirv.end(),
+                           artifact.Spirv.begin(), artifact.Spirv.end()));
+    save({1, 2, 3, 4});
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    EXPECT_EQ(loaded.Entries()[0].Spirv[0], 0x07230203U) << "pack owns its bytes";
+    entry.Kind = SpirvPackKind::PicaFragment;
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    entry.Kind = SpirvPackKind::Pass;
+    entry.Stage = static_cast<uint32_t>(SpirvStage::Compute);
+    entry.Source = "void main() {}";
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    entry.Kind = SpirvPackKind::PicaVertex;
+    entry.Spirv = kModuleA; // truncated instruction, despite correct magic
+    save(WriteSpirvPack(std::span(&entry, 1)));
+    EXPECT_THROW(TitleProgramPack{path}, std::runtime_error);
+    std::filesystem::remove(path);
+}
 
 TEST(SpirvPack, RoundTripsEveryEntryAndStoresDuplicatesOnce) {
     const auto entries = SampleEntries();
@@ -138,7 +175,9 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
     ExpectSpirvModules(Fast::Renderer3ds::NativeFragmentArtifacts(), 24U);
     ExpectSpirvModules(Fast::Extension::TemporalFragmentArtifacts(), 40U);
     ExpectSpirvModules(Fast::Extension::ToonFragmentArtifacts(), 348U); // build_fragment_artifacts --toon
-    ExpectSpirvModules(Fast::Extension::UberFragmentArtifacts(), 36U);
+    ExpectSpirvModules(Fast::Extension::LegacyUberFragmentArtifacts(), 36U);
+    EXPECT_TRUE(Oot3dNativeGame::AdditionalTitleVertexArtifacts().empty());
+    ExpectSpirvModules(Fast::Extension::UberFragmentArtifacts(), 140U); // legacy36 + native-lighting/GGX104
     ExpectSpirvModules(Fast::Extension::CasterFragmentArtifacts(), 6U);
     ExpectSpirvModules(BuiltinPassArtifacts(), 104U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5), 2 grass raster-depth fragments, 3 contact shadow lengths, 2 upscaler orientation turns, 4 GPU grass selection passes, the room shadow shell vertex shader, 5 grass card programs (vertex, 2 explicit-depth and 2 conservative-depth fragments), 2 whole-blade grass fragments without discard, the reflection upsample, the grass root lighting compute, 3 grass fragments without the geometry guide
 #ifdef ENABLE_OOT3D_IMMERSE
@@ -157,6 +196,48 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
             EXPECT_FALSE(native[i].Source == native[j].Source && native[i].SeparateSamplers == native[j].SeparateSamplers);
     // The table views the embedded pack, so repeated calls return the same storage.
     EXPECT_EQ(BuiltinPassArtifacts().data(), BuiltinPassArtifacts().data());
+}
+
+TEST(SpirvPack, OptionalPublisherFamilyLinksEverySupersetWithoutOotVertices) {
+    const char* path = std::getenv("TRIAEVUM_TEST_TITLE_PROGRAM_PACK");
+    if (!path || !*path) GTEST_SKIP() << "optional private title program oracle";
+    using namespace Fast::Renderer3ds;
+    TitleProgramPack pack(path);
+    const auto vertices = PicaVertexArtifactsFromPack(pack.Entries());
+    ASSERT_FALSE(vertices.empty());
+    const auto supersets = Fast::Extension::UberFragmentArtifacts();
+    const auto parts = PicaStartupProgramParts(vertices, supersets, NativeFragmentArtifacts(),
+                                               {VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, true});
+    for (const auto& part : parts) EXPECT_TRUE(PicaStageInterfaceLinks(part.Vertex, part.Fragment));
+    for (const auto& shader : supersets)
+        EXPECT_TRUE(std::any_of(parts.begin(), parts.end(), [&](const auto& part) {
+            return part.Fragment.data() == shader.Spirv.data();
+        })) << "missing superset " << shader.Source.Id;
+    for (const auto& shader : vertices)
+        EXPECT_TRUE(std::any_of(parts.begin(), parts.end(), [&](const auto& part) {
+            return part.Vertex.data() == shader.Spirv.data();
+        }));
+}
+
+// A preparation-work regression is deterministic even when the driver cache
+// hides its wall time. Non-native titles must not prewarm native-only supersets.
+TEST(SpirvPack, StartupFamilyFollowsNativeLightingCapabilities) {
+    using namespace Fast::Renderer3ds;
+    const auto vertices = Oot3dNativeGame::TitleVertexArtifacts();
+    const PicaStartupProgramDevice device{VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, true};
+    for (const bool operand : {false, true}) {
+        for (const bool shadows : {false, true}) {
+            const bool native = operand || shadows;
+            const auto family = Fast::Extension::StartupUberFragmentArtifacts(operand, shadows);
+            EXPECT_EQ(family.size(), native ? 140U : 36U);
+            const auto parts = PicaStartupProgramParts(vertices, family, NativeFragmentArtifacts(), device);
+            EXPECT_EQ(parts.size(), native ? 159U : 55U);
+            for (const auto& part : parts)
+                EXPECT_TRUE(PicaStageInterfaceLinks(part.Vertex, part.Fragment));
+        }
+    }
+    // Runtime lookup must retain native variants, regardless of startup policy.
+    EXPECT_EQ(Fast::Extension::UberFragmentArtifacts().size(), 140U);
 }
 
 // The startup preparation (and Forge's device preparation) links each program

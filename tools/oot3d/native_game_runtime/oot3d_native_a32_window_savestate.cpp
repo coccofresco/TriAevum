@@ -283,6 +283,7 @@ NativeA32WindowSession::SaveState(const std::filesystem::path &path, bool withSe
   if (objectBankStorage->Pending()) return SaveStateOutcome::Deferred;
   // The temporary rain count and the outer weather frame are host-held.
   if (rainStorage->Pending()) return SaveStateOutcome::Deferred;
+  if (titleSession && titleSession->SavestateCapturePending()) return SaveStateOutcome::Deferred;
   const auto started = std::chrono::steady_clock::now();
   Oot3dNativeGame::NativeA32SavestateRuntimeState runtime;
   runtime.FrameCount = frameCount;
@@ -598,7 +599,25 @@ NativeA32WindowSession::SavestateSettingsOwners() const {
   return {launch.UiProfile == Oot3dNativeGame::Oot3dUiProfile::TopScreen
               ? topScreenConfigRuntime
               : nullptr,
-          controlConfigRuntime, languageSettings};
+          controlConfigRuntime,
+          languageSettings,
+          titleSession ? std::string(titleSession->SavestateSettingsNotice())
+                       : std::string{},
+          titleSession ? std::string(titleSession->PipelineCacheNamespace())
+                       : std::string{},
+          titleSession ? std::function<std::optional<nlohmann::json>()>(
+                             [session = titleSession.get()] {
+                               return session->CaptureSavestateTitleSettings();
+                             })
+                       : nullptr,
+          titleSession
+              ? std::function<bool(const nlohmann::json &, std::string *)>(
+                    [session = titleSession.get()](
+                        const nlohmann::json &settings, std::string *error) {
+                      return session->ApplySavestateTitleSettings(settings,
+                                                                  error);
+                    })
+              : nullptr};
 }
 
 void NativeA32WindowSession::ServiceSavestateRequests() {
@@ -615,7 +634,7 @@ void NativeA32WindowSession::ServiceSavestateRequests() {
     return std::string(text.begin(), text.end());
   };
   if (request->Kind == Oot3dNativeGame::SavestateRequestKind::Save) {
-    const auto path = savestateLibrary->NewStatePath(request->WithSettings);
+    const auto path = savestateLibrary->SaveRequestPath(*request);
     std::error_code directoryError;
     std::filesystem::create_directories(path.parent_path(), directoryError);
     if (directoryError) {
@@ -635,7 +654,11 @@ void NativeA32WindowSession::ServiceSavestateRequests() {
       savestateLibrary->SetLastState(path);
       report(true, std::string(request->WithSettings ? "State and settings saved: "
                                                      : "State saved: ") +
-                       fileName(path));
+                       fileName(path) +
+                       (request->WithSettings && titleSession &&
+                                !titleSession->SavestateSettingsNotice().empty()
+                            ? "\n" + std::string(titleSession->SavestateSettingsNotice())
+                            : std::string{}));
       return;
     }
     return;

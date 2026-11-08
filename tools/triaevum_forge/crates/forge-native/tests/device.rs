@@ -185,6 +185,21 @@ fn native_and_effect_manifests_share_one_device_job_and_cache() {
 }
 
 #[test]
+fn optional_title_program_family_is_verified_routed_and_receipted() {
+    let mut fixture = Fixture::new();
+    fixture.title["title_program_pack"] = artifact(&fixture.root, "title.spvpack", b"programs");
+    fixture.contract().insert("startup_programs".into(), json!(true));
+    let result = fixture.prepare().unwrap();
+    assert_eq!(result["title_program_pack_sha256"], forge_base::hashing::sha256_hex(b"programs"));
+    let args = fixture.last_args();
+    let at = args.iter().position(|a| a == "--title-program-pack").unwrap();
+    assert_eq!(args[at + 1], fixture.root.join("title.spvpack").to_string_lossy());
+    std::fs::write(fixture.root.join("title.spvpack"), b"corrupt").unwrap();
+    assert!(fixture.prepare().is_err());
+    assert_eq!(runs(&fixture.helper).len(), 1);
+}
+
+#[test]
 fn startup_programs_join_the_same_job_with_a_longer_budget() {
     let mut fixture = Fixture::new();
     fixture.prepare().unwrap();

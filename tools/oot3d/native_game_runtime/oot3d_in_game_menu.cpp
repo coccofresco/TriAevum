@@ -819,6 +819,21 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
     row.Modified = [this] { return mControls.ButtonPrompts != NativeButtonPrompts::Automatic; };
     tab.Rows.push_back(std::move(row));
   }
+  if (mOwners.NativeButtonOverlay) {
+    Row row;
+    row.Key = "Native button labels";
+    row.Kind = RowKind::Choice;
+    row.Help = "Controller glyphs on the native MM3D HUD and prompts. Original 3DS and touch keep native artwork.";
+    row.Choices = {"Controller", "Original 3DS"};
+    row.Read = [this] { return mControls.NativeButtonLabels ? 0 : 1; };
+    row.Write = [this](int value) {
+      auto config = mControls;
+      config.NativeButtonLabels = value == 0;
+      return ApplyControls(config);
+    };
+    row.Modified = [this] { return !mControls.NativeButtonLabels; };
+    tab.Rows.push_back(std::move(row));
+  }
   {
     Row row;
     row.Key = "Control preset";
@@ -838,7 +853,10 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
       config.GyroscopeBiasDegreesPerSecond = previous.GyroscopeBiasDegreesPerSecond;
       config.AccelerometerNeutral = previous.AccelerometerNeutral;
       config.ButtonPrompts = previous.ButtonPrompts;
+      config.NativeButtonLabels = previous.NativeButtonLabels;
       config.Rumble = previous.Rumble;
+      config.QuickPutAway = previous.QuickPutAway;
+      config.RollDash = previous.RollDash;
       return ApplyControls(config);
     };
     row.ChoiceAvailable = [](int value) { return value != static_cast<int>(NativeControlProfile::Custom); };
@@ -1149,6 +1167,39 @@ void InGameMenu::BuildGameTab(Menu::Document &document) {
         return ApplyTopScreen(config);
       };
       row.Modified = [this] { return mTopScreen.SelectAction != TopScreenUiConfig{}.SelectAction; };
+      tab.Rows.push_back(std::move(row));
+    }
+  }
+  else if (mOwners.TitleGameplay.Any() && mOwners.Controls) {
+    // The rows the title implements itself (MM3D), kept by the controls owner
+    // so F1 > Controls > Gameplay shows the same state.
+    tab.Rows.push_back(Heading("Gameplay"));
+    if (mOwners.TitleGameplay.QuickPutAway) {
+      Row row;
+      row.Key = "Quick put away";
+      row.Kind = RowKind::Toggle;
+      row.Help = "Items can be put away immediately instead of after the native cooldown.";
+      row.Read = [this] { return mControls.QuickPutAway ? 1 : 0; };
+      row.Write = [this](int value) {
+        auto config = mControls;
+        config.QuickPutAway = value != 0;
+        return ApplyControls(config);
+      };
+      row.Modified = [this] { return mControls.QuickPutAway != NativeControlConfig{}.QuickPutAway; };
+      tab.Rows.push_back(std::move(row));
+    }
+    if (mOwners.TitleGameplay.RollDash) {
+      Row row;
+      row.Key = "Roll dash";
+      row.Kind = RowKind::Toggle;
+      row.Help = "Holding A after a roll keeps running at the faster dash speed.";
+      row.Read = [this] { return mControls.RollDash ? 1 : 0; };
+      row.Write = [this](int value) {
+        auto config = mControls;
+        config.RollDash = value != 0;
+        return ApplyControls(config);
+      };
+      row.Modified = [this] { return mControls.RollDash != NativeControlConfig{}.RollDash; };
       tab.Rows.push_back(std::move(row));
     }
   }

@@ -80,7 +80,7 @@ class InputOverlayDrawableButton(
         val isActionUp =
             motionEvent == MotionEvent.ACTION_UP || motionEvent == MotionEvent.ACTION_POINTER_UP
         if (isActionDown) {
-            if (!bounds.contains(xPosition, yPosition)) {
+            if (trackId != -1 || !bounds.contains(xPosition, yPosition)) {
                 return false
             }
             buttonDown(true, pointerId, overlay)
@@ -124,6 +124,13 @@ class InputOverlayDrawableButton(
         }
 
         return false
+    }
+
+    // Cancellation is not a release gesture (notably HOME tap/long press).
+    fun cancelTouch() {
+        pressedState = false
+        isMotionFirstButton = false
+        trackId = -1
     }
 
     private fun buttonDown(firstBtn: Boolean, pointerId: Int, overlay: InputOverlay) {

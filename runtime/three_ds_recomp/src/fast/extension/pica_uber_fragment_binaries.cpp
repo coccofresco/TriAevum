@@ -14,11 +14,28 @@ alignas(16) const unsigned char kPack[] = {
 #include "pica_uber_fragment.spvpack.inc"
 #endif
 };
+alignas(16) const unsigned char kNativeLightingPack[] = {
+#if TRIAEVUM_SPIRV_PACK_EMBED
+#embed "pica_native_lighting_uber.spvpack"
+#else
+#include "pica_native_lighting_uber.spvpack.inc"
+#endif
+};
 TRIAEVUM_SPIRV_PACK_EMBED_END
 } // namespace
 
+std::span<const Renderer3ds::PicaFragmentArtifact> LegacyUberFragmentArtifacts() {
+    static const auto artifacts = Renderer3ds::PicaFragmentArtifactsFromPack(Renderer::ReadSpirvPack(kPack));
+    return artifacts;
+}
+
 std::span<const Renderer3ds::PicaFragmentArtifact> UberFragmentArtifacts() {
-    static const auto entries = Renderer::ReadSpirvPack(kPack);
+    static const auto entries = [] {
+        auto legacy = Renderer::ReadSpirvPack(kPack);
+        const auto native = Renderer::ReadSpirvPack(kNativeLightingPack);
+        legacy.insert(legacy.end(), native.begin(), native.end());
+        return legacy;
+    }();
     static const auto artifacts = Renderer3ds::PicaFragmentArtifactsFromPack(entries);
     return artifacts;
 }

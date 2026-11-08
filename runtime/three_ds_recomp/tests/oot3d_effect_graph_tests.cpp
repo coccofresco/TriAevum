@@ -3054,6 +3054,48 @@ TEST(Oot3dSceneBoundary, UpscalersReconstructTheSceneBeforeNativeUi) {
     EXPECT_FALSE(BuildDisplayEffectPlan(input).NativeUiOverlay);
 }
 
+TEST(Oot3dSceneBoundary, OutputDensityUiReconstructsBeforeNativeRasterOnlyWithProof) {
+    for (auto provider : {UpscalerProvider::Nis, UpscalerProvider::Fsr, UpscalerProvider::Dlss}) {
+        auto input = BoundarySceneEffectInput();
+        input.NativeSceneBoundary = true;
+        input.BeforeNativeUi = true;
+        input.OutputResolutionBeforeUi = true;
+        input.AntiAliasing = AntiAliasingMode::Upscaler;
+        input.Upscaler = provider;
+        for (bool sceneResolved : {false, true}) {
+            input.SceneEffectsResolved = sceneResolved;
+            const auto plan = BuildDisplayEffectPlan(input);
+            ASSERT_TRUE(plan.Graph.Valid()) << plan.Graph.Error;
+            EXPECT_EQ(plan.SceneOutput, EffectResource::UpscaledColor);
+            EXPECT_TRUE(plan.Enabled(provider == UpscalerProvider::Nis
+                ? DisplayEffectPass::Nis : DisplayEffectPass::TemporalUpscaler));
+            EXPECT_TRUE(BoundaryReadsResource(plan, DisplayEffectPass::SceneComposition,
+                EffectResource::UpscaledColor));
+            EXPECT_TRUE(plan.Graph.ExportsResource(EffectResource::SceneComposition));
+            EXPECT_FALSE(plan.Enabled(DisplayEffectPass::Scanout));
+            EXPECT_FALSE(plan.NativeUiOverlay); // native blend, not changed-pixel inference
+        }
+        for (int negative = 0; negative < 4; ++negative) {
+            auto noProof = input;
+            if (negative == 0) noProof.OutputResolutionBeforeUi = false;
+            if (negative == 1) noProof.BeforeNativeUi = false;
+            if (negative == 2) noProof.UpscalerAvailable = false;
+            if (negative == 3) noProof.Purpose = Fast::Renderer3ds::PicaCompositionPurpose::NativeMemory;
+            const auto plan = BuildDisplayEffectPlan(noProof);
+            ASSERT_TRUE(plan.Graph.Valid()) << plan.Graph.Error;
+            EXPECT_FALSE(plan.Nis || plan.TemporalUpscaler);
+        }
+        input.NativeSceneBoundary = false;
+        input.BeforeNativeUi = false;
+        input.OutputResolutionBeforeUi = false;
+        input.PresentationEffectsResolved = true;
+        const auto presented = BuildDisplayEffectPlan(input);
+        ASSERT_TRUE(presented.Graph.Valid()) << presented.Graph.Error;
+        EXPECT_EQ(presented.Graph.Order, (std::vector<std::string>{"Scanout"}));
+        EXPECT_TRUE(BoundaryReadsResource(presented, DisplayEffectPass::Scanout, EffectResource::SceneColor));
+    }
+}
+
 // An ordinary display with no boundary inputs keeps its canonical shape: one
 // scanout pass over the native scene colour, no boundary composition.
 TEST(Oot3dSceneBoundary, OrdinaryDisplayIsUnchanged) {

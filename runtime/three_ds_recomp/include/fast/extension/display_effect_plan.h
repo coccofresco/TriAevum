@@ -86,6 +86,12 @@ struct DisplayEffectPlanInput {
     // (SceneBeforeUi). An upscaler then reconstructs that scene and lays the
     // display's UI over its output instead of upscaling the UI with it.
     bool SceneBeforeUi = false;
+    // Explicit, schedule-proved promotion: materialize the upscaled scene into
+    // an output-density native attachment before rasterizing its UI.
+    bool OutputResolutionBeforeUi = false;
+    // This colour already contains presentation reconstruction followed by UI.
+    // Never feed it through scene effects or an upscaler again.
+    bool PresentationEffectsResolved = false;
     Renderer3ds::PicaCompositionPurpose Purpose =
         Renderer3ds::PicaCompositionPurpose::Presentation;
 };

@@ -91,10 +91,18 @@ struct NativeControlConfig {
   // The menu's button prompts: Automatic follows the device used last.
   // Not part of a preset ("button_prompts", written only when fixed).
   NativeButtonPrompts ButtonPrompts = NativeButtonPrompts::Automatic;
+  // Native-layout title adapters use controller glyphs by default. TopScreen
+  // retains its own HUD setting. Omitted at default for legacy file identity.
+  bool NativeButtonLabels = true;
   // The selected pad's rumble for the events the title publishes (damage,
   // hard landings). Off by default: the 3DS has none. Not part of a preset
   // ("rumble", written only when not Off).
   NativeRumbleStrength Rumble = NativeRumbleStrength::Off;
+  // Gameplay rows a title implements outside a mod-owned profile (MM3D; OoT3D's
+  // TopScreen keeps its own). Off by default, as native; not part of a preset
+  // ("title_gameplay", written only when a value is on).
+  bool QuickPutAway = false;
+  bool RollDash = false;
 
   bool operator==(const NativeControlConfig&) const = default;
 };

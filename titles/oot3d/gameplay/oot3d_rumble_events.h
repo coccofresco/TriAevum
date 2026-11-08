@@ -8,7 +8,7 @@
 // this file owns which events exist and how strong each one is. Reading
 // changes nothing in the guest.
 
-#include "three_ds_input.h"
+#include "gameplay_rumble.h"
 
 #include <cstdint>
 #include <optional>
@@ -36,27 +36,10 @@ inline constexpr uint16_t kOot3dBgCheckGround = 0x0001U;
 inline constexpr uint16_t kOot3dBgCheckWater = 0x0020U;
 
 // A fall faster than this (units per update, downwards) lands hard.
-inline constexpr float kOot3dHardLandingSpeed = 8.0F;
-
-struct Oot3dRumbleSample {
-  // Normal gameplay (game mode 0) with the Player actor present.
-  bool Gameplay = false;
-  uint32_t PlayState = 0;
-  uint32_t Player = 0;
-  int16_t Scene = 0;
-  int16_t Health = 0;
-  uint16_t BgCheckFlags = 0;
-  float VelocityY = 0.0F;
-};
-
-enum class Oot3dRumbleEventKind : uint8_t { Damage, HardLanding };
-
-struct Oot3dRumbleEvent {
-  Oot3dRumbleEventKind Kind = Oot3dRumbleEventKind::Damage;
-  // Damage: health lost (16 per heart). HardLanding: the fastest fall of the
-  // airborne stretch (units per update, positive).
-  float Amount = 0.0F;
-};
+inline constexpr float kOot3dHardLandingSpeed = ThreeDsRecomp::Input::kGameplayHardLandingSpeed;
+using Oot3dRumbleSample = ThreeDsRecomp::Input::GameplayRumbleSample;
+using Oot3dRumbleEventKind = ThreeDsRecomp::Input::GameplayRumbleEventKind;
+using Oot3dRumbleEvent = ThreeDsRecomp::Input::GameplayRumbleEvent;
 
 // Reads one sample; Gameplay stays false when a read fails or the game is
 // not in normal gameplay with a player.
@@ -67,16 +50,7 @@ bool ReadOot3dRumbleSample(oot3d::recomp::a32::MemoryBus &memory, uint32_t playS
 // PlayState, scene or Player actor, only sets the baseline, so loading a file
 // or a savestate, a scene change or a respawn is never an event. Landing in
 // water is not a hard landing.
-class Oot3dRumbleEventTracker {
- public:
-  std::vector<Oot3dRumbleEvent> Observe(const Oot3dRumbleSample &sample);
-  void Reset() noexcept;
-
- private:
-  std::optional<Oot3dRumbleSample> mPrevious;
-  bool mAirborne = false;
-  float mFastestFall = 0.0F;
-};
+using Oot3dRumbleEventTracker = ThreeDsRecomp::Input::GameplayRumbleEventTracker;
 
 // How strong and long each event's rumble is, before the user's strength.
 [[nodiscard]] ThreeDsRecomp::Input::RumblePulse Oot3dRumblePulse(const Oot3dRumbleEvent &event) noexcept;

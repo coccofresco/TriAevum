@@ -1,21 +1,28 @@
 #pragma once
+#include <string>
+#include <string_view>
 
 #include "mm3d_guest_patches.h"
+#include "native_button_overlay.h"
 
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <map>
 #include <memory>
+#include <span>
 #include <vector>
+#include <span>
 
 namespace Mm3dDekui {
 class Core;
+struct NativeQuadQueueMove;
 }
 
 namespace Oot3dNativeGame {
 
 class Mm3dRestorationPort;
+class Mm3dButtonOverlay;
 
 // Majora's Mask 3D's single-screen mode: mm3d-dekui's guest side
 // (titles/mm3d/dekui, ported onto the vanilla v1.1 code.bin) run the way
@@ -43,6 +50,9 @@ class Mm3dSingleScreen {
     // calls into dekui reach this object's Core. Bind before Verify; the port
     // must outlive this object's sites.
     void BindRestoration(Mm3dRestorationPort& restoration);
+    using QuadQueueObserver = std::function<void(std::span<const Mm3dDekui::NativeQuadQueueMove>,
+        oot3d::recomp::a32::MemoryBus&)>;
+    void SetQuadQueueObserver(QuadQueueObserver observer) { mQuadQueueObserver = std::move(observer); }
     // dekui's settings (its presentation.json): the file at path, or
     // dekui's shipped defaults when path is empty or missing. Applied as
     // dekui applies them at startup; call before the guest runs. Returns
@@ -50,12 +60,35 @@ class Mm3dSingleScreen {
     static bool LoadSettings(const std::filesystem::path& path);
     // dekui's difficulty option (1..16), until the F1 menu owns its settings.
     static void SetDamageMultiplier(int multiplier);
+    // The active dekui settings (what LoadSettings/SetDamageMultiplier and a
+    // restored state applied), as presentation.json text: the MM settings a
+    // "state + settings" save carries, next to OoT3D's TopScreen settings.
+    static std::string ActiveSettingsJson();
+    // A restored state: dekui's per-site host state (camera traces, menu,
+    // HUD and banner animation) starts afresh, exactly as when a state is
+    // loaded at startup; settings and registered sites are kept.
+    void ResetHostState();
+    // Restore-reset witness: incremented by each ResetHostState.
+    [[nodiscard]] unsigned HostStateGeneration() const noexcept { return mHostStateGeneration; }
+    // Applies settings text through dekui's own parser and live apply (the
+    // path its options menu uses). Invalid text changes nothing.
+    static bool ApplySettingsJson(std::string_view text, std::string* error);
+    void ConfigureButtonOverlay(const NativeControlConfig&, NativePromptSet);
+    void SubmitButtonOverlayCommandList(uint32_t,uint32_t);
+    void ObserveButtonOverlayDraw(uint64_t);
+    void SelectButtonOverlay(std::span<const uint64_t>);
+    void ResetButtonOverlay();
+    std::vector<oot3d::ui::UiPrimitive> ButtonOverlay(float, bool gameplayHudVisible = true) const;
+    std::map<std::string, uint64_t> ButtonOverlaySummary() const;
 
   private:
     // dekui's headers stay out of the window's translation units.
     std::unique_ptr<Mm3dDekui::Core> mCore;
+    std::unique_ptr<Mm3dButtonOverlay> mButtonOverlay;
     std::map<std::uint32_t, std::uint32_t> mReplacements;
     Mm3dRestorationPort* mRestoration = nullptr;
+    unsigned mHostStateGeneration = 0;
+    QuadQueueObserver mQuadQueueObserver;
 };
 
 } // namespace Oot3dNativeGame

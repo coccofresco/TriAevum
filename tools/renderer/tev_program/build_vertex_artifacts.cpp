@@ -4,6 +4,8 @@
 #include "fast/extension/pica_directional_shadow_caster.h"
 #include "fast/extension/pica_rigid_motion.h"
 #include "fast/renderer/pass_shader_artifact.h"
+#include "fast/renderer/title_program_pack.h"
+#include <cstdlib>
 #include "fast/renderer3ds/pica_surface_lighting_shader.h"
 #include "spirv_pack_file.h"
 #include <shaderc/shaderc.hpp>
@@ -18,15 +20,27 @@ using namespace Oot3dNativeGame;
 static void Check(bool ok, const std::string& message) { if (!ok) throw std::runtime_error(message); }
 
 int main(int argc, char** argv) try {
-    Check(argc >= 3, "usage: build_vertex_artifacts oot3d_native_vertex.spvpack|--check input.shbin [...]");
+    Check(argc >= 3, "usage: build_vertex_artifacts output.spvpack|--check [--translate] [--vertex-only] input.shbin [...]");
     const bool check = std::string_view(argv[1]) == "--check";
+    const bool vertexOnly = std::any_of(argv + 2, argv + argc,
+        [](const char* arg) { return std::string_view(arg) == "--vertex-only"; });
+    std::unique_ptr<Fast::Renderer::TitleProgramPack> checkedTitle;
+    std::vector<Fast::Renderer3ds::PicaVertexArtifact> checkedVertices;
+    std::vector<Fast::Renderer::PassShaderArtifact> checkedPasses;
+    if (check && vertexOnly) {
+        const char* path = std::getenv("TRIAEVUM_TITLE_PROGRAM_PACK");
+        Check(path && *path, "vertex-only checking requires TRIAEVUM_TITLE_PROGRAM_PACK");
+        checkedTitle = std::make_unique<Fast::Renderer::TitleProgramPack>(path);
+        checkedVertices = Fast::Renderer3ds::PicaVertexArtifactsFromPack(checkedTitle->Entries());
+        checkedPasses = Fast::Renderer::PassShaderArtifactsFromPack(checkedTitle->Entries());
+    }
     // Vertex programs first, then the pass programs, each in emission order.
     SpirvPackFile vertexPack, passPack;
     shaderc::Compiler compiler;
     shaderc::CompileOptions options;
     options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_1);
     options.SetOptimizationLevel(shaderc_optimization_level_performance);
-    unsigned modules = 0, passModules = 0;
+    unsigned modules = 0, passModules = 0, vertexEntries = 0, geometryEntries = 0;
     // Pass programs derived from the title's vertex programs (shadow casters,
     // surface lighting): the pass compiler's Vulkan 1.2 target.
     const auto emitPass = [&](const std::string& source) {
@@ -37,7 +51,8 @@ int main(int argc, char** argv) try {
         Check(spirv.GetCompilationStatus() == shaderc_compilation_status_success, spirv.GetErrorMessage());
         if (check) {
             const auto stored = Fast::Renderer::FindPassShaderArtifact(
-                TitlePassArtifacts(), source, Fast::Renderer::SpirvStage::Vertex, {});
+                checkedTitle ? std::span<const Fast::Renderer::PassShaderArtifact>(checkedPasses) : TitlePassArtifacts(),
+                source, Fast::Renderer::SpirvStage::Vertex, {});
             Check(stored.size() == size_t(spirv.cend() - spirv.cbegin()) &&
                       std::equal(stored.begin(), stored.end(), spirv.cbegin()),
                   "missing/stale title pass program");
@@ -53,7 +68,8 @@ int main(int argc, char** argv) try {
         Check(spirv.GetCompilationStatus() == shaderc_compilation_status_success, spirv.GetErrorMessage());
         const auto id = Fast::Renderer3ds::IdentifyPicaShaderSource(source);
         if (check) {
-            const auto artifact = Fast::Renderer3ds::FindPicaVertexArtifact(TitleVertexArtifacts(), source);
+            const auto artifact = Fast::Renderer3ds::FindPicaVertexArtifact(
+                checkedTitle ? std::span<const Fast::Renderer3ds::PicaVertexArtifact>(checkedVertices) : TitleVertexArtifacts(), source);
             Check(!artifact.Spirv.empty(), "missing/stale compiled vertex source identity");
             // Validate the stored module independently of compiler version and layout.
             bool vertexEntry = false;
@@ -74,7 +90,10 @@ int main(int argc, char** argv) try {
         std::cout << "vertex_source=" << id.Id << '\n';
         ++modules;
     };
+    bool translate = false;
     for (int arg = 2; arg < argc; ++arg) {
+        if (std::string_view(argv[arg]) == "--translate") { translate = true; continue; }
+        if (std::string_view(argv[arg]) == "--vertex-only") continue;
         std::ifstream file(argv[arg], std::ios::binary);
         Check(bool(file), "cannot open SHBIN");
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
@@ -99,7 +118,16 @@ int main(int argc, char** argv) try {
             packet->VertexShader.Swizzles[i] = word(p+word(p+16)+8*i);
         for (size_t entry=0; entry<count; ++entry) {
             const size_t d = word(8+4*entry);
-            Check(word(d) == 0x454c5644U && ((word(d+4)>>16)&255) == 0, "not a vertex DVLE");
+            Check(word(d) == 0x454c5644U, "not a DVLE");
+            const unsigned stage = (word(d+4) >> 16) & 255U;
+            Check(stage <= 1, "unknown DVLE stage");
+            if (stage == 1) {
+                Check(vertexOnly, "not a vertex DVLE (explicit --vertex-only scopes the output; geometry remains untranslated)");
+                ++geometryEntries;
+                std::cout << "untranslated_geometry_dvle file=" << argv[arg] << " entry=" << entry << '\n';
+                continue;
+            }
+            ++vertexEntries;
             Oot3dPicaDecodedDrawState state{};
             state.ShaderInterface.VertexMainOffset = word(d+8);
             std::array<uint32_t,16> maps;
@@ -135,7 +163,7 @@ int main(int argc, char** argv) try {
             packet->Registers[0x2ba] = state.ShaderInterface.VertexMainOffset;
             Oot3dPicaGeneratedVertexShader translated, reference;
             std::string error;
-            Check(GenerateOot3dPicaVertexShader(*packet,state,translated,&error,true), error);
+            Check(GenerateOot3dPicaVertexShader(*packet,state,translated,&error,!translate), error);
             Check(GenerateOot3dPicaVertexShader(*packet,state,reference,&error), error);
             Check(translated.Source == reference.Source, "offline/native vertex source mismatch");
             emitVertex(translated.Source);
@@ -172,12 +200,14 @@ int main(int argc, char** argv) try {
                       << " point=" << point.Applied() << '\n';
         }
     }
+    Check(vertexEntries != 0, "no vertex DVLE was compiled");
     if (check) {
-        Check(modules == TitleVertexArtifacts().size(), "compiled vertex family coverage changed");
-        Check(passModules == TitlePassArtifacts().size(), "title pass program coverage changed");
+        Check(modules == (checkedTitle ? checkedVertices.size() : TitleVertexArtifacts().size()), "compiled vertex family coverage changed");
+        Check(passModules == (checkedTitle ? checkedPasses.size() : TitlePassArtifacts().size()), "title pass program coverage changed");
     } else {
         vertexPack.Entries.insert(vertexPack.Entries.end(), passPack.Entries.begin(), passPack.Entries.end());
         vertexPack.Write(argv[1]);
     }
-    std::cout << "native_vertex_artifacts=" << modules << " title_pass_artifacts=" << passModules << '\n';
+    std::cout << "native_vertex_artifacts=" << modules << " title_pass_artifacts=" << passModules
+              << " vertex_dvle=" << vertexEntries << " untranslated_geometry_dvle=" << geometryEntries << '\n';
 } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }

@@ -531,8 +531,47 @@ std::string HoistPicaGlslDeclarations(
     return out;
 }
 
+static std::string PbrEnding(bool nativeBalance) {
+    std::string ending{kPbrShadingEnd};
+    if (nativeBalance) {
+        const std::string scale = "float pbr_native_scale = pica_surface.control.x != 0u || pbr_material.native_control.x != 0u\n"
+            "                ? pica_surface.environment_parameters.x : pica_surface.environment_parameters.y;";
+        const auto at = ending.find(scale);
+        if (at == std::string::npos) throw std::logic_error("missing native GGX gain site");
+        // Per-slot ownership already applied the native gain; Local GGX must
+        // not be multiplied by the scene's (normally zero) native-direct gain.
+        ending.replace(at, scale.size(), "float pbr_native_scale = 1.0;");
+    }
+    return ending;
+}
+
+static constexpr std::string_view kPbrBalancedNativeUnlit = R"glsl(
+    if ((pica_surface.balance_control.z & 1u) != 0u) {
+        // Native TEV uses secondary as a material multiplier. Preserve its
+        // captured Scene LUT response; Local terms still follow their controls.
+        vec3 material_secondary = vec3(0.0);
+        for (uint slot = 0u; slot < lp.control.x; ++slot) {
+            uint i = lp.lights[slot].x;
+            vec4 gains = pica_surface.balance_gains[i];
+            vec3 factor = gains.w >= 4.0 ? pica_native_point_factor(i) :
+                vec3(gains.y) * (gains.w == 0.0 ? pica_surface_shadow(int(i)) : vec3(1.0));
+            material_secondary += balance_specular[slot] * factor;
+        }
+        secondary_fragment_color.rgb = clamp(material_secondary, vec3(0.0), vec3(1.0));
+    }
+)glsl";
+
+static constexpr std::string_view kPbrBalancedNativeAttenuation = R"glsl(
+        float point_spot = 1.0;
+        if ((flags & 32u) != 0u)
+            point_spot = pbr_native_spot(int(8u + i), two_sided, pbr_normal, pbr_tangent,
+                pbr_view, l, pbr_view + l, fragment_uniforms.lighting_spot_direction[i].xyz);
+        direct_attenuation = pica_native_point_attenuation(i, flags, light_distance, point_spot, attenuation);
+)glsl";
+
 PicaPbrUberShader BuildPicaPbrUberShader(
-    const PicaPbrUberControls& controls, bool nativeLighting, bool primitiveIds) {
+    const PicaPbrUberControls& controls, bool nativeLighting, bool primitiveIds,
+    bool nativeBalance, bool preserveNativeUnlit) {
     PicaPbrUberShader result;
     result.Declarations = kPbrDeclarations;
     if (primitiveIds) result.Declarations += PicaPbrSeamShaderLibrary();
@@ -542,8 +581,11 @@ PicaPbrUberShader BuildPicaPbrUberShader(
 
     std::string unlit = "    if (" + on + ") {\n";
     unlit += kPbrUnlitPrimary;
-    if (nativeLighting)
-        unlit += "    if (" + controls.NativeLighting + ") {" + std::string(kPbrNativeUnlit) + "    }\n";
+    if (nativeLighting) {
+        unlit += "    if (" + controls.NativeLighting + ") {" + std::string(kPbrNativeUnlit);
+        if (nativeBalance) unlit += kPbrBalancedNativeUnlit;
+        unlit += "    }\n";
+    }
     unlit += "    pbr_native_coordinate = " + controls.Coordinate + " == 0u ? pica_texcoord0 : " +
              controls.Coordinate + " == 1u ? pica_texcoord1 : pica_texcoord2;\n"
              "    pbr_native_uv = " + controls.Projected +
@@ -571,7 +613,9 @@ PicaPbrUberShader BuildPicaPbrUberShader(
     shading += HoistPicaGlslDeclarations(kPbrShadingMaterial, {"pbr_roughness", "pbr_albedo"}, hoisted);
     if (primitiveIds) shading += "    if (" + controls.Seams + ") {" + std::string(kPbrSeamEmission) + "    }\n";
     shading += kPbrShadingAccumulators;
-    if (nativeLighting) {
+    if (preserveNativeUnlit) {
+        shading += "    bool pbr_baked_reference = false; bool pbr_unlit_reference = true;\n";
+    } else if (nativeLighting) {
         shading += "    bool pbr_baked_reference = !" + controls.NativeLighting +
                    " && pica_surface.baked_reference_up.w != 0.0;\n"
                    "    bool pbr_unlit_reference = pbr_baked_reference || (!" + controls.NativeLighting +
@@ -582,18 +626,26 @@ PicaPbrUberShader BuildPicaPbrUberShader(
     shading += kPbrNativeFlags;
     if (nativeLighting) {
         shading += "    if (" + controls.NativeLighting + ") {";
+        if (nativeBalance) shading += "    pbr_native_direct = true; pbr_native_ambient = true;\n";
         shading += kPbrNativeLoopBegin;
         shading += "        if (" + controls.AttenuationLuts + ") {\n";
         shading += kPbrNativeAttenuation;
         shading += "        }\n";
-        shading += kPbrNativeLoopEnd;
+        if (nativeBalance) {
+            shading += "        float direct_attenuation = attenuation;\n";
+            shading += "        if (" + controls.AttenuationLuts + ") {\n";
+            shading += kPbrBalancedNativeAttenuation;
+            shading += "        }\n";
+        }
+        shading += nativeBalance ? kPbrBalancedNativeLoopEnd : kPbrNativeLoopEnd;
         shading += "    } else {";
         shading += kPbrSurfaceLoop;
         shading += "    }\n";
     } else {
         shading += kPbrSurfaceLoop;
     }
-    shading += HoistPicaGlslDeclarations(kPbrShadingEnd, {"pbr_gi_radiance", "pbr_ao_response", "pbr_reflectivity"}, hoisted);
+    if (preserveNativeUnlit) shading += "    pbr_direct = pbr_albedo; pbr_ambient = vec3(0.0);\n";
+    shading += HoistPicaGlslDeclarations(PbrEnding(nativeBalance), {"pbr_gi_radiance", "pbr_ao_response", "pbr_reflectivity"}, hoisted);
     shading += "    }\n";
     result.ShadingBody = std::move(shading);
     result.DiagnosticOutput = kPbrDiagnostic;
@@ -624,21 +676,7 @@ std::optional<PicaPbrShader> BuildPicaPbrShader(
     result.UnlitInputs = kPbrUnlitPrimary;
     if (options.NativeFragmentLighting) {
         result.UnlitInputs += kPbrNativeUnlit;
-        if (options.NativeBalance) result.UnlitInputs += R"glsl(
-    if ((pica_surface.balance_control.z & 1u) != 0u) {
-        // Native TEV uses secondary as a material multiplier. Preserve its
-        // captured Scene LUT response; Local terms still follow their controls.
-        vec3 material_secondary = vec3(0.0);
-        for (uint slot = 0u; slot < lp.control.x; ++slot) {
-            uint i = lp.lights[slot].x;
-            vec4 gains = pica_surface.balance_gains[i];
-            vec3 factor = gains.w >= 4.0 ? pica_native_point_factor(i) :
-                vec3(gains.y) * (gains.w == 0.0 ? pica_surface_shadow(int(i)) : vec3(1.0));
-            material_secondary += balance_specular[slot] * factor;
-        }
-        secondary_fragment_color.rgb = clamp(material_secondary, vec3(0.0), vec3(1.0));
-    }
-)glsl";
+        if (options.NativeBalance) result.UnlitInputs += kPbrBalancedNativeUnlit;
     }
     const std::string nativeCoordinate = "pica_texcoord" + coordinate;
     result.UnlitInputs += "\n    vec2 pbr_native_coordinate = " + nativeCoordinate + ";\n"
@@ -673,13 +711,7 @@ std::optional<PicaPbrShader> BuildPicaPbrShader(
         if (options.NativeBalance) {
             result.ShadingBody += "        float direct_attenuation = attenuation;\n";
             if (options.NativeAttenuationLuts)
-                result.ShadingBody += R"glsl(
-        float point_spot = 1.0;
-        if ((flags & 32u) != 0u)
-            point_spot = pbr_native_spot(int(8u + i), two_sided, pbr_normal, pbr_tangent,
-                pbr_view, l, pbr_view + l, fragment_uniforms.lighting_spot_direction[i].xyz);
-        direct_attenuation = pica_native_point_attenuation(i, flags, light_distance, point_spot, attenuation);
-)glsl";
+                result.ShadingBody += kPbrBalancedNativeAttenuation;
         }
         result.ShadingBody += options.NativeBalance ? kPbrBalancedNativeLoopEnd : kPbrNativeLoopEnd;
     } else {
@@ -687,17 +719,7 @@ std::optional<PicaPbrShader> BuildPicaPbrShader(
         if (options.PreserveNativeUnlit)
             result.ShadingBody += "    pbr_direct = pbr_albedo; pbr_ambient = vec3(0.0);\n";
     }
-    std::string ending{kPbrShadingEnd};
-    if (options.NativeFragmentLighting && options.NativeBalance) {
-        // Per-slot gains already own native direct. Do not multiply surviving
-        // Local GGX by the scene profile's native-direct (normally zero).
-        const std::string nativeScale = "float pbr_native_scale = pica_surface.control.x != 0u || pbr_material.native_control.x != 0u\n"
-            "                ? pica_surface.environment_parameters.x : pica_surface.environment_parameters.y;";
-        const auto at = ending.find(nativeScale);
-        if (at == std::string::npos) throw std::logic_error("missing native GGX gain site");
-        ending.replace(at, nativeScale.size(), "float pbr_native_scale = 1.0;");
-    }
-    result.ShadingBody += ending;
+    result.ShadingBody += PbrEnding(options.NativeFragmentLighting && options.NativeBalance);
     result.DiagnosticOutput = kPbrDiagnostic;
     return result;
 }

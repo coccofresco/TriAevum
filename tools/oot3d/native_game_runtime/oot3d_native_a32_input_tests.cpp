@@ -140,6 +140,44 @@ void TestRumbleSetting() {
 }
 
 
+// Title gameplay rows (MM3D quick put away) belong to the controls owner: off
+// by default and not written (OoT3D files are unchanged), on survives save and
+// reload, a wrong type or unknown key is refused, a preset never chooses it.
+void TestTitleGameplaySetting() {
+    auto config = NativeControlDefaults();
+    std::string json, error;
+    NativeControlConfig loaded;
+    Require(!config.QuickPutAway, "quick put away starts off");
+    Require(SerializeNativeControlConfigText(config, &json, &error) && json.find("title_gameplay") == std::string::npos,
+            "off is not written");
+    config.QuickPutAway = true;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("\"quick_put_away\": true") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
+            "quick put away survives save and reload");
+    auto document = nlohmann::json::parse(json);
+    document["title_gameplay"]["quick_put_away"] = 1;
+    Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
+                error.find("title_gameplay") != std::string::npos, "a non-boolean value is refused");
+    document["title_gameplay"] = {{"aiming_reticle_unknown", true}};
+    Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error), "an unknown title gameplay row is refused");
+    config.RollDash = true;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("\"roll_dash\": true") != std::string::npos &&
+                json.find("\"quick_put_away\": true") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config && loaded.RollDash,
+            "roll dash survives save and reload beside quick put away");
+    config.QuickPutAway = false;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("quick_put_away") == std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded.RollDash && !loaded.QuickPutAway,
+            "roll dash alone is written alone");
+    for (const auto profile : {NativeControlProfile::Keyboard, NativeControlProfile::KeyboardMouse,
+                               NativeControlProfile::Controller})
+        Require(!NativeControlPreset(profile).QuickPutAway && !NativeControlPreset(profile).RollDash,
+                "a preset chose a title gameplay row");
+}
+
 // The controls owner keeps the "Button prompts" choice and resolves the
 // prompts from the device activity the host poll reports.
 void TestButtonPromptsOwner() {
@@ -221,6 +259,31 @@ void TestButtonPromptsOwner() {
 
 } // namespace
 
+// A timeline's "host_keys" reach the host features (photo camera F6, its
+// WASD/QE, the photo HUD toggle) as the frame's HostKeys and never the guest
+// pad; an unknown name is refused.
+void TestHostKeysTimeline() {
+    const auto path = std::filesystem::temp_directory_path() / "triaevum_host_keys_timeline.json";
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","frame_origin":"run","segments":[
+      {"start_frame":0,"end_frame_exclusive":10,"buttons":["a"]},
+      {"start_frame":10,"end_frame_exclusive":12,"buttons":[],"host_keys":["photo_camera"]},
+      {"start_frame":12,"end_frame_exclusive":20,"buttons":[],"host_keys":["camera_forward","camera_up","hide_hud"]}]})");
+    const auto timeline = NativeA32InputTimeline::LoadFile(path);
+    const auto a = timeline.Sample(0, 5), f6 = timeline.Sample(0, 10), move = timeline.Sample(0, 15),
+               after = timeline.Sample(0, 25);
+    Require(a.HostKeys == 0U && a.Hid.Buttons != 0U, "a segment without host_keys holds none");
+    Require(f6.HostKeys == kNativeHostKeyPhotoCamera && f6.Hid.Buttons == 0U, "photo_camera is F6 and not a pad button");
+    Require(move.HostKeys == (kNativeHostKeyCameraForward | kNativeHostKeyCameraUp | kNativeHostKeyHideHud),
+            "several host keys are held together");
+    Require(after.HostKeys == 0U, "host keys end with their segment");
+    WriteText(path, R"({"schema":"oot3d.native_game.input_timeline.v1","segments":[
+      {"start_frame":0,"end_frame_exclusive":1,"host_keys":["f7"]}]})");
+    bool refused = false;
+    try { (void)NativeA32InputTimeline::LoadFile(path); } catch (const std::exception&) { refused = true; }
+    Require(refused, "an unknown host key is refused");
+    std::filesystem::remove(path);
+}
+
 int main(int argc, char** argv) {
     // Preflight acceptance fixtures with the production parser, before a
     // renderer/device run consumes its one-attempt budget.
@@ -244,6 +307,8 @@ int main(int argc, char** argv) {
     }
     Require(argc == 1, "usage: [--emit-mouse-aim FILE pitch|yaw | --validate-timeline FILE]");
     TestShoulderMappings();
+    TestTitleGameplaySetting();
+    TestHostKeysTimeline();
     TestButtonPromptsOwner();
     TestRumbleSetting();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);

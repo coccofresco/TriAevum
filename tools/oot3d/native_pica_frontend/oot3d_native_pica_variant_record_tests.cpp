@@ -4,6 +4,12 @@
 #include "fast/extension/graphics_settings_persistence.h"
 #include "fast/extension/pica_variant_request_record.h"
 #include "oot3d_native_pica_raw_draw_record.h"
+#include "oot3d_native_pica_fragment_shader_gen.h"
+#include "fast/extension/pica_uber_effect_program.h"
+#include "fast/extension/pica_uber_fragment_binaries.h"
+#include "fast/extension/pica_nri_shader_contract.h"
+#include "fast/renderer3ds/pica_fragment_balance.h"
+#include <set>
 
 #include <algorithm>
 #include <filesystem>
@@ -49,6 +55,12 @@ PicaShaderPipelineRequest Request() {
     request.ReflectionProfile->Reflectivity = 0.375F;
     request.ReflectionProfile->Roughness = 0.1F;
     request.SurfaceLightingAvailable = true;
+    request.FragmentLightingOperand = true;
+    request.FragmentLightingBalance = true;
+    request.NativeFragmentLitShadows = true;
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    request.ShadowProbe = true;
+#endif
     request.Pbr.TextureSlot = 2;
     request.Pbr.SeamSoftening = true;
     request.ReliefTexture = 1;
@@ -77,6 +89,12 @@ void RequestRoundTrip() {
                 decoded.SettingsRevision == 17,
             "request header");
     Require(decoded.Witness == witness, "witness round trip");
+    Require(decoded.HasFragmentContext && decoded.Request.FragmentLightingOperand &&
+                decoded.Request.FragmentLightingBalance && decoded.Request.NativeFragmentLitShadows,
+            "fragment context round trip");
+#if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
+    Require(decoded.Request.ShadowProbe, "probe context round trip");
+#endif
     Require(decoded.Request.ReflectionProfile.has_value() &&
                 decoded.Request.ReflectionProfile->Roughness == 0.1F,
             "reflection profile bits");
@@ -86,6 +104,24 @@ void RequestRoundTrip() {
     Json broken = encoded;
     broken["vertex_key"] = "not hex";
     Require(!DecodePicaVariantRequest(broken, decoded), "invalid key rejected");
+    broken = encoded;
+    broken["fragment_context"].erase("balance");
+    Require(!DecodePicaVariantRequest(broken, decoded), "partial context rejected");
+    broken = encoded;
+    broken.erase("fragment_context");
+    Require(DecodePicaVariantRequest(broken, decoded) && !decoded.HasFragmentContext &&
+                !decoded.Request.FragmentLightingOperand && !decoded.Request.FragmentLightingBalance &&
+                !decoded.Request.NativeFragmentLitShadows, "legacy context explicitly absent");
+    for (unsigned bits = 0; bits < 8; ++bits) {
+        auto varied = request;
+        varied.FragmentLightingOperand = (bits & 1) != 0;
+        varied.FragmentLightingBalance = (bits & 2) != 0;
+        varied.NativeFragmentLitShadows = (bits & 4) != 0;
+        const auto row = EncodePicaVariantRequest(1, 1, 1, varied, witness);
+        Require(DecodePicaVariantRequest(row, decoded) &&
+                    EncodePicaVariantRequest(1, 1, 1, decoded.Request, decoded.Witness) == row,
+                "all fragment context combinations round trip");
+    }
 }
 
 void EffectsRoundTrip() {
@@ -123,11 +159,21 @@ void RecorderDeduplicates(const std::filesystem::path& directory) {
         recorder.Observe(2, request, effects, {}, 1, result);
         recorder.Observe(2, request, effects, {}, 2, result);
         Require(recorder.RequestCount() == 3, "distinct requests counted once");
+        // Even when two requests produce the same source, their context is
+        // distinct and must survive for regeneration by a future generator.
+        for (unsigned bits = 0; bits < 8; ++bits) {
+            auto varied = request;
+            varied.FragmentLightingOperand = (bits & 1) != 0;
+            varied.FragmentLightingBalance = (bits & 2) != 0;
+            varied.NativeFragmentLitShadows = (bits & 4) != 0;
+            recorder.Observe(2, varied, effects, {}, 2, result);
+        }
+        Require(recorder.RequestCount() == 10, "context participates in deduplication");
     }
     PicaVariantRequestSession session;
     std::string error;
     Require(LoadPicaVariantRequests(path, session, &error), "session loads");
-    Require(session.Requests.size() == 3 && session.Effects.size() == 1, "session contents");
+    Require(session.Requests.size() == 10 && session.Effects.size() == 1, "session contents");
     Require(session.Effects.begin()->second.SurfaceLighting == SurfaceLightingMode::Native, "session effects");
     Require(session.Requests.back().SettingsRevision == 2, "revision recorded");
 }
@@ -141,6 +187,8 @@ Oot3dNativeGame::Oot3dPicaRawDraw RawDraw(uint64_t id) {
     packet.Indexed = true;
     packet.Composition.SourcePc = 0x002E2CD0;
     packet.Composition.IsolatedLighting = true;
+    packet.Composition.ExcludeFromPresentationFxaa = true;
+    packet.Composition.PreserveNativeUiSampling = true;
     for (size_t i = 0; i < packet.Registers.size(); ++i) packet.Registers[i] = static_cast<uint32_t>(i * 2654435761U);
     packet.VertexShader.ProgramWordCount = 3;
     packet.VertexShader.Program[0] = 0x4e000000;
@@ -186,6 +234,15 @@ void RawDrawRoundTrip(const std::filesystem::path& directory) {
             return id;
         });
     Require(reencoded == encoded && second == resources, "raw draw re-encodes identically");
+    Require(decoded.Packet.Composition.ExcludeFromPresentationFxaa &&
+            decoded.Packet.Composition.PreserveNativeUiSampling, "overlay contracts round trip");
+    auto legacy = encoded;
+    legacy["composition"].erase("exclude_presentation_fxaa");
+    legacy["composition"].erase("preserve_native_ui_sampling");
+    Require(Oot3dNativeGame::DecodeOot3dPicaRawDraw(legacy, resources, decoded, &error) &&
+            !decoded.Packet.Composition.ExcludeFromPresentationFxaa &&
+            !decoded.Packet.Composition.PreserveNativeUiSampling,
+            "legacy records do not opt in to the overlay FXAA contract");
 
     const auto path = directory / "raw-draws.jsonl";
     {
@@ -201,6 +258,94 @@ void RawDrawRoundTrip(const std::filesystem::path& directory) {
     Require(session.ParametricTev && !session.UberFragments && session.Draws.size() == 2, "raw session header");
     Require(session.Draws[0].Packet.VertexShader.Program[2] == 0x88000000, "program resource restored");
 }
+void NativePbrFamily() {
+    using namespace Oot3dNativeGame;
+    size_t covered = 0;
+    for (auto lighting : kOot3dPicaParametricLightings)
+    for (bool integerTexture : {false, true}) {
+        Oot3dPicaGeneratedFragmentShader shader;
+        std::string error;
+        Require(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture, shader, &error), "GGX base");
+        std::set<uint8_t> keys;
+        for (bool balanced : {false, true}) {
+            if (balanced && !shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
+            for (bool temporal : {false, true})
+            for (bool primitives : {false, true}) {
+                PicaEffectDecisions d;
+                d.Set(PicaEffectDecisions::SurfaceLighting);
+                d.Set(PicaEffectDecisions::Pbr);
+                d.PbrNativeLighting = balanced;
+                d.PbrNativeBalance = d.FragmentLightingBalance = balanced;
+                d.PbrNativeUnlit = !balanced;
+                const auto r = WithPicaUberLightingPolicy({shader.Source, shader.Hooks, temporal, true, primitives}, d);
+                Require(keys.insert(PicaUberEffectVariantKey(r)).second, "distinct GGX structural keys");
+                Require(PicaUberEffectSupports(d, r), "GGX native policy supported");
+                const auto source = BuildPicaUberEffectProgram(r);
+                const auto capture = std::string(Fast::Renderer3ds::kPicaFragmentBalanceCaptureDiffuse);
+                const auto captureAt = source.find(capture);
+                Require((captureAt != std::string::npos) == balanced,
+                        "only balanced GGX captures native secondary material response");
+                if (balanced) {
+                    Require(source.find(capture, captureAt + capture.size()) == std::string::npos,
+                            "GGX capture not duplicated by native alpha replay");
+                    Require(source.find("material_secondary += balance_specular[slot] * factor;") != std::string::npos,
+                            "GGX preserves native secondary as a material factor");
+                    Require(source.find("float direct_attenuation = attenuation;") != std::string::npos &&
+                            source.find("direct_attenuation = pica_native_point_attenuation(") != std::string::npos,
+                            "GGX converted point uses the maintained attenuation path");
+                }
+                Require(source.find(balanced ? "float pbr_native_scale = 1.0;" :
+                    "pbr_direct = pbr_albedo; pbr_ambient = vec3(0.0);") != std::string::npos, "shared specialized GGX ownership equations");
+                const auto nri = BuildPicaNriFragmentShaderVariant(source);
+                Require(nri.Applied && !Fast::Renderer3ds::FindPicaFragmentArtifact(UberFragmentArtifacts(), nri.Source, true).empty(), "GGX program precompiled");
+                d.PbrNativeLighting = !balanced;
+                Require(!PicaUberEffectSupports(d, r), "incompatible GGX lighting rejected");
+                ++covered;
+            }
+        }
+    }
+    Require(covered == 40, "balanced/unlit GGX family coverage");
+}
+
+void NativeLightingFamily() {
+    using namespace Oot3dNativeGame;
+    for (auto lighting : kOot3dPicaParametricLightings)
+    for (bool integerTexture : {false, true}) {
+        Oot3dPicaGeneratedFragmentShader shader;
+        std::string error;
+        Require(GenerateOot3dPicaParametricBaseFragmentShader(lighting, integerTexture, shader, &error), "parametric base");
+        if (!shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
+        std::set<uint8_t> keys;
+        for (bool temporal : {false, true})
+        for (bool primitives : {false, true})
+        for (unsigned policy : {1U, 3U, 4U, 5U, 7U}) {
+            PicaEffectDecisions decisions;
+            decisions.Set(PicaEffectDecisions::SurfaceLighting);
+            decisions.FragmentLightingOperand = (policy & 1) != 0;
+            decisions.FragmentLightingBalance = (policy & 2) != 0;
+            decisions.NativeFragmentLitShadows = (policy & 4) != 0;
+            PicaUberEffectProgramRequest legacy{shader.Source, shader.Hooks, temporal, true, primitives};
+            Require(!PicaUberEffectSupports(decisions, legacy), "legacy must reject native uniform policy");
+            const auto request = WithPicaUberLightingPolicy(legacy, decisions);
+            Require(keys.insert(PicaUberEffectVariantKey(request)).second, "all native cache policies distinct");
+            Require(PicaUberEffectSupports(decisions, request), "native family covers exact decisions");
+            const auto source = BuildPicaUberEffectProgram(request);
+            const auto capture = std::string(Fast::Renderer3ds::kPicaFragmentBalanceCaptureDiffuse);
+            Require((source.find(capture) != std::string::npos) == decisions.FragmentLightingBalance, "capture only in balanced programs");
+            if (decisions.FragmentLightingBalance)
+                Require(source.find(capture, source.find(capture) + capture.size()) == std::string::npos, "capture never duplicated by native alpha replay");
+            const auto nri = BuildPicaNriFragmentShaderVariant(source);
+            Require(nri.Applied && !Fast::Renderer3ds::FindPicaFragmentArtifact(UberFragmentArtifacts(), nri.Source, true).empty(), "native family is precompiled");
+            auto wrong = request;
+            wrong.NativeFragmentLitShadows = !wrong.NativeFragmentLitShadows;
+            Require(!PicaUberEffectSupports(decisions, wrong), "wrong policy rejected even when equations coincide");
+            wrong = request;
+            wrong.SurfaceInputs = false;
+            Require(!PicaUberEffectSupports(decisions, wrong) && BuildPicaUberEffectProgram(wrong).empty(), "native family requires surface interface");
+        }
+        Require(keys.size() == 20, "native interface/policy cache coverage");
+    }
+}
 } // namespace
 
 int main() {
@@ -208,6 +353,8 @@ int main() {
     try {
         std::filesystem::remove_all(directory);
         std::filesystem::create_directories(directory);
+        NativeLightingFamily();
+        NativePbrFamily();
         RequestRoundTrip();
         EffectsRoundTrip();
         RecorderDeduplicates(directory);

@@ -361,7 +361,7 @@ void main() {
         // The shadow stub controls visibility only (atlas sampling has its own
         // tests); it proves the dynamic term, not ambient, reads that value.
         struct NativePointCase { PicaBalancedSurfaceUniforms Lighting; Vec4 Visibility{1,0,0,0}; };
-        std::array<NativePointCase, 5> nativePoints{};
+        std::array<NativePointCase, 12> nativePoints{};
         for (size_t i = 0; i < nativePoints.size(); ++i) {
             PicaFragmentLightingLayout layout;
             layout.SchemaVersion = kPicaFragmentLightingLayoutSchemaVersion;
@@ -375,7 +375,13 @@ void main() {
             points->Lights[0].ReplacesNativeLocal = true;
             binding.ScenePoints = points;
             PicaEnvironmentLighting settings;
-            if (i == 4) settings.PointLights[2].Enabled = false;
+            if (i >= 4) {
+                // Every group owns Off and zero, without extinguishing ambient.
+                const uint32_t group = uint32_t((i - 4) / 2);
+                points->Lights[0].Group = group;
+                if (i % 2 == 0) settings.PointLights[group].Enabled = false;
+                else settings.PointLights[group].Intensity = 0;
+            }
             const auto replacement = BuildPicaNativePointReplacement(true, layout, binding, settings, {});
             auto& entry = nativePoints[i];
             if (replacement) entry.Lighting.Balance = replacement->Balance;
@@ -439,7 +445,7 @@ void main() {
         std::array<Vec4, nativePoints.size()> nativeOutput{};
         RunComputeTest(nativeShader, std::as_bytes(std::span(nativePoints)),
             std::as_writable_bytes(std::span(nativeOutput)), nativePoints.size());
-        const std::array<float, nativePoints.size()> nativeExpected{1.F,.3F,.7F,.3F,1};
+        const std::array<float, nativePoints.size()> nativeExpected{1.F,.3F,.7F,.3F,.3F,.3F,.3F,.3F,.3F,.3F,.3F,.3F};
         for (size_t i=0;i<nativePoints.size();++i) {
             const Vec4 expectedNative{nativeExpected[i],.3F,.3F,.37F};
             for (size_t c=0;c<4;++c)

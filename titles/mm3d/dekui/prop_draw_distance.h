@@ -15,7 +15,7 @@ inline bool Eligible(U32 header) {
     return (category==6&&(id==0x65||id==0x10a||id==0x78||id==0x7c))||(category==1&&id==0x11b);
 }
 template<class M> U32 Apply(M& m,U32 actor,U32 original,float factor) {
-    if(ActorDrawDistance::Clamp(factor)==1.f||actor<0x100000||actor>0x3ffffe00)return original;
+    if(ActorDrawDistance::result_policy_owned.load()||ActorDrawDistance::Clamp(factor)==1.f||actor<0x100000||actor>0x3ffffe00)return original;
     const auto header=m.Read(actor);
     return header&&Eligible(*header)?ActorDrawDistance::ScaleDistance(original,factor):original;
 }

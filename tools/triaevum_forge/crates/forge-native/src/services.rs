@@ -160,6 +160,7 @@ pub struct DeviceJob {
     pub root: PathBuf,
     pub stage: PathBuf,
     pub pack: PathBuf,
+    pub title_program_pack: Option<PathBuf>,
     pub cache_directory: PathBuf,
     pub adapter: u32,
     pub manifests: Vec<PathBuf>,
@@ -191,6 +192,9 @@ impl DeviceJob {
             "--adapter".into(),
             self.adapter.to_string().into(),
         ];
+        if let Some(pack) = &self.title_program_pack {
+            arguments.extend(["--title-program-pack".into(), pack.clone().into()]);
+        }
         for manifest in &self.manifests {
             arguments.extend(["--manifest".into(), manifest.clone().into()]);
         }

@@ -131,6 +131,11 @@ struct PicaCompositionAttribution {
     // caster changes its content version and refreshes what it covers. Only
     // set together with NativeActorGeometry and a nonzero NativeActorIdentity.
     bool StaticShadowCacheEligible = false;
+    // Opt-in title-proven overlay: run FXAA at the pre-overlay boundary,
+    // never on the display containing these pixels. Unknown boundaries fail
+    // closed (no presentation FXAA), not by filtering the overlay anyway.
+    bool ExcludeFromPresentationFxaa = false;
+    bool PreserveNativeUiSampling = false;
 
     bool operator==(const PicaCompositionAttribution&) const = default;
 };

@@ -10,8 +10,8 @@
 #include <cstring>
 
 namespace Oot3dNativeGame {
-std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily() {
-    return TitleVertexArtifacts();
+std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily(bool additionalOnly) {
+    return additionalOnly ? AdditionalTitleVertexArtifacts() : TitleVertexArtifacts();
 }
 std::span<const Fast::Renderer::PassShaderArtifact> NativePicaTitlePassPrograms() {
     return TitlePassArtifacts();
@@ -270,6 +270,8 @@ bool WithOot3dPicaVulkanDrawView(
                 : Oot3dNativeGame::Oot3dStaticShadowActorPolicy(),
             plan.Composition.NativeActorGeometry,
             plan.Composition.NativeActorIdentity),
+        plan.Composition.ExcludeFromPresentationFxaa,
+        plan.Composition.PreserveNativeUiSampling,
     };
     draw.LightBinding = overrides != nullptr && overrides->LightBinding != nullptr
         ? *overrides->LightBinding : plan.LightBinding;

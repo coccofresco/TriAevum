@@ -74,6 +74,7 @@ class Mm3dNativeA32LightingProbe {
     uint64_t mSceneLightFrames = 0;
     uint32_t mSnapshotPlay = 0, mSnapshotFrame = 0;
     uint16_t mSnapshotScene = 0;
+    std::optional<int32_t> mSnapshotDay;
     Fast::Renderer3ds::PicaSceneLightSelector mSelector;
     std::shared_ptr<const Fast::Renderer3ds::PicaEmitterCatalog> mEmitterCatalog;
     bool mEmitterCatalogResolved = false;

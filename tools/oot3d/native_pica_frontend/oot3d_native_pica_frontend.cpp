@@ -676,15 +676,35 @@ bool Oot3dNativePicaFrontend::SubmitGspCommand(
                               Oot3dPicaCompositionLayer::Ui,
                               Oot3dPicaCompositionProvenance::NativeUiLifecycle, 0U, 0U}
                         : Oot3dPicaCompositionAttribution{};
-                if (composition.TemporalIdentity.Available()) {
-                    const uint64_t address = uint64_t{commandListAddress} + uint64_t{offsetWords} * 4U;
-                    if (metadata == nullptr || composition.TemporalPacketBeginAddress == 0 ||
+                if (composition.TemporalCommandBufferIdentity) {
+                    const uint64_t address = uint64_t{bufferAddress} + uint64_t{offsetWords} * 4U;
+                    // A source-buffer address is a persistent part only under
+                    // the title's explicit model contract. Direct writes to a
+                    // frame arena are not parts. Repeated calls to the same
+                    // source produce duplicate identities (rejected downstream),
+                    // never invented occurrence-based matches.
+                    if (metadata && composition.TemporalIdentity.Available() &&
+                        !jumpCallers.empty() && bufferAddress != commandListAddress &&
+                        spanAt(address) != metadata) {
+                        composition.TemporalIdentity.Part = bufferAddress;
+                        composition.TemporalIdentity.Slot += uint64_t{offsetWords} * 4U;
+                    } else {
+                        composition.TemporalIdentity = {};
+                    }
+                } else if (composition.TemporalIdentity.Available()) {
+                    const uint64_t address = uint64_t{composition.TemporalPacketSourceRelative
+                        ? bufferAddress : commandListAddress} + uint64_t{offsetWords} * 4U;
+                    if (metadata == nullptr ||
+                        (composition.TemporalPacketSourceRelative && spanAt(address) != metadata) ||
+                        composition.TemporalPacketBeginAddress == 0 ||
                         address < composition.TemporalPacketBeginAddress || address >= metadata->EndAddress)
                         composition.TemporalIdentity = {};
                     else
                         composition.TemporalIdentity.Slot += address - composition.TemporalPacketBeginAddress;
                 }
                 composition.TemporalPacketBeginAddress = 0;
+                composition.TemporalCommandBufferIdentity = false;
+                composition.TemporalPacketSourceRelative = false;
                 auto domain = mCommandListCompositionDomain;
                 switch (composition.Layer) {
                     case Oot3dPicaCompositionLayer::OpaqueWorld:

@@ -590,6 +590,10 @@ bool Settings::LoadFromString(std::string_view text) {
 }
 bool Settings::Save(const std::filesystem::path& path) const {
     if(save_blocked) return false;
+    return AtomicSave(path, SaveToString());
+}
+
+std::string Settings::SaveToString() const {
     Json object{{"version", 1}, {"accurate_hle_audio",hle_audio_accuracy==2}, {"hle_audio_accuracy",hle_audio_accuracy}, {"hle_audio_mode_version",1}, {"damage_multiplier",damage_multiplier}, {"disable_heart_drops",disable_heart_drops}, {"disable_rupee_drops",disable_rupee_drops}, {"disable_fairy_drops",disable_fairy_drops}, {"disable_magic_drops",disable_magic_drops}, {"disable_ammo_pickups",disable_ammo_pickups}, {"lose_rupees_on_death",lose_rupees_on_death}, {"world_ends_on_death",world_ends_on_death}, {"advance_six_hours_on_death",advance_six_hours_on_death}, {"fast_time",fast_time}, {"double_prices",double_prices}, {"price_multiplier",price_multiplier}, {"inventory_panel_x",inventory_menu.x}, {"inventory_panel_y",inventory_menu.y}, {"inventory_panel_scale",inventory_menu.scale}, {"dialogue_scale",dialogue_scale}, {"dialogue_y",dialogue_y}, {"dialogue_background_width",dialogue_background_width}, {"dialogue_indicator_x",dialogue_indicator_x}, {"dialogue_indicator_y",dialogue_indicator_y}, {"indicator", indicator}, {"show_performance", show_performance}, {"show_startup_settings_hint", show_startup_settings_hint},
         {"scale", scale}, {"opacity", opacity}, {"x", x}, {"y", y},
         {"single_screen_text", single_screen_text}, {"stick_click_controls", stick_click_controls}, {"fix_bloom", fix_bloom}, {"disable_fog", disable_fog},
@@ -854,7 +858,7 @@ bool Settings::Save(const std::filesystem::path& path) const {
             {"textures",double(d.textures)}, {"blend",double(d.blend)}, {"depth",double(d.depth)}});
     }
     object["fullscreen_draws"]=saved_draws;
-    return AtomicSave(path, object.dump(4) + "\n");
+    return object.dump(4) + "\n";
 }
 
 void ApplySettings(const Settings& settings) {

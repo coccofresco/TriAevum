@@ -162,7 +162,7 @@ class TouchOverlayInput : Native3dsInputTarget {
         val layout = parent ?: return
         if (editing == (editBar != null)) return
         if (editing) {
-            NativeInputBridge.releaseAll()
+            view.cancelTouches()
             showControls()
             val done = Button(host).apply {
                 text = "Done"
@@ -206,7 +206,7 @@ class TouchOverlayInput : Native3dsInputTarget {
         val view = overlay ?: return
         if (hiddenForController || editBar != null || preferences()?.getBoolean(HIDE_WITH_CONTROLLER, true) != true) return
         hiddenForController = true
-        releaseAll()
+        view.cancelTouches()
         view.visibility = View.INVISIBLE
         // Without anchors the game draws its whole HUD again.
         controlBoundsCleared()

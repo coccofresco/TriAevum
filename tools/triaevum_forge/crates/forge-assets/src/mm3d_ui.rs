@@ -118,8 +118,25 @@ pub fn verify_layer(layer: &Path, cancel: &CancelToken) -> Result<()> {
 }
 
 /// Called by the normal install worker after input verification. OoT is inert.
-/// The Restoration input is supplied locally in D/imports/mm3d-restoration;
-/// it is never fetched, bundled or inferred from an unrelated title.
+/// Project Restoration is part of the MM3D product (owner decision
+/// 2026-11-08: dekui and Restoration are integrated product code, NOT Forge
+/// inputs): its romfs members are read from the MM3D package's own
+/// resources (RESTORATION_RESOURCES) and fingerprint-verified; the user's
+/// only input is the game dump. Never fetched or inferred from another title.
+pub const RESTORATION_RESOURCES: &str = "resources/mm3d/project-restoration";
+
+/// Where a Restoration member named by the fingerprint manifest (its own
+/// `romfs/...` layout) lives inside the package: under
+/// RESTORATION_RESOURCES without the `romfs` component, which the release
+/// policy forbids in a public package (forbidden_path_components).
+pub fn restoration_package_member(input: &str) -> Option<String> {
+    let relative = input.strip_prefix("romfs/")?;
+    if relative.is_empty() || relative.split('/').any(|c| c.is_empty() || c == "." || c == "..") {
+        return None;
+    }
+    Some(format!("{RESTORATION_RESOURCES}/{relative}"))
+}
+
 pub fn prepare(
     package: &Path,
     data_root: &Path,
@@ -134,7 +151,7 @@ pub fn prepare(
     }
     cancel.check()?;
     let manifest: Value = serde_json::from_str(FINGERPRINTS).map_err(|e| invalid(e.to_string()))?;
-    let source = data_root.join("imports/mm3d-restoration");
+    let source = package.join(RESTORATION_RESOURCES);
     let original_play = native(romfs_path, "layout/Joker.Main.Play.gar")?;
     if sha256_hex(&original_play) != text(&manifest, "original_action_sha256")? {
         return Err(invalid("Unsupported MM original action archive"));
@@ -151,7 +168,9 @@ pub fn prepare(
         let bytes = if text(entry, "input_root")? == "original" {
             native(romfs_path, &input[6..])?
         } else {
-            read(&source.join(input)).map_err(|_|invalid(format!("MM3D needs your local Project Restoration files at {}. Import the original folder before preparing.",source.display())))?
+            let member = restoration_package_member(input)
+                .ok_or_else(|| invalid(format!("Invalid MM preparation input {input}")))?;
+            read(&package.join(member)).map_err(|_|invalid(format!("The MM3D package is missing its bundled Project Restoration resources at {}; reinstall the package.",source.display())))?
         };
         if sha256_hex(&bytes) != text(entry, "input_sha256")? {
             return Err(invalid(format!("Unsupported MM preparation input {input}")));
@@ -268,32 +287,60 @@ pub fn prepare(
 mod tests {
     use super::*;
     #[test]
+    fn restoration_is_a_package_resource_not_a_user_input() {
+        // The Restoration members come from the package, never from the
+        // user's data root (the dump is the only user input).
+        let package = Path::new("P");
+        assert_eq!(package.join(RESTORATION_RESOURCES), Path::new("P/resources/mm3d/project-restoration"));
+        assert!(!RESTORATION_RESOURCES.starts_with("imports"));
+    }
+    /// Every Restoration member the preparation reads maps to a package path
+    /// the release policy admits: no forbidden component, no forbidden
+    /// extension (lists checked against release_policy.json below).
+    #[test]
+    fn restoration_members_are_policy_clean_package_paths() {
+        let manifest: Value = serde_json::from_str(FINGERPRINTS).unwrap();
+        let policy_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../triaevum_release/release_policy.json");
+        let policy: Value = serde_json::from_slice(&std::fs::read(policy_path).unwrap()).unwrap();
+        let list = |key: &str| -> Vec<String> {
+            policy[key].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_owned()).collect()
+        };
+        let (components, extensions) = (list("forbidden_path_components"), list("forbidden_extensions"));
+        let mut used = 0;
+        for entry in manifest["files"].as_array().unwrap() {
+            let output = entry["output"].as_str().unwrap();
+            if entry["input_root"] != "restoration" || !output.starts_with("romfs/") || output.contains(".mm3d-") {
+                continue;
+            }
+            let member = restoration_package_member(entry["input"].as_str().unwrap()).unwrap();
+            assert!(member.starts_with("resources/mm3d/project-restoration/layout/"), "{member}");
+            assert!(!member.split('/').any(|c| components.iter().any(|f| f == c)), "{member}");
+            assert!(!extensions.iter().any(|e| member.ends_with(e.as_str())), "{member}");
+            used += 1;
+        }
+        assert_eq!(used, 3, "Joker.Main.New.gar, Joker.Main.Play.gar, Joker.mfpj");
+        // Negative: the raw manifest path would violate the policy, and
+        // non-romfs or escaping inputs are refused.
+        assert!(components.iter().any(|c| c == "romfs"));
+        assert_eq!(restoration_package_member("code.bps"), None);
+        assert_eq!(restoration_package_member("romfs/../code.bps"), None);
+        assert_eq!(restoration_package_member("romfs/"), None);
+    }
+    #[test]
     fn other_titles_are_inert() {
         let p = Path::new("must-not-be-read-or-created");
         assert!(prepare(p, p, p, "oot3d", "", &mut |_, _| {}, &CancelToken::new()).unwrap().is_none());
     }
     #[test]
-    #[ignore = "requires explicitly supplied user MM code/RomFS and Restoration inputs"]
+    #[ignore = "requires an MM3D package (bundled Restoration resources) and the user MM RomFS"]
     fn local_atomic_preparation_contract() {
         let package = PathBuf::from(std::env::var_os("TRIAEVUM_MM_TEST_PACKAGE").expect("package"));
         let romfs = PathBuf::from(std::env::var_os("TRIAEVUM_MM_TEST_ROMFS").expect("RomFS"));
-        let source = PathBuf::from(std::env::var_os("TRIAEVUM_MM_TEST_SOURCE").expect("Restoration source"));
         let temp = tempfile::tempdir().unwrap();
         let data = temp.path();
         let cancel = CancelToken::new();
-        let manifest: Value = serde_json::from_str(FINGERPRINTS).unwrap();
-        for row in manifest["files"].as_array().unwrap() {
-            if row["input_root"] == "original"
-                || !row["output"].as_str().unwrap().starts_with("romfs/")
-                || row["output"].as_str().unwrap().contains(".mm3d-")
-            {
-                continue;
-            }
-            let name = row["input"].as_str().unwrap();
-            let to = data.join("imports/mm3d-restoration").join(name);
-            std::fs::create_dir_all(to.parent().unwrap()).unwrap();
-            std::fs::copy(source.join(name), to).unwrap();
-        }
+        // No user Restoration import exists: the package resources are used.
+        assert!(!data.join("imports/mm3d-restoration").exists());
         let hash = digest(&romfs, &cancel).unwrap();
         let build = || prepare(&package, data, &romfs, CODE, &hash, &mut |_, _| {}, &cancel).unwrap().unwrap();
         let first = build();

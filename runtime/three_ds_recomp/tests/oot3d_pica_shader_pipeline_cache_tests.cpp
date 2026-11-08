@@ -2525,7 +2525,7 @@ TEST(PicaNativePointReplacement, IndependentEmissionNeedsSeparatePositiveProof) 
     point.SourceIdentity=0xA500000000001234ULL;
     f.Binding.Sources[0].SourceIdentity=0;EXPECT_FALSE(resolve()); // unknown native point
     f.Binding.Sources[0].SourceIdentity=1;
-    f.Profile.PointLights[3].Enabled=false;EXPECT_FALSE(resolve()); // Off is native
+    f.Profile.PointLights[3].Enabled=false;EXPECT_FALSE(resolve()); // no matching native term to remove
 }
 
 TEST(PicaNativePointReplacement, ExactHardwareSlotAndTitleProofOwnReplacement) {
@@ -2577,7 +2577,11 @@ TEST(PicaNativePointReplacement, ExactHardwareSlotAndTitleProofOwnReplacement) {
     EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout)); // not an unmatched source
     f.Binding.Sources[0].SourceIdentity = point.SourceIdentity;
     f.Profile.PointLights[2].Enabled = false;
-    EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
+    result = resolve(f.Binding, f.Profile, f.Layout);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->Points.Count, 0U);
+    EXPECT_EQ(result->ReplacedSlots, 1U);
+    EXPECT_EQ(result->Balance.Gains[0], (std::array<float,4>{0,0,1,0}));
     f.Profile.PointLights[2].Enabled = true;
     point.ReplacesNativeLocal = false;
     EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout)); // legacy title is inert
@@ -2594,6 +2598,61 @@ TEST(PicaNativePointReplacement, ExactHardwareSlotAndTitleProofOwnReplacement) {
     EXPECT_FALSE(BuildPicaNativePointReplacement(false, f.Layout, f.Binding, f.Profile, {}));
     points->Count = 33;
     EXPECT_FALSE(resolve(f.Binding, f.Profile, f.Layout));
+}
+
+TEST(PicaNativePointReplacement, PointGroupsIndependentlyOwnOffAndZeroWithOrWithoutProfile) {
+    using namespace Fast::Renderer3ds;
+    FragmentLitNightFixture f;
+    auto points = std::make_shared<PicaScenePointLights>();
+    points->Count = 4;
+    f.Binding.ScenePoints = points;
+    f.Binding.SceneDirectionals.reset();
+    f.Layout.ActiveLightCount = 4;
+    f.Layout.LightPermutation = {0,1,2,3};
+    for (uint32_t i = 0; i < 4; ++i) {
+        f.Layout.Lights[i].Directional = false;
+        f.Binding.Sources[i] = f.Binding.Sources[0];
+        f.Binding.Sources[i].SourceIdentity = 100 + i;
+        auto& p = points->Lights[i];
+        p.SourceIdentity = 100 + i; p.Radius = 250; p.Color = {1,.7F,.2F};
+        p.Group = i; p.ReplacesNativeLocal = true;
+    }
+    for (bool profile : {false, true}) for (bool zero : {false, true})
+        for (uint32_t enabled = 0; enabled < 16; ++enabled) {
+            f.Profile.Enabled = profile;
+            f.Profile.NativeLocalStrength = 0; // not a second owner of converted light
+            for (uint32_t i = 0; i < 4; ++i) {
+                auto& s = f.Profile.PointLights[i];
+                s.Enabled = zero || (enabled & (1U << i));
+                s.Intensity = zero && !(enabled & (1U << i)) ? 0 : 1;
+            }
+            const auto r = BuildPicaNativePointReplacement(true,f.Layout,f.Binding,f.Profile,{});
+            ASSERT_TRUE(r);
+            EXPECT_EQ(r->ReplacedSlots,15U);
+            EXPECT_FLOAT_EQ(r->Balance.Parameters[0],1);
+            uint32_t row = 0;
+            for (uint32_t i = 0; i < 4; ++i) {
+                if (enabled & (1U << i)) {
+                    EXPECT_EQ(r->Points.Lights[row].Group,i);
+                    EXPECT_EQ(r->Balance.Gains[i],(std::array<float,4>{1,1,1,float(4+row)}));
+                    ++row;
+                } else EXPECT_EQ(r->Balance.Gains[i],(std::array<float,4>{0,0,1,0}));
+            }
+            EXPECT_EQ(r->Points.Count,row);
+        }
+    // Off never expands proof: unknown owner, duplicate identity, or an
+    // untracked hardware slot cannot be silently extinguished.
+    for (auto& s : f.Profile.PointLights) s.Enabled = false;
+    f.Binding.Sources[1].Origin = PicaNativeLightOrigin::Unknown;
+    auto r = BuildPicaNativePointReplacement(true,f.Layout,f.Binding,f.Profile,{});
+    ASSERT_TRUE(r); EXPECT_EQ(r->ReplacedSlots,13U);
+    EXPECT_EQ(r->Balance.Gains[1],(std::array<float,4>{1,1,1,0}));
+    points->Lights[2].SourceIdentity = points->Lights[3].SourceIdentity;
+    r = BuildPicaNativePointReplacement(true,f.Layout,f.Binding,f.Profile,{});
+    ASSERT_TRUE(r); EXPECT_EQ(r->ReplacedSlots,1U);
+    f.Binding.Sources[0].SourceIdentity = 0;
+    EXPECT_FALSE(BuildPicaNativePointReplacement(true,f.Layout,f.Binding,f.Profile,{}));
+    EXPECT_FALSE(BuildPicaNativePointReplacement(false,f.Layout,f.Binding,f.Profile,{}));
 }
 
 TEST(PicaNativePointReplacement, MatchedRowsUseNativeResponseNotFadedSupplementalRadiance) {
@@ -2765,6 +2824,30 @@ TEST(PicaFragmentBalance, ProfileFactorAndExactPointsKeepSeparatePayloadOwnershi
     auto once=surface;FoldPicaSurfaceMaterialForPbr(surface,true);
     EXPECT_EQ(surface.ScenePoints[0].Color,once.ScenePoints[0].Color);
     EXPECT_EQ(surface.ScenePoints[1].Color,once.ScenePoints[1].Color); // no second material fold
+}
+
+TEST(PicaFragmentBalance, LocalOnlyNativeReferenceDoesNotRelightVertexColourWhenPointsAreOff) {
+    using namespace Fast::Renderer3ds;
+    // Woodfall room trace: no native Scene slot, two supplemental Scene
+    // directionals survived exclusion. Off then rewrote the VTX*4 factor;
+    // converted On used only native fragment response. Neither should do so.
+    for (uint32_t points : {0U, 5U}) {
+        PicaSurfaceLightingUniforms surface{};
+        surface.Control = {0, points, 2, points ? 2U : 0U};
+        surface.MaterialDiffuse = {1, 1, 1, 0};
+        const auto before = surface;
+        PreservePicaNativeFragmentSceneReference(surface, true, true);
+        EXPECT_EQ(surface.Control[2], 0U);
+        surface.Control[2] = 2;
+        EXPECT_EQ(std::memcmp(&surface, &before, sizeof(surface)), 0); // no other edits
+        for (auto eligibility : {std::pair{false, true}, std::pair{true, false}}) {
+            PreservePicaNativeFragmentSceneReference(surface, eligibility.first, eligibility.second);
+            EXPECT_EQ(std::memcmp(&surface, &before, sizeof(surface)), 0); // OoT/water unchanged
+        }
+        surface.Control[0] = 1;
+        PreservePicaNativeFragmentSceneReference(surface, true, true);
+        EXPECT_EQ(surface.Control[2], 2U); // real vertex lighting unchanged
+    }
 }
 
 TEST(PicaFragmentBalance, UnqualifiedFragmentLitDrawKeepsTheNativeReference) {

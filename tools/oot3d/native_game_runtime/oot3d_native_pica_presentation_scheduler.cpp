@@ -167,7 +167,9 @@ bool Oot3dPicaPresentationScheduler::Execute(
         static_cast<uint8_t>(draw.CompositionDomain));
     if (presentation && !mNativeGameplayHudVisible &&
         domain == Oot3d::Renderer::PicaCompositionDomain::Ui &&
-        draw.Composition.SourcePc == kOot3dGameplayHudDrawEntry) {
+        (mGameplayHudClassifier
+             ? mGameplayHudClassifier(draw.Composition.SourcePc, draw.Composition.NativeValue)
+             : draw.Composition.SourcePc == kOot3dGameplayHudDrawEntry)) {
       mOmittedDrawScratch[index] = true;
       ++mStats.OmittedHudDraws;
       continue;
@@ -203,6 +205,8 @@ bool Oot3dPicaPresentationScheduler::Execute(
                     mStaticShadowActors,
                     draw.Composition.NativeActorGeometry,
                     draw.Composition.NativeActorIdentity),
+            .ExcludeFromPresentationFxaa = draw.Composition.ExcludeFromPresentationFxaa,
+            .PreserveNativeUiSampling = draw.Composition.PreserveNativeUiSampling,
         },
     });
   }

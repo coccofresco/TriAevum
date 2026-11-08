@@ -43,6 +43,13 @@ struct Args {
     int32_t BackendId = -1;
     std::string Renderer = "nri";
 
+    // Fixed simulation steps reproduce a run frame for frame, so the renderer
+    // must not let compile timing choose a draw's program. A throughput
+    // benchmark keeps the interactive (always-available) policy it measures.
+    [[nodiscard]] bool FrameReproducible() const noexcept {
+      return FixedDeltaSeconds > 0.0 && !ThroughputBenchmark;
+    }
+
     // A scripted session (captures, fixed steps, bounded or replayed runs,
     // benchmarks, scheduled settings): what the host adds for a person at the
     // screen (the default window fit, the first-play help card) stays out, so

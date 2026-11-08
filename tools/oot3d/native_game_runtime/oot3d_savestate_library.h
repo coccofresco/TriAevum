@@ -31,7 +31,8 @@ struct SavestateRequest {
   SavestateRequestKind Kind = SavestateRequestKind::Save;
   // Save: also store the host settings. Load: also apply the stored settings.
   bool WithSettings = false;
-  // Load only; empty loads the last state.
+  // Load: empty loads the last state. Save: empty writes a new file in the
+  // folder; a scripted action (--savestate-action FRAME:save:PATH) names it.
   std::filesystem::path Path;
 };
 
@@ -78,6 +79,11 @@ class SavestateLibrary final {
       bool withSettings,
       std::chrono::system_clock::time_point now =
           std::chrono::system_clock::now()) const;
+  // Where a save request writes: the path it names, else NewStatePath.
+  [[nodiscard]] std::filesystem::path
+  SaveRequestPath(const SavestateRequest &request,
+                  std::chrono::system_clock::time_point now =
+                      std::chrono::system_clock::now()) const;
   [[nodiscard]] static bool NameCarriesSettings(
       const std::filesystem::path& path);
 

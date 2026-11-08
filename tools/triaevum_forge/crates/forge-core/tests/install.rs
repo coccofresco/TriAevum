@@ -25,6 +25,24 @@ fn hidden_entries(directory: &Path) -> Vec<String> {
 }
 
 #[test]
+fn title_program_pack_is_bound_routed_and_rechecked_on_repair() {
+    let fixture = Fixture::new();
+    let path = fixture.package.join("recipes/precompiled-titles.json");
+    let mut catalog: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let bytes = b"synthetic pack routing fixture";
+    std::fs::write(fixture.package.join("title.spvpack"), bytes).unwrap();
+    catalog["titles"][0]["title_program_pack"] = json!({"path": "title.spvpack", "bytes": bytes.len(), "sha256": sha256_hex(bytes)});
+    std::fs::write(&path, serde_json::to_vec(&catalog).unwrap()).unwrap();
+    fixture.install(&FakeRuntime::default(), &mut Vec::new()).unwrap();
+    let profile = load_json_object(&fixture.launch_profile()).unwrap();
+    assert!(profile["arguments"].as_array().unwrap().iter().any(|v| v == "--title-program-pack"));
+    let before = std::fs::read(fixture.launch_profile()).unwrap();
+    std::fs::write(fixture.package.join("title.spvpack"), b"damaged").unwrap();
+    assert!(fixture.install(&FakeRuntime::default(), &mut Vec::new()).is_err());
+    assert_eq!(std::fs::read(fixture.launch_profile()).unwrap(), before);
+}
+
+#[test]
 fn installs_the_precompiled_title_and_publishes_the_runtime() {
     let fixture = Fixture::new();
     let runtime = FakeRuntime::default();

@@ -7,9 +7,13 @@
 // the current one. Scene-environment profiles are authored files with their
 // own Save, not settings, and stay out.
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
+
+#include <nlohmann/json.hpp>
 
 #include "fast/extension/graphics_settings.h"
 
@@ -24,6 +28,13 @@ struct SavestateSettingsOwners {
   std::shared_ptr<TopScreenUiConfigRuntime> TopScreen;
   std::shared_ptr<NativeControlConfigRuntime> Controls;
   std::shared_ptr<GameLanguageSettings> Language;
+  // Adapter-authored disclosure, never supplied by an untrusted state file.
+  std::string TitleSettingsNotice;
+  // The title's own settings owner (MM3D: dekui's presentation settings),
+  // stored under "title" with TitleSettingsId; empty functions skip it.
+  std::string TitleSettingsId;
+  std::function<std::optional<nlohmann::json>()> CaptureTitleSettings;
+  std::function<bool(const nlohmann::json &, std::string *)> ApplyTitleSettings;
 };
 
 // JSON object text.

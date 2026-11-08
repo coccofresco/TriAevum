@@ -62,6 +62,8 @@ foreach(_pack renderer3ds/pica_native_fragment extension/pica_temporal_fragment 
     triaevum_add_spirv_pack(triaevum_nri_pipeline_prepare "${runtime}/src/fast/${_pack}_binaries.cpp"
         "${runtime}/src/fast/${_pack}.spvpack")
 endforeach()
+triaevum_add_spirv_pack(triaevum_nri_pipeline_prepare "${runtime}/src/fast/extension/pica_uber_fragment_binaries.cpp"
+    "${runtime}/src/fast/extension/pica_native_lighting_uber.spvpack")
 add_executable(triaevum_pipeline_preparation_tests tests.cpp)
 target_link_libraries(triaevum_pipeline_preparation_tests PRIVATE triaevum_pipeline_preparation)
 enable_testing()

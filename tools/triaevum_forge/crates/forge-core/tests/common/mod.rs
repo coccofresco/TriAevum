@@ -115,7 +115,7 @@ impl Fixture {
         let inputs = json!({"code": identity(&code), "exheader": identity(&exheader), "romfs": identity(&romfs)});
         let recipe = json!({"id": RECIPE, "title": "Fixture", "region": "EUR", "inputs": inputs});
         write(
-            &package.join("recipes/oot3d.json"),
+            &package.join(forge_catalog::title::ACTIVE.packaged_recipes),
             json!({"format": "triaevum_supported_revisions_v1", "recipes": [recipe]}).to_string().as_bytes(),
         );
         let artifact = |relative: &str, bytes: &[u8]| {
@@ -216,7 +216,7 @@ pub struct FakeRuntime {
 impl NativeServices for FakeRuntime {
     fn product_info(&self, _runtime: &Path, plugin: Option<&Path>) -> Result<NativeOutput> {
         let mut product = json!({
-            "format": "triaevum_product_info_v1", "runtime": "oot3d_native_game", "whole_aot_plugin_abi": 2,
+            "format": "triaevum_product_info_v1", "runtime": "oot3d_native_game", "whole_aot_plugin_abi": 2, "titles": ["oot3d", "mm3d"],
             "capabilities": {"nri": true, "f1": true, "topscreen": true},
             "default_config": {"Graphics": {"Preset": "Enhanced", "FrameRate": {"Mode": "Interpolated2x"}}},
         });

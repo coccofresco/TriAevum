@@ -132,6 +132,9 @@ class Mm3dGuestCalls {
                                        oot3d::recomp::a32::GuestState& state,
                                        oot3d::recomp::a32::MemoryBus& memory);
     std::size_t Active() const noexcept { return mRunning.size(); }
+    // A savestate was restored: the suspended bodies belong to the abandoned
+    // timeline and are dropped without resuming the guest.
+    void Reset() noexcept { mRunning.clear(); }
 
   private:
     struct Running {

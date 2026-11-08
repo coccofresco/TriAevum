@@ -27,6 +27,8 @@ fn backup_preview_restore_and_recover() {
     let data = package.join("data");
     write(&data.join("savedata/system/save00.bin"), b"first");
     write(&data.join("config/TriAevum.json"), b"{}");
+    write(&package.join("recipes/oot3d.json"),
+        br#"{"format":"triaevum_supported_revisions_v1","recipes":[{"id":"fixture","game":"oot3d"}]}"#);
     let zip = directory.path().join("backup.zip");
     let root = package.to_string_lossy().into_owned();
     let zip_text = zip.to_string_lossy().into_owned();

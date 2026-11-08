@@ -4,15 +4,17 @@
 
 `forge-assets::mm3d_ui::prepare` is called by the normal native install/apply
 worker for the exact supported MM code identity. It needs no Python or compiler
-at installation time. The Enhancements page explains the local input folder:
+at installation time. Project Restoration is part of the MM3D product (owner
+decision 2026-11-08: dekui and Restoration are integrated product code, not
+Forge inputs), so its members are read from the MM3D package:
 
 ```text
-D/imports/mm3d-restoration/romfs/layout/...
+<package>/resources/mm3d/project-restoration/romfs/layout/...
 ```
 
-Supply original Project Restoration resources there. The six layout inputs and
-outputs are checked against `setup-fingerprints.json`; nothing is downloaded or
-guessed. Unsupported code identities leave other titles' preparation unchanged.
+The user's only input is the game dump. The six layout inputs and outputs are
+checked against `setup-fingerprints.json`; nothing is downloaded or guessed.
+Unsupported code identities leave other titles' preparation unchanged.
 This stage does **not** manufacture an approved MM executable/module recipe:
 the normal verified MM product recipe/catalogue is still a separate prerequisite.
 

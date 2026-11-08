@@ -31,7 +31,10 @@ oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
     void* blockEntryUser, const uint32_t* blockEntryPcs,
     size_t blockEntryPcCount, std::optional<uint32_t> stopPc,
     oot3d::recomp::a32::NativeBlockCallback productMod, void* productModUser,
-    bool manualCompiledFunctions) {
+    bool manualCompiledFunctions,
+    oot3d::recomp::a32::NativeFunctionCallback nativeFunction,
+    void* nativeFunctionUser, const uint32_t* nativeFunctionPcs,
+    size_t nativeFunctionPcCount) {
     using oot3d::recomp::a32::ExecutionResult;
     using oot3d::recomp::a32::ExitKind;
     using oot3d::recomp::a32::FallbackReason;
@@ -46,8 +49,17 @@ oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
         ExecutionResult result{};
         uint32_t consumed = 0U;
         const uint32_t remaining = blockLimit - consumedTotal;
-        const bool modHandled = productMod != nullptr && productMod(
-            state.r[15], state, memory, &result, remaining, &consumed, productModUser);
+        // A native function (a title guest patch) replaces the code at its
+        // PC; the title module exits to this loop at each such boundary.
+        const bool functionHandled =
+            nativeFunction != nullptr &&
+            std::binary_search(nativeFunctionPcs,
+                               nativeFunctionPcs + nativeFunctionPcCount,
+                               state.r[15]) &&
+            nativeFunction(state.r[15], state, memory, &result,
+                           nativeFunctionUser);
+        const bool modHandled = functionHandled || (productMod != nullptr && productMod(
+            state.r[15], state, memory, &result, remaining, &consumed, productModUser));
         const bool handled = modHandled || ExecuteOot3dCompiledFunction(
             state.r[15], state, memory, &result, remaining, &consumed,
             blockEntry, blockEntryUser, blockEntryPcs, blockEntryPcCount,
@@ -597,7 +609,9 @@ NativeA32ProcessRunResult NativeA32Process::Run(
                 state, mMemory, dispatchBudget,
                 mBlockEntryCallback, mBlockEntryUser,
                 mBlockEntryFilterPcs.data(), mBlockEntryFilterPcs.size(), std::nullopt,
-                mNativeBlockCallback, mNativeBlockUser, mManualCompiledFunctions);
+                mNativeBlockCallback, mNativeBlockUser, mManualCompiledFunctions,
+                mNativeFunctionCallback, mNativeFunctionUser,
+                mNativeFunctionPcs.data(), mNativeFunctionPcs.size());
 #else
             oot3d::recomp::a32::Dispatch(
             mRegistry, state.r[15], state, mMemory,
@@ -777,7 +791,9 @@ bool NativeA32Process::InvokeFunctionWithState(
                 mBlockEntryCallback, mBlockEntryUser,
                 mBlockEntryFilterPcs.data(), mBlockEntryFilterPcs.size(),
                 returnAddress, mNativeBlockCallback, mNativeBlockUser,
-                mManualCompiledFunctions);
+                mManualCompiledFunctions,
+                mNativeFunctionCallback, mNativeFunctionUser,
+                mNativeFunctionPcs.data(), mNativeFunctionPcs.size());
 #else
             oot3d::recomp::a32::Dispatch(
             mRegistry, state.r[15], state, mMemory, nullptr, nullptr,

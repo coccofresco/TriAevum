@@ -617,7 +617,36 @@ void RunNativeFrameRateTests() {
         throw std::runtime_error("native 30 Hz timing state was modified");
     }
 
+    // The default ABI must retain OoT's exact old writes and its unusual
+    // modulo-0x7fffffff boundary; title layouts must not change this path.
     constexpr uint32_t pacingState = 0x20U;
+    for(uint32_t counter : {0U, 102U, 0x7FFFFFFEU, 0xFFFFFFFFU}) {
+        TestMemoryBus baseline;
+        Oot3dNativeGame::NativeFrameRatePolicy pacing30(native30);
+        baseline.Write32(pacingState+0x84U,16U);
+        baseline.Write32(pacingState+0x88U,8U);
+        baseline.Write32(pacingState+0x8CU,42U);
+        baseline.VsyncCounter=counter;
+        auto expected=baseline;
+        expected.Write32(pacingState+0x84U,2U);
+        expected.Write32(pacingState+0x88U,2U);
+        expected.Write32(pacingState+0x8CU,
+                        static_cast<uint32_t>((uint64_t(counter)+1U)%0x7FFFFFFFULL));
+        pacing30.BeginFramePacing(pacingState);
+        if(!pacing30.ApplyFramePacingDeadline(pacingState,baseline) ||
+           !pacing30.ApplyFramePacingInterval(pacingState,baseline) ||
+           baseline.Bytes!=expected.Bytes || baseline.VsyncCounter!=counter ||
+           baseline.TimeStateAddress!=expected.TimeStateAddress)
+            throw std::runtime_error("default OoT pacing bytes changed");
+    }
+    for(uint64_t modulus : {uint64_t{0},uint64_t{1},(uint64_t{1}<<32U)+1U}) {
+        Oot3dNativeGame::NativeFramePacingLayout layout;
+        layout.CounterModulus=modulus;
+        bool rejected=false;
+        try {Oot3dNativeGame::NativeFrameRatePolicy invalid(native30,layout);}
+        catch(const std::invalid_argument&) {rejected=true;}
+        if(!rejected)throw std::runtime_error("invalid counter modulus admitted");
+    }
     memory.Write32(pacingState +
                        Oot3dNativeGame::kOot3dFramePacingMaximumIntervalOffset,
                    2U);

@@ -2,6 +2,7 @@
 // memory fills and descriptor sets. Other topics: gfx_vulkan_pica_*.cpp.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/extension/native_ui_overlay.h"
 
 namespace Fast {
 
@@ -530,6 +531,7 @@ void GfxRenderingAPIVulkan::ApplyNativePicaSampleCount(VkSampleCountFlagBits sam
     }
     mNativePicaRenderTargets.clear();
     mNativePicaDisplayDepthTargets.clear();
+    DestroyNativePicaUiTargets();
     DestroyNativePicaPipelines();
     if (mNativePicaRenderPass != VK_NULL_HANDLE) {
         vkDestroyRenderPass(mDevice, mNativePicaRenderPass, nullptr);
@@ -577,7 +579,8 @@ std::optional<Extension::PerspectiveViewState> GfxRenderingAPIVulkan::SamplePers
 GfxRenderingAPIVulkan::NativePicaRenderTarget&
 GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
     const GfxNativePicaDrawView& draw,
-    uint32_t restoredWidth, uint32_t restoredHeight) {
+    uint32_t restoredWidth, uint32_t restoredHeight, bool outputResolutionUi) {
+    auto& targets = outputResolutionUi ? mNativePicaUiTargets : mNativePicaRenderTargets;
     NativePicaRenderTargetKey key{
         draw.RenderTargetNamespace,
         draw.FramebufferColorPhysicalAddress,
@@ -597,9 +600,9 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         : Extension::ResolveNativePicaRenderExtent(
               {key.Width, key.Height},
               NativeTopScreenOutputExtent(),
-              mInternalResolutionScale);
-    if (const auto found = mNativePicaRenderTargets.find(key);
-        found != mNativePicaRenderTargets.end()) {
+              outputResolutionUi ? 1.0F : mInternalResolutionScale);
+    if (const auto found = targets.find(key);
+        found != targets.end()) {
         mDiagnostics.RecordRenderResolution(mInternalResolutionScale, outputExtent.Width,
             outputExtent.Height, found->second.Width, found->second.Height);
         PrepareNativePicaTargetAttachments(found->second);
@@ -610,6 +613,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
 
     NativePicaRenderTarget target;
     target.Key = key;
+    target.OutputResolutionUi = outputResolutionUi;
     target.Width = targetExtent.Width;
     target.Height = targetExtent.Height;
     // A target allocates every base guide together; a frame binds the ones
@@ -747,7 +751,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         createImage(
             mDepthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                 VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_SAMPLE_COUNT_1_BIT, target.DepthImage,
             target.DepthMemory);
@@ -1222,7 +1226,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         }
     }
 
-    auto& inserted = mNativePicaRenderTargets.emplace(key, std::move(target))
+    auto& inserted = targets.emplace(key, std::move(target))
                          .first->second;
     const auto publishSurface = [&](VkImage image, VkFormat format,
                                     VkImageUsageFlags usage,
@@ -1231,7 +1235,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         if (image == VK_NULL_HANDLE)
             return 0U;
         const uintptr_t nativeImage = reinterpret_cast<uintptr_t>(image);
-        const auto& surface = mSceneSurfaces.Publish(
+        const auto& surface = NativePicaSurfaceRegistry(inserted).Publish(
             { { key.RenderTargetNamespace, physicalAddress, kind },
               nativeImage, inserted.Width, inserted.Height,
               static_cast<uint32_t>(format), 0, true });
@@ -1254,7 +1258,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
     inserted.DepthSurfaceGeneration = publishSurface(
         inserted.DepthImage, mDepthFormat,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
         Extension::SceneSurfaceKind::Depth, key.DepthPhysicalAddress);
     publishSurface(inserted.NormalGuideImage, VK_FORMAT_R8G8B8A8_UNORM,
@@ -1309,30 +1313,15 @@ void GfxRenderingAPIVulkan::DestroyNativePicaRenderTarget(
         mResourceStates.Forget(reinterpret_cast<uintptr_t>(image));
         if (!target.NriOwned) mNriInterop.ForgetTexture(image);
     }
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::Color });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.DepthPhysicalAddress,
-                            Extension::SceneSurfaceKind::Depth });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::NormalGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::MaterialGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::RigidMotionGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::AmbientGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace,
-                            target.Key.ColorPhysicalAddress, Extension::SceneSurfaceKind::FogGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::OutlineGeometryGuide });
-    mSceneSurfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress,
-                            Extension::SceneSurfaceKind::DiffuseAlbedoGuide });
+    auto& surfaces = NativePicaSurfaceRegistry(target);
+    surfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.DepthPhysicalAddress,
+                      Extension::SceneSurfaceKind::Depth });
+    for (const auto kind : {Extension::SceneSurfaceKind::Color,
+            Extension::SceneSurfaceKind::NormalGuide, Extension::SceneSurfaceKind::MaterialGuide,
+            Extension::SceneSurfaceKind::RigidMotionGuide, Extension::SceneSurfaceKind::AmbientGuide,
+            Extension::SceneSurfaceKind::FogGuide, Extension::SceneSurfaceKind::OutlineGeometryGuide,
+            Extension::SceneSurfaceKind::DiffuseAlbedoGuide})
+        surfaces.Retire({ target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress, kind });
     if (target.Framebuffer != VK_NULL_HANDLE) {
         vkDestroyFramebuffer(mDevice, target.Framebuffer, nullptr);
     }
@@ -1436,7 +1425,67 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaDisplayImage(
         width, height);
 }
 
+GfxRenderingAPIVulkan::NativePicaRenderTarget&
+GfxRenderingAPIVulkan::ResolveNativePicaUiTarget(NativePicaRenderTarget& scene) {
+    const auto found = mNativePicaUiTargets.find(scene.Key);
+    if (found != mNativePicaUiTargets.end() && Extension::NativeUiCompanionCurrent(
+        scene.ContentWriteSerial, found->second.UiSourceSerial,
+        found->second.ContentWriteSerial, found->second.PresentationEffectsResolvedSerial))
+        return found->second;
+    return scene;
+}
+
+void GfxRenderingAPIVulkan::DestroyNativePicaUiTargets() {
+    for (auto& [key, target] : mNativePicaUiTargets)
+        DestroyNativePicaRenderTarget(target);
+    mNativePicaUiTargets.clear();
+}
+
+void GfxRenderingAPIVulkan::CopyNativePicaUiDepth(
+    const NativePicaRenderTarget& source, NativePicaRenderTarget& destination) {
+    // Upscaler modes are single-sampled. Preserve native depth AND stencil;
+    // clearing either would change depth-tested UI/isolated overlay semantics.
+    EndNativePicaRenderPass();
+    const auto command = mCommandBuffers[mCurrentFrame];
+    std::array<VkImageMemoryBarrier, 2> barriers{};
+    for (auto& barrier : barriers) {
+        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange = {NativeDepthAspect(mDepthFormat), 0, 1, 0, 1};
+        barrier.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    }
+    barriers[0].image = source.DepthImage;
+    barriers[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barriers[0].dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barriers[1].image = destination.DepthImage;
+    barriers[1].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barriers[1].dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+        VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr, 2, barriers.data());
+    for (const auto aspect : {VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_ASPECT_STENCIL_BIT}) {
+        if ((NativeDepthAspect(mDepthFormat) & aspect) == 0) continue;
+        VkImageBlit blit{};
+        blit.srcSubresource = {static_cast<VkImageAspectFlags>(aspect), 0, 0, 1};
+        blit.dstSubresource = blit.srcSubresource;
+        blit.srcOffsets[1] = {int32_t(source.Width), int32_t(source.Height), 1};
+        blit.dstOffsets[1] = {int32_t(destination.Width), int32_t(destination.Height), 1};
+        vkCmdBlitImage(command, source.DepthImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            destination.DepthImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_NEAREST);
+    }
+    for (auto& barrier : barriers) {
+        std::swap(barrier.oldLayout, barrier.newLayout);
+        std::swap(barrier.srcAccessMask, barrier.dstAccessMask);
+    }
+    vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+        0, 0, nullptr, 0, nullptr, 2, barriers.data());
+}
+
 void GfxRenderingAPIVulkan::DestroyNativePicaSceneBeforeUiImages() {
+    DestroyNativePicaUiTargets();
     for (auto* images : {&mNativePicaSceneBeforeUiTargets,
                          &mNativePicaSceneBeforeUiDisplays}) {
         for (auto& [key, image] : *images) {

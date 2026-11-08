@@ -302,7 +302,10 @@ add_test(NAME pica_fragment_artifacts COMMAND build_fragment_artifacts --check)
 add_test(NAME pica_native_normal_guides COMMAND build_fragment_artifacts --normal-guide-check)
 add_test(NAME pica_temporal_fragment_artifacts COMMAND build_fragment_artifacts --temporal --check)
 add_test(NAME pica_toon_fragment_artifacts COMMAND build_fragment_artifacts --toon --check)
+triaevum_add_spirv_pack(build_fragment_artifacts "${runtime}/src/fast/extension/pica_uber_fragment_binaries.cpp"
+    "${runtime}/src/fast/extension/pica_native_lighting_uber.spvpack")
 add_test(NAME pica_uber_fragment_artifacts COMMAND build_fragment_artifacts --uber --check)
+add_test(NAME pica_native_lighting_uber_artifacts COMMAND build_fragment_artifacts --native-lighting-uber --check)
 add_test(NAME pica_caster_fragment_artifacts COMMAND build_fragment_artifacts --casters --check)
 add_test(NAME pica_fragment_balance_compile COMMAND build_fragment_artifacts --balance-check)
 set_tests_properties(pica_toon_fragment_artifacts PROPERTIES TIMEOUT 120)
@@ -421,6 +424,13 @@ target_include_directories(build_vertex_artifacts PRIVATE "${frontend}" "${runti
     "${frontend}/../third_party/azahar_pica" "${SHADERC_INCLUDE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
 target_link_libraries(build_vertex_artifacts PRIVATE spdlog::spdlog "${SHADERC_LIBRARY}")
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME pica_vertex_stage_scope COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/test_vertex_stage_scope.py")
+    set_tests_properties(pica_vertex_stage_scope PROPERTIES TIMEOUT 120
+        ENVIRONMENT "TRIAEVUM_VERTEX_ARTIFACT_BUILDER=$<TARGET_FILE:build_vertex_artifacts>")
+endif()
 set(OOT3D_SHADER_TEST_ROMFS "" CACHE PATH "Private extracted ROMFS for offline vertex artifact validation")
 if(OOT3D_SHADER_TEST_ROMFS)
     add_test(NAME pica_vertex_artifacts COMMAND build_vertex_artifacts --check

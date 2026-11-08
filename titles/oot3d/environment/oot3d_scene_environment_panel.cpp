@@ -232,14 +232,15 @@ private:
                        "lighting remains in the albedo.");
     ImGui::EndDisabled();
     ImGui::SeparatorText("Dynamic scene point lights");
-    ImGui::TextWrapped("Replace Navi and fairy vertex-light contributions with spatial scene lights, and light "
+    ImGui::TextWrapped("Replace companion and fairy native-light contributions with spatial scene lights, and light "
                        "the flames the game only draws (torches, fire objects). Architecture lights the room "
                        "torches, lava, windows, light shafts and glows of the room geometry, in the rooms the "
                        "game has loaded. Native positions, colors and ranges are retained. These controls are independent of Use scene environment and affect "
                        "only the Modern lighting model.");
-    const char *pointLabels[] = {"Navi point lights", "Fairy point lights", "Flame point lights",
+    const std::string companionLabel = mOptions.CompanionLightName + " point lights";
+    const char *pointLabels[] = {companionLabel.c_str(), "Fairy point lights", "Flame point lights",
                                  "Architecture point lights"};
-    const char *pointNames[] = {"Navi", "Fairy", "Flame", "Architecture"};
+    const char *pointNames[] = {mOptions.CompanionLightName.c_str(), "Fairy", "Flame", "Architecture"};
     static_assert(std::size(pointLabels) == Fast::Renderer3ds::kPicaScenePointLightGroups);
     for (size_t i = 0; i < value.PointLights.size(); ++i) {
       auto &light = value.PointLights[i];
@@ -450,10 +451,10 @@ private:
     else
       ImGui::TextWrapped(light.Type == PlacedLightType::Surface
                              ? "Uses a point-shadow cube map at the surface's centre (Point shadows: Cube "
-                               "maps), shared with Navi and the fairies; a large surface's shadows are "
+                               "maps), shared with the companion and other fairies; a large surface's shadows are "
                                "approximate."
                              : "Uses a point-shadow cube map at the light (Point shadows: Cube maps), "
-                               "shared with Navi and the fairies.");
+                               "shared with the companion and other fairies.");
     switch (light.Type) {
     case PlacedLightType::Point:
     case PlacedLightType::Omni:
@@ -530,7 +531,7 @@ private:
       "smoothly at the reach.",
       "An emitting rectangle or disc facing its direction (both faces when two-sided): bright "
       "close to it, fading with distance, cut at the reach.",
-      "Soft falloff to zero at the reach, like Navi and the fairies: easy to dose."};
+      "Soft falloff to zero at the reach, like companion and fairy lights: easy to dose."};
   // World units above Link's feet where a new light starts.
   static constexpr float kPlacedLightHeadHeight = 50.0F;
   uint32_t mSelectedLight = 0;

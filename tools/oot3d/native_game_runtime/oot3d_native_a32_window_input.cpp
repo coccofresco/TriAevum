@@ -1,5 +1,6 @@
 // Host input polling of the A32 window and the TopScreen pause transitions it drives.
 #include "oot3d_native_a32_window_shared.h"
+#include "oot3d_overlay_acceptance_driver.h"
 
 #include <spdlog/spdlog.h>
 
@@ -100,10 +101,19 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   // user's strength, on the active pad. Off plays nothing (and the adapter
   // reads nothing); host menus hold it.
   pollingState.RumbleStrength = config.Rumble;
+  const bool rumbleContextChanged = pollingState.RumbleAdmission.Update(
+      selectedController.InstanceId, config.ControllerEnabled, SDL_GetKeyboardFocus() != nullptr,
+      hostGuiVisible, config.Rumble);
+  if (rumbleContextChanged || !pollingState.RumbleAdmission.Allowed) {
+    (void)pollingState.Rumble.Take();
+    // Stop a previously admitted pulse when its input owner disappears.
+    if (rumbleContextChanged && selectedController.Controller)
+      (void)SDL_GameControllerRumble(selectedController.Controller, 0, 0, 0);
+  }
   if (pollingState.Rumble.Pending()) {
     const auto pulse = pollingState.Rumble.Take();
     const auto command = ThreeDsRecomp::Input::ResolveRumble(pulse, config.Rumble);
-    const bool played = config.ControllerEnabled && !hostGuiVisible &&
+    const bool played = pollingState.RumbleAdmission.Allowed &&
                         ThreeDsRecomp::Input::PlaySdlRumble(selectedController.Controller, command);
     if (pollingState.KeyTrace)
       SPDLOG_WARN("TRIAEVUM_INPUT_TRACE rumble strength={} intensity={:.3f} ms={} low={} high={} pad={} played={}",
@@ -198,6 +208,9 @@ PollNativeA32Input(Fast::Fast3dWindow &window,
   using ThreeDsRecomp::Input::VirtualPad;
   auto touchControls = ThreeDsRecomp::Input::TouchOverlayPad().Read(guestRefreshWillConsume || hostGuiVisible);
   if (hostGuiVisible) touchControls = {};
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  Oot3dNativeGame::ObserveOverlayAcceptanceTouch(touchControls.Held,touchControls.Pressed,hostGuiVisible);
+#endif
 
   for (size_t index = 0; index < kNativeControlActionCount; ++index) {
     if (hostGuiVisible) pollingState.PendingPressedActions[index] = false;
@@ -494,7 +507,11 @@ Oot3dNativeGame::NativeA32InputFrame ResolveNativeA32GuestInput(
     Oot3dNativeGame::NativeA32PolledButtonLatch &startButtonLatch,
     Oot3dNativeGame::TopScreenStartRoutingState &startRoutingState) {
   auto resolved = physical;
-  if (timeline.Enabled()) {
+  bool scripted=timeline.Enabled();
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  scripted=scripted && !Oot3dNativeGame::OverlayAcceptanceReleaseTimeline;
+#endif
+  if (scripted) {
     resolved = timeline.Sample(guestFrameIndex, runFrameIndex);
     resolved.Exit = physical.Exit;
   } else {
@@ -511,6 +528,9 @@ Oot3dNativeGame::NativeA32InputFrame ResolveNativeA32GuestInput(
   Oot3dNativeGame::ApplyTopScreenStartRouting(
       resolved, topScreenUiProfile, topScreenStartRoutingEligible,
       nativeFrontendTouchEnabled, true, startRoutingState);
+#if defined(TRIAEVUM_DEVELOPER_TOOLS)
+  Oot3dNativeGame::ObserveOverlayAcceptanceGuest(resolved.Hid.Buttons,scripted);
+#endif
   return resolved;
 }
 

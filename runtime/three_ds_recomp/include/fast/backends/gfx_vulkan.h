@@ -14,6 +14,7 @@
 #include "fast/renderer3ds/pica_program_preparation.h"
 #include "fast/renderer3ds/pica_preparation_queue.h"
 #include "fast/renderer3ds/pipeline_cache_flusher.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "fast/renderer3ds/pica_texture_copy_plan.h"
 #include "fast/renderer3ds/pica_shadow_geometry.h"
 #include "fast/renderer3ds/pica_ui_canvas.h"
@@ -164,6 +165,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     ~GfxRenderingAPIVulkan() override;
     void PrepareNativePicaPrograms(std::span<const Renderer3ds::PicaVertexArtifact> vertices) override;
     [[nodiscard]] bool UsesAlwaysAvailablePrograms() const override;
+    void SetFrameReproducibleProgramSelection(bool reproducible) override {
+        mFrameReproducibleProgramSelection = reproducible;
+    }
     void RegisterTitlePassPrograms(std::span<const Renderer::PassShaderArtifact> programs) override;
     [[nodiscard]] Renderer3ds::PicaPreparationStatus PreparationStatus() const override;
     void SetNativeTopScreenExtendsToOutput(bool extends) noexcept override {
@@ -725,6 +729,12 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // before UI kept for an upscaler; native UI writes carry it like the
         // resolved serial, any other write ends it.
         uint64_t SceneBeforeUiSerial = 0;
+        uint64_t PresentationFxaaExcludedSerial = 0;
+        uint64_t NativeUiSamplingSerial = 0;
+        uint64_t PresentationEffectsResolvedSerial = 0;
+        // Companion is valid only for this exact reduced scene content version.
+        uint64_t UiSourceSerial = 0;
+        bool OutputResolutionUi = false;
         VkImage MsaaColorImage = VK_NULL_HANDLE;
         VkDeviceMemory MsaaColorMemory = VK_NULL_HANDLE;
         VkImageView MsaaColorView = VK_NULL_HANDLE;
@@ -799,6 +809,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // The same transfer of the scene before native UI was made this frame
         // (mNativePicaSceneBeforeUiDisplays).
         bool SceneBeforeUi = false;
+        bool PresentationFxaaExcluded = false;
+        bool PreserveNativeUiSampling = false;
+        bool PresentationEffectsResolved = false;
     };
 
     struct PresentRequest {
@@ -899,7 +912,14 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void ApplyNativePicaSampleCount(VkSampleCountFlagBits sampleCount);
     NativePicaRenderTarget& GetOrCreateNativePicaRenderTarget(
         const GfxNativePicaDrawView& draw,
-        uint32_t restoredWidth = 0U, uint32_t restoredHeight = 0U);
+        uint32_t restoredWidth = 0U, uint32_t restoredHeight = 0U,
+        bool outputResolutionUi = false);
+    NativePicaRenderTarget& ResolveNativePicaUiTarget(NativePicaRenderTarget& scene);
+    void DestroyNativePicaUiTargets();
+    Extension::SceneSurfaceRegistry& NativePicaSurfaceRegistry(const NativePicaRenderTarget& target) {
+        return target.OutputResolutionUi ? mNativePicaUiSurfaces : mSceneSurfaces;
+    }
+    void CopyNativePicaUiDepth(const NativePicaRenderTarget& source, NativePicaRenderTarget& destination);
     void DestroyNativePicaRenderTarget(NativePicaRenderTarget& target);
     void PrepareNativePicaTargetAttachments(NativePicaRenderTarget& target);
     // The attachment layout of the sequence being executed. Native-memory
@@ -1183,6 +1203,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // not), so the library policy no longer switches NRI's pipeline path.
     bool mExtendedDynamicStateEnabled = false;
     NativePicaPreparationMode mNativePicaPreparationMode = NativePicaPreparationMode::Synchronous;
+    bool mFrameReproducibleProgramSelection = false;
     bool mNativePicaProgramsPrepared = false;
     // Startup preparation progress (PrepareNativePicaPrograms parts).
     std::atomic<size_t> mStartupParts{0};
@@ -1490,6 +1511,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Extension::NriOwnedTexture2D mNativePicaSceneCopyCanvas;
     uint32_t mNativePicaSceneCopyCanvasWidth = 0;
     uint32_t mNativePicaSceneCopyCanvasHeight = 0;
+    Extension::NriOwnedTexture2D mNativePicaUiCopyCanvas;
+    uint32_t mNativePicaUiCopyCanvasWidth = 0;
+    uint32_t mNativePicaUiCopyCanvasHeight = 0;
     // Retire only at a completed frame fence, never while recorded sampling or
     // deferred guest bytes can still refer to the immutable producer.
     void RetireGpuTextureCopyProducers(uint64_t completedFrame);
@@ -1707,7 +1731,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
                                        uint64_t afterDrawSubmissionId,
                                        GpuTextureCopySourceImport& output,
                                        std::string* error,
-                                       const Renderer3ds::PicaCompositionStageAnchor* beforeUi = nullptr);
+                                       const Renderer3ds::PicaCompositionStageAnchor* beforeUi = nullptr,
+                                       bool fxaaBeforeUi = false,
+                                       bool outputResolutionUi = false);
     // The display graph body, shared between presentation and the raw copy's
     // scene-source composition so the graph is executed exactly once and in the
     // same order in both cases. `copyOutput` (and the `copySource` it belongs
@@ -1721,7 +1747,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         const NativePicaDisplayImage& display,
         NativePicaRenderTarget* copySource,
         GpuTextureCopySourceImport* copyOutput, std::string* error,
-        bool beforeNativeUi = false);
+        bool beforeNativeUi = false, bool fxaaBeforeUi = false,
+        bool outputResolutionUi = false);
     bool SubmitNativePicaTextureCopy(const GfxNativePicaDisplayTransferView& transfer, std::string* error);
     // GPU producers a later draw samples without a raw copy: a colour target
     // written by earlier draws, and the tiled result of a DisplayTransfer.
@@ -1753,6 +1780,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     NativePicaTextureResidency mNativePicaTextureResidency;
     std::map<NativePicaRenderTargetKey, NativePicaRenderTarget>
         mNativePicaRenderTargets;
+    std::map<NativePicaRenderTargetKey, NativePicaRenderTarget> mNativePicaUiTargets;
     std::map<std::pair<uint64_t, uint32_t>, NativePicaDisplayImage>
         mNativePicaDisplayImages;
     // A display image resized while frames are in flight stays alive until
@@ -1867,6 +1895,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // Persists the NRI pipeline cache while the session runs; stopped before
     // the final store at shutdown.
     Renderer3ds::PipelineCacheFlusher mNriPipelineCacheFlusher;
+    // What the title's shader preparation lets startup do
+    // (fast/renderer3ds/title_shader_preparation.h), read at Init.
+    Renderer3ds::TitleShaderPreparationPlan mTitleShaderPreparationPlan{};
     // Per-frame vertex/upload arena sizing evidence, summarized at shutdown.
     VkDeviceSize mPeakFrameVertexBytes = 0;
     uint32_t mFrameVertexArenaGrowths = 0;
@@ -1997,6 +2028,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     Renderer3ds::PicaTemporalHistory mPicaTemporalHistory;
     uint32_t mNativePicaDepthWritingDrawsThisFrame = 0;
     Extension::SceneSurfaceRegistry mSceneSurfaces;
+    // Companions share guest addresses but must not retire live scene bindings.
+    Extension::SceneSurfaceRegistry mNativePicaUiSurfaces;
     Extension::ResourceStateTracker mResourceStates;
 };
 

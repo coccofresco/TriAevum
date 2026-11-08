@@ -169,6 +169,7 @@ pub fn validate_installed_runtime(
         ("romfs_overlay", "--romfs-overlay", "RomFS mods"),
         ("title_message_edits", "--title-message-edits", "prepared title messages"),
         ("pica_shader_pack", "--pica-aot-shader-pack", "PICA shader pack"),
+        ("title_program_pack", "--title-program-pack", "title program pack"),
     ] {
         let resource = get(runtime, field);
         if resource.is_null() {

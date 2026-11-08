@@ -165,8 +165,26 @@ std::span<const PicaRoomEmitter> PicaEmitterCatalog::Room(uint16_t scene, int ro
 void CapturePicaRoomEmitters(const PicaEmitterCatalog &catalog, uint16_t scene,
                              std::span<const PicaEmitterRoom> rooms, std::vector<PicaScenePointLight> &lights,
                              PicaSurfaceEmissionRegistry *emission) {
+    std::vector<PicaEmitterRoom> unique;
+    for (const auto& room : rooms) {
+        // A duplicate current/previous record is one room. Conflicting
+        // fingerprints for the same room number cannot share source ids.
+        if (std::any_of(rooms.begin(), rooms.end(), [&](const auto& other) {
+                return other.Number == room.Number && other.Fingerprint != room.Fingerprint;
+            }) || std::any_of(unique.begin(), unique.end(), [&](const auto& other) {
+                return other.Number == room.Number;
+            })) continue;
+        unique.push_back(room);
+    }
     std::vector<uint64_t> followed;
-    for (const auto &room : rooms) {
+    for (const auto& room : unique)
+        for (const auto& emitter : catalog.Room(scene, room.Number, room.Fingerprint))
+            for (auto surface : emitter.Surfaces)
+                if (surface) followed.push_back(surface);
+    // Publish lifetime before querying strength. A newly loaded surface must
+    // not inherit the removed room's observation through a stale follow set.
+    if (emission) emission->Follow(followed);
+    for (const auto &room : unique) {
         const auto emitters = catalog.Room(scene, room.Number, room.Fingerprint);
         for (size_t i = 0; i < emitters.size(); ++i) {
             const auto &e = emitters[i];
@@ -176,7 +194,6 @@ void CapturePicaRoomEmitters(const PicaEmitterCatalog &catalog, uint16_t scene,
                 for (auto surface : e.Surfaces) {
                     if (!surface)
                         continue;
-                    followed.push_back(surface);
                     strength = std::max(strength, std::clamp(emission->Strength(surface), 0.0F, 1.0F));
                 }
             }
@@ -196,7 +213,5 @@ void CapturePicaRoomEmitters(const PicaEmitterCatalog &catalog, uint16_t scene,
             lights.push_back(light);
         }
     }
-    if (emission)
-        emission->Follow(followed);
 }
 } // namespace Fast::Renderer3ds
