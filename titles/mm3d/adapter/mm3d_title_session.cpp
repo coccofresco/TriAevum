@@ -569,6 +569,11 @@ public:
         {"isolated_model_spans", stats.IsolatedModelSpans},
         {"atmosphere_model_spans", stats.AtmosphereModelSpans},
         {"lifecycle_invalidations", stats.LifecycleInvalidations},
+        {"room_slot_changes", stats.RoomSlotChanges},
+        {"direct_shadow_submits", stats.DirectShadowSubmits},
+        {"room_lifetime_ends", stats.RoomLifetimeEnds},
+        {"last_current_room", stats.LastCurrentRoom},
+        {"last_previous_room", stats.LastPreviousRoom},
         {"scene_directional_lights", stats.SceneDirectionalLights}};
   }
 

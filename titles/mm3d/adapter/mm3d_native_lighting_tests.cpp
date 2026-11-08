@@ -162,14 +162,20 @@ void TestCompositionTemporalLifetimes() {
         // Two-room transition: room 0 stays loaded in prevRoom while room 1
         // loads into curRoom; both are drawn, so history must survive.
         const auto before = bgEnqueue();
+        const auto changes0 = tracker.Stats().RoomSlotChanges, ends0 = tracker.Stats().RoomLifetimeEnds;
         rooms(1, 0);
         Require(bgEnqueue().Lifetime == before.Lifetime, "two-room transition dropped loaded room history");
+        Require(tracker.Stats().RoomSlotChanges == changes0 + 1U && tracker.Stats().RoomLifetimeEnds == ends0 &&
+                tracker.Stats().LastCurrentRoom == 1 && tracker.Stats().LastPreviousRoom == 0,
+                "two-room transition miscounted room slot statistics");
         rooms(0, 1);
         Require(bgEnqueue().Lifetime == before.Lifetime, "slot swap of loaded rooms dropped history");
         // Transition end: room 1 leaves both slots.
         rooms(0, 0xFF);
         const auto afterUnload = bgEnqueue();
         Require(afterUnload.Lifetime != before.Lifetime, "room unload kept room model lifetime");
+        Require(tracker.Stats().RoomLifetimeEnds == ends0 + 1U && tracker.Stats().RoomSlotChanges == changes0 + 3U &&
+                tracker.Stats().LastPreviousRoom == -1, "room unload miscounted room slot statistics");
         // Invalid room number (>127, not the empty marker) is unknown.
         rooms(0x80, 0xFF);
         const auto invalid = bgEnqueue();
@@ -303,6 +309,96 @@ void TestDeferredModelResourceLifetime() {
         Require(!finish().TemporalIdentity.Available(), "active scope survived native destruction");
     }
     Require(original.TemporalIdentity.Available(), "immutable historical attribution was mutated");
+}
+
+// F03: in-place recycling the native destroy hooks did not observe. The
+// actor identity is (id << 32 | address); the model lifetime is keyed by its
+// temporal owner, owner epoch and resource handles. A different actor at the
+// same address, or a model handed to another owner, must never match history.
+void TestUnobservedInPlaceRecycling() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "recycling hooks verified");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    uint32_t frame = 1;
+    const auto enqueue = [&](uint16_t id, bool actor) {
+        f.W32(f.Play + 0x138U, frame++); s.r[0] = f.Play; observe(0x15E9ECU);
+        if (actor) { f.W16(f.Actor, id); f.W32(f.Actor + 0x144U, 0x1F8E28U);
+            s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U); }
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = f.Model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 4U, 1); f.W32(f.Queue + 8U, f.Model);
+        if (actor) observe(0x182C48U);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = 0x11EF3CU; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = f.Model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000020U);
+        s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 1, "recycling fixture keeps one model range");
+        return spans.front().Attribution.TemporalIdentity;
+    };
+    const auto a = enqueue(0x10, true);
+    Require(a.Available() && enqueue(0x10, true) == a, "recycling baseline identity unstable");
+    // Same address, different actor id, no destroy site observed.
+    const auto b = enqueue(0x11, true);
+    Require(b.Available() && b.Owner != a.Owner && b.Lifetime != a.Lifetime,
+            "unobserved actor recycling at the same address matched the former lifetime");
+    // The former id returning at that address is a new instance, not a revival.
+    const auto a2 = enqueue(0x10, true);
+    Require(a2.Available() && a2.Lifetime != a.Lifetime && a2.Lifetime != b.Lifetime,
+            "actor ABA at the same address revived an old lifetime");
+    // Same model address handed from the actor to a scene owner and back.
+    const auto scene = enqueue(0, false);
+    Require(scene.Available() && (scene.Owner & (1ULL << 63U)) && scene.Lifetime != a2.Lifetime,
+            "model recycled to a scene owner kept the actor lifetime");
+    const auto back = enqueue(0x10, true);
+    Require(back.Available() && back.Lifetime != scene.Lifetime && back.Lifetime != a2.Lifetime,
+            "model returned to an actor revived a former lifetime");
+    Require(enqueue(0x10, true) == back, "recycled identity not stable afterwards");
+}
+
+void TestActorEpochRenewedOnIdChange() {
+    Fixture f;
+    Mm3dNativePicaCompositionTracker tracker;
+    auto& s = f.State;
+    Require(tracker.VerifyHooks(f.Memory), "recycling hooks verified");
+    const auto observe = [&](uint32_t pc) { tracker.ObserveBlockEntry(pc, s, f.Memory); };
+    uint32_t frame = 1;
+    const auto enqueue = [&](uint16_t id, bool actor, uint32_t model) {
+        f.W32(f.Play + 0x138U, frame++); s.r[0] = f.Play; observe(0x15E9ECU);
+        if (actor) { f.W16(f.Actor, id); f.W32(f.Actor + 0x144U, 0x1F8E28U);
+            s.r[0] = f.Actor; s.r[2] = 0x1F8E28U; observe(0x182C44U); }
+        f.W32(f.Queue + 4U, 0);
+        s.r[0] = f.Queue; s.r[1] = model; s.r[14] = 0x20A8F8U; observe(0x224104U);
+        f.W32(f.Queue + 4U, 1); f.W32(f.Queue + 8U, model);
+        if (actor) observe(0x182C48U);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000000U);
+        s.r[0] = f.Queue; s.r[14] = 0x11EF3CU; observe(kMm3dRenderListVisitEntry);
+        s.r[0] = model; s.r[5] = f.Queue + 8U; observe(0x5EF0CCU);
+        f.W32(kMm3dCommandListCursorAddress, 0x14000020U);
+        s.r[5] = f.Queue + 8U; observe(0x5EF0D0U); observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0, 0, spans);
+        Require(spans.size() == 1, "recycling fixture keeps one model range");
+        return spans.front().Attribution.TemporalIdentity;
+    };
+    // A second model owned only by the original actor instance keeps a record
+    // (owner identity, owner epoch). When the slot is recycled to another id
+    // and the former id returns, the owner identity matches again, so only a
+    // renewed actor epoch can prevent the parked model from reviving.
+    const uint32_t parked = f.Model + 0x800U;
+    f.W32(parked, 0x0063BED4U); f.W32(parked + 0xA0U, f.Renderer);
+    const auto p1 = enqueue(0x10, true, parked);
+    Require(p1.Available() && enqueue(0x10, true, parked) == p1, "parked model baseline unstable");
+    const auto other = enqueue(0x11, true, f.Model);
+    Require(other.Available(), "recycled actor id lost identity");
+    const auto p2 = enqueue(0x10, true, parked);
+    Require(p2.Available() && p2.Owner == p1.Owner && p2.Lifetime != p1.Lifetime,
+            "actor lifetime kept across an unobserved id change revived a parked model");
+    Require(enqueue(0x10, true, parked) == p2, "renewed parked identity not stable");
 }
 
 void TestPrimitiveOwnership() {
@@ -894,6 +990,100 @@ void TestDeferredQueueAndShadowScopes() {
     tracker.TakeCommandListCompositionSpans(0,0,spans);Require(spans.empty(),"disabled observer emitted metadata");
 }
 
+// Custom shadow producers (code.bin receipt COMPOSITION/SHADOW_PRODUCERS):
+// actor overlays call the generic shadow routine 0x0021EC40 directly from
+// their own draw callback (zeldaret-mm ActorShadow_Draw callers), so the blob
+// submit (LR 0x0021EFAC) happens INSIDE the actor draw scope. The feet routine
+// 0x001F2E64 is installed as a shadow function pointer and submits at
+// 0x001F3898/0x001F3AB0. Each blob must be a shadow, never actor geometry.
+void TestCustomShadowProducers() {
+    for (const uint32_t lr : {0x0021EFACU, 0x001F3898U, 0x001F3AB0U, 0x0020A000U}) {
+        Fixture f; Mm3dNativePicaCompositionTracker tracker; auto& s=f.State;
+        Require(tracker.VerifyHooks(f.Memory),"valid signatures rejected");
+        const auto observe=[&](uint32_t pc){return tracker.ObserveBlockEntry(pc,s,f.Memory);};
+        const auto cursor=[&](uint32_t p){f.W32(kMm3dCommandListCursorAddress,p);};
+        s.r[0]=f.Play;observe(0x15E9ECU);
+        s.r[0]=f.Actor;s.r[2]=0x1F8E28U;observe(0x182C44U);
+        s.r[0]=f.Queue;s.r[1]=f.Model;s.r[14]=0x20A8F8U;f.W32(f.Queue+4U,0);observe(0x224104U);
+        f.W32(f.Queue+8U,f.Model);f.W32(f.Queue+4U,1);
+        const uint32_t shadowModel=f.Model+0x400U;
+        f.W32(shadowModel,0x63BED4U);f.W32(shadowModel+0xA0U,f.Renderer);
+        // Still inside the actor's main draw callback.
+        s.r[0]=shadowModel;s.r[14]=lr;observe(0x20A898U);
+        s.r[0]=f.Queue;s.r[1]=shadowModel;s.r[14]=0x20A8F8U;observe(0x224104U);
+        f.W32(f.Queue+12U,shadowModel);f.W32(f.Queue+4U,2);observe(0x223EDCU);
+        observe(0x182C48U);
+        cursor(0x14000000U);s.r[0]=f.Queue;s.r[14]=0x11EF3CU;observe(kMm3dRenderListVisitEntry);
+        const auto consume=[&](uint32_t slot,uint32_t begin,uint32_t end){
+            cursor(begin);Require(f.Memory.Read32(slot,&s.r[0]),"consumer model");s.r[4]=f.Queue;s.r[5]=slot;
+            observe(0x5EF0CCU);cursor(end);observe(0x5EF0D0U);
+        };
+        consume(f.Queue+8U,0x14000008U,0x14000020U);
+        consume(f.Queue+12U,0x14000020U,0x14000038U);
+        cursor(0x14000040U);observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0,0,spans);
+        Require(spans.size()==4,"custom shadow coverage");
+        Require(spans[1].Attribution.NativeActorGeometry && spans[1].Attribution.NativeActorIdentity==f.Actor &&
+                !spans[1].Attribution.NativeProjectedShadow,"custom producer main model lost actor");
+        if (lr==0x0020A000U) {
+            // Negative: an unrelated submit inside the actor scope is the actor's geometry, not a blob.
+            Require(!spans[2].Attribution.NativeProjectedShadow && spans[2].Attribution.NativeActorGeometry,
+                    "non-shadow submit became a blob");
+        } else {
+            Require(spans[2].Attribution.NativeProjectedShadow && !spans[2].Attribution.NativeActorGeometry,
+                    "custom shadow producer blob inherited actor role");
+        }
+    }
+}
+
+// Direct shadow submitters (COMPOSITION/DIRECT_SHADOW/scan.txt): an actor that
+// submits the shared shadow CMB through 0x0020A898 itself, bypassing the shared
+// routines, is a blob by the model's resource tuple learned from a proved
+// routine submit. mode 0: same resources -> shadow; mode 1: other resources ->
+// actor geometry; mode 2: no proved submit before -> actor geometry.
+void TestDirectShadowSubmitByResource() {
+    for (int mode = 0; mode < 3; ++mode) {
+        Fixture f; Mm3dNativePicaCompositionTracker tracker; auto& s=f.State;
+        Require(tracker.VerifyHooks(f.Memory),"valid signatures rejected");
+        const auto observe=[&](uint32_t pc){return tracker.ObserveBlockEntry(pc,s,f.Memory);};
+        const auto cursor=[&](uint32_t p){f.W32(kMm3dCommandListCursorAddress,p);};
+        s.r[0]=f.Play;observe(0x15E9ECU);
+        s.r[0]=f.Actor;s.r[2]=0x1F8E28U;observe(0x182C44U);
+        const uint32_t proved=f.Model+0x400U,direct=f.Model+0x800U;
+        f.W32(proved,0x63BED4U);f.W32(proved+0xA0U,f.Renderer);f.W32(proved+0x90U,0x0C000100U);
+        f.W32(direct,0x63BED4U);f.W32(direct+0xA0U,f.Renderer);f.W32(direct+0x90U,mode==1?0x0C000200U:0x0C000100U);
+        f.W32(f.Queue+4U,0);
+        uint32_t n=0;
+        const auto submit=[&](uint32_t model,uint32_t lr){
+            s.r[0]=model;s.r[14]=lr;observe(0x20A898U);
+            s.r[0]=f.Queue;s.r[1]=model;s.r[14]=0x20A8F8U;observe(0x224104U);
+            f.W32(f.Queue+8U+n*4U,model);++n;f.W32(f.Queue+4U,n);observe(0x223EDCU);
+        };
+        if (mode!=2) submit(proved,0x0021EFACU);
+        submit(direct,0x0020A000U);
+        observe(0x182C48U);
+        cursor(0x14000000U);s.r[0]=f.Queue;s.r[14]=0x11EF3CU;observe(kMm3dRenderListVisitEntry);
+        uint32_t at=0x14000008U;
+        for (uint32_t i=0;i<n;++i){
+            const uint32_t slot=f.Queue+8U+i*4U;
+            cursor(at);Require(f.Memory.Read32(slot,&s.r[0]),"consumer model");s.r[4]=f.Queue;s.r[5]=slot;
+            observe(0x5EF0CCU);at+=0x18U;cursor(at);observe(0x5EF0D0U);
+        }
+        cursor(at+8U);observe(0x11EF3CU);
+        std::vector<Oot3dPicaCommandListCompositionSpan> spans;
+        tracker.TakeCommandListCompositionSpans(0,0,spans);
+        const Oot3dPicaCommandListCompositionSpan* last=nullptr;
+        for (const auto& span:spans) if (span.Attribution.NativeProjectedShadow || span.Attribution.NativeActorGeometry) last=&span;
+        Require(last!=nullptr,"direct shadow coverage");
+        if (mode==0) Require(last->Attribution.NativeProjectedShadow && !last->Attribution.NativeActorGeometry,
+                             "direct shadow-CMB submit inherited actor role");
+        else Require(!last->Attribution.NativeProjectedShadow && last->Attribution.NativeActorGeometry,
+                     mode==1?"foreign resources became a blob":"unproved resources became a blob");
+        Require((tracker.Stats().DirectShadowSubmits==1U)==(mode==0),"direct shadow counter");
+    }
+}
+
 // P1.0/P1.1: each selected light's function, and BakedOutdoorRoom from the
 // environment group, with guard words and Unknown fallback.
 void TestLightFunctionsAndGroup() {
@@ -968,8 +1158,8 @@ void TestLightFunctionsAndGroup() {
 }
 } // namespace
 int main() {
-    TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
-    TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();
+    TestCompositionTemporalLifetimes(); TestDeferredModelResourceLifetime(); TestUnobservedInPlaceRecycling(); TestActorEpochRenewedOnIdChange(); TestPrimitiveOwnership(); TestQuadEntryOwnership();
+    TestAcceptedAndSelectedSources();TestSceneSnapshots();TestWaterCountAndHeight();TestDeferredQueueAndShadowScopes();TestCustomShadowProducers();TestDirectShadowSubmitByResource();
     TestAmbiguousQueueOwnership();TestNestedAndInvalidConsumer();TestWaterOperandEligibility();
     TestLightFunctionsAndGroup();TestClockCutsAndDayReset();
     std::cout << "mm3d_native_lighting_tests: ok\n";

@@ -4,6 +4,7 @@
 #include "oot3d_native_pica_frontend.h"
 #include "mm3d_native_a32_lighting.h"
 
+#include <array>
 #include <cstdint>
 #include <map>
 #include <memory>
@@ -78,6 +79,10 @@ struct Mm3dNativePicaCompositionStats {
     // (bounded; later names count in LayoutOwnersDropped).
     std::map<std::string, uint64_t> LayoutOwners;
     uint64_t LayoutOwnersDropped = 0;
+    // Room slots observed at Play_Draw: changes of the (cur, prev) pair, room
+    // lifetime ends (a room left both slots), and the last valid pair (-1 = empty).
+    uint64_t RoomSlotChanges = 0, RoomLifetimeEnds = 0, DirectShadowSubmits = 0;
+    int32_t LastCurrentRoom = -1, LastPreviousRoom = -1;
     uint64_t PrimitiveEntries = 0, PrimitiveSpans = 0, TemporalPrimitiveSpans = 0;
     uint64_t UnownedPrimitives = 0, InvalidPrimitives = 0;
     uint64_t AtmosphereQuadSpans = 0, UiQuadSpans = 0, InvalidQuadOwners = 0;
@@ -192,6 +197,9 @@ class Mm3dNativePicaCompositionTracker final
     RoomSlots mRooms;
     std::unordered_map<uint32_t, ActorLifetime> mActorLifetimes;
     std::unordered_map<uint32_t, ModelLifetime> mModelLifetimes;
+    // CMB resource tuples (model+0x90..0xA8) of models proved to be shadows by
+    // the shared shadow routines' submit LRs. Scene-scoped.
+    std::vector<std::array<uint32_t, 7>> mShadowResources;
     uint64_t mQueueGeneration = 0;
     std::vector<uint64_t> mActorDrawStack;
     std::unordered_map<uint32_t, QueueOwner> mQueueOwners;
