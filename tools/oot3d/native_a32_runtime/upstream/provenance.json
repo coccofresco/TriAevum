@@ -5,9 +5,9 @@
     {
       "path": "src/oot3d_pack/a32_cpp_aot.py",
       "base_sha256": "64bff9da1febca4c8f9195bac6c0203343884c8a61c8a5f892326152362c829c",
-      "working_sha256": "005bc7c2bd67f3b47524ecd34404de29e4ad1ca5508356edcb45f4fcdd1e1612",
-      "working_size": 62682,
-      "purpose": "Bound AOT flow to ExHeader .text, recover initializer and constant/computed switch targets through proven linear register effects, preserve explicit nonadjacent LR continuations, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards. Emit BLX #imm as Branch and keep its Thumb destination out of A32 flow."
+      "working_sha256": "737350221e003f0abb2c8a85ec8f48afee8012db384e0ca1ad8cd7e672dd6362",
+      "working_size": 64032,
+      "purpose": "Bound AOT flow to ExHeader .text, recover initializer and constant/computed switch targets through proven linear register effects, preserve explicit nonadjacent LR continuations, emit disjoint core metadata, and configure manifest-selected true-AOT candidates without regenerating packed shards. Emit BLX #imm as Branch and keep its Thumb destination out of A32 flow. Accept title facts for BL callees that consume inline argument words after the call (resume at BL+4+4n; the words are literal data, never code)."
     },
     {
       "path": "src/oot3d_pack/arm_ir.py",
