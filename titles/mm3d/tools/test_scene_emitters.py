@@ -78,7 +78,20 @@ class MmSceneEmitterTests(unittest.TestCase):
             self.assertEqual(mm.category(name, True), category)
         for name in ("gs_kamado_01", "room_torch_01", "syokudai_fire", "water_light", "unknown_white", "sky", "hud"):
             self.assertIsNone(mm.category(name, True))
-        self.assertIsNone(mm.category("room_door_light", False))
+        # Opaque: not a doorway; its "light" name is a light shaft as in OoT3D.
+        self.assertEqual(mm.category("room_door_light", False), "light-shaft")
+
+    def test_light_names_follow_oot3d_light_shaft_recipe(self):
+        # MM3D authored additive glow cards seen in the EUR room census.
+        for name in ("ka_dailight_01", "kksi_light_01", "mn_light_03", "zse_bos_light_0", "deku_mini_light"):
+            self.assertEqual(mm.category(name, True), "light-shaft")
+        for name in ("zk_water_light", "room_torch_light", "knk_shadow_light"):
+            self.assertIsNone(mm.category(name, True))
+        data, pixels = model10("mn_light_03", additive=True)
+        with patch.object(mm.shared, "texels", side_effect=AssertionError("image analysis forbidden")):
+            emitters = mm.model_emitters(mm.Model(data, 0))
+        self.assertEqual([e["category"] for e in emitters], ["light-shaft"])
+        self.assertEqual(emitters[0]["surfaces"], [f"{mm.content_hash(pixels):016x}"])
 
     def test_v10_rigid_geometry_bones_and_native_blend_offsets(self):
         data, pixels = model10(additive=True)
