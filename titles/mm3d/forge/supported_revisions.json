@@ -1,0 +1,110 @@
+{
+  "format": "triaevum_supported_revisions_v1",
+  "recipes": [
+    {
+      "id": "mm3d-eur-local-6eec27b1",
+      "game": "mm3d",
+      "title": "The Legend of Zelda: Majora's Mask 3D",
+      "region": "EUR",
+      "inputs": {
+        "code": {
+          "bytes": 5967872,
+          "sha256": "6eec27b1827eab2c87744ac38066d569ffe6fe75790b1eb3300bd91f5099038d"
+        },
+        "exheader": {
+          "bytes": 2048,
+          "sha256": "d14ad800ecb69d746c1135c6fd2828cca7dc5735f4036d1501567ca00ce05b11"
+        },
+        "romfs": {
+          "bytes": 664428544,
+          "sha256": "dcc0d6eacc513cea7a8d8c0568ba0874ee3942579b4a54c9782856da4170e75f"
+        }
+      },
+      "process": {
+        "base": 1048576,
+        "entrypoint": 1048576,
+        "executable_size": 5361664
+      },
+      "water_catalog": {
+        "cmb": {
+          "header_bytes": 72,
+          "texture_chunk_offset": 48,
+          "texture_data_offset": 68,
+          "version": 10
+        },
+        "directories": [
+          "scenes",
+          "actors"
+        ],
+        "revision": 1,
+        "suffixes": [
+          "_info.zsi",
+          ".gar",
+          ".gar.lzs"
+        ],
+        "title": "mm3d",
+        "water_rules": {
+          "exclude": [
+            "kabe",
+            "yuka",
+            "hasira",
+            "iwa",
+            "kasumi",
+            "mizuk",
+            "mizuzou",
+            "shadow",
+            "hikari",
+            "shibuki",
+            "_awa",
+            "kusa",
+            "tree",
+            "_ten",
+            "water_bomb",
+            "dekubaba_water",
+            "torch4_water"
+          ],
+          "roles": [
+            {
+              "contains": [
+                "uvwater"
+              ],
+              "mask": 8
+            },
+            {
+              "contains": [
+                "_sea_",
+                "taki_wt_"
+              ],
+              "mask": 1
+            },
+            {
+              "contains": [
+                "_taki",
+                "dokutaki",
+                "waterfall"
+              ],
+              "mask": 4
+            },
+            {
+              "contains": [
+                "river",
+                "kawa"
+              ],
+              "mask": 2
+            },
+            {
+              "contains": [
+                "water",
+                "mizu",
+                "wsea",
+                "sea0"
+              ],
+              "mask": 1
+            }
+          ]
+        },
+        "zsi_magic": "5a534909"
+      }
+    }
+  ]
+}
