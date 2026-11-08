@@ -9,5 +9,7 @@
 
 namespace Oot3dNativeGame {
 std::span<const Fast::Renderer3ds::PicaVertexArtifact> TitleVertexArtifacts();
+// Only publisher-provided programs; never prewarm OoT's family for another title.
+std::span<const Fast::Renderer3ds::PicaVertexArtifact> AdditionalTitleVertexArtifacts();
 std::span<const Fast::Renderer::PassShaderArtifact> TitlePassArtifacts();
 } // namespace Oot3dNativeGame

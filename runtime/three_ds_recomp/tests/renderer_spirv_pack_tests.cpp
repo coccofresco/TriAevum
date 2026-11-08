@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cstring>
+#include <cstdlib>
 
 using namespace Fast::Renderer;
 
@@ -174,6 +175,8 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
     ExpectSpirvModules(Fast::Renderer3ds::NativeFragmentArtifacts(), 24U);
     ExpectSpirvModules(Fast::Extension::TemporalFragmentArtifacts(), 40U);
     ExpectSpirvModules(Fast::Extension::ToonFragmentArtifacts(), 348U); // build_fragment_artifacts --toon
+    ExpectSpirvModules(Fast::Extension::LegacyUberFragmentArtifacts(), 36U);
+    EXPECT_TRUE(Oot3dNativeGame::AdditionalTitleVertexArtifacts().empty());
     ExpectSpirvModules(Fast::Extension::UberFragmentArtifacts(), 140U); // legacy36 + native-lighting/GGX104
     ExpectSpirvModules(Fast::Extension::CasterFragmentArtifacts(), 6U);
     ExpectSpirvModules(BuiltinPassArtifacts(), 104U); // 70 + 9 diffuse GI pass kernels + its OOT3D adapter (M5), 2 grass raster-depth fragments, 3 contact shadow lengths, 2 upscaler orientation turns, 4 GPU grass selection passes, the room shadow shell vertex shader, 5 grass card programs (vertex, 2 explicit-depth and 2 conservative-depth fragments), 2 whole-blade grass fragments without discard, the reflection upsample, the grass root lighting compute, 3 grass fragments without the geometry guide
@@ -193,6 +196,27 @@ TEST(SpirvPack, EmbeddedFamiliesHoldTheirModules) {
             EXPECT_FALSE(native[i].Source == native[j].Source && native[i].SeparateSamplers == native[j].SeparateSamplers);
     // The table views the embedded pack, so repeated calls return the same storage.
     EXPECT_EQ(BuiltinPassArtifacts().data(), BuiltinPassArtifacts().data());
+}
+
+TEST(SpirvPack, OptionalPublisherFamilyLinksEverySupersetWithoutOotVertices) {
+    const char* path = std::getenv("TRIAEVUM_TEST_TITLE_PROGRAM_PACK");
+    if (!path || !*path) GTEST_SKIP() << "optional private title program oracle";
+    using namespace Fast::Renderer3ds;
+    TitleProgramPack pack(path);
+    const auto vertices = PicaVertexArtifactsFromPack(pack.Entries());
+    ASSERT_FALSE(vertices.empty());
+    const auto supersets = Fast::Extension::UberFragmentArtifacts();
+    const auto parts = PicaStartupProgramParts(vertices, supersets, NativeFragmentArtifacts(),
+                                               {VK_FORMAT_D32_SFLOAT, VK_SAMPLE_COUNT_1_BIT, true});
+    for (const auto& part : parts) EXPECT_TRUE(PicaStageInterfaceLinks(part.Vertex, part.Fragment));
+    for (const auto& shader : supersets)
+        EXPECT_TRUE(std::any_of(parts.begin(), parts.end(), [&](const auto& part) {
+            return part.Fragment.data() == shader.Spirv.data();
+        })) << "missing superset " << shader.Source.Id;
+    for (const auto& shader : vertices)
+        EXPECT_TRUE(std::any_of(parts.begin(), parts.end(), [&](const auto& part) {
+            return part.Vertex.data() == shader.Spirv.data();
+        }));
 }
 
 // A preparation-work regression is deterministic even when the driver cache

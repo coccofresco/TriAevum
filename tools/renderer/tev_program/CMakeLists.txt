@@ -424,6 +424,13 @@ target_include_directories(build_vertex_artifacts PRIVATE "${frontend}" "${runti
     "${frontend}/../third_party/azahar_pica" "${SHADERC_INCLUDE_DIR}"
     "${CMAKE_CURRENT_LIST_DIR}/../../triaevum_release/vendor/include")
 target_link_libraries(build_vertex_artifacts PRIVATE spdlog::spdlog "${SHADERC_LIBRARY}")
+find_package(Python3 QUIET COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME pica_vertex_stage_scope COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/test_vertex_stage_scope.py")
+    set_tests_properties(pica_vertex_stage_scope PROPERTIES TIMEOUT 120
+        ENVIRONMENT "TRIAEVUM_VERTEX_ARTIFACT_BUILDER=$<TARGET_FILE:build_vertex_artifacts>")
+endif()
 set(OOT3D_SHADER_TEST_ROMFS "" CACHE PATH "Private extracted ROMFS for offline vertex artifact validation")
 if(OOT3D_SHADER_TEST_ROMFS)
     add_test(NAME pica_vertex_artifacts COMMAND build_vertex_artifacts --check

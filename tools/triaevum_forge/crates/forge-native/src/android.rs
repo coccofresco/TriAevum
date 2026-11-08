@@ -433,6 +433,7 @@ mod tests {
             root: directory.path().to_path_buf(),
             stage: stage.clone(),
             pack: directory.path().join("portable.o3ps"),
+            title_program_pack: None,
             cache_directory: directory.path().join("renderer"),
             adapter: 0,
             manifests: vec![directory.path().join("pipelines-0.json")],

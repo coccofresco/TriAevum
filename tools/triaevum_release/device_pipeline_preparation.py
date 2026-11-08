@@ -161,6 +161,7 @@ def prepare_device_pipelines(*, root: Path, data_root: Path, title: dict,
     if pack is None or not pack.is_file():
         raise ValueError("Device pipeline preparation requires prepared portable shaders")
     helper = checked_file(root, contract["helper"])
+    title_program_pack = checked_file(root, title["title_program_pack"]) if "title_program_pack" in title else None
     if "manifest" in contract and "manifests" in contract:
         raise ValueError("Specify manifest or manifests, not both")
     records = contract.get("manifests", [contract["manifest"]] if "manifest" in contract else [])
@@ -187,6 +188,8 @@ def prepare_device_pipelines(*, root: Path, data_root: Path, title: dict,
         command = [str(helper), "--pack", str(pack),
                    "--cache-dir", str(cache), "--report", str(stage / "result.json"),
                    "--cancel-file", str(stage / "cancel"), "--adapter", str(adapter)]
+        if title_program_pack is not None:
+            command.extend(("--title-program-pack", str(title_program_pack)))
         for manifest in manifests:
             command.extend(("--manifest", str(manifest)))
         if startup_programs:
@@ -224,6 +227,8 @@ def prepare_device_pipelines(*, root: Path, data_root: Path, title: dict,
                       manifest_sha256s=[sha256_file(path) for path in manifests],
                       helper_sha256=sha256_file(helper),
                       dependency_sha256=[sha256_file(path) for path in dependencies])
+        if title_program_pack is not None:
+            result["title_program_pack_sha256"] = sha256_file(title_program_pack)
         atomic_write_json(receipts / "latest.json", result)
         report("pipelines", "GPU pipeline preparation: " + result["device_pipeline_prewarm"])
         return result

@@ -5,8 +5,17 @@ Publisher tooling can generate an additional SPVK pack from local native title
 SHBINs using `build_vertex_artifacts OUTPUT --translate INPUT...`. Translation
 is publisher-time only. Ship neither the SHBINs nor the extracted RomFS. The
 pack contains portable vertex SPIR-V, canonical shader identities and derived
-vertex passes; no driver cache. Unsupported non-vertex DVLEs fail generation.
-Do not silently publish partial output as all-title coverage.
+vertex passes; no driver cache. Non-vertex DVLEs fail generation by default.
+For a mixed-stage SHBIN, explicit `--vertex-only` generates just the vertex
+scope and reports each untranslated geometry DVLE and the final stage counts.
+Unknown stages and an empty vertex family still fail. This does **not** lower
+geometry shaders or prove all-title coverage. Preserve the full input/stage
+census and the unresolved geometry gap with the artifact.
+
+To check that scoped output, set `TRIAEVUM_TITLE_PROGRAM_PACK=OUTPUT` and run
+`build_vertex_artifacts --check --translate --vertex-only INPUT...`. This checks
+against that explicit pack, not an embedded-first fallback, and requires exact
+vertex/pass coverage counts. Unscoped `--check` retains the existing behavior.
 
 `--title-program-pack PATH` selects the optional runtime pack. Entries are
 appended **after** the legacy embedded vertex/pass artifacts, preserving OoT
@@ -35,7 +44,9 @@ Its 104 unique programs cover raw fragment operands/balance/native shadows
 (64), balanced native GGX (16), and native-unlit GGX (24), including temporal
 interfaces, integer texture zero and primitive-ID/no-primitive-ID variants.
 The original 36-program pack is unchanged; registration appends the new family.
-Both Forge startup preparation and the runtime see the combined 140 programs.
+Native-policy startup uses the combined 140 programs. Titles without native
+lighting policy retain the original 36-program startup set; lookup still
+preserves embedded-first precedence.
 
 The superset uses the same surface-lighting, capture and GGX ownership equations
 as specialized shaders. In particular, balanced GGX preserves Local per-slot
@@ -54,6 +65,27 @@ Tests cover all 120 native policy/interface paths (some share identical shader
 source), incompatible-policy rejection, single native capture before alpha
 replay, GGX gain/unlit endpoints, embedded modules and startup stage linking.
 Source coverage does not substitute for live, cold/prewarm and publication gates.
+
+### Optional-family startup routing
+
+A non-OoT title with a publisher program pack now prepares that pack's vertex
+family at startup, rather than skipping preparation or warming unrelated OoT
+vertices. Without an optional family the previous behavior remains. The
+headless `triaevum_nri_pipeline_prepare --title-program-pack PATH
+--startup-programs` route owns/validates the same pack and builds the same
+native program parts. It is not a complete room/pass/whole-title census.
+
+Native and Python Forge validate the title's existing `title_program_pack`
+artifact record before the device job, pass this option, and include
+`title_program_pack_sha256` in its receipt. Missing/corrupt artifacts fail
+before the helper; driver/prewarm failures retain the existing optional
+acceleration policy. No optional field means unchanged OoT arguments/receipts.
+
+Pure `uber` recordings intentionally have no portable pipeline recipes (their
+programs are library parts). Their raw draws/variant requests can prove source
+replay and availability, but are not complete portable-recipe sessions. The
+regeneration CLI accepts complete variant-record sessions without a separate
+capture import; required witness, uber, recipe and policy gates still apply.
 
 ## Exact replay context
 

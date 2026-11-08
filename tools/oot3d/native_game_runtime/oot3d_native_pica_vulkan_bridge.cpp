@@ -10,8 +10,8 @@
 #include <cstring>
 
 namespace Oot3dNativeGame {
-std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily() {
-    return TitleVertexArtifacts();
+std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily(bool additionalOnly) {
+    return additionalOnly ? AdditionalTitleVertexArtifacts() : TitleVertexArtifacts();
 }
 std::span<const Fast::Renderer::PassShaderArtifact> NativePicaTitlePassPrograms() {
     return TitlePassArtifacts();

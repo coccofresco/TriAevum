@@ -8,7 +8,7 @@
 #include <string>
 
 namespace Oot3dNativeGame {
-std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily();
+std::span<const Fast::Renderer3ds::PicaVertexArtifact> NativePicaVertexProgramFamily(bool additionalOnly = false);
 // Shadow-caster and surface-lighting vertex programs derived from the family.
 std::span<const Fast::Renderer::PassShaderArtifact> NativePicaTitlePassPrograms();
 

@@ -257,6 +257,8 @@ pub fn prepare_device_pipelines(
     };
     let verify = CancelToken::new();
     let helper = checked_file(root, index(contract_value, "helper")?, &verify)?;
+    let title_program_pack = title.get("title_program_pack")
+        .map(|record| checked_file(root, record, &verify)).transpose()?;
     if fields.contains_key("manifest") && fields.contains_key("manifests") {
         return Err(contract("Specify manifest or manifests, not both"));
     }
@@ -319,6 +321,7 @@ pub fn prepare_device_pipelines(
         root: root.to_path_buf(),
         stage: stage.path().to_path_buf(),
         pack: pack.to_path_buf(),
+        title_program_pack: title_program_pack.clone(),
         cache_directory: cache,
         adapter,
         manifests: manifests.clone(),
@@ -341,6 +344,9 @@ pub fn prepare_device_pipelines(
     });
     result.insert("game_coverage_proven".into(), json!(false));
     result.insert("pack_sha256".into(), json!(file_sha256(pack)?));
+    if let Some(programs) = &title_program_pack {
+        result.insert("title_program_pack_sha256".into(), json!(file_sha256(programs)?));
+    }
     let single = if manifests.len() == 1 { json!(file_sha256(&manifests[0])?) } else { Value::Null };
     result.insert("manifest_sha256".into(), single);
     let manifest_sha256 = manifests.iter().map(|path| file_sha256(path)).collect::<Result<Vec<_>>>()?;

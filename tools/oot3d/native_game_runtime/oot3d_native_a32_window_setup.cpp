@@ -1416,14 +1416,13 @@ void NativeA32WindowSession::Setup() {
   if (programPreparation != nullptr)
     programPreparation->RegisterTitlePassPrograms(
         Oot3dNativeGame::NativePicaTitlePassPrograms());
-  // The startup program family (vertex programs, effect supersets) is
-  // OoT3D's: another title's draws never match it, so preparing it would
-  // only hold that guest at startup. Its draws prepare their own programs.
+  // Another title prepares only its publisher-provided vertex family, never
+  // OoT's unrelated programs. Without such a pack it retains the old behavior.
   if (programPreparation != nullptr &&
-      titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur &&
       (launch.PicaParametricTev || alwaysAvailablePrograms)) {
-    programPreparation->PrepareNativePicaPrograms(
-        Oot3dNativeGame::NativePicaVertexProgramFamily());
+    const auto family = Oot3dNativeGame::NativePicaVertexProgramFamily(
+        titleAdapter != Oot3dNativeGame::TitleAdapter::Oot3dEur);
+    if (!family.empty()) programPreparation->PrepareNativePicaPrograms(family);
   }
   // Initial preparation: from here until the renderer's startup work is ready
   // and the first frames run within budget, the window shows its progress.

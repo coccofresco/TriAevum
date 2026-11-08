@@ -73,6 +73,18 @@ class DevicePreparationTests(unittest.TestCase):
             self.assertEqual(run.call_args.args[0].count("--manifest"), 2)
             self.assertEqual(len(result["manifest_sha256s"]), 2)
 
+    def test_optional_title_program_family_is_verified_routed_and_receipted(self):
+        self.title['title_program_pack'] = self.artifact('title.spvpack')
+        self.title['device_pipeline_preparation']['startup_programs'] = True
+        with patch('device_pipeline_preparation._run', side_effect=self.fake_run) as run:
+            result = self.prepare()
+            self.assertEqual(result['title_program_pack_sha256'], sha256_file(self.root / 'title.spvpack'))
+            args = run.call_args.args[0]
+            self.assertEqual(args[args.index('--title-program-pack') + 1], str(self.root / 'title.spvpack'))
+            (self.root / 'title.spvpack').write_bytes(b'corrupt')
+            with self.assertRaises(ValueError): self.prepare()
+            self.assertEqual(run.call_count, 1)
+
     def test_startup_programs_join_the_same_job_with_a_longer_budget(self):
         with patch("device_pipeline_preparation._run", side_effect=self.fake_run) as run:
             self.prepare()

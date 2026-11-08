@@ -6,6 +6,8 @@
 #include "headless_device.h"
 #include "fast/extension/pica_pipeline_preparation.h"
 #include "fast/renderer/preparation_host.h"
+#include "fast/renderer/title_program_pack.h"
+#include <memory>
 #include "fast/renderer3ds/pipeline_cache_flusher.h"
 // Translated title vertex family (title code, like the runtime executable's).
 #include "oot3d_native_vertex_binaries.h"
@@ -158,7 +160,7 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
                 continue;
             }
             if (key != "--manifest" && key != "--pack" && key != "--cache-dir" &&
-                key != "--report" && key != "--cancel-file" && key != "--adapter")
+                key != "--report" && key != "--cancel-file" && key != "--adapter" && key != "--title-program-pack")
                 throw std::runtime_error("unknown pipeline preparation option: " + key);
             if (++i >= argc || !args.emplace(key, argv[i]).second) throw std::runtime_error("missing or duplicate option");
         }
@@ -177,7 +179,7 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
         const auto cachePath = std::filesystem::weakly_canonical(
             std::filesystem::path(args.at("--cache-dir")) / Renderer3ds::kNriPipelineCacheFilename);
         const auto reportPath = std::filesystem::weakly_canonical(args.at("--report"));
-        for (const auto* key : {"--manifest", "--pack", "--cancel-file"}) {
+        for (const auto* key : {"--manifest", "--pack", "--cancel-file", "--title-program-pack"}) {
             if (!args.contains(key)) continue;
             const auto input = std::filesystem::weakly_canonical(args.at(key));
             if (input == cachePath || input == reportPath)
@@ -195,6 +197,15 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
         // The runtime reads binaries on demand; installation checks them all.
         if (!manifests.empty() && (!pack.Load(args.at("--pack"), &error) || !pack.Verify(&error)))
             throw std::runtime_error(error);
+        // Own and validate the optional family before touching the GPU. Like
+        // runtime startup, another title prepares only its own vertex programs.
+        std::unique_ptr<Fast::Renderer::TitleProgramPack> titlePrograms;
+        std::vector<Renderer3ds::PicaVertexArtifact> titleVertices;
+        if (args.contains("--title-program-pack")) {
+            titlePrograms = std::make_unique<Fast::Renderer::TitleProgramPack>(args.at("--title-program-pack"));
+            titleVertices = Renderer3ds::PicaVertexArtifactsFromPack(titlePrograms->Entries());
+            if (startupPrograms && titleVertices.empty()) throw std::runtime_error("title program pack has no vertex family");
+        }
         std::map<uint64_t, Fast::Extension::PicaGraphicsPipelineManifestEntry> unique;
         size_t observations = 0;
         for (const auto& path : manifests) {
@@ -250,7 +261,10 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
                                                                   device.GeometryShaders};
         if (startupPrograms && device.PipelineLibraries)
             parts = Renderer3ds::PicaStartupProgramParts(
-                Oot3dNativeGame::TitleVertexArtifacts(), Fast::Extension::StartupUberFragmentArtifacts(false, false),
+                titlePrograms ? std::span<const Renderer3ds::PicaVertexArtifact>(titleVertices)
+                              : Oot3dNativeGame::TitleVertexArtifacts(),
+                titlePrograms ? Fast::Extension::UberFragmentArtifacts()
+                              : Fast::Extension::StartupUberFragmentArtifacts(false, false),
                 Renderer3ds::NativeFragmentArtifacts(), startupDevice);
         const size_t total = parts.size() + entries.size();
         const auto progress = [&](size_t attempted, size_t prepared, size_t failed, const std::string& last) {
