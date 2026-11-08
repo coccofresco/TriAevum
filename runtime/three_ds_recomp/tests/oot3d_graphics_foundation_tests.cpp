@@ -7939,6 +7939,58 @@ TEST(Renderer3dsShadowCasterViewLagProbe, SeparatesAPreviousFrameViewFromACurren
         << probe.Line();
 }
 
+TEST(Renderer3dsShadowCasterViewLagProbe, DrawAdapterReadsThePackedViewAndModelUniforms) {
+    using namespace Fast::Renderer3ds;
+    // Packed float4 rows: view rows at c0..c2, model rows at c4..c6.
+    const auto pack = [](float viewX, float modelX) {
+        std::vector<uint8_t> bytes(8 * 16, 0);
+        auto row = [&](uint32_t index, float a, float b, float c, float d) {
+            const float values[4] = { a, b, c, d };
+            std::memcpy(bytes.data() + index * 16, values, sizeof(values));
+        };
+        row(0, 1, 0, 0, viewX); row(1, 0, 1, 0, 0); row(2, 0, 0, 1, 0);
+        row(4, 1, 0, 0, modelX); row(5, 0, 1, 0, 0); row(6, 0, 0, 1, 0);
+        return bytes;
+    };
+    ShadowCasterViewLagProbe adapted;
+    ShadowCasterViewLagProbe direct;
+    for (uint64_t frame = 10; frame < 30; ++frame) {
+        const float camera = 0.05F * float(frame * frame);
+        const float formed = 0.05F * float((frame - 1) * (frame - 1));
+        const auto bytes = pack(-formed, 5.0F);
+        ShadowCasterViewLagDraw draw;
+        draw.Frame = 2U * frame;
+        draw.ViewToWorld = ViewLagTranslation(camera);
+        draw.FloatUniforms = bytes;
+        draw.ViewFirstUniform = 0;
+        draw.ModelFirstUniform = 4;
+        draw.GeometryIdentity = 0x51;
+        draw.TemporalIdentity = { 1, 2, 3, 4, 5 };
+        ASSERT_TRUE(ObserveShadowCasterViewLagDraw(adapted, draw));
+        direct.BeginFrame(2U * frame, ViewLagTranslation(camera));
+        direct.Observe(7, ViewLagTranslation(-formed), ViewLagTranslation(5.0F));
+    }
+    EXPECT_EQ(adapted.Counts().Pairs, 18U);
+    EXPECT_EQ(adapted.Counts().ReanchorPrevious, direct.Counts().ReanchorPrevious);
+    EXPECT_EQ(adapted.Counts().ReanchorCurrent, direct.Counts().ReanchorCurrent);
+    EXPECT_EQ(adapted.Line(), direct.Line());
+    // Negative: an unreadable model uniform (past the packed block, or
+    // non-finite) is refused and observes nothing.
+    ShadowCasterViewLagProbe refused;
+    auto bytes = pack(0.0F, 1.0F);
+    ShadowCasterViewLagDraw draw;
+    draw.Frame = 1;
+    draw.FloatUniforms = bytes;
+    draw.ViewFirstUniform = 0;
+    draw.ModelFirstUniform = 94;
+    EXPECT_FALSE(ObserveShadowCasterViewLagDraw(refused, draw));
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    std::memcpy(bytes.data() + 4 * 16, &nan, sizeof(nan));
+    draw.ModelFirstUniform = 4;
+    EXPECT_FALSE(ObserveShadowCasterViewLagDraw(refused, draw));
+    EXPECT_EQ(refused.Counts().Frames, 0U);
+}
+
 namespace {
 // Drives the keyframe scheduler with a light that turns about the Z axis and
 // a construction of `pages` static pages.

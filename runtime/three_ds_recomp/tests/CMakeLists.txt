@@ -753,6 +753,7 @@ add_test(NAME oot3d_grass_midrange_clusters_tests COMMAND oot3d_grass_midrange_c
 
 add_executable(oot3d_graphics_foundation_tests
     oot3d_graphics_foundation_tests.cpp
+    ../src/fast/renderer3ds/shadow_caster_view_lag_probe.cpp
     oot3d_azahar_texture_pack_tests.cpp
     oot3d_graphics_settings_persistence_tests.cpp
     oot3d_graphics_settings_runtime_tests.cpp
