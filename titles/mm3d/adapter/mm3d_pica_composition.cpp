@@ -162,19 +162,35 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             mActorLifetimes.clear(); mModelLifetimes.clear(); mSpans.clear();
             ++mStats.LifecycleInvalidations;
         }
-        // Room change (Play+0xC260 curRoom.num, same field CaptureMm3dEmitterRoom
-        // uses): a room/background CMB loaded into a reused buffer is a new
-        // instance. Scene-owned model lifetimes end; actors keep their own
-        // destroy-site boundaries (Actor_Kill on room unload, zeldaret-mm z_actor).
-        uint8_t room = 0xFFU;
-        const int16_t currentRoom = valid && memory.Read8(play + 0xC260U, &room) && room <= 127U ? int16_t(room) : int16_t(-1);
-        if (currentRoom != mRoom) {
+        // Room slots (RoomContext at Play+0xC260: curRoom, prevRoom at +0x64,
+        // num s8 at +0; prevRoom.num < 0 = empty). Proved in code.bin: room
+        // draw 0x00171C44 visits both slots, room-change 0x001F5158 reads
+        // prevRoom.num at Play+0xC2C4 and unloads it (zeldaret-mm RoomContext,
+        // Room_FinishRoomChange). During a two-room transition both rooms stay
+        // loaded and drawn, so their models keep history. A room leaving both
+        // slots ends scene-owned model lifetimes; per-model room keying needs
+        // the room-node->model ABI, which is not proved. Actors keep their own
+        // destroy-site boundaries. An unreadable/invalid slot is unknown and
+        // never matches a known set.
+        RoomSlots rooms;
+        uint8_t cur = 0xFFU, prev = 0xFFU;
+        rooms.Valid = valid && play <= UINT32_MAX - 0xC2C5U &&
+            memory.Read8(play + 0xC260U, &cur) && memory.Read8(play + 0xC2C4U, &prev) &&
+            cur <= 127U && (prev <= 127U || prev == 0xFFU);
+        if (rooms.Valid) { rooms.Current = int8_t(cur); rooms.Previous = prev == 0xFFU ? int8_t(-1) : int8_t(prev); }
+        const auto contains = [](const RoomSlots& slots, int8_t room) {
+            return slots.Valid && room >= 0 && (slots.Current == room || slots.Previous == room);
+        };
+        const bool roomLeft = mRooms.Valid != rooms.Valid ||
+            (mRooms.Valid && ((mRooms.Current >= 0 && !contains(rooms, mRooms.Current)) ||
+                              (mRooms.Previous >= 0 && !contains(rooms, mRooms.Previous))));
+        if (roomLeft) {
             for (auto it = mModelLifetimes.begin(); it != mModelLifetimes.end();) {
                 if (it->second.Owner & (1ULL << 63U)) it = mModelLifetimes.erase(it); else ++it;
             }
-            if (mRoom >= 0) ++mStats.LifecycleInvalidations;
+            if (mRooms.Valid) ++mStats.LifecycleInvalidations;
         }
-        mRoom = currentRoom;
+        mRooms = rooms;
         mPlay = valid ? play : 0U; mScene = scene; mPlayFrame = frame;
         ++mQueueGeneration;
         mQueueOwners.clear(); mActorDrawStack.clear(); mModelSubmit.reset(); mModelScope.reset();
@@ -815,7 +831,7 @@ void Mm3dNativePicaCompositionTracker::Reset() noexcept {
     // Never rewind the monotonic allocator on state load: the same guest
     // addresses after restore must not match an earlier presented sample.
     mActorLifetimes.clear(); mModelLifetimes.clear();
-    mPlay = mPlayFrame = 0; mScene = 0; mRoom = -1;
+    mPlay = mPlayFrame = 0; mScene = 0; mRooms = {};
     mActive.reset();
     mSpans.clear();
     mSceneLighting = {};

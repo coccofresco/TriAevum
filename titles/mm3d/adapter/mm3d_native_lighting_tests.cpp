@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <vector>
+#include <span>
 
 using namespace Oot3dNativeGame;
 using namespace Fast::Renderer3ds;
@@ -141,19 +143,59 @@ void TestCompositionTemporalLifetimes() {
             f.W32(f.Queue + 8U, f.Model); f.W32(f.Queue + 4U, 1);
             return consume().TemporalIdentity;
         };
-        f.W8(f.Play + 0xC260U, 0);
+        const auto rooms = [&](uint8_t cur, uint8_t prev) { f.W8(f.Play + 0xC260U, cur); f.W8(f.Play + 0xC2C4U, prev); };
+        rooms(0, 0xFF);
         const auto roomA = bgEnqueue();
         Require(bgEnqueue().Lifetime == roomA.Lifetime, "room model lifetime unstable within a room");
         beginFrame(); enqueue(); const auto actorA = consume().TemporalIdentity;
-        f.W8(f.Play + 0xC260U, 1);
+        rooms(1, 0xFF);
         beginFrame(); enqueue();
         Require(consume().TemporalIdentity.Lifetime == actorA.Lifetime, "room change reset a live actor lifetime");
-        f.W8(f.Play + 0xC260U, 0); bgEnqueue(); const auto roomA2 = bgEnqueue();
-        f.W8(f.Play + 0xC260U, 1);
+        rooms(0, 0xFF); bgEnqueue(); const auto roomA2 = bgEnqueue();
+        rooms(1, 0xFF);
         const auto roomB = bgEnqueue();
         Require(roomB.Available() && roomB.Lifetime != roomA2.Lifetime, "room change kept room model lifetime");
-        f.W8(f.Play + 0xC260U, 0);
+        rooms(0, 0xFF);
         Require(bgEnqueue().Lifetime != roomA.Lifetime, "returning room reused stale lifetime");
+        // Two-room transition: room 0 stays loaded in prevRoom while room 1
+        // loads into curRoom; both are drawn, so history must survive.
+        const auto before = bgEnqueue();
+        rooms(1, 0);
+        Require(bgEnqueue().Lifetime == before.Lifetime, "two-room transition dropped loaded room history");
+        rooms(0, 1);
+        Require(bgEnqueue().Lifetime == before.Lifetime, "slot swap of loaded rooms dropped history");
+        // Transition end: room 1 leaves both slots.
+        rooms(0, 0xFF);
+        const auto afterUnload = bgEnqueue();
+        Require(afterUnload.Lifetime != before.Lifetime, "room unload kept room model lifetime");
+        // Invalid room number (>127, not the empty marker) is unknown.
+        rooms(0x80, 0xFF);
+        const auto invalid = bgEnqueue();
+        Require(invalid.Lifetime != afterUnload.Lifetime, "invalid room value kept room model lifetime");
+        rooms(0, 0x90);
+        Require(bgEnqueue().Lifetime == invalid.Lifetime, "unknown room state was not stable");
+        rooms(0, 0xFF);
+        const auto recovered = bgEnqueue();
+        Require(recovered.Lifetime != invalid.Lifetime, "recovery from invalid room reused unknown lifetime");
+        Require(bgEnqueue().Lifetime == recovered.Lifetime, "room lifetime unstable after recovery");
+        // A failed slot read is unknown, never a match.
+        // Leave a hole over the RoomContext page so the slot read fails.
+        std::vector<uint8_t> saved(0x20000U);
+        std::string error;
+        Require(f.Memory.ReadBytes(f.Play, saved), "save play");
+        const auto remap = [&](bool hole) {
+            Require(f.Memory.UnmapRegion(f.Play, hole ? 0x20000U : 0xC000U, &error) &&
+                    (hole || f.Memory.UnmapRegion(f.Play + 0xD000U, 0x13000U, &error)), "unmap play");
+            const auto map = [&](uint32_t offset, uint32_t size) {
+                Require(f.Memory.MapRegion({"mm3d-lighting-test", f.Play + offset, size, true, false, {}}, &error) &&
+                        f.Memory.WriteBytes(f.Play + offset, std::span<const uint8_t>(saved).subspan(offset, size)), "map play");
+            };
+            if (hole) { map(0, 0xC000U); map(0xD000U, 0x13000U); } else map(0, 0x20000U);
+        };
+        remap(true);
+        const auto unreadable = bgEnqueue();
+        remap(false);
+        Require(unreadable.Lifetime != recovered.Lifetime, "failed room read kept room model lifetime");
     }
     const auto beforeRollback = consume().TemporalIdentity;
     frame = 1; beginFrame(); enqueue();
