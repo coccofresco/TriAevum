@@ -285,5 +285,43 @@ The model submit tails (`0x0020A910`, `0x0020A9A0`, guard `e2800e81`) and
 (`0x0011EF14`, `0x0011EF60`, `0x0011125C`, whose return addresses are the
 existing scopes). List 2 is only initialised and cleared, so it produces no
 native draw and is given no composition owner. Any draw that arrives outside
-every scope keeps the Unknown role; no role is inferred. Overlay (CRO) code
-was not scanned. Receipt: `analysis/parity/COMPOSITION/THIRD_LIST/`.
+every scope keeps the Unknown role; no role is inferred. Receipt:
+`analysis/parity/COMPOSITION/THIRD_LIST/`. The EUR image ships no CRO
+overlays (0 RomFS entries, 0 `CRO0` magic in `romfs.bin`/`code.bin`;
+`analysis/parity/COMPOSITION/CRO_SCAN/`), so the `code.bin` scans of list-2
+visitors and direct shadow submitters cover all native code.
+
+## Projected shadows in Enhanced (2026-11-08)
+
+The presentation omits the native projected-shadow role through one shared
+predicate, `OmitsNativeProjectedShadowRole`: Per-pixel and Per-pixel + PBR
+only, never in the Authentic profile or the native-memory replay. This is the
+OoT3D rule; Enhanced (Per-pixel + PBR, VSM) therefore shows the VSM shadow, not
+blob plus VSM. MM3D marks a model span as projected shadow only when it is
+pure: no actor, isolated-lighting or atmosphere owner, world layer
+(`projected_shadow_spans`). Tests in `mm3d_native_lighting_tests` apply the
+predicate to the tracker's real spans.
+
+## Deformed passes and exact motion (2026-11-08)
+
+Deformed CMB passes receive temporal identities like rigid passes, as on
+OoT3D, and the shared rigid gate (`DecodeCommonRigidOriginClip`) rejects them
+for exact motion. MM3D's `GzwShader.shbin` enters its matrix-palette path on
+bool uniform b2 (`ifu b2` at 0x00E, palette reads through `a1`/`a2` at
+c52..c54), which is the bit the gate rejects; its rigid layout (c20 model,
+c4 model-view) is the one the gate decodes. Test
+`TestDeformedPassRejectedByRigidGate`; receipt
+`analysis/parity/COMPOSITION/F03_RIGID/`.
+
+## Room geometry identity (final, 2026-11-08)
+
+OoT3D keys world (non-actor) CMB passes by renderer instance, packet descriptor
+and pass under one world lifetime that renews only at reset
+(`oot3d_native_pica_composition.cpp`, `mWorldTemporalLifetime`); it has no
+per-room keying. MM3D keys room and scene models by model address under a
+lifetime that renews when the model's resource tuple changes, and it also ends
+scene-owned lifetimes when a room leaves both room slots. That is at least as
+strict as OoT3D: a reused address cannot match a previous room's history. The
+cost is a one-frame history reset of the surviving room's models at the end
+of a transition. Linking the room node table (room+0x18) to CMB instances
+would only remove that reset. It is not needed for parity and is not pursued.
