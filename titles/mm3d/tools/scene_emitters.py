@@ -1,10 +1,13 @@
-"""MM3D EUR room/material emitter facts from the user's assets (no pixels analysed).
+"""MM3D EUR room/material emitter facts from the user's assets.
 
 Run with --code-bin, --romfs and --out. Scene ids come from the native EUR
 resource table, not a hand-maintained scene list. CMB v10 supplies semantic
 texture names, encoded base-level identities and rigid room geometry. Placement,
 clustering, category budgets and gains reuse the existing scene-light mechanism.
 This does not classify arbitrary fullbright materials or install PBR emission maps.
+Pixels are read only for OoT3D's two offline texel-colour rules (shared
+scene_lights.is_daylight/doorway_emitter and the fire colour guard), with the
+same thresholds as OoT3D; nothing here tunes a scene from runtime brightness.
 """
 from __future__ import annotations
 import argparse
@@ -119,9 +122,14 @@ class Model(shared.Model):
         self._shapes, self._uvs = {}, {}
 
 
+# Title fact: actor-owned flames and non-emitting effects (water, mist spray
+# "mizukemuri", shadows). Also excludes them from the white-doorway rule.
+NON_EMITTING = re.compile(r"syoku|shoku|torch|taimatsu|rousoku|candle|water|mizu|shadow|kage")
+
+
 def category(name: str, additive: bool) -> str | None:
     name = name.lower()
-    if re.search(r"syoku|shoku|torch|taimatsu|rousoku|candle|water|mizu|shadow|kage", name):
+    if NON_EMITTING.search(name):
         return None  # actor-owned flames / non-emitting effects
     if additive and re.search(r"door.*(?:glow|light)|(?:glow|light).*door", name):
         return "doorway"
@@ -136,7 +144,7 @@ def category(name: str, additive: bool) -> str | None:
     # additive glow cards this way (ka_dailight, kksi_light, mn_light, ...).
     if re.search(r"hikari|light", name):
         return "light-shaft"
-    if re.search(r"fire|fir\d|yougan|magma|lava|hinoko|hono", name):
+    if re.search(r"fire|fir\d|mgm|yougan|magma|lava|hinoko|hono", name):
         return "fire-lava"
     return None
 
@@ -160,19 +168,41 @@ def model_emitters(model: Model) -> list[dict]:
     for material, shapes in groups.items():
         if material not in facts:
             continue
-        (name, _, _, _, _, pixels), additive, cat = facts[material]
-        if not cat or not pixels or (cat == "window-lamp" and not additive and window_glow):
+        (name, _, _, fmt, kind, pixels), additive, cat = facts[material]
+        if not pixels:
             continue
+        surface = f"{content_hash(pixels):016x}"
         triangles = [tuple(((shape, index), point) for index, point in tri)
                      for shape in shapes for tri in model.triangles(shape)]
-        boxes = shared.objects(triangles, 10 if cat == "doorway" else 40)
-        if cat == "doorway":
-            emitters = [e for low, high, _ in boxes
-                        if (e := shared.doorway_emitter(low, high, shared.model_centre(model))) is not None]
-        else:
-            emitters = shared.emitters_for(cat, COLOUR[cat], boxes)
-        for emitter in emitters:
-            emitter.update(category=cat, texture=name, surfaces=[f"{content_hash(pixels):016x}"],
+        found, boxes = [], None
+        # OoT3D's offline texel rules (scene_lights.model_emitters): a plain
+        # white additive material's doorway-shaped volumes let daylight in
+        # (the material's other objects keep its named category), and fire
+        # found by loose name stems (mgm, hono, ...) must look like fire.
+        raw = shared.texture_colour(fmt, kind, pixels) if additive or cat == "fire-lava" else None
+        if additive and cat != "doorway" and not NON_EMITTING.search(name.lower()) and shared.is_daylight(raw):
+            boxes = []
+            for low, high, tris in shared.objects(triangles, 10.0):
+                emitter = shared.doorway_emitter(low, high, shared.model_centre(model))
+                if emitter is None:
+                    boxes.append((low, high, tris))
+                else:
+                    emitter["category"] = "doorway"
+                    found.append(emitter)
+        if cat == "window-lamp" and not additive and window_glow:
+            cat = None
+        if cat == "fire-lava" and raw is not None and not (raw[0] >= raw[2] and max(raw) > 0.25):
+            cat = None
+        if cat:
+            if boxes is None:
+                boxes = shared.objects(triangles, 10 if cat == "doorway" else 40)
+            if cat == "doorway":
+                found += [dict(e, category=cat) for low, high, _ in boxes
+                          if (e := shared.doorway_emitter(low, high, shared.model_centre(model))) is not None]
+            else:
+                found += [dict(e, category=cat) for e in shared.emitters_for(cat, COLOUR[cat], boxes)]
+        for emitter in found:
+            emitter.update(texture=name, surfaces=[surface],
                            material=material, surfaceRole="authored-room-emitter-or-fake-emitter",
                            independentEmission=True)
             result.append(emitter)
@@ -217,7 +247,7 @@ def generate(code: bytes, files) -> dict:
                               source=name, sourceSha256=hashlib.sha256(data).hexdigest(), emitters=emitters))
         except (ValueError, struct.error, UnicodeError) as error:
             rejected.append(dict(source=name, reason=str(error)))
-    return dict(schema="triaevum.scene-lights", version=1, title="mm3d", generatorRevision=2,
+    return dict(schema="triaevum.scene-lights", version=1, title="mm3d", generatorRevision=3,
                 fingerprintMode="mm3d-zsi-header-v1", rooms=rooms, rejected=rejected)
 
 
