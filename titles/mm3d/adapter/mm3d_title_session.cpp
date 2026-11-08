@@ -404,6 +404,7 @@ public:
             {"write_failures",photo.WriteFailures},{"max_eye_distance",photo.MaxEyeDistance},
             {"max_player_distance",photo.MaxPlayerDistance},{"last_eye",photo.LastEye},
             {"last_native_eye",photo.LastNativeEye}}},
+        {"layout_owners", {{"draws",stats.LayoutOwners},{"dropped",stats.LayoutOwnersDropped}}},
         {"scene_projections",std::move(projections)},
         {"scene_projection_segments_discarded",mProjectionHistory.DiscardedSegments()},
         {"foliage_distance", {{"verified", mFoliage.Verified()},

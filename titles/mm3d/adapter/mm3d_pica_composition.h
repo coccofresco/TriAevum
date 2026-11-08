@@ -4,6 +4,7 @@
 #include "mm3d_native_a32_lighting.h"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -68,6 +69,10 @@ struct Mm3dNativePicaCompositionStats {
     // the environment's directional lights the last of them carried.
     uint64_t LightBindings = 0;
     uint32_t SceneDirectionalLights = 0;
+    // P17 owner dump: draws per layout resource name at the owner draw entry
+    // (bounded; later names count in LayoutOwnersDropped).
+    std::map<std::string, uint64_t> LayoutOwners;
+    uint64_t LayoutOwnersDropped = 0;
 };
 
 // Records the command-list byte range each native pass writes, with its
