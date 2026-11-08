@@ -8,6 +8,7 @@
 #include "mm3d_restoration.h"
 
 #include <cstdio>
+#include <cstdlib>
 
 namespace Oot3dNativeGame {
 
@@ -79,6 +80,11 @@ Mm3dSingleScreen::Mm3dSingleScreen(std::function<std::int64_t()> globalTimeUs)
     mCore->host.layout_draw = [this](Mm3dDekui::Memory& memory, uint32_t layout, uint32_t root, uint32_t pass) {
         return mButtonOverlay->Capture(memory, layout, root, pass);
     };
+    // Sole owner of the inline-chord look choice (owner decision pending):
+    // TRIAEVUM_MM3D_INLINE_CHORDS=abbreviated (default) | chord.
+    if (const char* style = std::getenv("TRIAEVUM_MM3D_INLINE_CHORDS"))
+        if (const auto parsed = Mm3dButtonOverlay::ParseInlineChordStyle(style))
+            mButtonOverlay->SetInlineChordStyle(*parsed);
 }
 
 void Mm3dSingleScreen::ConfigureButtonOverlay(const NativeControlConfig& config, NativePromptSet prompts) {
@@ -99,7 +105,7 @@ std::map<std::string, uint64_t> Mm3dSingleScreen::ButtonOverlaySummary() const {
              {"candidates",s.Candidates},{"tint_rejected",s.TintRejected},{"pose_rejected",s.PoseRejected},
               {"unbound_candidates",s.UnboundCandidates},{"ring_geometry_rejected",s.RingGeometryRejected},
               {"capacity_rejected",s.CapacityRejected},{"duplicate_candidates",s.DuplicateCandidates},
-              {"pending_labels",mButtonOverlay->PendingLabels()},{"pending_panes",mButtonOverlay->PendingPanes()},
+              {"pending_labels",mButtonOverlay->PendingLabels()},{"inline_chord_form",mButtonOverlay->GetInlineChordStyle()==Mm3dButtonOverlay::InlineChordStyle::Chord?1u:0u},{"pending_panes",mButtonOverlay->PendingPanes()},
               {"inline_glyphs",s.InlineGlyphs}};
 }
 

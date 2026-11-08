@@ -18,6 +18,9 @@ struct NativeButtonOverlaySlot {
   bool SuffixPlus = false;
   float PlusX = 0, PlusY = 0;
   bool ChordMainAnchor = false; // mixed HUD art: main key covers its native letter
+  // Single-glyph chord abbreviation for fixed-advance prose cells: the main key
+  // fills the cell and the modifier is a corner badge instead of "mod + key".
+  bool ChordAbbreviated = false;
 };
 
 inline std::optional<Menu::ButtonGlyph> NativeButtonOverlayGlyph(
@@ -44,10 +47,11 @@ inline void AppendNativeButtonOverlay(std::vector<oot3d::ui::UiPrimitive>& outpu
     Menu::ButtonGlyphColors colors;
     const float light = std::clamp(std::min({slot.Color.red, slot.Color.green, slot.Color.blue}), 0.f, 1.f);
     colors.Body = {light, light, light, 1};
+    const bool abbreviated = modifier && slot.ChordAbbreviated;
     const float unitWidth=Menu::ButtonGlyphWidth(*glyph,1.f)+
-        (modifier?Menu::ButtonGlyphWidth(*modifier,1.f)+.6f:0.f);
+        (modifier && !abbreviated?Menu::ButtonGlyphWidth(*modifier,1.f)+.6f:0.f);
     const float height = slot.Width > 0 ? std::min(slot.Height,slot.Width / unitWidth) : slot.Height;
-    const float mainX=slot.X+(modifier && !slot.ChordMainAnchor?(Menu::ButtonGlyphWidth(*modifier,height)+.6f*height)*.5f:0.f);
+    const float mainX=slot.X+(modifier && !abbreviated && !slot.ChordMainAnchor?(Menu::ButtonGlyphWidth(*modifier,height)+.6f*height)*.5f:0.f);
     Menu::AppendButtonGlyph(output, *glyph, mainX, slot.Y, height, slot.Color.alpha, 30,
         Menu::ButtonGlyphCellForPixels(height * pixelsPerUnit), colors);
     if (slot.SuffixPlus) {
@@ -56,7 +60,13 @@ inline void AppendNativeButtonOverlay(std::vector<oot3d::ui::UiPrimitive>& outpu
       text.Color={light,light,light,slot.Color.alpha};
       Menu::AppendText(output,text,slot.PlusX,slot.PlusY+slot.Height*.3f,"+");
     }
-    if (modifier) {
+    if (abbreviated) {
+      const float badge = height * .5f;
+      const float badgeWidth = Menu::ButtonGlyphWidth(*modifier, badge);
+      const float left = mainX - Menu::ButtonGlyphWidth(*glyph, height) * .5f;
+      Menu::AppendButtonGlyph(output, *modifier, left + badgeWidth * .5f, slot.Y - (height - badge) * .5f,
+          badge, slot.Color.alpha, 30, Menu::ButtonGlyphCellForPixels(badge * pixelsPerUnit), colors);
+    } else if (modifier) {
       const float mainWidth = Menu::ButtonGlyphWidth(*glyph, height);
       const float modWidth = Menu::ButtonGlyphWidth(*modifier, height);
       const float plusX = mainX - mainWidth * .5f - height * .3f;

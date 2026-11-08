@@ -225,6 +225,24 @@ void TestInlineAndChordBounds(){
  m.words[record]=pixels;m.F(record+0x28,0);Check(!overlay.CaptureInline(m,node,record,false),"ordinary atlas art stays native");
  m.F(record+0x28,160.f/256);m.F(record+0x2c,32.f/128);
  Check(overlay.CaptureInline(m,node,record,false),"inline Restoration I cell recognized");
+ {
+  struct Extent{float Tallest=0,Left=1e9f,Right=-1e9f;size_t Count=0;};
+  auto run=[&](Mm3dButtonOverlay::InlineChordStyle style){
+   Mm3dButtonOverlay o;o.Configure(NativeControlDefaults(),NativePromptSet::Keyboard);o.SetInlineChordStyle(style);
+   Check(o.CaptureInline(m,node,record,false)&&o.PendingLabels()==1,"inline I captured for style");
+   o.SubmitCommandList(0x14001000,0x100);o.ObserveDraw(7);const uint64_t d=7;o.Select(std::span(&d,1));
+   Extent e;for(const auto& p:o.Compose(3)){++e.Count;e.Tallest=std::max(e.Tallest,p.destination.height);
+    e.Left=std::min(e.Left,p.destination.x);e.Right=std::max(e.Right,p.destination.x+p.destination.width);}
+   return e;};
+  Mm3dButtonOverlay defaults;Check(defaults.GetInlineChordStyle()==Mm3dButtonOverlay::InlineChordStyle::Abbreviated,"abbreviation is the default inline chord look");
+  const auto glyph=run(Mm3dButtonOverlay::InlineChordStyle::Abbreviated),chord=run(Mm3dButtonOverlay::InlineChordStyle::Chord);
+  Check(glyph.Count>0&&chord.Count>0,"both inline chord looks render");
+  Check(glyph.Tallest>=1.8f*chord.Tallest,"abbreviated inline I main key is readable, not squeezed beside its modifier");
+  Check(glyph.Right-glyph.Left<=chord.Right-chord.Left+.01f,"abbreviated inline I stays within the same native text cell");
+  Check(Mm3dButtonOverlay::ParseInlineChordStyle("chord")==Mm3dButtonOverlay::InlineChordStyle::Chord&&
+        Mm3dButtonOverlay::ParseInlineChordStyle("abbreviated")==Mm3dButtonOverlay::InlineChordStyle::Abbreviated&&
+        !Mm3dButtonOverlay::ParseInlineChordStyle("big"),"inline chord flag parsing fails closed");
+ }
  auto config=NativeControlDefaults();config.Bindings[size_t(NativeControlAction::Zr)]={};overlay.Configure(config,NativePromptSet::Keyboard);
  Check(!overlay.CaptureInline(m,node,record,false),"unbound inline modifier preserves native glyph");
  NativeButtonOverlaySlot slot;slot.Action=NativeControlAction::X;slot.Modifier=NativeControlAction::Zr;

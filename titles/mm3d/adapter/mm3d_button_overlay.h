@@ -10,6 +10,8 @@
 #include <memory>
 #include <deque>
 #include <span>
+#include <optional>
+#include <string_view>
 
 namespace Oot3dNativeGame {
 // EUR v1.1 widget emission ABI: 134DE4 supplies each actually rendered pane,
@@ -25,6 +27,17 @@ public:
     const bool active = controls.NativeButtonLabels && prompts != NativePromptSet::Touch;
     mControls = controls; mPrompts = prompts; mActive = active;
     mStyle=std::make_shared<Style>(Style{controls,prompts});
+  }
+  // Inline prose I/II (ZR+X / ZR+Y) inside the guest's fixed 16-unit text
+  // advance. Abbreviated (default): one full-height main glyph with a modifier
+  // corner badge. Chord: the "ZR + X" form scaled to fit the same cell.
+  enum class InlineChordStyle : uint8_t { Abbreviated, Chord };
+  void SetInlineChordStyle(InlineChordStyle style) { mInlineChordStyle = style; }
+  InlineChordStyle GetInlineChordStyle() const { return mInlineChordStyle; }
+  static std::optional<InlineChordStyle> ParseInlineChordStyle(std::string_view text) {
+    if (text == "abbreviated" || text == "glyph") return InlineChordStyle::Abbreviated;
+    if (text == "chord") return InlineChordStyle::Chord;
+    return {};
   }
   void Reset() { mPending.clear(); mSeen.clear(); mDraws.clear(); mSubmitted.reset(); mPresented.clear(); }
   // Called at actual GSP submission, BEFORE that list is decoded. A host
@@ -116,6 +129,7 @@ public:
         b=Float(m,node+0x130),a=Float(m,node+0x134);
     if(!x||!y||!w||!h||!xx||!xy||!yx||!yy||!tx||!ty||!r||!g||!b||!a||*a<=0||*w<=0||*h<=0)return false;
     NativeButtonOverlaySlot slot;slot.Action=action;slot.Modifier=modifier;
+    slot.ChordAbbreviated=modifier!=NativeControlAction::Count && mInlineChordStyle==InlineChordStyle::Abbreviated;
     const float cx=*x+*w*.5f,cy=*y+*h*.5f;
     slot.X=*tx+*xx*cx+*xy*cy+40.f/3.f;slot.Y=*ty+*yx*cx+*yy*cy;
     slot.Width=std::hypot(*xx,*yx)**w;slot.Height=std::max(slot.Width,std::hypot(*xy,*yy)**h);
@@ -314,6 +328,7 @@ private:
   NativeControlConfig mControls;
   NativePromptSet mPrompts=NativePromptSet::Touch;
   bool mActive=false;
+  InlineChordStyle mInlineChordStyle=InlineChordStyle::Abbreviated;
   struct Style { NativeControlConfig Controls;NativePromptSet Prompts; };
   using Key=std::tuple<uint32_t,uint32_t,float,float>;
   struct PendingPane { uint32_t Cursor;Key Identity;std::vector<NativeButtonOverlaySlot> Slots;std::shared_ptr<const Style> Settings; };
