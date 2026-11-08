@@ -10,7 +10,7 @@ execution section is historical; its O2 pass does not qualify the newer runtime.
 
 | Platform | MM installed/Forge status | Evidence boundary |
 |---|---|---|
-| Windows x64 | Not yet qualified (installed product); developer registry build exercised | No installed MM product exists to launch: no MM recipe in `supported_revisions.json`, and the MM session refuses whole-AOT product mode while dekui/Restoration guest patches are active (`ImageMounted`: "guest patch sites need the A32 registry dispatch"). Round-2 evidence on the dual-title developer registry build (not an installed product): state+settings save with MM settings, quit, restart and load-with-settings ("Title settings: applied"), truncated-state rejection ("savestate container header is invalid"). Compiler-free installed launch, installed settings persistence, update/repair preservation: open. |
+| Windows x64 | Not yet qualified (installed product); developer registry build exercised | No installed MM product exists to launch: no MM recipe in `supported_revisions.json`, and the MM session refuses whole-AOT product mode while dekui/Restoration guest patches are active (`ImageMounted`: "guest patch sites need the A32 registry dispatch"). Round-2 evidence on the dual-title developer registry build (not an installed product): state+settings save with MM settings, quit, restart and load-with-settings ("Title settings: applied"), truncated-state rejection ("savestate container header is invalid"); round 3: foreign-title, future-version and corrupt-payload state rejection with the game continuing. Compiler-free installed launch, installed settings persistence, update/repair preservation: open. |
 | Linux / handheld | Not yet qualified | Shared packaging/ELF infrastructure and OoT qualification do not qualify MM. |
 | macOS | Not yet qualified | Shared bundle/privacy policy and synthetic tests are not an MM import/install/launch receipt. |
 | Android | Not yet qualified | Runtime/mobile infrastructure is not an approved MM Forge package or device acceptance. |
@@ -50,13 +50,23 @@ settings application transactional. Tests: `oot3d_mm3d_single_screen_tests`
 
 The host state tests use synthetic memory, including an MM-tagged process
 identity, foreign-title/source-snapshot rejection, corrupt/truncated/unsupported
-containers and sentinel checks. These are not native MM cartridge-save round trips.
+containers and sentinel checks. On the real MM binary (developer registry build,
+c84c19b1), one run saved a state, then rejected an OoT3D state ("savestate code.bin
+identity is incompatible"), a future container version ("savestate container header
+is invalid") and a corrupted payload ("savestate payload checksum does not match"),
+kept running and loaded its own state. These are not native MM cartridge-save round trips.
 The window restore path resets title session and composition owners before resumed
 submission, and resets renderer/history/UI/rumble owners. The MM title session's
 `Reset()` also starts dekui's per-site host state (camera traces, menu, HUD and
 banner animation) afresh, the same state a cold `--load-state` starts from;
-settings and registered sites are kept. Project Restoration's in-flight guest
-calls are not yet covered by that reset (open). New title adapters remain
+settings and registered sites are kept. Project Restoration's guest calls
+are host coroutines no state can carry: as OoT3D defers a save while a host-held
+continuation is pending, the save waits while a guest call is in flight
+(`SavestateCapturePending`), and restore drops the abandoned timeline's suspended
+calls and pending site skips (`oot3d_mm3d_guest_calls_tests` TestResetOnRestore;
+it fails with a no-op reset). The light arena keeps no host state to reset: its
+overflow mapping is a guest memory region restored with the state and revalidated
+by region and magic before use. New title adapters remain
 responsible for clearing their own lifecycle state in `Reset()`.
 
 Forge's Rust `forge-core` owns data inventory, backup/restore, repair and interrupted
