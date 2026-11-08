@@ -282,7 +282,7 @@ void TestRoomEmitterPublication() {
 
 void TestSyntheticFireAndFairies() {
     // F02(b): OoT3D's S-candidates present in MM (Honotrap flames) must be rows.
-    for(const uint16_t id:{uint16_t(0x61),uint16_t(0xB)})
+    for(const uint16_t id:{uint16_t(0x61),uint16_t(0xB),uint16_t(0xFD)})
         Require(std::any_of(kMm3dSyntheticSources.begin(),kMm3dSyntheticSources.end(),
                 [&](const auto& r){return r.Actor==id;}),"OoT3D synthetic fire analogue missing in MM");
     for(const auto& row:kMm3dSyntheticSources) {
@@ -299,6 +299,7 @@ void TestSyntheticFireAndFairies() {
             for(uint32_t i=0;i<10;++i)for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x22C+i*12+n*4,float(10+n*10));}
         if(row.Actor==0xB){draw=0x456990;f.W32(f.Actor+0x9D4,0x55868C);f.F32(f.Actor+0x240,31.5F);
             for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0xA20+n*4,float(100+n));}
+        if(row.Actor==0xFD){draw=0x4CE20C;f.W8(f.Actor+0x266,255);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0348F);}
         if(row.Actor==0x61){draw=0x4E2234;f.W16(f.Actor+0x1C,2);for(uint32_t n=0;n<3;++n)f.F32(f.Actor+0x58+n*4,.0048F);}
         f.W32(f.Actor+0x144,draw);
         CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
@@ -338,6 +339,21 @@ void TestSyntheticFireAndFairies() {
             CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
             Require(lights.empty(),"Dodongo not breathing emitted");
             f.W32(f.Actor+0x9D4,0x55868C);
+        }
+        if(row.Actor==0xFD) {
+            f.W32(f.Actor+0x144,draw);lights.clear();
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && std::abs(lights[0].Radius-1000.F)<1e-2F && lights[0].PositionWorld[1]==60.F,
+                    "risen Fireshield lost the OoT3D fire-wall policy");
+            lights.clear();f.W8(f.Actor+0x266,64);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.size()==1 && lights[0].Radius<600.F && lights[0].Color[0]<.3F,"sinking Fireshield not faded");
+            lights.clear();f.W8(f.Actor+0x266,0);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"lowered (extinguished) Fireshield emitted");
+            f.W8(f.Actor+0x266,255);f.W32(f.Actor+0x144,0x4CE20C+4);
+            CaptureMm3dSyntheticEmitters(f.Play,f.Actor,row.Actor,f.Memory,false,false,lights);
+            Require(lights.empty(),"Fireshield with another draw callback emitted");
         }
         if(row.Actor==0x61) {
             // Grown drop flame: full level, radius 500*scale/0.004 (OoT3D policy).

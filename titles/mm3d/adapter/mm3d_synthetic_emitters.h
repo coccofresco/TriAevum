@@ -55,6 +55,14 @@ inline constexpr std::array kMm3dSyntheticSources{
         {0x558740,0xE59F1274},{0x558744,0xE59509D4},
         {0x5589BC,0x0055868C},{0x5589C0,0x41E80000},
         {0x5589C4,0x422C0000},{0x558794,0xED950A90},{0x5587F0,0xED961A88}}}},
+    // 0xFD = Obj_Fireshield (MM fire wall; keep, init 4A8618 scales x by
+    // 0.0348 literal 4A88A0). Update 4CE284 stores alpha = rise(+0x258)*255
+    // (vldr 4CE5B4, 255.0 at 4CE6A0, strb +0x266 at 4CE5EC); draw 4CE20C reads
+    // it (4CE224). Analysis round5/fireshield_proof.out.
+    Mm3dSyntheticSource{0xFD,0x4CE284,0x4A88C4,{{
+        {0x4CE5B4,0xED940A96},{0x4CE5B8,0xED9F1A38},
+        {0x4CE6A0,0x437F0000},{0x4CE5EC,0xE5C40266},
+        {0x4CE224,0xE5D40266},{0x4A88A0,0x3D0E8A72},{0,0}}}},
     Mm3dSyntheticSource{0x10B,0x4B4BE8,0x474070,{{
         {0x47403C,0xEBFD1750},{0x474040,0xE584026C},
         {0x474000,0xE5840264},{0x4B4C6C,0xE594220C}}}},
@@ -164,6 +172,14 @@ inline void CaptureMm3dSyntheticEmitters(uint32_t play,uint32_t actor,uint16_t i
            !F(memory,actor+0x240,frame) || !(frame>=29.F) || !(frame<=43.F) ||
            !V(memory,actor+0xA20,position))return;
         level=(255.F-10.F*std::trunc(frame-29.F))/255.F;radius=400;
+    } else if(id==0xFD) {
+        // OoT3D fire-wall policy (Bg_Hidan_Firewall): level follows the
+        // wall's rise (here its native alpha), radius 1000*sqrt(level), raised
+        // 40*level; MM's wall width (scale.x / 0.0348) scales the radius.
+        uint8_t alpha=0;
+        if(draw!=0x4CE20C || !memory.Read8(actor+0x266,&alpha) || !alpha || !(scale[0]>0))return;
+        level=float(alpha)/255.F;
+        radius=1000.F*std::sqrt(level)*std::clamp(scale[0]/.0348F,.3F,2.F);position[1]+=40.F*level;
     } else if(id==0x61) {
         // OoT3D policy (oot3d_native_a32_fire_emitters.cpp, En_Honotrap): the
         // flames (params 1, 2) grow from 0.0001 to 0.004 / 0.0048 and shrink
