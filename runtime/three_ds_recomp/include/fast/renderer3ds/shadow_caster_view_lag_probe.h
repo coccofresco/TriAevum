@@ -30,7 +30,7 @@ namespace Fast::Renderer3ds {
 struct ShadowCasterViewLagCounts {
     uint64_t Frames = 0;      // frames with a view
     uint64_t ViewChanges = 0; // frames whose view differs from the previous frame's
-    uint64_t Pairs = 0;       // per key, observations in consecutive frames
+    uint64_t Pairs = 0;       // per key, observations in consecutive caster frames
     uint64_t ReanchorCurrent = 0;
     uint64_t ReanchorPrevious = 0;
 };
@@ -39,11 +39,13 @@ class ShadowCasterViewLagProbe final {
   public:
     // Takes the view-to-world matrix of `frame`, which is the inverse of that
     // frame's captured WorldToView. Call it for every draw: only a new frame
-    // id advances the probe.
+    // id advances the probe. "Previous" is the previous frame that drew
+    // casters, not frame id - 1: the shadow pass runs once per game frame,
+    // and at 30 Hz game logic over a 60 Hz renderer the ids step by 2.
     void BeginFrame(uint64_t frame, const ShadowMatrix& viewToWorld) noexcept {
         if (mHasFrame && frame == mFrame)
             return;
-        mHasPrevious = mHasFrame && frame == mFrame + 1U; // a gap leaves no previous view
+        mHasPrevious = mHasFrame;
         if (mHasPrevious)
             mPrevious = mCurrent;
         if (mHasPrevious && mPrevious != viewToWorld)
@@ -51,6 +53,7 @@ class ShadowCasterViewLagProbe final {
         mCurrent = viewToWorld;
         mFrame = frame;
         mHasFrame = true;
+        ++mSequence;
         ++mCounts.Frames;
     }
 
@@ -62,9 +65,9 @@ class ShadowCasterViewLagProbe final {
         const auto current = VertexGeometry::Multiply(mCurrent, local);
         const auto previous = VertexGeometry::Multiply(mPrevious, local);
         auto& anchor = mAnchors[key];
-        if (anchor.Frame == mFrame && anchor.Valid)
+        if (anchor.Valid && anchor.Sequence == mSequence)
             return; // one observation per key and frame
-        if (anchor.Valid && anchor.Frame + 1U == mFrame) {
+        if (anchor.Valid && anchor.Sequence + 1U == mSequence) {
             ++mCounts.Pairs;
             if (!Inside(current, anchor.Current)) {
                 ++mCounts.ReanchorCurrent;
@@ -79,7 +82,7 @@ class ShadowCasterViewLagProbe final {
             anchor.Previous = previous;
         }
         anchor.Valid = true;
-        anchor.Frame = mFrame;
+        anchor.Sequence = mSequence;
     }
 
     [[nodiscard]] const ShadowCasterViewLagCounts& Counts() const noexcept { return mCounts; }
@@ -109,13 +112,14 @@ class ShadowCasterViewLagProbe final {
     struct Anchor {
         ShadowMatrix Current{};
         ShadowMatrix Previous{};
-        uint64_t Frame = 0;
+        uint64_t Sequence = 0;
         bool Valid = false;
     };
     std::unordered_map<uint64_t, Anchor> mAnchors;
     ShadowMatrix mCurrent{};
     ShadowMatrix mPrevious{};
     uint64_t mFrame = 0;
+    uint64_t mSequence = 0;
     bool mHasFrame = false;
     bool mHasPrevious = false;
     ShadowCasterViewLagCounts mCounts;

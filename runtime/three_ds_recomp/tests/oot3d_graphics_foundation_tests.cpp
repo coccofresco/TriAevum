@@ -7903,8 +7903,9 @@ Fast::Renderer3ds::ShadowCasterViewLagCounts RunViewLag(int lag) {
     for (uint64_t frame = 10; frame < 30; ++frame) {
         const float camera = 0.05F * float(frame * frame);
         const float formed = 0.05F * float((frame - lag) * (frame - lag));
-        // WorldToView moves the world by -camera; viewToWorld undoes it.
-        probe.BeginFrame(frame, ViewLagTranslation(camera));
+        // WorldToView moves the world by -camera; viewToWorld undoes it. The
+        // renderer frame ids step by 2 (30 Hz game over a 60 Hz renderer).
+        probe.BeginFrame(2U * frame, ViewLagTranslation(camera));
         probe.Observe(0x51, ViewLagTranslation(-formed), model);
         probe.Observe(0x51, ViewLagTranslation(-formed), model); // second draw of the same key: ignored
     }
@@ -7925,14 +7926,16 @@ TEST(Renderer3dsShadowCasterViewLagProbe, SeparatesAPreviousFrameViewFromACurren
     EXPECT_EQ(matched.Pairs, 18U);
     EXPECT_EQ(matched.ReanchorCurrent, 0U);
     EXPECT_EQ(matched.ReanchorPrevious, 18U);
-    // A frame gap drops the previous view: no pair spans it.
+    // A key absent from one caster frame does not pair across the gap.
     Fast::Renderer3ds::ShadowCasterViewLagProbe probe;
     probe.BeginFrame(1, ViewLagTranslation(0.0F));
     probe.Observe(1, ViewLagTranslation(0.0F), ViewLagTranslation(1.0F));
     probe.BeginFrame(3, ViewLagTranslation(0.0F));
+    probe.Observe(2, ViewLagTranslation(0.0F), ViewLagTranslation(1.0F));
+    probe.BeginFrame(5, ViewLagTranslation(0.0F));
     probe.Observe(1, ViewLagTranslation(0.0F), ViewLagTranslation(1.0F));
     EXPECT_EQ(probe.Counts().Pairs, 0U);
-    EXPECT_NE(probe.Line().find("[shadow-caster-view-lag] v=1 frames=2 view_changes=0 pairs=0"), std::string::npos)
+    EXPECT_NE(probe.Line().find("[shadow-caster-view-lag] v=1 frames=3 view_changes=0 pairs=0"), std::string::npos)
         << probe.Line();
 }
 
