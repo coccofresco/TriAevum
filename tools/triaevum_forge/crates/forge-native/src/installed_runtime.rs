@@ -74,12 +74,25 @@ fn resource_path<'a>(resource: &'a Value, field: &str) -> Result<&'a str> {
 }
 
 /// `validate_installed_runtime(executable, title, data_root, runtime)`:
-/// returns the validated launch profile.
+/// returns the validated launch profile. The TopScreen routing follows the
+/// active title's fact (`ForgeTitle::topscreen_ui`).
 pub fn validate_installed_runtime(
     executable: &Path,
     title: &Path,
     data_root: &Path,
     runtime: &Map<String, Value>,
+) -> Result<PathBuf> {
+    validate_installed_runtime_for(executable, title, data_root, runtime, forge_catalog::ACTIVE_TITLE.topscreen_ui)
+}
+
+/// [`validate_installed_runtime`] for a title whose TopScreen UI fact is
+/// `topscreen_ui` (OoT3D: true, MM3D: false).
+pub fn validate_installed_runtime_for(
+    executable: &Path,
+    title: &Path,
+    data_root: &Path,
+    runtime: &Map<String, Value>,
+    topscreen_ui: bool,
 ) -> Result<PathBuf> {
     if !eq_str(get(runtime, "status"), "ready") {
         return Err(recovery("The active title has no ready playable runtime; run Forge again"));
@@ -146,16 +159,21 @@ pub fn validate_installed_runtime(
     }
     // Resolve profile-relative paths first. Reject ambiguous duplicate
     // routing arguments rather than validating one value and executing another.
-    // The TopScreen UI profile is a per-title fact (OoT3D's per-game mod): a
-    // profile that selects it, or routes a TopScreen file, must route the
-    // installation's TopScreen file; a title without it (MM3D) has neither.
-    let topscreen = arguments.windows(2).any(|pair| pair[0] == "--ui-profile" && pair[1] == "topscreen")
-        || arguments.iter().any(|argument| argument == "--topscreen-config");
+    // The TopScreen UI profile is a per-title fact (OoT3D's per-game mod), not
+    // a property of the profile: OoT3D's profile must route the installation's
+    // TopScreen file; a title without it (MM3D, dekui in the product code)
+    // must carry no TopScreen option at all.
+    if !topscreen_ui
+        && (arguments.iter().any(|argument| argument == "--topscreen-config")
+            || arguments.windows(2).any(|pair| pair[0] == "--ui-profile" && pair[1] == "topscreen"))
+    {
+        return Err(recovery("Launch profile selects the TopScreen UI, which this title does not have"));
+    }
     let mut routed = vec![
         ("--a32-process-manifest", title.join("process-manifest.json")),
         ("--config", data_root.join("config").join("TriAevum.json")),
     ];
-    if topscreen {
+    if topscreen_ui {
         routed.push(("--topscreen-config", data_root.join("config").join("topscreen_ui.json")));
     }
     routed.push(("--save-data", data_root.join("savedata")));
