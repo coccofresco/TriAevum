@@ -23,12 +23,16 @@ TITLES = {
         "recipe_path": "recipes/oot3d.json",
         "default_recipe": "oot3d-eur-project-baseline-16a6b0aa",
         "forge_features": (),
+        # OoT3D's reviewed extra ROM inputs (USA canonicalised to EUR, catalogue EUR).
+        "input_coverage": ROOT / "tools/triaevum_release/input_coverage",
     },
     "mm3d": {
         "recipes": ROOT / "titles/mm3d/forge/supported_revisions.json",
         "recipe_path": "recipes/mm3d.json",
         "default_recipe": "mm3d-eur-local-6eec27b1",
         "forge_features": ("forge-desktop/title-mm3d", "forge-cli/title-mm3d", "forge-update-helper/title-mm3d"),
+        # The EUR CTR-P-AJRP dump is MM3D's only input: no qualified extra inputs.
+        "input_coverage": None,
     },
 }
 

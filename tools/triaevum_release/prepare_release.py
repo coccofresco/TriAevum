@@ -183,7 +183,12 @@ def prepare(args) -> dict:
     catalog_path = work / "precompiled/precompiled-titles.json"
     definitions = load_json_object(recipe_file)
     catalog, definitions = add_verified_variants(load_json_object(catalog_path), definitions, definitions)
-    catalog, definitions, input_files = bind_input_coverage(catalog, definitions)
+    # Each title's reviewed extra inputs (OoT3D's input_coverage; none for MM3D).
+    if title["input_coverage"] is not None:
+        catalog, definitions, input_files = bind_input_coverage(catalog, definitions,
+                                                                root=title["input_coverage"])
+    else:
+        input_files = []
     qualified_recipes = work / "qualified-recipes.json"
     atomic_write_json(qualified_recipes, definitions)
     for item in layout["files"]:

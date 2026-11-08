@@ -39,6 +39,9 @@ class TitleReleaseTests(unittest.TestCase):
         recipes = json.loads(Path(layout[0]["source"]).read_text(encoding="utf-8"))
         self.assertEqual([r["id"] for r in recipes["recipes"]], [facts["default_recipe"]])
         self.assertIn("forge-cli/title-mm3d", facts["forge_features"])
+        # The OoT3D input coverage (base recipe oot3d-eur-...) is not MM3D's.
+        self.assertIsNone(facts["input_coverage"])
+        self.assertEqual(title_release("oot3d")["input_coverage"].name, "input_coverage")
         # Every Windows Forge binary is per title, the update helper too (its
         # own steel-mask icon, owner decision 2026-11-08): each crate's feature.
         for crate in ("forge-desktop", "forge-cli", "forge-update-helper"):
