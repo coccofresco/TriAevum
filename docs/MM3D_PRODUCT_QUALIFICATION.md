@@ -333,3 +333,13 @@ fingerprint. The two `.gar` archives use the role `restoration_mm3d_asset`, and 
 `title_neutral_resource`. The default `--title oot3d` keeps OoT3D's release unchanged: its recipe file, recipe path,
 default recipe, and no Forge feature. The MM3D release still needs the MM whole-AOT title module from the module
 window. The installed run (F07) has not been made.
+
+## Round-5 final integration cut (2026-11-08)
+
+Merges onto b0191231: 73ae8cb6 hooks 4648c4bd (one conflict in `titles/mm3d/adapter/mm3d_pica_composition.cpp`,
+resolved by keeping both sides: the quad/primitive flush and the layout-batch carry), bef79f0d composition 049bd3ce
+(include-list conflict in `mm3d_native_lighting_tests.cpp`, union), 7bc7fb60 catalogs 44688869, b8e9a214 langaudio
+ff5e7a8f, deeeb68e parity/dl 1da09ade. The dual tree is configured with registry `a32_generated_overlay`, and the
+build exits 0. 40/40 affected suites exit 0. The negative (built-in packs `--negative`) exits 1. The O2 ran once on the
+OoT-only tree at deeeb68e (TriAevum.exe sha256 c62d0264...) and passed: 3/3 cap-p13 frames identical, reproducible=1,
+uber_draws=0, watch_exit=0. Evidence: `W/analysis/parity/INTEG/r7/`.
