@@ -23,18 +23,23 @@ try:
     from .precompiled_titles import load_catalog, checked_file, CATALOG
     from .precompiled_title_layout import artifact
     from .release_platform import ANDROID
+    from . import release_signature
 except ImportError:
     from audit_release import DEFAULT_POLICY, build_machine_path
     from common import atomic_write_json, load_json_object, normalize_relative_path, sha256_file
     from precompiled_titles import load_catalog, checked_file, CATALOG
     from precompiled_title_layout import artifact
     from release_platform import ANDROID
+    import release_signature
 
 
 ASSET_ROOT = "forge-package"
 INVENTORY = "forge-package.json"
 INVENTORY_FORMAT = "triaevum_android_forge_package_v1"
 RELEASE_MANIFEST = "release-manifest.json"
+# Publisher signature of the inventory's exact bytes, beside it in the package
+# folder; forge-android verifies it (package_signature.rs) before Forge reads a file.
+SIGNATURE = "release-signature.json"
 LIBRARIES = "lib/arm64-v8a/"
 TITLE_BUILD_TARGET = "ports/android/native"
 # Reference release roles the Android Forge reads as package files.
@@ -257,6 +262,43 @@ def create_package(reference_root: Path, native_stage: Path, output: Path, *, so
     return inventory
 
 
+def sign_android_package(package_dir: Path, private_key: Path,
+                         keys_path: Path = release_signature.KEYS) -> Path:
+    """Signs forge-package.json in `package_dir` with a key Forge trusts."""
+    package_dir = package_dir.resolve()
+    release_signature._outside(private_key, release_signature.REPO_ROOT, package_dir)
+    inventory = (package_dir / INVENTORY).read_bytes()
+    document = release_signature.sign_manifest(inventory, private_key)
+    keys = release_signature.load_keys(keys_path)
+    if document["key_id"] not in keys:
+        raise release_signature.SigningError(f"key {document['key_id']} is not a key Forge trusts")
+    payload = json.dumps(document, indent=2).encode("utf-8") + b"\n"
+    errors = release_signature.signature_errors(inventory, payload, keys)
+    if errors:
+        raise release_signature.SigningError("; ".join(errors))
+    target = package_dir / SIGNATURE
+    target.write_bytes(payload)
+    return target
+
+
+def verify_android_package(package_dir: Path, keys_path: Path = release_signature.KEYS) -> list[str]:
+    """The checks forge-android makes on the device: signature, then every file."""
+    signature = package_dir / SIGNATURE
+    if not signature.is_file():
+        return [f"the Android Forge package is not signed ({SIGNATURE} is missing)"]
+    inventory = (package_dir / INVENTORY).read_bytes()
+    errors = release_signature.signature_errors(inventory, signature.read_bytes(),
+                                                release_signature.load_keys(keys_path))
+    if errors:
+        return errors
+    for record in json.loads(inventory)["files"]:
+        relative = normalize_relative_path(record["path"])
+        path = package_dir / relative
+        if not path.is_file() or path.stat().st_size != record["bytes"] or sha256_file(path) != record["sha256"]:
+            errors.append(f"{relative} does not match the signed inventory")
+    return errors
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference-package", type=Path, required=True,
@@ -267,10 +309,17 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--title", choices=TITLES,
                         help="the product of the APK; the reference release must be that title's")
+    parser.add_argument("--sign", action="store_true",
+                        help=f"sign the inventory with the key named by ${release_signature.KEY_VARIABLE}")
     args = parser.parse_args()
+    key = os.environ.get(release_signature.KEY_VARIABLE)
+    if args.sign and not key:
+        parser.error(f"--sign needs ${release_signature.KEY_VARIABLE}")
     inventory = create_package(args.reference_package, args.native_stage, args.output,
                                source_commit=args.source_commit, title=args.title)
     print(f"{args.output / ASSET_ROOT}: {len(inventory['files'])} data files")
+    if args.sign:
+        print(sign_android_package(args.output / ASSET_ROOT, Path(key)))
 
 
 if __name__ == "__main__":

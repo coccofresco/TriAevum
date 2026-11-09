@@ -60,4 +60,12 @@ public final class ForgeNative {
      * call it off the main thread.
      */
     public static native byte[] diagnostics(byte[] request);
+
+    /**
+     * Verifies the Forge package at packageRoot (UTF-8 path): the publisher signature of
+     * forge-package.json under the keys built into Forge, then every file it names. Returns
+     * {"status":"signed",...} or {"status":"refused","message":...}. Hashes files: call it off
+     * the main thread.
+     */
+    public static native byte[] verifyPackage(byte[] packageRoot);
 }

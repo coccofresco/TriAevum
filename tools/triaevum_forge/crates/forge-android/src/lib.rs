@@ -13,6 +13,8 @@
 // documented above and in include/triaevum_forge.h; it is not repeated per item.
 #![allow(clippy::missing_safety_doc)]
 
+pub mod package_signature;
+
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::ptr;
 
@@ -212,5 +214,21 @@ pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_destro
         // SAFETY: the handle came from startJob and is destroyed once.
         let job = Box::from_raw(handle as *mut Job);
         let _ = catch_unwind(AssertUnwindSafe(move || drop(job)));
+    }
+}
+
+/// `static native byte[] verifyPackage(byte[] packageRoot)`: the publisher
+/// signature and file hashes of the Forge package (`package_signature`).
+#[no_mangle]
+pub unsafe extern "system" fn Java_org_triaevum_android_forge_ForgeNative_verifyPackage(
+    env: *mut JNIEnv,
+    _class: jclass,
+    root: jbyteArray,
+) -> jbyteArray {
+    let root = read_byte_array(env, root).unwrap_or_default();
+    let root = std::path::PathBuf::from(String::from_utf8_lossy(&root).into_owned());
+    match catch_unwind(AssertUnwindSafe(|| package_signature::verify_package_json(&root))) {
+        Ok(bytes) => byte_array(env, &bytes),
+        Err(_) => ptr::null_mut(),
     }
 }

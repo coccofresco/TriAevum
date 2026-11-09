@@ -9,7 +9,9 @@ from common import atomic_write_json
 from precompiled_title_layout import artifact
 from precompiled_titles import FORMAT, MODEL, CATALOG
 from release_platform import ANDROID, WINDOWS
-from android_forge_package import ASSET_ROOT, INVENTORY, create_package, require_arm64_library
+from android_forge_package import (ASSET_ROOT, INVENTORY, SIGNATURE, create_package, require_arm64_library,
+                                   sign_android_package, verify_android_package)
+import release_signature
 
 
 def elf(path, machine=183, payload=b""):
@@ -227,6 +229,48 @@ class AndroidForgePackageTitleTests(unittest.TestCase):
             fixture.write_manifest()
             with self.assertRaisesRegex(ValueError, "no licence files"):
                 fixture.create()
+
+
+
+class AndroidForgePackageSignatureTests(unittest.TestCase):
+    """The publisher signature forge-android verifies on the device (A5)."""
+
+    def _signed(self, root: Path):
+        fixture = Fixture(root / "work")
+        fixture.create()
+        entry = release_signature.generate_key(root / "keys/test.pem")
+        keys = root / "keys/keys.json"
+        keys.write_text(json.dumps({"format": release_signature.KEYS_FORMAT, "keys": [entry]}), encoding="utf-8")
+        package = fixture.output / ASSET_ROOT
+        sign_android_package(package, root / "keys/test.pem", keys)
+        return package, keys
+
+    def test_signed_package_verifies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package, keys = self._signed(Path(directory))
+            self.assertTrue((package / SIGNATURE).is_file())
+            self.assertEqual(verify_android_package(package, keys), [])
+
+    def test_negative_tampered_file_inventory_or_missing_signature(self):
+        with tempfile.TemporaryDirectory() as directory:
+            package, keys = self._signed(Path(directory))
+            data = sorted(path for path in package.rglob("*") if path.is_file()
+                          and path.name not in (INVENTORY, SIGNATURE, CATALOG))[0]
+            data.write_bytes(data.read_bytes() + b"x")
+            self.assertIn("does not match", " ".join(verify_android_package(package, keys)))
+            (package / INVENTORY).write_bytes((package / INVENTORY).read_bytes() + b" ")
+            self.assertIn("another manifest", " ".join(verify_android_package(package, keys)))
+            (package / SIGNATURE).unlink()
+            self.assertIn("not signed", " ".join(verify_android_package(package, keys)))
+
+    def test_negative_untrusted_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = Fixture(root / "work")
+            fixture.create()
+            release_signature.generate_key(root / "keys/other.pem")
+            with self.assertRaises(release_signature.SigningError):
+                sign_android_package(fixture.output / ASSET_ROOT, root / "keys/other.pem")
 
 
 if __name__ == "__main__":

@@ -15,8 +15,9 @@ crate-type = ["cdylib", "rlib"]
 # "https": the HD interface pack download the user starts in the installer
 # (ui_pack_download; owner decision 5). Trusts Android's system CA store.
 forge-core = { path = "../forge-core", default-features = false, features = ["https"] }
+forge-base = { path = "../forge-base" }
 jni-sys = "0.3"
+serde_json.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 tempfile.workspace = true
