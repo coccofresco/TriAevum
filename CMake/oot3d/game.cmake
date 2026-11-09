@@ -193,6 +193,29 @@ target_link_libraries(triaevum_title_shader_preparation_tests PRIVATE
     oot3d_native_game_runtime oot3d_ui_menu oot3d_native_control_config)
 oot3d_target_defaults(triaevum_title_shader_preparation_tests FOLDER Tests)
 
+# The title adapter resolved from the code.bin hash, and its OoT3D gates.
+add_executable(triaevum_title_adapter_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_title_adapter_tests.cpp)
+if(TRIAEVUM_TITLE_MM3D)
+    target_compile_definitions(triaevum_title_adapter_tests PRIVATE TRIAEVUM_TITLE_MM3D=1)
+endif()
+oot3d_target_defaults(triaevum_title_adapter_tests FOLDER Tests)
+
+# Whole-AOT observable-exit accounting: exact and lock-free (G2-F5).
+add_executable(triaevum_pc_counter_table_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_pc_counter_table_tests.cpp)
+oot3d_target_defaults(triaevum_pc_counter_table_tests FOLDER Tests)
+
+# Developer overrides are inert in the product (G4a-F3, R1): the product
+# build and the developer build of the same test (the negative control).
+add_executable(triaevum_developer_overrides_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_developer_overrides_tests.cpp)
+oot3d_target_defaults(triaevum_developer_overrides_tests FOLDER Tests)
+add_executable(triaevum_developer_overrides_dev_tests EXCLUDE_FROM_ALL
+    tools/oot3d/native_game_runtime/triaevum_developer_overrides_tests.cpp)
+target_compile_definitions(triaevum_developer_overrides_dev_tests PRIVATE TRIAEVUM_DEVELOPER_TOOLS=1)
+oot3d_target_defaults(triaevum_developer_overrides_dev_tests FOLDER Tests)
+
 add_executable(oot3d_native_audio_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/oot3d_native_audio_tests.cpp
 )
@@ -220,15 +243,13 @@ target_sources(oot3d_native_game PRIVATE
 # titles/mm3d/branding). Only the icon resource depends on it.
 set(TRIAEVUM_PRODUCT_TITLE "oot3d" CACHE STRING "Product title of the game executable's icon (oot3d, mm3d)")
 set_property(CACHE TRIAEVUM_PRODUCT_TITLE PROPERTY STRINGS oot3d mm3d)
+include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/triaevum_product_title.cmake)
+triaevum_check_product_title("${TRIAEVUM_PRODUCT_TITLE}" "${TRIAEVUM_TITLES}")
+message(STATUS "TriAevum product title: ${TRIAEVUM_PRODUCT_TITLE}")
 if(TRIAEVUM_PRODUCT_TITLE STREQUAL "mm3d")
-    if(NOT TRIAEVUM_TITLE_MM3D)
-        message(FATAL_ERROR "TRIAEVUM_PRODUCT_TITLE=mm3d needs mm3d in TRIAEVUM_TITLES")
-    endif()
     set(_triaevum_product_rc titles/mm3d/branding/mm3d_windows.rc)
-elseif(TRIAEVUM_PRODUCT_TITLE STREQUAL "oot3d")
-    set(_triaevum_product_rc tools/oot3d/native_game_runtime/triaevum_windows.rc)
 else()
-    message(FATAL_ERROR "TRIAEVUM_PRODUCT_TITLE: unknown title '${TRIAEVUM_PRODUCT_TITLE}' (oot3d, mm3d)")
+    set(_triaevum_product_rc tools/oot3d/native_game_runtime/triaevum_windows.rc)
 endif()
 if(WIN32)
     target_sources(oot3d_native_game PRIVATE

@@ -1,6 +1,7 @@
 // MM3D's title session: its hooks and guest patches (mm3d-dekui, Project
 // Restoration, lighting), its scene view and environment, its interface frame
 // and its developer tools, at the points the native A32 window session calls.
+#include "triaevum_developer_overrides.h"
 #include "triaevum_title_session.h"
 #include "../shaders/mm3d_builtin_shader_packs.h"
 
@@ -164,15 +165,15 @@ public:
     if (!*setup.DevToolsTitle) *setup.DevToolsTitle = std::make_shared<Mm3dDevTools>();
 #endif
     if (mGuestPatches.Empty()) {
-      // dekui's settings: its shipped defaults, or (development) a
+      // dekui's settings: its shipped defaults, or (developer builds) a
       // presentation.json given by TRIAEVUM_MM3D_PRESENTATION, until the F1
-      // menu owns and persists them.
-      const char *presentation = std::getenv("TRIAEVUM_MM3D_PRESENTATION");
+      // menu owns and persists them. A product build reads neither override.
+      const char *presentation = DeveloperOverride("TRIAEVUM_MM3D_PRESENTATION");
       if (!Mm3dSingleScreen::LoadSettings(
               presentation != nullptr ? std::filesystem::path(presentation) : std::filesystem::path{}))
         std::fprintf(stderr, "MM3D single-screen: %s is unreadable, using dekui's defaults\n",
                      presentation != nullptr ? presentation : "dekui's settings");
-      if (const char *multiplier = std::getenv("TRIAEVUM_MM3D_DAMAGE_MULTIPLIER")) {
+      if (const char *multiplier = DeveloperOverride("TRIAEVUM_MM3D_DAMAGE_MULTIPLIER")) {
         // Development: dekui's damage multiplier until the F1 owns it.
         Mm3dSingleScreen::SetDamageMultiplier(std::atoi(multiplier));
       }
@@ -232,6 +233,8 @@ public:
         mRestoration->ApplyDataPatches(process.Memory());
       }
       const std::size_t enabledSites = mGuestPatches.Verify(process.Memory(), nullptr);
+      // Each continuation a handler returns must be one its site declares.
+      mGuestPatches.SetProductReturnCheck(true);
       const auto entries = Oot3dCompiledFunctionEntryPoints(true, false);
       const auto missing = mGuestPatches.MissingProductBoundaries(
           std::vector<uint32_t>(entries.begin(), entries.end()));
@@ -617,7 +620,8 @@ public:
            {"missing_block", site.MissingBlock},
            {"prepared", site.Prepared},
            {"replacements", site.Replacements},
-           {"declined", site.Declined}});
+           {"declined", site.Declined},
+           {"return_violations", site.ReturnViolations}});
       // Read-only state facts of the gameplay rows (mm3d_gameplay_options.h):
       // what the option did to the player, not only that it dispatched.
       if (site.Name == "mm3d.quick_put_away" || site.Name == "mm3d.roll_dash.speed") {

@@ -88,6 +88,9 @@ int main(int argc, char** argv) {
     constexpr std::uint32_t player = 0x08100000U;
     GameplayOptions o; Mm3dGuestPatches p; o.Register(p);
     CHECK(p.Verify(image) == 3);
+    // G4a-F4: the real roll-dash handlers declare HandlerReturnsNext=false;
+    // in product mode each continuation they return must be declared.
+    p.SetProductReturnCheck(true);
     auto frame = [&](std::uint32_t action, std::uint16_t av2, bool a) {
       image.ram[player + kActionFuncOffset] = action;
       image.Set16(player + kActionVar2Offset, av2);
@@ -117,6 +120,7 @@ int main(int argc, char** argv) {
     // Turning the row off mid-dash restores native at once.
     CHECK(frame(kActionRoll, 0, true)); o.Set({false, false}); CHECK(!frame(kActionRun, 0, true));
     CHECK(o.DashFrames() == 7 && image.writes.empty());
+    CHECK(p.ReturnViolations() == 0U);  // real handlers: declared continuations only
     // Each guard word protects its roll dash site.
     std::vector<std::uint32_t> guarded;
     for (const auto& g : kRollDashInputGuard) guarded.push_back(g.first);

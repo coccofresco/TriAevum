@@ -1,4 +1,5 @@
 // Native A32 window session: setup (process image, host services, renderer, UI, initial state).
+#include "triaevum_developer_overrides.h"
 #include "oot3d_native_compiled_functions.h"
 #include "oot3d_native_a32_window_session.h"
 #include "oot3d_native_a32_romfs_overlay.h"
@@ -333,7 +334,7 @@ void NativeA32WindowSession::Setup() {
     hostConfig.RomFsLayers = built->File;
     std::fprintf(stderr, "Prepared MM UI: %zu replaced, %zu added\n", built->ReplacedFiles, built->AddedFiles);
   }
-  if (const char *overlay = std::getenv("TRIAEVUM_ROMFS_OVERLAY")) {
+  if (const char *overlay = Oot3dNativeGame::DeveloperOverride("TRIAEVUM_ROMFS_OVERLAY")) {
     // Development: user-supplied RomFS files laid over the title's (a
     // directory per layer mirroring RomFS paths, ';'-separated, later
     // layers winning). Installed RomFS mods (Forge's overlay) are the
@@ -681,33 +682,19 @@ void NativeA32WindowSession::Setup() {
     std::fprintf(stderr, "TRIAEVUM_A32_COVERAGE %s\n", coverage);
   }
 #endif
-  if (const char *pcDump = std::getenv("TRIAEVUM_A32_PC_DUMP")) {
-    // PC,FRAME,DIR,ADDR:SIZE[;ADDR:SIZE...]
-    const std::string spec(pcDump);
-    const auto first = spec.find(',');
-    const auto second = first == std::string::npos ? first : spec.find(',', first + 1);
-    const auto third = second == std::string::npos ? second : spec.find(',', second + 1);
-    if (third == std::string::npos)
-      throw std::runtime_error("TRIAEVUM_A32_PC_DUMP: expected PC,FRAME,DIR,ADDR:SIZE[;...]");
-    widescreenProjection.PcDumpAddress =
-        static_cast<uint32_t>(std::stoul(spec.substr(0, first), nullptr, 16));
-    widescreenProjection.PcDumpFrame =
-        static_cast<uint32_t>(std::stoul(spec.substr(first + 1, second - first - 1)));
-    widescreenProjection.PcDumpDirectory = spec.substr(second + 1, third - second - 1);
-    std::string ranges = spec.substr(third + 1);
-    for (std::size_t start = 0; start <= ranges.size();) {
-      const auto end = std::min(ranges.find(';', start), ranges.size());
-      const auto range = ranges.substr(start, end - start);
-      const auto colon = range.find(':');
-      if (colon == std::string::npos)
-        throw std::runtime_error("TRIAEVUM_A32_PC_DUMP: range without ADDR:SIZE");
-      widescreenProjection.PcDumpRanges.emplace_back(
-          static_cast<uint32_t>(std::stoul(range.substr(0, colon), nullptr, 16)),
-          static_cast<uint32_t>(std::stoul(range.substr(colon + 1), nullptr, 16)));
-      start = end + 1;
+  if (const char *pcDump = Oot3dNativeGame::DeveloperOverride("TRIAEVUM_A32_PC_DUMP")) {
+    // Developer builds only; a malformed value is reported, never thrown.
+    std::string pcDumpError;
+    if (auto spec = Oot3dNativeGame::ParseA32PcDumpSpec(pcDump, &pcDumpError)) {
+      widescreenProjection.PcDumpAddress = spec->Address;
+      widescreenProjection.PcDumpFrame = spec->Frame;
+      widescreenProjection.PcDumpDirectory = std::move(spec->Directory);
+      widescreenProjection.PcDumpRanges = std::move(spec->Ranges);
+      widescreenProjection.PcDumpDone = false;
+      callTraceEntries.push_back(widescreenProjection.PcDumpAddress);
+    } else {
+      std::fprintf(stderr, "TRIAEVUM_A32_PC_DUMP ignored: %s\n", pcDumpError.c_str());
     }
-    widescreenProjection.PcDumpDone = false;
-    callTraceEntries.push_back(widescreenProjection.PcDumpAddress);
   }
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   if (const char *probe = std::getenv("TRIAEVUM_A32_PROBE"); probe != nullptr && *probe != '\0') {
@@ -1229,7 +1216,7 @@ void NativeA32WindowSession::Setup() {
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)
   // The developer tours, lab and emitter inventory drive OoT3D's guest
   // (scenes, entrances, actors): unavailable for another title.
-  const bool oot3dDeveloperTools = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
+  const bool oot3dDeveloperTools = Oot3dNativeGame::TitleHasOot3dDeveloperTools(titleAdapter);
   if (const char *tour = std::getenv("TRIAEVUM_DEV_FREECAM_TOUR");
       oot3dDeveloperTools && tour != nullptr && *tour != '\0') {
     std::string text = tour;
@@ -1449,8 +1436,12 @@ void NativeA32WindowSession::Setup() {
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
   if (programPreparation != nullptr) {
+    // Fixed-step sessions, and every OoT3D session (release decision D4:
+    // OoT3D renders only its bit-exact specialized programs), complete a
+    // draw's specialized program instead of the always-available one.
     programPreparation->SetFrameReproducibleProgramSelection(
-        hostArgs.FrameReproducible());
+        hostArgs.FrameReproducible() ||
+        Oot3dNativeGame::TitleDrawsCompleteSpecializedPrograms(titleAdapter, titleSession.get()));
   }
   // The title pass programs serve the shared renderer passes (shadow
   // casters among them) of every title: registering them is a lookup table,

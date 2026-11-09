@@ -8,6 +8,7 @@
 // exactly as before. OoT3D's adapter is still wired into the session itself.
 // Which title sessions a build contains is TRIAEVUM_TITLES.
 
+#include "../../../titles/oot3d/oot3d_title_facts.h"
 #include "native_scene_environment_state.h"
 #include "native_button_overlay.h"
 #include "oot3d_environment_time.h"
@@ -149,6 +150,11 @@ public:
   // uses no always-available programs; every program a draw uses is still
   // compiled when the draw needs it. OoT3D (no session) has them.
   [[nodiscard]] virtual bool PreparedShaders() const { return false; }
+  // Whether a draw whose specialized program is not ready completes it
+  // instead of rendering the always-available program (release decision D4,
+  // titles/oot3d/oot3d_title_facts.h). A title session keeps the hybrid
+  // policy unless it says otherwise (MM3D keeps it).
+  [[nodiscard]] virtual bool DrawsCompleteSpecializedPrograms() const { return false; }
   // The title's built-in shader packs (a vertex-program family and a
   // fragment-family pack). The window session installs them before the
   // renderer starts and prepares the family at startup as it does OoT3D's.
@@ -256,6 +262,16 @@ std::unique_ptr<TitleSession> CreateTitleSession(TitleAdapter adapter);
 // itself, has them; a generic title has none.
 [[nodiscard]] inline bool TitlePreparedShaders(TitleAdapter adapter, const TitleSession *session) {
   return session != nullptr ? session->PreparedShaders() : adapter == TitleAdapter::Oot3dEur;
+}
+
+// Whether the running title's draws render only their specialized program
+// (TitleSession::DrawsCompleteSpecializedPrograms): its session's; OoT3D's
+// adapter (no session) takes its title fact (D4); a generic title keeps the
+// hybrid policy.
+[[nodiscard]] inline bool TitleDrawsCompleteSpecializedPrograms(TitleAdapter adapter,
+                                                                const TitleSession *session) {
+  if (session != nullptr) return session->DrawsCompleteSpecializedPrograms();
+  return adapter == TitleAdapter::Oot3dEur && kOot3dDrawsCompleteSpecializedPrograms;
 }
 
 // The running title's pipeline cache namespace (TitleSession::

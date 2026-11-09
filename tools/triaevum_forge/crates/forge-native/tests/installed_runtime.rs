@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 
 use forge_base::fsutil::atomic_write_json;
 use forge_base::hashing::sha256_hex;
-use forge_catalog::{host_platform, LINUX, WINDOWS};
-use forge_native::validate_installed_runtime;
+use forge_catalog::{host_platform, ACTIVE_TITLE, LINUX, WINDOWS};
+use forge_native::{validate_installed_runtime, validate_installed_runtime_for};
 use serde_json::{json, Map, Value};
 
 struct Fixture {
@@ -49,6 +49,10 @@ impl Fixture {
             ("--topscreen-config", data.join("config").join("topscreen_ui.json")),
             ("--save-data", data.join("savedata")),
         ] {
+            // The active title's fact: only a TopScreen title routes its file.
+            if option == "--topscreen-config" && !ACTIVE_TITLE.topscreen_ui {
+                continue;
+            }
             if option != "--save-data" {
                 atomic_write_json(&path, &json!({})).unwrap();
             }
@@ -206,22 +210,75 @@ fn drop_option(arguments: &mut Vec<Value>, option: &str) {
     arguments.drain(index..index + 2);
 }
 
-#[test]
-fn title_without_topscreen_profile_needs_no_topscreen_file() {
-    // MM3D (per-game mod dekui): no --ui-profile topscreen, no --topscreen-config.
+fn validate_for(fixture: &Fixture, topscreen_ui: bool) -> forge_base::Result<PathBuf> {
+    validate_installed_runtime_for(&fixture.exe, &fixture.title, &fixture.data, &fixture.receipt, topscreen_ui)
+}
+
+/// The fixture profile with (OoT3D shape) or without (MM3D shape) the
+/// TopScreen route, whatever the active title of this build.
+fn fixture_with_topscreen(topscreen: bool) -> Fixture {
     let mut fixture = Fixture::new();
-    rewrite_profile(&mut fixture, |arguments| drop_option(arguments, "--topscreen-config"));
-    std::fs::remove_file(fixture.data.join("config").join("topscreen_ui.json")).unwrap();
-    assert_eq!(fixture.validate().unwrap(), fixture.profile);
+    let file = fixture.data.join("config").join("topscreen_ui.json");
+    rewrite_profile(&mut fixture, |arguments| {
+        if arguments.iter().any(|argument| argument == "--topscreen-config") {
+            drop_option(arguments, "--topscreen-config");
+        }
+        if topscreen {
+            arguments.extend([json!("--topscreen-config"), json!(file.to_string_lossy())]);
+        }
+    });
+    if topscreen {
+        atomic_write_json(&file, &json!({})).unwrap();
+    } else if file.exists() {
+        std::fs::remove_file(&file).unwrap();
+    }
+    fixture
 }
 
 #[test]
-fn topscreen_profile_must_route_its_topscreen_file() {
-    // Negative: the TopScreen UI profile without its file is refused.
-    let mut fixture = Fixture::new();
-    rewrite_profile(&mut fixture, |arguments| {
-        drop_option(arguments, "--topscreen-config");
-        arguments.extend([json!("--ui-profile"), json!("topscreen")]);
-    });
-    assert_eq!(fixture.error(), "Missing or duplicate installed profile option: --topscreen-config");
+fn active_title_fact_selects_the_topscreen_rule() {
+    // G3-F3: the OoT3D Forge requires the route, the MM3D Forge forbids it.
+    let fixture = fixture_with_topscreen(ACTIVE_TITLE.topscreen_ui);
+    assert_eq!(fixture.validate().unwrap(), fixture.profile);
+    let other = fixture_with_topscreen(!ACTIVE_TITLE.topscreen_ui);
+    assert!(other.validate().is_err());
+}
+
+#[test]
+fn topscreen_title_accepts_its_routed_topscreen_file() {
+    let fixture = fixture_with_topscreen(true);
+    assert_eq!(validate_for(&fixture, true).unwrap(), fixture.profile);
+}
+
+#[test]
+fn topscreen_title_refuses_a_profile_without_the_route() {
+    // Negative (OoT3D): a profile without --topscreen-config is refused even
+    // though it contains no other TopScreen option.
+    let fixture = fixture_with_topscreen(false);
+    assert_eq!(
+        validate_for(&fixture, true).unwrap_err().message,
+        "Missing or duplicate installed profile option: --topscreen-config"
+    );
+}
+
+#[test]
+fn title_without_topscreen_accepts_a_profile_without_it() {
+    let fixture = fixture_with_topscreen(false);
+    assert_eq!(validate_for(&fixture, false).unwrap(), fixture.profile);
+}
+
+#[test]
+fn title_without_topscreen_refuses_a_topscreen_route() {
+    // Negative (MM3D): the TopScreen route or the profile selection is refused.
+    let fixture = fixture_with_topscreen(true);
+    assert_eq!(
+        validate_for(&fixture, false).unwrap_err().message,
+        "Launch profile selects the TopScreen UI, which this title does not have"
+    );
+    let mut selected = fixture_with_topscreen(false);
+    rewrite_profile(&mut selected, |arguments| arguments.extend([json!("--ui-profile"), json!("topscreen")]));
+    assert_eq!(
+        validate_for(&selected, false).unwrap_err().message,
+        "Launch profile selects the TopScreen UI, which this title does not have"
+    );
 }

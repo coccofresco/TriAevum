@@ -1,6 +1,7 @@
 #include "mm3d_guest_patches.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <stdexcept>
 
 namespace Oot3dNativeGame {
@@ -149,15 +150,33 @@ bool Mm3dGuestPatches::Execute(std::uint32_t pc, a32::GuestState& state, a32::Me
             return false;
         }
     }
+    auto* patches = static_cast<Mm3dGuestPatches*>(user);
+    const std::uint32_t lrAtEntry = state.r[14];
     const auto next = entry->Site.Handler(state, memory);
     if (!next.has_value()) {
         ++entry->Stats.Declined;
         return false;
     }
     ++entry->Stats.Replacements;
+    if (patches->mProductReturnCheck && !patches->DeclaredContinuation(entry->Site, *next, lrAtEntry)) {
+        if (entry->Stats.ReturnViolations++ == 0U)
+            std::fprintf(stderr,
+                         "MM3D guest patch %s (0x%08X) continued at undeclared 0x%08X "
+                         "(HandlerReturnsNext=%d, lr=0x%08X)\n",
+                         entry->Site.Name.c_str(), pc, *next, entry->Site.HandlerReturnsNext ? 1 : 0,
+                         lrAtEntry);
+        ++patches->mReturnViolations;
+    }
     state.r[15] = *next;
     *result = {a32::ExitKind::Branch, *next, a32::FallbackReason::None, pc};
     return true;
+}
+
+bool Mm3dGuestPatches::DeclaredContinuation(const Mm3dGuestPatchSite& site, std::uint32_t next,
+                                            std::uint32_t lrAtEntry) const noexcept {
+    if (next == site.Pc + 4U) return site.HandlerReturnsNext;
+    if (std::find(mTargets.begin(), mTargets.end(), next) != mTargets.end()) return true;
+    return (next & ~1U) == (lrAtEntry & ~1U);
 }
 
 void Mm3dGuestPatches::SkipOnce(std::uint32_t pc, std::uint32_t thread) {

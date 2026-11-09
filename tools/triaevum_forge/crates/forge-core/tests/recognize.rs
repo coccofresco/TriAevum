@@ -153,10 +153,6 @@ fn a_cartridge_is_recognized_in_place_with_its_languages() {
     let fixture = Fixture::new();
     let runtime = FakeRuntime::default();
     let result = fixture.recognize(InstallSource::Rom(fixture.rom.clone()), &runtime).unwrap();
-    // Receipt hook: the recognition output for a before/after comparison.
-    if let Some(dump) = std::env::var_os("TRIAEVUM_FORGE_RECOGNIZE_DUMP") {
-        std::fs::write(dump, serde_json::to_vec_pretty(&result).unwrap()).unwrap();
-    }
     assert_eq!(result["recipe"], "fixture-eur");
     assert_eq!(result["label"], "Fixture (EUR)");
     assert_eq!(result["program_id"], "0004000000033500");

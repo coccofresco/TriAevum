@@ -3363,8 +3363,8 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   }
   // OoT3D's PlayState, SaveContext and actor layout: another title's memory
   // there is something else, so its time and player come from its adapter.
-  const bool oot3dTitle = titleAdapter == Oot3dNativeGame::TitleAdapter::Oot3dEur;
-  auto environmentTime = snapshot && oot3dTitle && !snapshot->FileSelect
+  auto environmentTime = snapshot && Oot3dNativeGame::TitleReadsOot3dSceneTime(titleAdapter) &&
+                                 !snapshot->FileSelect
       ? Oot3dNativeGame::CaptureSceneEnvironmentTime(snapshot->PlayStateAddress, process.Memory())
       : std::nullopt;
   if (environmentTime)
@@ -3398,7 +3398,9 @@ void NativeA32WindowSession::PublishNativeSceneView() {
   // Where Link is (world position +0x28, shape yaw +0xBE: 0 faces +Z,
   // 0x4000 +X), for lights placed from F1.
   std::optional<Oot3dNativeGame::ScenePlayerPlacement> player;
-  if (const uint32_t actor = oot3dTitle ? playerTimingProbe.Stats().LastPlayerAddress : 0U;
+  if (const uint32_t actor = Oot3dNativeGame::TitleReadsOot3dPlayerActor(titleAdapter)
+                                 ? playerTimingProbe.Stats().LastPlayerAddress
+                                 : 0U;
       actor != 0U) {
     Oot3dNativeGame::ScenePlayerPlacement placement;
     uint32_t bits[3]{};
