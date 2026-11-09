@@ -22,7 +22,9 @@ add_executable(oot3d_native_direct_aot_tests EXCLUDE_FROM_ALL
     "${pinned}/a32_core.cpp"
     "${pinned}/a32_core_alu.cpp"
     "${pinned}/a32_core_memory.cpp"
-    "${pinned}/a32_runtime.cpp")
+    "${pinned}/a32_runtime.cpp"
+    # a32_runtime.cpp dispatches Thumb blocks (ExecuteThumbBlock).
+    "${TRIAEVUM_ROOT}/tools/oot3d/native_a32_runtime/a32_thumb.cpp")
 target_compile_definitions(oot3d_native_direct_aot_tests PRIVATE
     OOT3D_NATIVE_DIRECT_AOT_PLUGIN=1 OOT3D_NATIVE_GENERATED_WHOLE_AOT=1 NOMINMAX)
 target_link_libraries(oot3d_native_direct_aot_tests PRIVATE
