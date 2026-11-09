@@ -9,8 +9,16 @@
 #include "fast/renderer/title_program_pack.h"
 #include <memory>
 #include "fast/renderer3ds/pipeline_cache_flusher.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 // Translated title vertex family (title code, like the runtime executable's).
 #include "oot3d_native_vertex_binaries.h"
+// A title with a session of its own (MM3D): its built-in families and its
+// shader-preparation facts, the ones its session gives the runtime.
+#if defined(TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS) && TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS
+#include "../../../titles/mm3d/shaders/mm3d_builtin_shader_packs.h"
+#include "../../../titles/mm3d/shaders/mm3d_shader_preparation.h"
+#define TRIAEVUM_PIPELINE_PREPARE_MM3D 1
+#endif
 #include <NRI.h>
 #include <Extensions/NRIDeviceCreation.h>
 #include <Extensions/NRIRayTracing.h>
@@ -160,7 +168,8 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
                 continue;
             }
             if (key != "--manifest" && key != "--pack" && key != "--cache-dir" &&
-                key != "--report" && key != "--cancel-file" && key != "--adapter" && key != "--title-program-pack")
+                key != "--report" && key != "--cancel-file" && key != "--adapter" && key != "--title-program-pack" &&
+                key != "--pipeline-cache-namespace")
                 throw std::runtime_error("unknown pipeline preparation option: " + key);
             if (++i >= argc || !args.emplace(key, argv[i]).second) throw std::runtime_error("missing or duplicate option");
         }
@@ -176,8 +185,17 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
             if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size())
                 throw std::runtime_error("adapter must be an unsigned integer");
         }
+        // The title's own pipeline cache file, by the rule the renderer names
+        // it with (title_shader_preparation.h): the runtime of a title with a
+        // namespace never opens the original file. No option, or the empty
+        // namespace, is the original file (OoT3D's).
+        const std::string nameSpace =
+            args.contains("--pipeline-cache-namespace") ? args.at("--pipeline-cache-namespace") : std::string();
+        const std::string cacheFilename =
+            Renderer3ds::TitlePipelineCacheFilename(Renderer3ds::kNriPipelineCacheFilename, nameSpace);
+        if (cacheFilename.empty()) throw std::runtime_error("invalid pipeline cache namespace: " + nameSpace);
         const auto cachePath = std::filesystem::weakly_canonical(
-            std::filesystem::path(args.at("--cache-dir")) / Renderer3ds::kNriPipelineCacheFilename);
+            std::filesystem::path(args.at("--cache-dir")) / cacheFilename);
         const auto reportPath = std::filesystem::weakly_canonical(args.at("--report"));
         for (const auto* key : {"--manifest", "--pack", "--cancel-file", "--title-program-pack"}) {
             if (!args.contains(key)) continue;
@@ -206,6 +224,27 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
             titleVertices = Renderer3ds::PicaVertexArtifactsFromPack(titlePrograms->Entries());
             if (startupPrograms && titleVertices.empty()) throw std::runtime_error("title program pack has no vertex family");
         }
+        // The startup family of a title with a namespace is the one its
+        // session installs in the runtime (oot3d_native_a32_window_setup.cpp):
+        // its built-in vertex family (never OoT3D's programs), then the
+        // optional publisher pack, and the uber family its lighting admits.
+        // The fragment pack is installed before anything reads the canonical
+        // family, as the runtime installs it before the renderer starts.
+        bool titleFamilyKnown = false;
+        bool titleFragmentLighting = false;
+#if defined(TRIAEVUM_PIPELINE_PREPARE_MM3D)
+        if (nameSpace == Oot3dNativeGame::kMm3dPipelineCacheNamespace) {
+            if (!Oot3dNativeGame::InstallTitleBuiltInVertexPack(Oot3dNativeGame::Mm3dBuiltInVertexPack()) ||
+                !Renderer3ds::InstallTitleFragmentPack(Oot3dNativeGame::Mm3dBuiltInFragmentPack()))
+                throw std::runtime_error("title shader packs installed after the families were read");
+            const auto builtIn = Oot3dNativeGame::AdditionalTitleVertexArtifacts();
+            titleVertices.insert(titleVertices.begin(), builtIn.begin(), builtIn.end());
+            titleFamilyKnown = true;
+            titleFragmentLighting = Oot3dNativeGame::kMm3dNativeFragmentLighting;
+        }
+#endif
+        if (startupPrograms && !nameSpace.empty() && !titleFamilyKnown && !titlePrograms)
+            throw std::runtime_error("no startup program family for pipeline cache namespace: " + nameSpace);
         std::map<uint64_t, Fast::Extension::PicaGraphicsPipelineManifestEntry> unique;
         size_t observations = 0;
         for (const auto& path : manifests) {
@@ -259,12 +298,17 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
         std::vector<Renderer3ds::PicaStartupProgramPart> parts;
         const Renderer3ds::PicaStartupProgramDevice startupDevice{depthFormat, VK_SAMPLE_COUNT_1_BIT,
                                                                   device.GeometryShaders};
-        if (startupPrograms && device.PipelineLibraries)
+        const bool titleFamily = titlePrograms || titleFamilyKnown;
+        // A title built without its packs has no family: its runtime prepares
+        // no startup programs either.
+        if (startupPrograms && device.PipelineLibraries && !(titleFamily && titleVertices.empty()))
             parts = Renderer3ds::PicaStartupProgramParts(
-                titlePrograms ? std::span<const Renderer3ds::PicaVertexArtifact>(titleVertices)
-                              : Oot3dNativeGame::TitleVertexArtifacts(),
-                titlePrograms ? Fast::Extension::UberFragmentArtifacts()
-                              : Fast::Extension::StartupUberFragmentArtifacts(false, false),
+                titleFamily ? std::span<const Renderer3ds::PicaVertexArtifact>(titleVertices)
+                            : Oot3dNativeGame::TitleVertexArtifacts(),
+                titleFamilyKnown ? Fast::Extension::StartupUberFragmentArtifacts(titleFragmentLighting,
+                                                                               titleFragmentLighting)
+                : titlePrograms  ? Fast::Extension::UberFragmentArtifacts()
+                                 : Fast::Extension::StartupUberFragmentArtifacts(false, false),
                 Renderer3ds::NativeFragmentArtifacts(), startupDevice);
         const size_t total = parts.size() + entries.size();
         const auto progress = [&](size_t attempted, size_t prepared, size_t failed, const std::string& last) {
@@ -333,6 +377,7 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
             {"creation_attempts", statistics.CreationAttempts}, {"created", statistics.Created},
             {"creation_failures", statistics.CreationFailures}, {"library_fallbacks", statistics.LibraryFallbacks},
             {"cache_input_loaded", loaded}, {"cache_bytes", cache.size()}, {"cache_path", cachePath.string()},
+            {"pipeline_cache_namespace", nameSpace}, {"title_startup_family", titleFamilyKnown},
             {"gpu", properties.deviceName}, {"vendor_id", identity.VendorId}, {"device_id", identity.DeviceId},
             {"driver_version", identity.DriverVersion}, {"pipeline_cache_uuid", identity.Uuid},
             {"renderer_abi", identity.RendererAbi}, {"depth_format", static_cast<uint32_t>(depthFormat)},

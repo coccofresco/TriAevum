@@ -130,6 +130,10 @@ struct NativeA32ProcessTimingStats {
     // dispatch per guest thread (slot 0 primary, last slot = overflow), and
     // the guest clock phase (AdvanceGuestClockTo) counters.
     uint64_t PatchExitRequests = 0;
+    // Blocks the title module reported consumed to the product dispatch loop
+    // (module entries that returned; an entry left by a thrown observable
+    // exit reports what the exit carried).
+    uint64_t WholeAotBlocksConsumed = 0;
     std::array<uint64_t, 16> DispatchCallsByThread{};
     std::array<uint64_t, 16> DispatchNanosecondsByThread{};
     uint64_t ClockPhases = 0;
@@ -139,6 +143,7 @@ struct NativeA32ProcessTimingStats {
     uint64_t ClockWholeAotCalls = 0;
     uint64_t ClockBlockLimitExits = 0;
     uint64_t ClockPatchExitRequests = 0;
+    uint64_t ClockWholeAotBlocksConsumed = 0;
 };
 
 class NativeA32Process {
@@ -286,6 +291,8 @@ class NativeA32Process {
     uint64_t mClockStartBlockLimitExits = 0;
     uint64_t mClockStartPatchExitRequests = 0;
     uint64_t mPatchExitRequestsAtReset = 0;
+    uint64_t mClockStartBlocksConsumed = 0;
+    uint64_t mBlocksConsumedAtReset = 0;
     std::vector<uint32_t> mBlockEntryFilterPcs;
     oot3d::recomp::a32::NativeFunctionCallback mNativeFunctionCallback =
         nullptr;

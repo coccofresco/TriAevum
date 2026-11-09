@@ -126,6 +126,9 @@ if(TRIAEVUM_TITLE_MM3D)
             titles/mm3d/shaders/mm3d_builtin_shader_packs_tests.cpp)
         target_include_directories(mm3d_builtin_shader_packs_${_variant}_tests PRIVATE
             runtime/three_ds_recomp/include)
+        # The pipeline cache namespace of the session is the product fact.
+        target_compile_definitions(mm3d_builtin_shader_packs_${_variant}_tests PRIVATE
+            "TRIAEVUM_MM3D_PRODUCT_FACTS=\"${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/product.json\"")
         oot3d_target_defaults(mm3d_builtin_shader_packs_${_variant}_tests FOLDER Tests)
     endforeach()
     triaevum_add_mm3d_builtin_shader_packs(mm3d_builtin_shader_packs_present_tests "${_mm3d_pack_fixture}")

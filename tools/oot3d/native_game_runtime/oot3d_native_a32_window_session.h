@@ -304,7 +304,11 @@ private:
   void RequireStoppedGuest(const char *access);
   std::vector<Fast::Renderer3ds::PicaTextureCopyReference> CollectGuestCopyReferences();
   void PinGpuCopyResources(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample& sample);
-  bool FlushNativeDependencies();
+  // duringSubmit: the flush inside the PICA submit loop (profile attribution
+  // only), otherwise the one before a guest refresh.
+  bool FlushNativeDependencies(bool duringSubmit = false);
+  // PERF profile: the game thread's waits for the render worker so far.
+  NativeA32FrameWaits FrameWaitValues() const;
   void ExecuteVisualSample(const Oot3dNativeGame::Oot3dPicaVisualFrameViewSample &sample, Oot3dNativeGame::Oot3dPicaPresentationExecutionKind kind, bool present, const Fast::Extension::NativeFrameTemporalSample& temporalSample, uint64_t renderTargetNamespace = kVisualInterpolationRenderTargetNamespace);
   // Deferred: a host continuation is pending, retry at a later frame boundary. Failed: reported once; the request is
   // dropped because every retry repeats the full GPU drain and readback.
@@ -511,6 +515,17 @@ private:
   Oot3dNativeGame::NativeA32InputTimeline inputTimeline{};
   Oot3dNativeGame::GraphicsSettingsSchedule graphicsSettingsSchedule{};
   NativeFramePhaseTiming phaseTiming;
+  // PERF profile (reported in benchmark_window.frame_waits). Game thread,
+  // except the two StartFrame counters: the frame begin runs on the worker
+  // unless it is synchronous.
+  double framesInFlightWaitSeconds = 0.0;
+  double frameStartDrainSeconds = 0.0;
+  uint64_t synchronousFrameStarts = 0;
+  std::array<double, 2> dependencyFlushDrainSeconds{};
+  std::array<double, 2> dependencyFlushExecuteSeconds{};
+  std::array<uint64_t, 2> dependencyFlushes{};
+  std::atomic<uint64_t> rendererStartFrameNanoseconds{0};
+  std::atomic<uint64_t> rendererStartFrames{0};
   Oot3dNativeGame::NativeA32InputDiagnostics inputDiagnostics;
   NativeInputConsumerDiagnostics inputConsumerDiagnostics;
   NativeControlPollingState nativeControlPollingState;

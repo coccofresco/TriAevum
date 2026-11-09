@@ -64,6 +64,20 @@ foreach(_pack renderer3ds/pica_native_fragment extension/pica_temporal_fragment 
 endforeach()
 triaevum_add_spirv_pack(triaevum_nri_pipeline_prepare "${runtime}/src/fast/extension/pica_uber_fragment_binaries.cpp"
     "${runtime}/src/fast/extension/pica_native_lighting_uber.spvpack")
+# A title with pipeline cache files of its own (--pipeline-cache-namespace)
+# prepares the families its session installs in the runtime: MM3D's built-in
+# packs, embedded as the runtime embeds them (CMake/oot3d/game.cmake,
+# triaevum_add_mm3d_builtin_shader_packs), when the tree has both.
+set(_mm3d_shaders "${root}/titles/mm3d/shaders")
+if(EXISTS "${_mm3d_shaders}/mm3d_native_vertex.spvpack" AND EXISTS "${_mm3d_shaders}/mm3d_native_fragment.spvpack")
+    foreach(_pack mm3d_native_vertex mm3d_native_fragment)
+        triaevum_add_spirv_pack(triaevum_nri_pipeline_prepare "${_mm3d_shaders}/mm3d_builtin_shader_packs.cpp"
+            "${_mm3d_shaders}/${_pack}.spvpack")
+    endforeach()
+    target_compile_definitions(triaevum_nri_pipeline_prepare PRIVATE TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS=1
+        "TRIAEVUM_MM3D_VERTEX_PACK=\"${_mm3d_shaders}/mm3d_native_vertex.spvpack\""
+        "TRIAEVUM_MM3D_FRAGMENT_PACK=\"${_mm3d_shaders}/mm3d_native_fragment.spvpack\"")
+endif()
 add_executable(triaevum_pipeline_preparation_tests tests.cpp)
 target_link_libraries(triaevum_pipeline_preparation_tests PRIVATE triaevum_pipeline_preparation)
 enable_testing()

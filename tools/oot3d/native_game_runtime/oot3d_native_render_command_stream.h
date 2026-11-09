@@ -67,6 +67,25 @@ class NativeRenderCommandStream final {
     [[nodiscard]] bool InSynchronousCommand() const noexcept;
     [[nodiscard]] uint64_t ExecutedCommands() const noexcept;
 
+    // How long the submitter waited for the worker, by cause (profile output
+    // only; the waits themselves are unchanged). Worker mode only: an inline
+    // stream never waits.
+    struct WaitStats {
+        // Run, Drain and SetMode waiting until the stream is empty.
+        uint64_t Drains = 0;
+        uint64_t DrainNanoseconds = 0;
+        // WaitForFramesInFlight.
+        uint64_t FramesInFlightWaits = 0;
+        uint64_t FramesInFlightNanoseconds = 0;
+        // Submit of a frame end with MaxFramesInFlight frames pending.
+        uint64_t FrameEndSubmits = 0;
+        uint64_t FrameEndBackPressureNanoseconds = 0;
+        // Run's command, executed on the submitter after the drain.
+        uint64_t RunCommands = 0;
+        uint64_t RunCommandNanoseconds = 0;
+    };
+    [[nodiscard]] WaitStats Waits() const noexcept;
+
   private:
     struct Entry {
         Command Work;
@@ -93,6 +112,7 @@ class NativeRenderCommandStream final {
     std::exception_ptr mFailure;
     uint64_t mExecuted = 0U;
     uint64_t mSubmitted = 0U;
+    WaitStats mWaits;
 };
 
 } // namespace Oot3dNativeGame

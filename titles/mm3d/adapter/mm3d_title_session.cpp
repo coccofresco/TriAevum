@@ -4,6 +4,7 @@
 #include "triaevum_developer_overrides.h"
 #include "triaevum_title_session.h"
 #include "../shaders/mm3d_builtin_shader_packs.h"
+#include "../shaders/mm3d_shader_preparation.h"
 
 #include "a32_runtime.h"
 #include "mm3d_guest_calls.h"
@@ -67,7 +68,7 @@ public:
     if(mSingleScreen)mSingleScreen->SubmitButtonOverlayCommandList(address,bytes);
     return true;
   }
-  bool NativeFragmentLighting() const override { return true; }
+  bool NativeFragmentLighting() const override { return kMm3dNativeFragmentLighting; }
   std::string_view CompanionLightName() const override { return "Tatl"; }
   // dekui's settings (Restoration's options and the damage multiplier
   // among them) travel with "state + settings", as TopScreen's do for OoT3D.
@@ -112,7 +113,7 @@ public:
   std::span<const unsigned char> BuiltInVertexProgramPack() const override { return Mm3dBuiltInVertexPack(); }
   std::span<const unsigned char> BuiltInFragmentProgramPack() const override { return Mm3dBuiltInFragmentPack(); }
   // MM3D's own pipeline cache files, apart from OoT3D's.
-  std::string_view PipelineCacheNamespace() const override { return "mm3d"; }
+  std::string_view PipelineCacheNamespace() const override { return kMm3dPipelineCacheNamespace; }
 
   bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const override {
     return IsMm3dGameplayHud(sourcePc, nativeValue);

@@ -4,6 +4,7 @@
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 #include "fast/renderer3ds/pica_vulkan_device_profile.h"
 #include "fast/renderer3ds/pica_startup_programs.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 #include "fast/extension/pica_nri_pipeline_state.h"
 #include "fast/extension/pica_pipeline_preparation.h"
 #include <atomic>
@@ -227,6 +228,16 @@ int main() {
         draw.FragmentOperationMode = 3;
         state = Fast::Extension::BuildPicaNriPipelineState(draw, {}, {}, VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_D32_SFLOAT);
         Check(state.Colors[0].colorWriteMask == 0 && !state.LogicOpEnabled);
+
+        // The cache file the helper writes is the one the title's runtime reads:
+        // both name it from the same constant by the same rule. No namespace is
+        // the original file, byte for byte; an invalid one names no file.
+        Check(Renderer3ds::TitlePipelineCacheFilename(Renderer3ds::kNriPipelineCacheFilename, "") ==
+              "nri_pipeline_cache.bin");
+        Check(Renderer3ds::TitlePipelineCacheFilename(Renderer3ds::kNriPipelineCacheFilename, "mm3d") ==
+              "nri_pipeline_cache.mm3d.bin");
+        Check(Renderer3ds::TitlePipelineCacheFilename(Renderer3ds::kNriPipelineCacheFilename, "../mm3d").empty() &&
+              Renderer3ds::TitlePipelineCacheFilename(Renderer3ds::kNriPipelineCacheFilename, "MM3D").empty());
 
         // Startup program parts: one derivation for the renderer and Forge.
         const std::vector<uint32_t> plain{0x07230203, 0x00010000, 0, 1, 0};

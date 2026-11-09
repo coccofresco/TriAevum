@@ -161,6 +161,14 @@ bool NativeA32WindowSession::RunFrame() {
   const auto phaseBeforeFrame = phaseTiming.Values();
   const double nestedGuestBeforeFrame = phaseTiming.GuestInsidePicaSubmitSeconds;
   const double guestClockBeforeFrame = phaseTiming.GuestClockSeconds;
+  // PERF profile: the frame's waits and (profile runs) its guest work, as
+  // deltas of these, for the benchmark window and its longest frame.
+  const auto waitsBeforeFrame = FrameWaitValues();
+  const uint64_t vblanksBeforeFrame = vblankCount;
+  const auto processTimingBeforeFrame = launch.ProfileA32Runtime
+      ? process.TimingStats() : Oot3dNativeGame::NativeA32ProcessTimingStats{};
+  const auto ctrTimingBeforeFrame = launch.ProfileA32Runtime
+      ? hostServicesStorage->RuntimeProfile() : Oot3dNativeGame::NativeA32CtrRuntimeProfile{};
   widescreenProjection.CurrentHostFrame =
       static_cast<uint32_t>(presentationFrameCount);
   WindowDemoFrameTiming frameTiming;
@@ -195,7 +203,11 @@ bool NativeA32WindowSession::RunFrame() {
   const bool frameAdmitted = inputAdmission.BeginFrame();
   if (frameAdmitted) inputSampleDelay.Reset();
   const bool lateInputSample = frameAdmitted && inputAdmissionLateSampling;
-  if (frameAdmitted) renderStream.WaitForFramesInFlight(0U);
+  if (frameAdmitted) {
+    const auto inFlightWaitStart = std::chrono::steady_clock::now();
+    renderStream.WaitForFramesInFlight(0U);
+    framesInFlightWaitSeconds += SecondsSince(inFlightWaitStart);
+  }
   if (!PrepareNextWindowDemoFrame(hostArgs, window, timing, frameTiming)) {
     return true;
   }
@@ -438,6 +450,11 @@ bool NativeA32WindowSession::RunFrame() {
       const auto beginStart = std::chrono::steady_clock::now();
       api.StartFrame();
       workerFrameAcquireEnd = std::chrono::steady_clock::now();
+      rendererStartFrameNanoseconds.fetch_add(
+          static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+              workerFrameAcquireEnd - beginStart).count()),
+          std::memory_order_relaxed);
+      rendererStartFrames.fetch_add(1U, std::memory_order_relaxed);
       inputLatencyTrace.ObserveBegin(presentationSerial, beginStart,
                                      workerFrameAcquireEnd);
       rendererFrameSkipped = !api.HasActiveFrame();
@@ -485,7 +502,11 @@ bool NativeA32WindowSession::RunFrame() {
     guestFrameBeginNativePresentation = renderNativePresentation;
     bool rendererFrameActive = true;
     if (synchronousFrameBegin) {
+      const uint64_t drainBefore = renderStream.Waits().DrainNanoseconds;
       renderStream.Run(beginRendererFrame);
+      frameStartDrainSeconds +=
+          static_cast<double>(renderStream.Waits().DrainNanoseconds - drainBefore) * 1.0e-9;
+      ++synchronousFrameStarts;
       // The renderer is idle after Run: its frame state is readable.
       rendererFrameActive = !rendererFrameSkipped;
     } else {
@@ -1077,6 +1098,64 @@ bool NativeA32WindowSession::RunFrame() {
         -delta[4]-delta[11]-delta[13];
     benchmark.PreBackendEnvelopeTimes.RecordMilliseconds(envelope*1000.0);
     benchmark.UnattributedSeconds+=envelope-budget.Total();
+    // PERF profile: the waits of this frame, and the frame with the longest
+    // pre-backend time with what the guest did in it.
+    auto frameWaits = FrameWaitValues();
+    for (size_t i = 0; i < frameWaits.size(); ++i) {
+      frameWaits[i] -= waitsBeforeFrame[i];
+      benchmark.Waits[i] += frameWaits[i];
+    }
+    if (budget.Valid() && (!benchmark.LongestPreBackendFrame.Valid ||
+                           budget.Total() > benchmark.LongestPreBackendFrame.PreBackendSeconds)) {
+      auto& longest = benchmark.LongestPreBackendFrame;
+      longest = {};
+      longest.Valid = true;
+      longest.RunFrame = runFrameCount;
+      longest.WindowSeconds =
+          std::chrono::duration<double>(completedFrameTime - benchmark.MeasurementStart).count();
+      longest.PreBackendSeconds = budget.Total();
+      longest.EnvelopeSeconds = envelope;
+      longest.FrameSeconds =
+          std::chrono::duration<double>(completedFrameTime - benchmark.MeasurementEnd).count();
+      longest.NestedGuestSeconds = nestedGuest;
+      longest.GuestClockSeconds = phaseTiming.GuestClockSeconds - guestClockBeforeFrame;
+      longest.PhaseSeconds = delta;
+      longest.Waits = frameWaits;
+      longest.GuestRefreshes = vblankCount - vblanksBeforeFrame;
+      if (launch.ProfileA32Runtime) {
+        const auto now = process.TimingStats();
+        const auto& before = processTimingBeforeFrame;
+        longest.Profiled = true;
+        longest.ProcessRunCalls = now.ProcessRunCalls - before.ProcessRunCalls;
+        longest.DispatchCalls = now.DispatchCalls - before.DispatchCalls;
+        longest.DispatchNanoseconds = now.DispatchNanoseconds - before.DispatchNanoseconds;
+        for (size_t i = 0; i < longest.DispatchCallsByThread.size(); ++i) {
+          longest.DispatchCallsByThread[i] = now.DispatchCallsByThread[i] - before.DispatchCallsByThread[i];
+          longest.DispatchNanosecondsByThread[i] =
+              now.DispatchNanosecondsByThread[i] - before.DispatchNanosecondsByThread[i];
+        }
+        longest.ClockDispatchCalls = now.ClockDispatchCalls - before.ClockDispatchCalls;
+        longest.ClockDispatchNanoseconds = now.ClockDispatchNanoseconds - before.ClockDispatchNanoseconds;
+        longest.SvcCalls = now.SvcCalls - before.SvcCalls;
+        longest.SvcNanoseconds = now.SvcNanoseconds - before.SvcNanoseconds;
+        for (size_t i = 0; i < longest.SvcCallsByImmediate.size(); ++i) {
+          longest.SvcCallsByImmediate[i] = now.SvcCallsByImmediate[i] - before.SvcCallsByImmediate[i];
+          longest.SvcNanosecondsByImmediate[i] =
+              now.SvcNanosecondsByImmediate[i] - before.SvcNanosecondsByImmediate[i];
+        }
+        longest.PatchExitRequests = now.PatchExitRequests - before.PatchExitRequests;
+        longest.WholeAotBlocksConsumed = now.WholeAotBlocksConsumed - before.WholeAotBlocksConsumed;
+        const auto ctr = hostServicesStorage->RuntimeProfile();
+        longest.RomFsStreamOpenCalls = ctr.RomFsStreamOpenCalls - ctrTimingBeforeFrame.RomFsStreamOpenCalls;
+        longest.RomFsReadCalls = ctr.RomFsReadCalls - ctrTimingBeforeFrame.RomFsReadCalls;
+        longest.RomFsReadBytes = ctr.RomFsReadBytes - ctrTimingBeforeFrame.RomFsReadBytes;
+        longest.RomFsReadNanoseconds = ctr.RomFsReadNanoseconds - ctrTimingBeforeFrame.RomFsReadNanoseconds;
+        longest.GspTriggerCalls = ctr.TriggerCommandQueueCalls - ctrTimingBeforeFrame.TriggerCommandQueueCalls;
+        longest.GspTriggerNanoseconds =
+            ctr.TriggerCommandQueueNanoseconds - ctrTimingBeforeFrame.TriggerCommandQueueNanoseconds;
+        longest.GspCommandPackets = ctr.CommandPackets - ctrTimingBeforeFrame.CommandPackets;
+      }
+    }
     if (benchmarkFrameTimes) {
       auto phases = phaseTiming.Values();
       for (size_t i = 0; i < phases.size(); ++i)
@@ -1540,9 +1619,12 @@ bool NativeA32WindowSession::UpdateGuestServicesForRefresh(
   nextVblankTick += refreshTickRemainder / kGuestDisplayRefreshRate;
   refreshTickRemainder %= kGuestDisplayRefreshRate;
   const auto clockStart = std::chrono::steady_clock::now();
+  // Profile runs: the dispatch inside the clock advance is counted apart.
+  process.BeginClockPhase();
   const auto clockResolution = AdvanceGuestClockTo(
       process, hostServices, processResult, nextVblankTick,
       launch.WholeAotBlockBudget);
+  process.EndClockPhase();
   const double clockSeconds = SecondsSince(clockStart);
   phaseTiming.GuestClockSeconds += clockSeconds;
   phaseTiming.GuestSeconds += clockSeconds;
@@ -2157,7 +2239,7 @@ void NativeA32WindowSession::RunGuestRefresh() {
                                "match a submitted draw");
     }
     signaledPicaCompletion =
-        FlushNativeDependencies() || signaledPicaCompletion;
+        FlushNativeDependencies(true) || signaledPicaCompletion;
     if (!signaledPicaCompletion) {
       break;
     }
@@ -3528,12 +3610,52 @@ void NativeA32WindowSession::PinGpuCopyResources(const Oot3dNativeGame::Oot3dPic
   }
 }
 
-bool NativeA32WindowSession::FlushNativeDependencies() {
+NativeA32FrameWaits NativeA32WindowSession::FrameWaitValues() const {
+  const auto stream = renderStream.Waits();
+  constexpr double ns = 1.0e-9;
+  // The order of kNativeA32FrameWaitNames.
+  return {framesInFlightWaitSeconds,
+          frameStartDrainSeconds,
+          static_cast<double>(rendererStartFrameNanoseconds.load(std::memory_order_relaxed)) * ns,
+          dependencyFlushDrainSeconds[0],
+          dependencyFlushExecuteSeconds[0],
+          dependencyFlushDrainSeconds[1],
+          dependencyFlushExecuteSeconds[1],
+          static_cast<double>(stream.FrameEndBackPressureNanoseconds) * ns,
+          static_cast<double>(stream.DrainNanoseconds) * ns,
+          static_cast<double>(stream.RunCommandNanoseconds) * ns,
+          static_cast<double>(stream.FramesInFlightWaits),
+          static_cast<double>(synchronousFrameStarts),
+          static_cast<double>(rendererStartFrames.load(std::memory_order_relaxed)),
+          static_cast<double>(dependencyFlushes[0]),
+          static_cast<double>(dependencyFlushes[1]),
+          static_cast<double>(stream.FrameEndSubmits),
+          static_cast<double>(stream.Drains)};
+}
+
+bool NativeA32WindowSession::FlushNativeDependencies(bool duringSubmit) {
   auto &api = *apiPointer;
   // The accumulator is guest-owned, so whether there is dependency work is
   // known here; only real work waits for the renderer.
   if (!picaPresentationScheduler.ViewDependencyWork(dependencySampleScratch))
     return false;
+  // PERF profile: the wait for the worker and the flush itself, per call site.
+  const auto flushStart = std::chrono::steady_clock::now();
+  const uint64_t drainBefore = renderStream.Waits().DrainNanoseconds;
+  struct FlushTiming {
+    NativeA32WindowSession& Session;
+    std::chrono::steady_clock::time_point Start;
+    uint64_t DrainBefore;
+    size_t Site;
+    ~FlushTiming() {
+      const double drain =
+          static_cast<double>(Session.renderStream.Waits().DrainNanoseconds - DrainBefore) * 1.0e-9;
+      const double total = std::chrono::duration<double>(std::chrono::steady_clock::now() - Start).count();
+      Session.dependencyFlushDrainSeconds[Site] += drain;
+      Session.dependencyFlushExecuteSeconds[Site] += total > drain ? total - drain : 0.0;
+      ++Session.dependencyFlushes[Site];
+    }
+  } flushTiming{*this, flushStart, drainBefore, duringSubmit ? size_t{1} : size_t{0}};
   // Synchronous: raw copies read and write guest memory and signal PPF
   // while the guest waits.
   bool flushed = false;

@@ -50,6 +50,7 @@ struct ProductPatchExitContext {
 };
 
 uint64_t gProductPatchExitRequests = 0U;
+uint64_t gProductBlocksConsumed = 0U;
 
 [[noreturn]] void ExitCompiledModuleAt(
     uint32_t pc, const oot3d::recomp::a32::GuestState& state) {
@@ -203,6 +204,7 @@ oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
 
         consumed = std::clamp(consumed, 1U, remaining);
         consumedTotal += consumed;
+        gProductBlocksConsumed += consumed;
         if (result.kind != ExitKind::Branch &&
             result.kind != ExitKind::Fallthrough) {
             if (result.kind == ExitKind::BlockLimit) {
@@ -1086,6 +1088,7 @@ void NativeA32Process::SetTimingEnabled(bool enabled) noexcept {
     mTimingStats = {};
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
     mPatchExitRequestsAtReset = gProductPatchExitRequests;
+    mBlocksConsumedAtReset = gProductBlocksConsumed;
 #endif
 }
 
@@ -1097,6 +1100,7 @@ NativeA32ProcessTimingStats NativeA32Process::TimingStats() const noexcept {
     auto stats = mTimingStats;
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
     stats.PatchExitRequests = gProductPatchExitRequests - mPatchExitRequestsAtReset;
+    stats.WholeAotBlocksConsumed = gProductBlocksConsumed - mBlocksConsumedAtReset;
 #endif
     return stats;
 }
@@ -1112,6 +1116,7 @@ void NativeA32Process::BeginClockPhase() noexcept {
     mClockStartBlockLimitExits = compiled.WholeAotBlockLimitExits;
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
     mClockStartPatchExitRequests = gProductPatchExitRequests;
+    mClockStartBlocksConsumed = gProductBlocksConsumed;
 #endif
 }
 
@@ -1125,6 +1130,7 @@ void NativeA32Process::EndClockPhase() noexcept {
     mTimingStats.ClockBlockLimitExits += compiled.WholeAotBlockLimitExits - mClockStartBlockLimitExits;
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
     mTimingStats.ClockPatchExitRequests += gProductPatchExitRequests - mClockStartPatchExitRequests;
+    mTimingStats.ClockWholeAotBlocksConsumed += gProductBlocksConsumed - mClockStartBlocksConsumed;
 #endif
 }
 
@@ -1353,6 +1359,7 @@ bool NativeA32Process::RestoreState(const nlohmann::json& state,
         mTimingStats = {};
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
     mPatchExitRequestsAtReset = gProductPatchExitRequests;
+    mBlocksConsumedAtReset = gProductBlocksConsumed;
 #endif
         return true;
     } catch (const std::exception& exception) {

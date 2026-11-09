@@ -1,5 +1,6 @@
 #include "oot3d_native_render_command_stream.h"
 
+#include <chrono>
 #include <stdexcept>
 #include <utility>
 
@@ -8,6 +9,11 @@ namespace {
 
 thread_local bool tInCommand = false;
 thread_local bool tSynchronous = false;
+
+uint64_t NanosecondsSince(std::chrono::steady_clock::time_point start) {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count());
+}
 
 struct CommandScope {
     explicit CommandScope(bool synchronous) {
@@ -51,6 +57,11 @@ uint64_t NativeRenderCommandStream::ExecutedCommands() const noexcept {
     return mExecuted;
 }
 
+NativeRenderCommandStream::WaitStats NativeRenderCommandStream::Waits() const noexcept {
+    std::lock_guard lock(mMutex);
+    return mWaits;
+}
+
 void NativeRenderCommandStream::Submit(Command command, bool endsFrame) {
     Enqueue(std::move(command), endsFrame, false);
 }
@@ -71,9 +82,12 @@ void NativeRenderCommandStream::Enqueue(Command command, bool endsFrame,
     std::unique_lock lock(mMutex);
     RethrowPendingFailureLocked(lock);
     if (endsFrame) {
+        const auto waitStart = std::chrono::steady_clock::now();
         mProgress.wait(lock, [&] {
             return mFailure != nullptr || mFramesQueued < mMaxFramesInFlight;
         });
+        ++mWaits.FrameEndSubmits;
+        mWaits.FrameEndBackPressureNanoseconds += NanosecondsSince(waitStart);
         RethrowPendingFailureLocked(lock);
         ++mFramesQueued;
     }
@@ -84,30 +98,40 @@ void NativeRenderCommandStream::Enqueue(Command command, bool endsFrame,
 
 void NativeRenderCommandStream::Run(Command command) {
     Drain();
+    const auto commandStart = std::chrono::steady_clock::now();
     {
         CommandScope scope(true);
         command();
     }
+    const uint64_t commandNanoseconds = NanosecondsSince(commandStart);
     std::lock_guard lock(mMutex);
     ++mSubmitted;
     ++mExecuted;
+    ++mWaits.RunCommands;
+    mWaits.RunCommandNanoseconds += commandNanoseconds;
 }
 
 void NativeRenderCommandStream::Drain() {
     if (mMode == Mode::Inline || !mWorker.joinable()) return;
     std::unique_lock lock(mMutex);
+    const auto waitStart = std::chrono::steady_clock::now();
     mProgress.wait(lock, [&] {
         return mFailure != nullptr || (mQueue.empty() && !mBusy);
     });
+    ++mWaits.Drains;
+    mWaits.DrainNanoseconds += NanosecondsSince(waitStart);
     RethrowPendingFailureLocked(lock);
 }
 
 void NativeRenderCommandStream::WaitForFramesInFlight(size_t frames) {
     if (mMode == Mode::Inline || !mWorker.joinable()) return;
     std::unique_lock lock(mMutex);
+    const auto waitStart = std::chrono::steady_clock::now();
     mProgress.wait(lock, [&] {
         return mFailure != nullptr || mFramesQueued <= frames;
     });
+    ++mWaits.FramesInFlightWaits;
+    mWaits.FramesInFlightNanoseconds += NanosecondsSince(waitStart);
     RethrowPendingFailureLocked(lock);
 }
 

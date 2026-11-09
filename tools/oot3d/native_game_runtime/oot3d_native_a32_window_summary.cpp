@@ -647,6 +647,77 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                   {"p95_upper_ms",benchmark.PreBackendTimes.Count()?nlohmann::json(*benchmark.PreBackendTimes.QuantileUpperMs(.95)):nlohmann::json(nullptr)},
                   {"maximum_ms",benchmark.PreBackendTimes.MaximumMs()}};
               }()},
+              {"frame_waits", [&]() -> nlohmann::json {
+                 // Game-thread waits for the render worker inside the measured
+                 // frames. They are untimed in pre_backend_cpu, so they sit in
+                 // unattributed_host_ui_seconds, except renderer_start_frame
+                 // (inside renderer_frame_start, or on the worker when the
+                 // frame begin is not synchronous) and the submit flush
+                 // (inside pica_submit).
+                 nlohmann::json waits = nlohmann::json::object();
+                 for (size_t i = 0; i < benchmark.Waits.size(); ++i) {
+                   if (i < 10U) waits[kNativeA32FrameWaitNames[i]] = benchmark.Waits[i];
+                   else waits[kNativeA32FrameWaitNames[i]] = static_cast<uint64_t>(benchmark.Waits[i] + 0.5);
+                 }
+                 waits["note"] = "stream_drain_seconds contains frame_start_drain, refresh_flush_drain and "
+                                 "submit_flush_drain; stream_run_command_seconds contains the flush executions "
+                                 "and the synchronous frame begin";
+                 return waits;
+               }()},
+              {"longest_pre_backend_frame", [&]() -> nlohmann::json {
+                 const auto& f = benchmark.LongestPreBackendFrame;
+                 if (!f.Valid) return nullptr;
+                 constexpr const char* names[]{"guest", "frame_start", "host_frame_start", "input_poll",
+                   "renderer_frame_start", "dsp_mix", "audio_output", "pica_submit", "pica_plan",
+                   "pica_backend", "pica_diagnostics", "visual_presentation", "visual_replay", "present", "pacing_wait"};
+                 nlohmann::json phases = nlohmann::json::object();
+                 for (size_t i = 0; i < std::size(names); ++i) phases[names[i]] = f.PhaseSeconds[i] * 1000.0;
+                 nlohmann::json waits = nlohmann::json::object();
+                 for (size_t i = 0; i < f.Waits.size(); ++i) {
+                   if (i < 10U) waits[kNativeA32FrameWaitNames[i]] = f.Waits[i];
+                   else waits[kNativeA32FrameWaitNames[i]] = static_cast<uint64_t>(f.Waits[i] + 0.5);
+                 }
+                 nlohmann::json frame{{"run_frame", f.RunFrame},
+                   {"measured_window_seconds_at_end", f.WindowSeconds},
+                   {"pre_backend_ms", f.PreBackendSeconds * 1000.0},
+                   {"host_envelope_ms", f.EnvelopeSeconds * 1000.0},
+                   {"frame_ms", f.FrameSeconds * 1000.0},
+                   {"guest_clock_ms", f.GuestClockSeconds * 1000.0},
+                   {"nested_guest_ms", f.NestedGuestSeconds * 1000.0},
+                   {"guest_refreshes", f.GuestRefreshes},
+                   {"phases_ms", std::move(phases)}, {"waits", std::move(waits)},
+                   {"guest_profiled", f.Profiled}};
+                 if (f.Profiled) {
+                   nlohmann::json threads = nlohmann::json::array();
+                   for (size_t i = 0; i < f.DispatchCallsByThread.size(); ++i) {
+                     if (f.DispatchCallsByThread[i] == 0U) continue;
+                     threads.push_back({{"thread_slot", i}, {"dispatch_calls", f.DispatchCallsByThread[i]},
+                       {"dispatch_seconds", f.DispatchNanosecondsByThread[i] * 1.0e-9}});
+                   }
+                   nlohmann::json svcs = nlohmann::json::array();
+                   for (size_t i = 0; i < f.SvcCallsByImmediate.size(); ++i) {
+                     if (f.SvcCallsByImmediate[i] == 0U) continue;
+                     svcs.push_back({{"immediate", i}, {"calls", f.SvcCallsByImmediate[i]},
+                       {"seconds", f.SvcNanosecondsByImmediate[i] * 1.0e-9}});
+                   }
+                   frame["guest"] = {{"process_run_calls", f.ProcessRunCalls},
+                     {"dispatch_calls", f.DispatchCalls}, {"dispatch_seconds", f.DispatchNanoseconds * 1.0e-9},
+                     {"dispatch_by_thread", std::move(threads)},
+                     {"guest_clock_dispatch_calls", f.ClockDispatchCalls},
+                     {"guest_clock_dispatch_seconds", f.ClockDispatchNanoseconds * 1.0e-9},
+                     {"svc_calls", f.SvcCalls}, {"svc_seconds", f.SvcNanoseconds * 1.0e-9},
+                     {"svc_by_immediate", std::move(svcs)},
+                     {"patch_exit_requests", f.PatchExitRequests},
+                     {"whole_aot_blocks_consumed", f.WholeAotBlocksConsumed},
+                     {"romfs_stream_open_calls", f.RomFsStreamOpenCalls},
+                     {"romfs_read_calls", f.RomFsReadCalls}, {"romfs_read_bytes", f.RomFsReadBytes},
+                     {"romfs_read_seconds", f.RomFsReadNanoseconds * 1.0e-9},
+                     {"gsp_trigger_command_queue_calls", f.GspTriggerCalls},
+                     {"gsp_trigger_command_queue_seconds", f.GspTriggerNanoseconds * 1.0e-9},
+                     {"gsp_command_packets", f.GspCommandPackets}};
+                 }
+                 return frame;
+               }()},
               {"frame_times", [&]() -> nlohmann::json {
                  if (!benchmarkFrameTimes || !benchmarkFrameTimes->Count()) return nullptr;
                  const auto& times = *benchmarkFrameTimes;
@@ -2353,6 +2424,7 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                    {"dispatch_seconds",
                     timing.DispatchNanoseconds * nanosecondsToSeconds},
                    {"patch_exit_requests", timing.PatchExitRequests},
+                   {"whole_aot_blocks_consumed", timing.WholeAotBlocksConsumed},
                    {"dispatch_calls_by_thread", timing.DispatchCallsByThread},
                    {"dispatch_seconds_by_thread",
                     [&] {
@@ -2369,7 +2441,8 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                      {"whole_aot_calls", timing.ClockWholeAotCalls},
                      {"indirect_calls", timing.ClockIndirectCalls},
                      {"block_limit_exits", timing.ClockBlockLimitExits},
-                     {"patch_exit_requests", timing.ClockPatchExitRequests}}},
+                     {"patch_exit_requests", timing.ClockPatchExitRequests},
+                     {"whole_aot_blocks_consumed", timing.ClockWholeAotBlocksConsumed}}},
                    {"svc_calls", timing.SvcCalls},
                    {"svc_seconds",
                     timing.SvcNanoseconds * nanosecondsToSeconds},
