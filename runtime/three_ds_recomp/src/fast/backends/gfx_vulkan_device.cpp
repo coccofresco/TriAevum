@@ -607,13 +607,25 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
     std::fprintf(stderr, "TRIAEVUM_PICA_VULKAN_SHADER_PAIRS created=%llu\n",
                  static_cast<unsigned long long>(mNativePicaVulkanShaderPairCreations));
     const auto& copySampler = mGpuTextureCopySamplerCost;
+    Fast::GpuCopyImagePoolStats poolStats;
+    uint64_t poolBytes = 0;
+    uint64_t poolEntries = 0;
+    {
+        std::lock_guard lock(mGpuCopyImagePoolMutex);
+        poolStats = mGpuCopyImagePool.Stats();
+        poolBytes = mGpuCopyImagePool.Bytes();
+        poolEntries = mGpuCopyImagePool.Entries();
+    }
     if (copySampler.Resolutions != 0U) {
         std::fprintf(stderr,
                      "TRIAEVUM_GPU_COPY_SAMPLER resolutions=%llu producer=%llu "
                      "gpu_bound=%llu gpu_bytes=%llu gpu_pixels=%llu native_pixels=%llu "
                      "regions=%llu producer_restores=%llu fallback_unknown=%llu "
                      "fallback_uncaptured=%llu fallback_layout=%llu fallback_mips=%llu "
-                     "resolve_ms=%.3f bind_ms=%.3f\n",
+                     "resolve_ms=%.3f bind_ms=%.3f pool_created=%llu pool_reused=%llu "
+                     "pool_released=%llu pool_trimmed=%llu pool_rejected=%llu pool_bytes=%llu "
+                     "pool_peak_bytes=%llu pool_entries=%llu sampler_cache_hits=%llu "
+                     "sampler_cache_created=%llu create_ms=%.3f retire_ms=%.3f\n",
                      static_cast<unsigned long long>(copySampler.Resolutions),
                      static_cast<unsigned long long>(copySampler.ProducerResolutions),
                      static_cast<unsigned long long>(copySampler.GpuBound),
@@ -627,7 +639,19 @@ void GfxRenderingAPIVulkan::StorePipelineCache() {
                      static_cast<unsigned long long>(copySampler.FallbackLayout),
                      static_cast<unsigned long long>(copySampler.FallbackMipChain),
                      copySampler.ResolveSeconds * 1000.0,
-                     copySampler.BindSeconds * 1000.0);
+                     copySampler.BindSeconds * 1000.0,
+                     static_cast<unsigned long long>(poolStats.Created),
+                     static_cast<unsigned long long>(poolStats.Reused),
+                     static_cast<unsigned long long>(poolStats.Released),
+                     static_cast<unsigned long long>(poolStats.Trimmed),
+                     static_cast<unsigned long long>(poolStats.Rejected),
+                     static_cast<unsigned long long>(poolBytes),
+                     static_cast<unsigned long long>(poolStats.PeakBytes),
+                     static_cast<unsigned long long>(poolEntries),
+                     static_cast<unsigned long long>(copySampler.SamplerCacheHits),
+                     static_cast<unsigned long long>(copySampler.SamplerCacheCreated),
+                     copySampler.PoolCreateSeconds * 1000.0,
+                     copySampler.RetireSeconds * 1000.0);
     }
     if (mRawCopyEncodeVerifyBytes != 0U) {
         std::fprintf(stderr,
@@ -883,6 +907,9 @@ void GfxRenderingAPIVulkan::ReportDeviceLoss(VkResult result, const char* operat
     if (result != VK_ERROR_DEVICE_LOST || mDeviceLossReported.exchange(true)) {
         return;
     }
+    // The next producer sweep releases every pooled GPU-copy image and turns
+    // pooling off; nothing is reused on a lost device.
+    mGpuCopyImagePoolDeviceLost.store(true);
     const auto report = [](const std::string& line) {
         SPDLOG_WARN("{}", line);
         std::fprintf(stderr, "%s\n", line.c_str());
@@ -1364,6 +1391,9 @@ void GfxRenderingAPIVulkan::RecreateSwapchain() {
         mSwapchainDirty = true;
         return;
     }
+    // A resize usually comes with a new internal extent; pooled GPU-copy images
+    // are idle by construction, so dropping them here is always safe.
+    ReleaseGpuCopyImagePool();
     WaitForAllPresents();
     StopPresentWorker();
     CheckVk(vkDeviceWaitIdle(mDevice), "vkDeviceWaitIdle(recreate swapchain)");

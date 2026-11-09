@@ -7,6 +7,7 @@
 #endif
 
 #include "fast/backends/gfx_rendering_api.h"
+#include "fast/backends/gpu_copy_image_pool.h"
 #include "fast/renderer/spirv_cache.h"
 #include "fast/renderer3ds/pica_shader_module_identity.h"
 #include "fast/renderer3ds/pica_temporal_history.h"
@@ -445,6 +446,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // The last frame a draw resolved this record: the texture cache
         // releases records no draw samples (ReleaseIdleNativePicaTextures).
         uint64_t LastUsedFrame = 0;
+        // The sampler belongs to the permanent GPU-copy sampler cache, not to
+        // this record: DestroyTexture and RecreateSampler leave it alone.
+        bool SamplerShared = false;
     };
 
     struct NativePicaMaterialBundle {
@@ -1150,7 +1154,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     TextureRecord* CreateGpuCopiedTextureRecord(
         const NativePicaTextureKey& textureKey,
         const GfxNativePicaTextureView& texture, uint32_t width,
-        uint32_t height);
+        uint32_t height, bool allowPooledImage);
     // Resolves the sampled record and marks it used this frame.
     TextureRecord* GetOrCreateNativePicaTexture(
         const GfxNativePicaTextureView& texture, std::string* error,
@@ -1511,6 +1515,11 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::vector<uint8_t> MaterializedNativeBytes;
         // Memory ranges hold this pin independently from sampled-plan pins.
         std::shared_ptr<const uint64_t> GuestOwner;
+        // Image came from CaptureGpuTextureCopySource (or its pool) and may go
+        // back to the GPU-copy image pool when the producer retires.
+        bool ImagePoolable = false;
+        VkImageView ImageView = VK_NULL_HANDLE;        // sampled view of Image (pool payload)
+        VkImageView NativeImageView = VK_NULL_HANDLE;  // sampled view of NativeImage
     };
     // The boundary canvas the scene composer materializes and owns.
     Extension::NriOwnedTexture2D mNativePicaSceneCopyCanvas;
@@ -1612,8 +1621,63 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint64_t ProducerRestores = 0;
         double ResolveSeconds = 0.0;
         double BindSeconds = 0.0;
+        // Image pool (captures and derived images): time spent obtaining an
+        // image (pool hit or allocation), and time spent retiring producers.
+        double PoolCreateSeconds = 0.0;
+        double RetireSeconds = 0.0;
+        uint64_t SamplerCacheHits = 0;
+        uint64_t SamplerCacheCreated = 0;
     };
     GpuTextureCopySamplerCost mGpuTextureCopySamplerCost;
+    // A pooled image with the view its owner created with it.
+    struct PooledGpuCopyImage {
+        VkImage Image = VK_NULL_HANDLE;
+        VkImageView View = VK_NULL_HANDLE;
+        VkDeviceMemory Memory = VK_NULL_HANDLE;  // raw Vulkan allocations only
+    };
+    static constexpr uint32_t kGpuCopyImageAllocatorNri = 1U;
+    static constexpr uint32_t kGpuCopyImageAllocatorVulkan = 2U;
+    // A capture is NriInteropContext::CreateOwnedTexture2D(w, h, RGBA8) with its
+    // defaults (one level, sampled + storage views); a derived image made by
+    // the NRI image owner is the identical creation, so both share one key.
+    static Fast::GpuCopyImagePoolKey GpuCopyCaptureImageKey(uint32_t width, uint32_t height) {
+        Fast::GpuCopyImagePoolKey key;
+        key.Width = width;
+        key.Height = height;
+        key.Format = static_cast<uint32_t>(VK_FORMAT_R8G8B8A8_UNORM);
+        key.Usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+        key.MipLevels = 1U;
+        key.Layers = 1U;
+        key.Allocator = kGpuCopyImageAllocatorNri;
+        return key;
+    }
+    static Fast::GpuCopyImagePoolKey GpuCopyDerivedImageKey(uint32_t width, uint32_t height,
+                                                           bool nriOwned) {
+        Fast::GpuCopyImagePoolKey key = GpuCopyCaptureImageKey(width, height);
+        if (!nriOwned) {
+            // CreateNativePicaTextureStorage's raw Vulkan fallback.
+            key.Usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                        VK_IMAGE_USAGE_STORAGE_BIT;
+            key.Allocator = kGpuCopyImageAllocatorVulkan;
+        }
+        return key;
+    }
+    Fast::GpuCopyImagePool<PooledGpuCopyImage> mGpuCopyImagePool;
+    bool mGpuCopyImagePoolConfigured = false;
+    std::atomic<bool> mGpuCopyImagePoolDeviceLost{false};
+    std::mutex mGpuCopyImagePoolMutex;
+    std::unordered_map<Fast::GpuCopySamplerKey, VkSampler, Fast::GpuCopySamplerKeyHash>
+        mGpuCopySamplerCache;
+    void ConfigureGpuCopyImagePool();
+    bool AcquireGpuCopyImage(const Fast::GpuCopyImagePoolKey& key, PooledGpuCopyImage& image);
+    void ReleaseGpuCopyImage(const Fast::GpuCopyImagePoolKey& key, const PooledGpuCopyImage& image);
+    void DestroyGpuCopyImages(
+        std::vector<Fast::GpuCopyImagePool<PooledGpuCopyImage>::Evicted>&& evicted);
+    void TrimGpuCopyImagePool();
+    void ReleaseGpuCopyImagePool();
+    void ReleaseGpuCopySamplerCache();
+    VkSamplerCreateInfo BuildTextureSamplerInfo(const TextureRecord& texture) const;
+    VkSampler AcquireSharedGpuCopySampler(const TextureRecord& texture);
     // Why a view that carries producer references cannot be served from the
     // immutable GPU copy. None of these is allowed to pass as a GPU result.
     enum class GpuTextureCopyFallback : uint8_t {
@@ -1657,7 +1721,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint64_t FirstProducerCompletionId = 0;
     };
     void PublishGpuTextureCopySurface(GpuTextureCopySurface& surface);
-    void DestroyGpuTextureCopySurface(uint64_t identity);
+    void DestroyGpuTextureCopySurface(uint64_t identity, bool toPool = false);
     void DestroyGpuTextureCopySurfaces();
     // Retires the copies a render-target reset invalidates, keeping those whose
     // bytes guest memory still defers to.

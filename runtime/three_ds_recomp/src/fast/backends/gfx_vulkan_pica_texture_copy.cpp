@@ -8,7 +8,10 @@
 #include "fast/renderer3ds/pica_texture_copy_plan.h"
 #include "fast/renderer/spirv_cache.h"
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
 
@@ -438,6 +441,7 @@ bool GfxRenderingAPIVulkan::SetPinnedPicaTextureCopies(
 }
 
 void GfxRenderingAPIVulkan::RetireGpuTextureCopyProducers(uint64_t completedFrame) {
+    const auto retireStart = std::chrono::steady_clock::now();
     std::vector<uint64_t> retired;
     for (const auto& [identity, surface] : mGpuTextureCopySurfaces) {
         if (surface.CapturedFrame > completedFrame ||
@@ -455,7 +459,136 @@ void GfxRenderingAPIVulkan::RetireGpuTextureCopyProducers(uint64_t completedFram
         }
         retired.push_back(identity);
     }
-    for (const auto identity : retired) DestroyGpuTextureCopySurface(identity);
+    // This is exactly the point where the images used to be destroyed: the
+    // fence covering their last use has completed, so instead of destroying
+    // them they go back to the pool for the next capture or derivation.
+    for (const auto identity : retired) DestroyGpuTextureCopySurface(identity, /*toPool=*/true);
+    TrimGpuCopyImagePool();
+    mGpuTextureCopySamplerCost.RetireSeconds +=
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - retireStart).count();
+}
+
+void GfxRenderingAPIVulkan::ConfigureGpuCopyImagePool() {
+    if (mGpuCopyImagePoolConfigured) return;
+    mGpuCopyImagePoolConfigured = true;
+    Fast::GpuCopyImagePoolLimits limits;
+    const auto readUnsigned = [](const char* name, uint64_t fallback) {
+        const char* value = std::getenv(name);
+        if (value == nullptr || *value == '\0') return fallback;
+        char* end = nullptr;
+        const unsigned long long parsed = std::strtoull(value, &end, 10);
+        return end != value ? static_cast<uint64_t>(parsed) : fallback;
+    };
+    limits.MaxEntries = static_cast<size_t>(
+        readUnsigned("TRIAEVUM_GPU_COPY_POOL_ENTRIES", limits.MaxEntries));
+    limits.MaxBytes =
+        readUnsigned("TRIAEVUM_GPU_COPY_POOL_MB", limits.MaxBytes >> 20U) << 20U;
+    mGpuCopyImagePool.SetLimits(limits);
+    // TRIAEVUM_GPU_COPY_POOL=0 restores create-per-copy / destroy-per-retire.
+    const char* enabled = std::getenv("TRIAEVUM_GPU_COPY_POOL");
+    mGpuCopyImagePool.SetEnabled(!(enabled != nullptr && enabled[0] == '0'));
+}
+
+bool GfxRenderingAPIVulkan::AcquireGpuCopyImage(const Fast::GpuCopyImagePoolKey& key,
+                                                PooledGpuCopyImage& image) {
+    std::lock_guard lock(mGpuCopyImagePoolMutex);
+    ConfigureGpuCopyImagePool();
+    if (mGpuCopyImagePoolDeviceLost.load()) mGpuCopyImagePool.SetEnabled(false);
+    return mGpuCopyImagePool.Acquire(key, image);
+}
+
+void GfxRenderingAPIVulkan::ReleaseGpuCopyImage(const Fast::GpuCopyImagePoolKey& key,
+                                                const PooledGpuCopyImage& image) {
+    std::vector<Fast::GpuCopyImagePool<PooledGpuCopyImage>::Evicted> evicted;
+    {
+        std::lock_guard lock(mGpuCopyImagePoolMutex);
+        ConfigureGpuCopyImagePool();
+        if (mGpuCopyImagePoolDeviceLost.load()) mGpuCopyImagePool.SetEnabled(false);
+        const uint64_t bytes = uint64_t{key.Width} * key.Height * 4U;
+        evicted = mGpuCopyImagePool.Release(key, image, bytes, mFrameCounter);
+    }
+    DestroyGpuCopyImages(std::move(evicted));
+}
+
+void GfxRenderingAPIVulkan::DestroyGpuCopyImages(
+    std::vector<Fast::GpuCopyImagePool<PooledGpuCopyImage>::Evicted>&& evicted) {
+    for (auto& entry : evicted) {
+        const auto& image = entry.Value;
+        if (image.Image == VK_NULL_HANDLE) continue;
+        mNriPicaTextureCopyCapturePass.ForgetTexture(image.Image);
+        mNriPicaTextureUploadPass.ForgetTexture(image.Image);
+        if (entry.Key.Allocator == kGpuCopyImageAllocatorNri) {
+            mNriInterop.DestroyOwnedTexture(image.Image);
+        } else if (mDevice != VK_NULL_HANDLE) {
+            mNriInterop.ForgetTexture(image.Image);
+            if (image.View != VK_NULL_HANDLE) vkDestroyImageView(mDevice, image.View, nullptr);
+            vkDestroyImage(mDevice, image.Image, nullptr);
+            if (image.Memory != VK_NULL_HANDLE) vkFreeMemory(mDevice, image.Memory, nullptr);
+        }
+    }
+}
+
+void GfxRenderingAPIVulkan::TrimGpuCopyImagePool() {
+    std::vector<Fast::GpuCopyImagePool<PooledGpuCopyImage>::Evicted> evicted;
+    {
+        std::lock_guard lock(mGpuCopyImagePoolMutex);
+        if (mGpuCopyImagePoolDeviceLost.load()) {
+            mGpuCopyImagePool.SetEnabled(false);
+            evicted = mGpuCopyImagePool.ReleaseAll();
+        } else {
+            evicted = mGpuCopyImagePool.Trim(mFrameCounter);
+        }
+    }
+    DestroyGpuCopyImages(std::move(evicted));
+}
+
+void GfxRenderingAPIVulkan::ReleaseGpuCopyImagePool() {
+    std::vector<Fast::GpuCopyImagePool<PooledGpuCopyImage>::Evicted> evicted;
+    {
+        std::lock_guard lock(mGpuCopyImagePoolMutex);
+        evicted = mGpuCopyImagePool.ReleaseAll();
+    }
+    DestroyGpuCopyImages(std::move(evicted));
+}
+
+void GfxRenderingAPIVulkan::ReleaseGpuCopySamplerCache() {
+    if (mDevice != VK_NULL_HANDLE) {
+        for (auto& [key, sampler] : mGpuCopySamplerCache)
+            if (sampler != VK_NULL_HANDLE) vkDestroySampler(mDevice, sampler, nullptr);
+    }
+    mGpuCopySamplerCache.clear();
+}
+
+VkSampler GfxRenderingAPIVulkan::AcquireSharedGpuCopySampler(const TextureRecord& texture) {
+    const VkSamplerCreateInfo info = BuildTextureSamplerInfo(texture);
+    const auto bits = [](float value) {
+        uint32_t out = 0;
+        std::memcpy(&out, &value, sizeof(out));
+        return out;
+    };
+    Fast::GpuCopySamplerKey key;
+    key.MagFilter = static_cast<uint32_t>(info.magFilter);
+    key.MinFilter = static_cast<uint32_t>(info.minFilter);
+    key.MipmapMode = static_cast<uint32_t>(info.mipmapMode);
+    key.AddressU = static_cast<uint32_t>(info.addressModeU);
+    key.AddressV = static_cast<uint32_t>(info.addressModeV);
+    key.AddressW = static_cast<uint32_t>(info.addressModeW);
+    key.MipLodBiasBits = bits(info.mipLodBias);
+    key.MinLodBits = bits(info.minLod);
+    key.MaxLodBits = bits(info.maxLod);
+    key.AnisotropyEnable = info.anisotropyEnable;
+    key.MaxAnisotropyBits = bits(info.maxAnisotropy);
+    std::lock_guard lock(mGpuCopyImagePoolMutex);
+    const auto found = mGpuCopySamplerCache.find(key);
+    if (found != mGpuCopySamplerCache.end()) {
+        ++mGpuTextureCopySamplerCost.SamplerCacheHits;
+        return found->second;
+    }
+    VkSampler sampler = VK_NULL_HANDLE;
+    CheckVk(vkCreateSampler(mDevice, &info, nullptr, &sampler), "vkCreateSampler(GPU copy)");
+    mGpuCopySamplerCache.emplace(key, sampler);
+    ++mGpuTextureCopySamplerCost.SamplerCacheCreated;
+    return sampler;
 }
 
 void GfxRenderingAPIVulkan::FlushGpuTextureCopyPrefix() {
@@ -854,11 +987,23 @@ bool GfxRenderingAPIVulkan::CaptureGpuTextureCopySource(
     const uint32_t width = source.Width;
     const uint32_t height = source.Height;
     Extension::NriOwnedTexture2D captured;
-    if (!mNriInterop.CreateOwnedTexture2D(width, height,
-                                          VK_FORMAT_R8G8B8A8_UNORM, captured) ||
-        captured.Image == VK_NULL_HANDLE) {
+    // The capture pass writes every texel of the destination (identity plan,
+    // destination seeded Undefined), so a pooled image of the same key is
+    // indistinguishable from a fresh one.
+    const auto createStart = std::chrono::steady_clock::now();
+    PooledGpuCopyImage pooled;
+    if (AcquireGpuCopyImage(GpuCopyCaptureImageKey(width, height), pooled)) {
+        captured.Image = pooled.Image;
+        captured.SampledView = pooled.View;
+    } else if (!mNriInterop.CreateOwnedTexture2D(width, height,
+                                                 VK_FORMAT_R8G8B8A8_UNORM, captured) ||
+               captured.Image == VK_NULL_HANDLE) {
+        mGpuTextureCopySamplerCost.PoolCreateSeconds +=
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - createStart).count();
         return false;
     }
+    mGpuTextureCopySamplerCost.PoolCreateSeconds +=
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - createStart).count();
     // An identity plan samples the source 1:1 at its internal extent, so the
     // internal rendering resolution survives the copy instead of being reduced
     // to native bytes first.
@@ -878,6 +1023,8 @@ bool GfxRenderingAPIVulkan::CaptureGpuTextureCopySource(
         return false;
     }
     surface.Image = captured.Image;
+    surface.ImageView = captured.SampledView;
+    surface.ImagePoolable = captured.SampledView != VK_NULL_HANDLE;
     surface.ImageWidth = width;
     surface.ImageHeight = height;
     surface.Encoding = source.Encoding;
@@ -911,6 +1058,7 @@ void GfxRenderingAPIVulkan::MaterializeRestoredGpuTextureCopyProducers() {
             throw;
         }
         surface.Image = staged.Image;
+        surface.ImagePoolable = false;  // restored image: not created by the capture path
         surface.Layout = staged.ImageLayout;
         // The staged record only carried the upload; the register owns the
         // image now, so its sampler and view go away.
@@ -940,7 +1088,7 @@ void GfxRenderingAPIVulkan::PublishGpuTextureCopySurface(
         surface.Identity;
 }
 
-void GfxRenderingAPIVulkan::DestroyGpuTextureCopySurface(uint64_t identity) {
+void GfxRenderingAPIVulkan::DestroyGpuTextureCopySurface(uint64_t identity, bool toPool) {
     const auto found = mGpuTextureCopySurfaces.find(identity);
     if (found == mGpuTextureCopySurfaces.end()) {
         return;
@@ -953,19 +1101,51 @@ void GfxRenderingAPIVulkan::DestroyGpuTextureCopySurface(uint64_t identity) {
         const auto& producers = texture->second.CopyProducerIdentities;
         if (std::find(producers.begin(), producers.end(), identity) !=
             producers.end()) {
-            DestroyTexture(texture->second);
+            auto& record = texture->second;
+            // Only an image CreateGpuCopiedTextureRecord made (single level,
+            // RGBA8, not borrowed or replaced) goes back to the pool; its base
+            // image and any owned sampler are destroyed as before.
+            if (toPool && record.Image != VK_NULL_HANDLE && record.View != VK_NULL_HANDLE &&
+                !record.ImageBorrowed && !record.LiveRenderTargetAlias &&
+                record.MipLevels == 1U && record.Width != 0U && record.Height != 0U &&
+                !record.CustomReplacementApplied && !record.CustomReplacementPending) {
+                const PooledGpuCopyImage image{
+                    record.Image, record.View,
+                    record.NriOwnedImage ? VK_NULL_HANDLE : record.Memory};
+                const auto key = GpuCopyDerivedImageKey(record.Width, record.Height,
+                                                        record.NriOwnedImage);
+                if (record.NriImage != VK_NULL_HANDLE)
+                    mNriPicaTextureUploadPass.ForgetTexture(record.NriImage);
+                record.Image = VK_NULL_HANDLE;
+                record.NriImage = VK_NULL_HANDLE;
+                record.View = VK_NULL_HANDLE;
+                record.Memory = VK_NULL_HANDLE;
+                DestroyTexture(record);
+                ReleaseGpuCopyImage(key, image);
+            } else {
+                DestroyTexture(record);
+            }
             texture = mNativePicaTextures.erase(texture);
         } else {
             ++texture;
         }
     }
+    const auto retireCapture = [&](VkImage image, VkImageView view) {
+        mNriPicaTextureCopyCapturePass.ForgetTexture(image);
+        if (toPool && found->second.ImagePoolable && view != VK_NULL_HANDLE) {
+            ReleaseGpuCopyImage(
+                GpuCopyCaptureImageKey(found->second.ImageWidth, found->second.ImageHeight),
+                PooledGpuCopyImage{image, view, VK_NULL_HANDLE});
+        } else {
+            mNriInterop.DestroyOwnedTexture(image);
+        }
+    };
     if (found->second.Image != VK_NULL_HANDLE) {
-        mNriPicaTextureCopyCapturePass.ForgetTexture(found->second.Image);
-        mNriInterop.DestroyOwnedTexture(found->second.Image);
+        retireCapture(found->second.Image, found->second.ImageView);
     }
-    if (found->second.NativeImage != VK_NULL_HANDLE) {
-        mNriPicaTextureCopyCapturePass.ForgetTexture(found->second.NativeImage);
-        mNriInterop.DestroyOwnedTexture(found->second.NativeImage);
+    if (found->second.NativeImage != VK_NULL_HANDLE &&
+        found->second.NativeImage != found->second.Image) {
+        retireCapture(found->second.NativeImage, found->second.NativeImageView);
     }
     for (auto producer = mGpuTextureCopyProducers.begin();
          producer != mGpuTextureCopyProducers.end();) {
@@ -984,6 +1164,8 @@ void GfxRenderingAPIVulkan::DestroyGpuTextureCopySurfaces() {
     while (!mGpuTextureCopySurfaces.empty()) {
         DestroyGpuTextureCopySurface(mGpuTextureCopySurfaces.begin()->first);
     }
+    // Shutdown and full register resets: nothing pooled survives them.
+    ReleaseGpuCopyImagePool();
     mHandledNativePicaTextureCopies.clear();
     mGpuTextureCopyPins.clear();
     mGpuTextureCopyPinsDeclared = false;
@@ -1710,7 +1892,9 @@ bool GfxRenderingAPIVulkan::SubmitNativePicaTextureCopy(
                 nativeSource.Height = source->Height;
                 if (!CaptureGpuTextureCopySource(nativeSource, nativeSurface))
                     throw std::runtime_error("cannot retain native copy bytes independently of scene effects");
-                mGpuTextureCopySurfaces.at(surface.Identity).NativeImage = nativeSurface.Image;
+                auto& published = mGpuTextureCopySurfaces.at(surface.Identity);
+                published.NativeImage = nativeSurface.Image;
+                published.NativeImageView = nativeSurface.ImageView;
             }
             const auto owner = surface.GuestOwner;
             if (mPhysicalMemoryDefer(spans,

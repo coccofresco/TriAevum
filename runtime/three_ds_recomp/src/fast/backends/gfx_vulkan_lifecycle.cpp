@@ -848,7 +848,8 @@ void GfxRenderingAPIVulkan::Shutdown() {
             vkDestroyFence(mDevice, mRawCopyFence, nullptr);
             mRawCopyFence = VK_NULL_HANDLE;
         }
-        DestroyGpuTextureCopySurfaces();
+        DestroyGpuTextureCopySurfaces();  // also releases the GPU-copy image pool
+        ReleaseGpuCopySamplerCache();
         DestroyRawCopyEncodeResources();
         if (mOot3dShadow2dRenderPass != VK_NULL_HANDLE) {
             vkDestroyRenderPass(mDevice, mOot3dShadow2dRenderPass, nullptr);

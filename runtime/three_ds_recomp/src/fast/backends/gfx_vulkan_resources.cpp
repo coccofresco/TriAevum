@@ -732,13 +732,8 @@ void GfxRenderingAPIVulkan::CreateTextureImage(TextureRecord& texture,
     RecreateSampler(texture);
 }
 
-void GfxRenderingAPIVulkan::RecreateSampler(TextureRecord& texture) {
-    if (!texture.Uploaded && texture.Image == VK_NULL_HANDLE) {
-        return;
-    }
-    if (texture.Sampler != VK_NULL_HANDLE) {
-        mRetiredSamplers.push_back(texture.Sampler);
-    }
+VkSamplerCreateInfo GfxRenderingAPIVulkan::BuildTextureSamplerInfo(
+    const TextureRecord& texture) const {
     VkSamplerCreateInfo samplerInfo{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
     samplerInfo.magFilter = ToVulkanFilter(texture.SamplerState.MagFilter);
     samplerInfo.minFilter = ToVulkanFilter(texture.SamplerState.MinFilter);
@@ -760,6 +755,20 @@ void GfxRenderingAPIVulkan::RecreateSampler(TextureRecord& texture) {
         samplerInfo.anisotropyEnable = VK_TRUE;
         samplerInfo.maxAnisotropy = mTextureAnisotropy;
     }
+    return samplerInfo;
+}
+
+void GfxRenderingAPIVulkan::RecreateSampler(TextureRecord& texture) {
+    if (!texture.Uploaded && texture.Image == VK_NULL_HANDLE) {
+        return;
+    }
+    // A shared sampler belongs to the GPU-copy sampler cache; the record just
+    // stops using it.
+    if (texture.Sampler != VK_NULL_HANDLE && !texture.SamplerShared) {
+        mRetiredSamplers.push_back(texture.Sampler);
+    }
+    texture.SamplerShared = false;
+    const VkSamplerCreateInfo samplerInfo = BuildTextureSamplerInfo(texture);
     CheckVk(vkCreateSampler(mDevice, &samplerInfo, nullptr, &texture.Sampler),
             "vkCreateSampler");
     texture.AppliedSamplerState = texture.SamplerState;
@@ -778,9 +787,10 @@ void GfxRenderingAPIVulkan::DestroyTexture(TextureRecord& texture) {
             mNriInterop.ForgetTexture(texture.NriImage);
         }
     }
-    if (texture.Sampler != VK_NULL_HANDLE) {
+    if (texture.Sampler != VK_NULL_HANDLE && !texture.SamplerShared) {
         vkDestroySampler(mDevice, texture.Sampler, nullptr);
     }
+    texture.SamplerShared = false;
     if (!texture.NriOwnedImage) {
         if (texture.View != VK_NULL_HANDLE) {
             vkDestroyImageView(mDevice, texture.View, nullptr);

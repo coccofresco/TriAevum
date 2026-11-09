@@ -2157,6 +2157,9 @@ void GfxRenderingAPIVulkan::ResetNativePicaRenderTargets(bool preserveDisplayIma
         texture = mNativePicaTextures.erase(texture);
     }
     RetireGpuTextureCopySurfacesForTargetReset();
+    // Capture and derived extents follow the internal scale: pooled images of
+    // the old scale would never match again.
+    ReleaseGpuCopyImagePool();
     for (auto& [key, target] : mNativePicaRenderTargets) {
         DestroyNativePicaRenderTarget(target);
     }

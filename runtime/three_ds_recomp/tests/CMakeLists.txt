@@ -46,6 +46,11 @@ target_compile_features(pica_temporal_history_tests PRIVATE cxx_std_20)
 target_include_directories(pica_temporal_history_tests PRIVATE ../include)
 add_test(NAME pica_temporal_history_tests COMMAND pica_temporal_history_tests)
 
+add_executable(gpu_copy_image_pool_tests gpu_copy_image_pool_tests.cpp)
+target_compile_features(gpu_copy_image_pool_tests PRIVATE cxx_std_20)
+target_include_directories(gpu_copy_image_pool_tests PRIVATE ../include)
+add_test(NAME gpu_copy_image_pool_tests COMMAND gpu_copy_image_pool_tests)
+
 add_executable(pica_temporal_occurrences_tests pica_temporal_occurrences_tests.cpp)
 target_compile_features(pica_temporal_occurrences_tests PRIVATE cxx_std_20)
 target_include_directories(pica_temporal_occurrences_tests PRIVATE ../include)

@@ -2,6 +2,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
 #include "fast/extension/grass_gpu_memory.h"
+#include <chrono>
 
 namespace Fast {
 
@@ -89,7 +90,8 @@ GfxNativeTextureFilter NativePicaMinFilter(
 GfxRenderingAPIVulkan::TextureRecord*
 GfxRenderingAPIVulkan::CreateGpuCopiedTextureRecord(
     const NativePicaTextureKey& textureKey,
-    const GfxNativePicaTextureView& texture, uint32_t width, uint32_t height) {
+    const GfxNativePicaTextureView& texture, uint32_t width, uint32_t height,
+    bool allowPooledImage) {
     auto [inserted, wasInserted] = mNativePicaTextures.emplace(textureKey,
                                                                TextureRecord{});
     if (!wasInserted) {
@@ -107,13 +109,40 @@ GfxRenderingAPIVulkan::CreateGpuCopiedTextureRecord(
     record.SamplerState.MinMipLevel = texture.MinMipLevel;
     record.SamplerState.MaxMipLevel = texture.MaxMipLevel;
     // The image is written by the base fill and the owned regions below, so it
-    // is allocated without an upload and needs a storage view.
-    CreateNativePicaTextureStorage(record, width, height, 1U,
-                                   VK_FORMAT_R8G8B8A8_UNORM,
-                                   /*storageView=*/true);
+    // is allocated without an upload and needs a storage view. A pooled image
+    // of the same key is taken instead only when those writes provably cover
+    // every texel (allowPooledImage), so no earlier content can show through.
+    const auto createStart = std::chrono::steady_clock::now();
+    const bool nriOwner = mNriPicaTextureImageOwner.Available();
+    PooledGpuCopyImage pooled;
+    if (allowPooledImage &&
+        AcquireGpuCopyImage(GpuCopyDerivedImageKey(width, height, nriOwner), pooled)) {
+        record.Width = width;
+        record.Height = height;
+        record.MipLevels = 1U;
+        record.Image = pooled.Image;
+        record.NriImage = pooled.Image;
+        record.View = pooled.View;
+        record.Memory = pooled.Memory;
+        record.NriOwnedImage = nriOwner;
+    } else {
+        if (!allowPooledImage) {
+            std::lock_guard lock(mGpuCopyImagePoolMutex);
+            mGpuCopyImagePool.CountCreation();
+        }
+        CreateNativePicaTextureStorage(record, width, height, 1U,
+                                       VK_FORMAT_R8G8B8A8_UNORM,
+                                       /*storageView=*/true);
+    }
+    mGpuTextureCopySamplerCost.PoolCreateSeconds +=
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - createStart).count();
     record.UploadedMipLevels = 1U;
     record.Uploaded = true;
-    RecreateSampler(record);
+    // Samplers are cached by state for the device's lifetime.
+    record.Sampler = AcquireSharedGpuCopySampler(record);
+    record.SamplerShared = true;
+    record.AppliedSamplerState = record.SamplerState;
+    record.SamplerStateApplied = true;
     return &record;
 }
 
@@ -227,8 +256,22 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                 }
                 return &exact->second;
             }
+            // A partial view gets a base fill over the whole image; a fully
+            // owned one is written only by its regions, so it may reuse an
+            // image only when their union is exactly the declared layout.
+            bool allowPooledImage = !derivation.CoversDeclaredLayout;
+            if (!allowPooledImage) {
+                std::vector<Fast::GpuCopyCoverRect> rects;
+                for (const auto& group : derivation.Groups)
+                    for (const auto& region : group.Regions)
+                        rects.push_back({region.DestinationX, region.DestinationY,
+                                         region.Width, region.Height});
+                allowPooledImage =
+                    Fast::GpuCopyRectsCoverExactly(texture.Width, texture.Height, rects);
+            }
             TextureRecord* record = CreateGpuCopiedTextureRecord(
-                key, texture, derivation.ImageWidth, derivation.ImageHeight);
+                key, texture, derivation.ImageWidth, derivation.ImageHeight,
+                allowPooledImage);
             try {
                 // Only CPU-owned (uncovered) bytes are initialized from the
                 // snapshot, at the declared native size: the expand into the
