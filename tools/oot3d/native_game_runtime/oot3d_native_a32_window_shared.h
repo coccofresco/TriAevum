@@ -522,6 +522,10 @@ struct NativeWidescreenProjectionState {
   uint64_t BlockEntries = 0;
   uint32_t BlockSampleState = 0x6D2B79F5U;
   std::unordered_map<uint32_t, uint64_t> BlockSamples;
+  // --profile-a32-blocks: the samples of the current host frame, reported
+  // when that frame's guest work is a spike (TRIAEVUM_A32_SPIKE_BLOCKS).
+  std::unordered_map<uint32_t, uint64_t> FrameBlockSamples;
+  uint32_t FrameBlockSamplesHostFrame = 0;
   bool TraceA32Blocks = false;
   bool BlockTraceTruncated = false;
   // Adapter bring-up: TRIAEVUM_A32_CALL_TRACE=PATH,FIRST_FRAME,LAST_FRAME,WORD

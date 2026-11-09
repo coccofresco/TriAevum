@@ -1,6 +1,12 @@
 // Block-entry policy of the A32 window: widescreen projection and guest observation hooks.
 #include "oot3d_native_a32_window_shared.h"
 
+#include <algorithm>
+#include <cstdio>
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace Oot3dA32Window {
 
 void ApplyNativeWidescreenProjectionPolicy(
@@ -653,8 +659,33 @@ void ApplyNativeWidescreenProjectionPolicy(
     ++runtime.BlockEntries;
     runtime.BlockSampleState =
         runtime.BlockSampleState * 1664525U + 1013904223U;
+    if (runtime.FrameBlockSamplesHostFrame != runtime.CurrentHostFrame) {
+      // A host frame whose guest work ran over about 640k blocks (10k
+      // samples): print its hottest sampled blocks, to attribute spikes.
+      uint64_t frameSamples = 0;
+      for (const auto &entry : runtime.FrameBlockSamples) frameSamples += entry.second;
+      if (frameSamples >= 10000U) {
+        std::vector<std::pair<uint32_t, uint64_t>> hottest(
+            runtime.FrameBlockSamples.begin(), runtime.FrameBlockSamples.end());
+        std::sort(hottest.begin(), hottest.end(),
+                  [](const auto &a, const auto &b) { return a.second > b.second; });
+        std::string line = "TRIAEVUM_A32_SPIKE_BLOCKS host_frame=" +
+            std::to_string(runtime.FrameBlockSamplesHostFrame) +
+            " samples=" + std::to_string(frameSamples);
+        char item[48];
+        for (size_t index = 0; index < hottest.size() && index < 24U; ++index) {
+          std::snprintf(item, sizeof(item), " %08X:%llu", hottest[index].first,
+                        static_cast<unsigned long long>(hottest[index].second));
+          line += item;
+        }
+        std::fprintf(stderr, "%s\n", line.c_str());
+      }
+      runtime.FrameBlockSamples.clear();
+      runtime.FrameBlockSamplesHostFrame = runtime.CurrentHostFrame;
+    }
     if ((runtime.BlockSampleState & 63U) == 0U) {
       ++runtime.BlockSamples[pc];
+      ++runtime.FrameBlockSamples[pc];
     }
   }
   if (runtime.CollectExtendedDiagnostics &&
