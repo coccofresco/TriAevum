@@ -1,5 +1,12 @@
 {
   "format": "triaevum_update_signing_keys_v1",
   "comment": "Ed25519 public keys whose signatures Forge accepts on update packages (docs/TRIAEVUM_UPDATE_SIGNING.md). Public keys only: the private key never enters this repository or any package. Add a key with tools/triaevum_release/release_signature.py generate-key; keep retired keys listed until no supported package uses them.",
-  "keys": []
+  "keys": [
+    {
+      "key_id": "d26699b198289c6d",
+      "algorithm": "ed25519",
+      "public_key": "d1174b011a2b24a56f617f2a366338fbb017dc6f6375ae1b78bee06261bb8e64",
+      "comment": "TriAevum release key 2026"
+    }
+  ]
 }
