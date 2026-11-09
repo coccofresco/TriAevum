@@ -2,7 +2,7 @@
 
 A path is reported when an absolute Windows drive path or a POSIX home/build
 path names a source or debug file (.c, .cc, .cpp, .h, .hpp, .inl, .rs, .pdb).
-Data paths such as a ROM's own m:/menu/... strings are not source files and
+Data paths such as the ROM's own menu/... strings (RomFS drive) are not source files and
 are not reported. Exit 0 when nothing is found, 1 when a path is found, 2 on
 a usage error. Only counts and redacted samples are printed (drive or root
 plus file name), never the matched directories.
