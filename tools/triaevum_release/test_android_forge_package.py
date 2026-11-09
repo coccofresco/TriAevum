@@ -191,5 +191,43 @@ class AndroidForgePackageTests(unittest.TestCase):
                 fixture.create()
 
 
+class AndroidForgePackageTitleTests(unittest.TestCase):
+    def test_title_and_notices(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            inventory = create_package(fixture.reference, fixture.stage, fixture.output,
+                                       source_commit="8" * 40, title="oot3d")
+            self.assertEqual(inventory["title"], "oot3d")
+            self.assertEqual([item["path"] for item in inventory["notices"]], ["LICENSE"])
+            self.assertEqual((fixture.output / "notices/LICENSE").read_bytes(), b"license")
+            self.assertFalse((fixture.output / ASSET_ROOT / "LICENSE").exists())
+
+    def test_negative_other_title(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            with self.assertRaisesRegex(ValueError, "is the oot3d release, not mm3d"):
+                create_package(fixture.reference, fixture.stage, fixture.output, source_commit="8" * 40,
+                               title="mm3d")
+            self.assertFalse(fixture.output.exists())
+
+    def test_negative_game_content_and_missing_licences(self):
+        for name in ("restoration/actors.gar", "restoration/title.mfpj", "resources/romfs/a.bin"):
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
+                fixture = Fixture(Path(directory))
+                path = fixture.reference / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"data")
+                fixture.files.append(dict(artifact(path, name), role="restoration_original_member"))
+                fixture.write_manifest()
+                with self.assertRaisesRegex(ValueError, "holds game content"):
+                    fixture.create()
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            fixture.files = [item for item in fixture.files if item["role"] != "license"]
+            fixture.write_manifest()
+            with self.assertRaisesRegex(ValueError, "no licence files"):
+                fixture.create()
+
+
 if __name__ == "__main__":
     unittest.main()

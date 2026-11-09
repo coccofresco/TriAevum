@@ -12,7 +12,7 @@ import argparse
 import copy
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import shutil
 import struct
 import zipfile
@@ -99,6 +99,51 @@ def _translated_source(reference_root: Path, title: dict) -> tuple[Path, tuple]:
     return archive_path, identity
 
 
+# One APK is one product: the reference release must be the desktop release of
+# that title (titles/<title>/product.json), named by its revision recipe.
+TITLES = ("oot3d", "mm3d")
+NOTICES = "notices"
+# Game data never enters the APK: the Android Forge produces it on the device.
+FORBIDDEN_DATA_SUFFIXES = (".gar", ".mfpj", ".3ds", ".cci", ".cia", ".cxi", ".cfa", ".romfs", ".zar")
+FORBIDDEN_DATA_COMPONENTS = ("romfs", "exefs")
+
+
+def package_title(data: dict, title: str | None) -> str:
+    """The title of the reference release (its revision recipe recipes/<title>.json)."""
+    named = sorted({PurePosixPath(path).stem for path, (record, _) in data.items()
+                    if record["role"] == "revision_recipe" and PurePosixPath(path).stem in TITLES})
+    if len(named) != 1:
+        raise ValueError(f"Reference release must hold the revision recipe of exactly one title, not {named}")
+    if title is not None and named[0] != title:
+        raise ValueError(f"Reference release is the {named[0]} release, not {title}")
+    return named[0]
+
+
+def forbidden_data(data: dict) -> list[str]:
+    hits = []
+    for path in data:
+        parts = PurePosixPath(path.casefold()).parts
+        if parts[-1].endswith(FORBIDDEN_DATA_SUFFIXES) or any(part in FORBIDDEN_DATA_COMPONENTS for part in parts[:-1]):
+            hits.append(path)
+    return hits
+
+
+def _reference_notices(reference_root: Path) -> dict[str, tuple[dict, Path]]:
+    """The licences and notices the desktop package carries (copied beside forge-package/)."""
+    manifest = load_json_object(reference_root / RELEASE_MANIFEST)
+    notices = {}
+    for item in manifest["files"]:
+        relative = normalize_relative_path(item["path"])
+        name = PurePosixPath(relative).name
+        if item.get("role") == "license" or (item.get("role") == "documentation" and name in (
+                "THIRD_PARTY_NOTICES.md", "LICENSE_SCOPE.md", "SOURCE_OFFER.md")):
+            record = {"path": relative, "role": item["role"], "sha256": item["sha256"], "bytes": item["bytes"]}
+            notices[relative] = (record, checked_file(reference_root, record))
+    if not any(record["role"] == "license" for record, _ in notices.values()):
+        raise ValueError("Reference release carries no licence files")
+    return notices
+
+
 def _reference_data(reference_root: Path) -> dict[str, tuple[dict, Path]]:
     manifest = load_json_object(reference_root / RELEASE_MANIFEST)
     if manifest.get("format") != "triaevum_public_release_manifest_v1" or not isinstance(manifest.get("files"), list):
@@ -118,7 +163,8 @@ def _reference_data(reference_root: Path) -> dict[str, tuple[dict, Path]]:
     return data
 
 
-def create_package(reference_root: Path, native_stage: Path, output: Path, *, source_commit: str) -> dict:
+def create_package(reference_root: Path, native_stage: Path, output: Path, *, source_commit: str,
+                   title: str | None = None) -> dict:
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("Platform source commit must be a full Git commit ID")
     libraries = native_stage / "arm64-v8a"
@@ -135,6 +181,11 @@ def create_package(reference_root: Path, native_stage: Path, output: Path, *, so
                          "rust_forge_build.rustflags (CARGO_ENCODED_RUSTFLAGS) path remapping")
     reference = load_catalog(reference_root)
     data = _reference_data(reference_root)
+    product = package_title(data, title)
+    refused = forbidden_data(data)
+    if refused:
+        raise ValueError(f"Reference release data holds game content: {refused[:5]}")
+    notices = _reference_notices(reference_root)
 
     runtime_record = artifact(runtime, ANDROID.runtime)
     result = copy.deepcopy(reference)
@@ -192,8 +243,14 @@ def create_package(reference_root: Path, native_stage: Path, output: Path, *, so
         "libraries": [runtime_record, result["titles"][0]["plugin"], artifact(forge, ANDROID.forge)],
         "files": [record for record, _ in (data[path] for path in sorted(data))],
         "corresponding_source": sorted(sources),
+        "title": product,
+        "notices": [record for record, _ in (notices[path] for path in sorted(notices))],
     }
     atomic_write_json(package / INVENTORY, inventory)
+    for relative, (_, source) in sorted(notices.items()):
+        destination = staging / NOTICES / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
     if output.exists():
         output.rmdir()
     os.replace(staging, output)
@@ -208,9 +265,11 @@ def main():
                         help="stage_native_app.py output (arm64-v8a/)")
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--title", choices=TITLES,
+                        help="the product of the APK; the reference release must be that title's")
     args = parser.parse_args()
     inventory = create_package(args.reference_package, args.native_stage, args.output,
-                               source_commit=args.source_commit)
+                               source_commit=args.source_commit, title=args.title)
     print(f"{args.output / ASSET_ROOT}: {len(inventory['files'])} data files")
 
 
