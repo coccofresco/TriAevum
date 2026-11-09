@@ -40,6 +40,13 @@ pub struct ForgeTitle {
     /// the runtime's title UI (MM3D: dekui is integrated in the product code)
     /// and its profile carries no TopScreen option.
     pub topscreen_ui: bool,
+    /// Names the title's renderer pipeline cache files in the renderer cache
+    /// directory (`pipeline_cache_namespace` of `titles/<title>/product.json`;
+    /// the runtime's title session uses the same value). The device pipeline
+    /// preparation writes the file the title's runtime reads:
+    /// `nri_pipeline_cache.<namespace>.bin`, or the original
+    /// `nri_pipeline_cache.bin` for the empty namespace (OoT3D).
+    pub pipeline_cache_namespace: &'static str,
 }
 
 pub const OOT3D: ForgeTitle = ForgeTitle {
@@ -54,6 +61,7 @@ pub const OOT3D: ForgeTitle = ForgeTitle {
     code_sha256: &["16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"],
     offline_interior_sun: true,
     topscreen_ui: true,
+    pipeline_cache_namespace: "",
 };
 
 pub const MM3D: ForgeTitle = ForgeTitle {
@@ -73,6 +81,8 @@ pub const MM3D: ForgeTitle = ForgeTitle {
     // the TopScreen profile for any adapter but OoT3D EUR
     // (oot3d_native_a32_window_setup.cpp "TopScreen UI profile belongs to OoT3D EUR").
     topscreen_ui: false,
+    // titles/mm3d/shaders/mm3d_shader_preparation.h (the session's namespace).
+    pipeline_cache_namespace: "mm3d",
 };
 
 /// Every title this source tree knows (for naming a foreign dump only).
@@ -168,6 +178,24 @@ mod tests {
         assert_eq!(OOT3D.embedded_recipes, "tools/triaevum_release/supported_revisions.json");
         assert_eq!(OOT3D.data_namespace, "TriAevum");
         assert_eq!(OOT3D.package_identity, "io.github.coccofresco.TriAevum");
+    }
+
+    /// One title fact, three readers: `titles/<title>/product.json`, the
+    /// runtime's title session (titles/mm3d/shaders/mm3d_shader_preparation.h,
+    /// bound to the same file by mm3d_builtin_shader_packs_tests.cpp) and this
+    /// table. OoT3D keeps the original cache file names.
+    #[test]
+    fn pipeline_cache_namespace_is_the_title_product_fact() {
+        for (title, facts) in [
+            (OOT3D, include_str!("../../../../../titles/oot3d/product.json")),
+            (MM3D, include_str!("../../../../../titles/mm3d/product.json")),
+        ] {
+            let facts: serde_json::Value = serde_json::from_str(facts).unwrap();
+            assert_eq!(facts["title"], title.id);
+            assert_eq!(facts["pipeline_cache_namespace"], title.pipeline_cache_namespace);
+        }
+        assert_eq!(OOT3D.pipeline_cache_namespace, "");
+        assert_eq!(MM3D.pipeline_cache_namespace, "mm3d");
     }
 
     #[test]

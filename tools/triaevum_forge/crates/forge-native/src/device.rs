@@ -24,7 +24,11 @@ use crate::pyerr::{io_failure, load_json_object, open_error, os_error};
 use crate::services::{DeviceJob, NativeServices, Report};
 
 pub const FORMAT: &str = "triaevum_device_pipeline_preparation_v1";
+/// The renderer's NRI pipeline cache file of a title without a namespace
+/// (`Renderer3ds::kNriPipelineCacheFilename`).
 pub const CACHE_FILENAME: &str = "nri_pipeline_cache.bin";
+/// The renderer's plain Vulkan pipeline cache file, likewise.
+const PLAIN_CACHE_FILENAME: &str = "pipeline_cache.bin";
 /// Time budgets: startup programs take about a minute on six cores cold.
 pub const TIMEOUT_SECONDS: f64 = 600.0;
 pub const STARTUP_PROGRAMS_TIMEOUT_SECONDS: f64 = 1800.0;
@@ -75,6 +79,33 @@ pub fn renderer_cache_directory() -> Result<PathBuf> {
     Ok(root.join("oot3d_native_vulkan").join("shader_cache"))
 }
 
+/// `Renderer3ds::TitlePipelineCacheFilename(filename, namespace)`: the
+/// title's own file for a pipeline cache file name. `nri_pipeline_cache.bin`
+/// is `nri_pipeline_cache.mm3d.bin` in namespace `mm3d`; the empty namespace
+/// keeps the name. `None` for a namespace the renderer refuses (more than 32
+/// characters, or anything but `a-z`, `0-9`, `_` and `-`).
+pub fn title_cache_filename(filename: &str, namespace: &str) -> Option<String> {
+    let valid = namespace.len() <= 32
+        && namespace.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'-');
+    if !valid {
+        return None;
+    }
+    if namespace.is_empty() {
+        return Some(filename.to_owned());
+    }
+    Some(match filename.rfind('.') {
+        Some(dot) => format!("{}.{namespace}{}", &filename[..dot], &filename[dot..]),
+        None => format!("{filename}.{namespace}"),
+    })
+}
+
+/// The NRI pipeline cache file the active title's runtime reads, and the
+/// device pipeline preparation therefore writes.
+pub fn active_cache_filename() -> String {
+    title_cache_filename(CACHE_FILENAME, forge_catalog::title::ACTIVE.pipeline_cache_namespace)
+        .expect("the title table holds a valid pipeline cache namespace")
+}
+
 fn is_symlink(path: &Path) -> bool {
     std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_symlink())
 }
@@ -87,8 +118,13 @@ fn spirv_cache_name(name: &str) -> bool {
     matches!(stem.split_once('_'), Some((left, right)) if hex_run(left) && hex_run(right))
 }
 
-fn copy_entries(destination: &Path, source: &Path) -> Result<usize> {
-    let mut files = vec![source.join(CACHE_FILENAME), source.join("pipeline_cache.bin")];
+fn copy_entries(destination: &Path, source: &Path, namespace: &str) -> Result<usize> {
+    // The title's own two driver files (the original names without a namespace).
+    let mut files: Vec<PathBuf> = [CACHE_FILENAME, PLAIN_CACHE_FILENAME]
+        .iter()
+        .filter_map(|name| title_cache_filename(name, namespace))
+        .map(|name| source.join(name))
+        .collect();
     let modules = source.join("spirv-v2");
     if modules.is_dir() && !is_symlink(&modules) {
         let entries = std::fs::read_dir(&modules).map_err(|error| {
@@ -152,7 +188,7 @@ pub fn adopt_existing_cache(destination: &Path, source: Option<&Path>, report: R
         if is_symlink(&source) || !source.is_dir() || path_key(&resolve(&source)?) == path_key(&resolve(destination)?) {
             return Ok(());
         }
-        copied = copy_entries(destination, &source)?;
+        copied = copy_entries(destination, &source, forge_catalog::title::ACTIVE.pipeline_cache_namespace)?;
         Ok(())
     })();
     if let Err(error) = attempt {
@@ -209,7 +245,9 @@ fn evaluate(status: i64, job: &DeviceJob) -> Result<Map<String, Value>> {
         && py_eq(get(&result, "failed"), &json!(0))
         && result.get("game_booted") == Some(&Value::Bool(false));
     if complete {
-        let actual_cache = job.cache_directory.join(CACHE_FILENAME);
+        let filename = title_cache_filename(CACHE_FILENAME, &job.pipeline_cache_namespace)
+            .ok_or_else(|| contract("Invalid pipeline cache namespace"))?;
+        let actual_cache = job.cache_directory.join(filename);
         let reported = get(&result, "cache_path").as_str().unwrap_or_default();
         let reported = resolve(Path::new(reported))?;
         if path_key(&reported) != path_key(&resolve(&actual_cache)?) || !actual_cache.is_file() {
@@ -242,9 +280,42 @@ pub fn prepare_device_pipelines(
     report: Report<'_>,
     cancel: &CancelToken,
 ) -> Result<Option<Map<String, Value>>> {
+    prepare_title_device_pipelines(
+        forge_catalog::title::ACTIVE.pipeline_cache_namespace,
+        services,
+        root,
+        data_root,
+        title,
+        pack,
+        cache_directory,
+        report,
+        cancel,
+    )
+}
+
+/// [`prepare_device_pipelines`] for a title's pipeline cache namespace
+/// (`ForgeTitle::pipeline_cache_namespace`): the helper prepares the cache
+/// file that title's runtime reads, with that title's startup programs, and
+/// the receipt is complete only when exactly that file was produced. The
+/// empty namespace is the original job (OoT3D), option for option.
+#[allow(clippy::too_many_arguments)]
+pub fn prepare_title_device_pipelines(
+    pipeline_cache_namespace: &str,
+    services: &dyn NativeServices,
+    root: &Path,
+    data_root: &Path,
+    title: &Map<String, Value>,
+    pack: Option<&Path>,
+    cache_directory: Option<&Path>,
+    report: Report<'_>,
+    cancel: &CancelToken,
+) -> Result<Option<Map<String, Value>>> {
     let contract_value = get(title, "device_pipeline_preparation");
     if contract_value.is_null() {
         return Ok(None);
+    }
+    if title_cache_filename(CACHE_FILENAME, pipeline_cache_namespace).is_none() {
+        return Err(contract("Invalid pipeline cache namespace"));
     }
     let Value::Object(fields) = contract_value else {
         return Err(contract("Unsupported device pipeline preparation contract"));
@@ -322,6 +393,7 @@ pub fn prepare_device_pipelines(
         stage: stage.path().to_path_buf(),
         pack: pack.to_path_buf(),
         title_program_pack: title_program_pack.clone(),
+        pipeline_cache_namespace: pipeline_cache_namespace.to_owned(),
         cache_directory: cache,
         adapter,
         manifests: manifests.clone(),
@@ -364,6 +436,23 @@ pub fn prepare_device_pipelines(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn title_cache_filenames_follow_the_renderer_rule() {
+        // title_shader_preparation.h TitlePipelineCacheFilename, case for case.
+        assert_eq!(title_cache_filename(CACHE_FILENAME, "").as_deref(), Some("nri_pipeline_cache.bin"));
+        assert_eq!(title_cache_filename(CACHE_FILENAME, "mm3d").as_deref(), Some("nri_pipeline_cache.mm3d.bin"));
+        assert_eq!(title_cache_filename("pipeline_cache.bin", "mm3d").as_deref(), Some("pipeline_cache.mm3d.bin"));
+        assert_eq!(title_cache_filename("cache", "a-b_9").as_deref(), Some("cache.a-b_9"));
+        for bad in ["MM3D", "mm 3d", "../mm3d", "mm3d.bin", &"a".repeat(33)] {
+            assert_eq!(title_cache_filename(CACHE_FILENAME, bad), None, "{bad}");
+        }
+        assert!(title_cache_filename(CACHE_FILENAME, &"a".repeat(32)).is_some());
+        // The active title's file: the original one for the OoT3D Forge, the
+        // file the Moonfall Curse runtime reads for the MM3D Forge.
+        let expected = if forge_catalog::title::ACTIVE.id == "mm3d" { "nri_pipeline_cache.mm3d.bin" } else { CACHE_FILENAME };
+        assert_eq!(active_cache_filename(), expected);
+    }
 
     #[test]
     fn spirv_names() {

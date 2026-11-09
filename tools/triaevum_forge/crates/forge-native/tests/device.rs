@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use common::{artifact, install_fake, runs, set_plan};
 use forge_base::CancelToken;
 use forge_native::desktop::run_device_helper;
-use forge_native::device::{CACHE_FILENAME, FORMAT};
+use forge_native::device::{prepare_title_device_pipelines, title_cache_filename, CACHE_FILENAME, FORMAT};
 use forge_native::services::*;
 use forge_native::{adopt_existing_cache, prepare_device_pipelines, renderer_cache_directory, DesktopServices};
 use serde_json::{json, Map, Value};
@@ -61,13 +61,18 @@ impl NativeServices for Recording {
 const SEPARATOR: &str = if cfg!(windows) { "\\\\" } else { "/" };
 
 fn helper_plan(prewarm: &str, exit: i64) -> Value {
+    helper_plan_writing(prewarm, exit, CACHE_FILENAME)
+}
+
+/// A helper that writes (and reports) `cache` in the cache directory.
+fn helper_plan_writing(prewarm: &str, exit: i64, cache: &str) -> Value {
     let report = format!(
         "{{\"format\": \"{FORMAT}\", \"device_pipeline_prewarm\": \"{prewarm}\", \"total\": 500, \"prepared\": 500, \
          \"failed\": 0, \"game_booted\": false, \"gpu\": \"test device\", \
-         \"cache_path\": \"{{flag:--cache-dir}}{SEPARATOR}{CACHE_FILENAME}\"}}"
+         \"cache_path\": \"{{flag:--cache-dir}}{SEPARATOR}{cache}\"}}"
     );
     json!({"exit": exit, "write": [
-        {"flag": "--cache-dir", "join": CACHE_FILENAME, "content": "device cache"},
+        {"flag": "--cache-dir", "join": cache, "content": "device cache"},
         {"flag": "--report", "content": report},
     ]})
 }
@@ -116,6 +121,21 @@ impl Fixture {
             Some(&self.cache),
             &mut |_, _| {},
             cancel,
+        )
+        .map(Option::unwrap)
+    }
+
+    fn prepare_title(&self, namespace: &str) -> forge_base::Result<Map<String, Value>> {
+        prepare_title_device_pipelines(
+            namespace,
+            &self.services,
+            &self.root,
+            &self.root.join("data"),
+            self.title.as_object().unwrap(),
+            Some(&self.pack),
+            Some(&self.cache),
+            &mut |_, _| {},
+            &CancelToken::new(),
         )
         .map(Option::unwrap)
     }
@@ -389,4 +409,54 @@ fn existing_cache_is_copied_without_overwrite_or_unknown_files() {
     assert_eq!(adopt_existing_cache(&fixture.cache, Some(&source), &mut |_, _| {}), 0);
     assert_eq!(std::fs::read(fixture.cache.join(CACHE_FILENAME)).unwrap(), b"new learned cache");
     assert!(source.join("spirv-v2/ab_cd.spvc").is_file());
+}
+
+/// The Moonfall Curse runtime reads `nri_pipeline_cache.mm3d.bin`: the job of
+/// a title with a pipeline cache namespace names it to the helper and is
+/// complete only when the helper produced that title's file.
+#[test]
+fn a_title_namespace_prepares_the_cache_file_its_runtime_reads() {
+    let mut fixture = Fixture::new();
+    fixture.contract().insert("startup_programs".into(), json!(true));
+    let own = title_cache_filename(CACHE_FILENAME, "mm3d").unwrap();
+    assert_eq!(own, "nri_pipeline_cache.mm3d.bin");
+    set_plan(&fixture.helper, &helper_plan_writing("complete", 0, &own));
+    let result = fixture.prepare_title("mm3d").unwrap();
+    assert_eq!(result["device_pipeline_prewarm"], "complete");
+    assert_eq!(result["cache_sha256"], forge_base::hashing::sha256_hex(b"device cache"));
+    assert!(fixture.cache.join(&own).is_file());
+    assert!(!fixture.cache.join(CACHE_FILENAME).exists());
+    let args = fixture.last_args();
+    let at = args.iter().position(|a| a == "--pipeline-cache-namespace").unwrap();
+    assert_eq!(args[at + 1], "mm3d");
+    assert_eq!(fixture.services.jobs.borrow()[0].pipeline_cache_namespace, "mm3d");
+
+    // Negative (the defect): a helper that writes the original file prepared
+    // nothing this title's runtime opens. The receipt says failed, not complete.
+    set_plan(&fixture.helper, &helper_plan("complete", 0));
+    let result = fixture.prepare_title("mm3d").unwrap();
+    assert_eq!(result["device_pipeline_prewarm"], "failed");
+    assert_eq!(result["error"], "Preparation did not produce the requested device cache");
+
+    // Negative: a namespace the renderer refuses never reaches the helper.
+    let before = runs(&fixture.helper).len();
+    assert!(fixture.prepare_title("../mm3d").unwrap_err().message.contains("pipeline cache namespace"));
+    assert_eq!(runs(&fixture.helper).len(), before);
+}
+
+/// Echoes of Time: no namespace, the original command line and the original
+/// file (the helper is not told about namespaces at all).
+#[test]
+fn no_namespace_keeps_the_original_job() {
+    let fixture = Fixture::new();
+    let result = fixture.prepare_title("").unwrap();
+    assert_eq!(result["device_pipeline_prewarm"], "complete");
+    assert!(fixture.cache.join("nri_pipeline_cache.bin").is_file());
+    let args = fixture.last_args();
+    assert!(!args.iter().any(|a| a == "--pipeline-cache-namespace"));
+    assert_eq!(args.len(), 12);
+    // A helper that writes a namespaced file did not prepare the original one.
+    set_plan(&fixture.helper, &helper_plan_writing("complete", 0, "nri_pipeline_cache.mm3d.bin"));
+    std::fs::remove_file(fixture.cache.join("nri_pipeline_cache.bin")).unwrap();
+    assert_eq!(fixture.prepare_title("").unwrap()["device_pipeline_prewarm"], "failed");
 }

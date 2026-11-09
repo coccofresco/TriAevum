@@ -434,6 +434,7 @@ mod tests {
             stage: stage.clone(),
             pack: directory.path().join("portable.o3ps"),
             title_program_pack: None,
+            pipeline_cache_namespace: String::new(),
             cache_directory: directory.path().join("renderer"),
             adapter: 0,
             manifests: vec![directory.path().join("pipelines-0.json")],

@@ -173,6 +173,9 @@ pub struct DeviceJob {
     pub stage: PathBuf,
     pub pack: PathBuf,
     pub title_program_pack: Option<PathBuf>,
+    /// The title's pipeline cache namespace (`ForgeTitle`); empty for the
+    /// original file names.
+    pub pipeline_cache_namespace: String,
     pub cache_directory: PathBuf,
     pub adapter: u32,
     pub manifests: Vec<PathBuf>,
@@ -190,7 +193,9 @@ impl DeviceJob {
     }
 
     /// `--pack P --cache-dir C --report R --cancel-file F --adapter N
-    /// (--manifest M)... [--startup-programs]`.
+    /// [--pipeline-cache-namespace S] (--manifest M)... [--startup-programs]`.
+    /// A title without a namespace (OoT3D) passes no namespace option: its
+    /// command line is the original one.
     pub fn arguments(&self) -> Vec<OsString> {
         let mut arguments: Vec<OsString> = vec![
             "--pack".into(),
@@ -206,6 +211,9 @@ impl DeviceJob {
         ];
         if let Some(pack) = &self.title_program_pack {
             arguments.extend(["--title-program-pack".into(), pack.clone().into()]);
+        }
+        if !self.pipeline_cache_namespace.is_empty() {
+            arguments.extend(["--pipeline-cache-namespace".into(), self.pipeline_cache_namespace.clone().into()]);
         }
         for manifest in &self.manifests {
             arguments.extend(["--manifest".into(), manifest.clone().into()]);
