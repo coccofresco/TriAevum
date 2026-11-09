@@ -6,6 +6,8 @@ import re
 import shutil
 import subprocess
 
+from android_elf_checks import check_stage
+
 
 def host_llvm(ndk: Path) -> Path:
     """The NDK's prebuilt LLVM directory of the build host (Linux, Windows or macOS)."""
@@ -51,6 +53,10 @@ def stage(runtime: Path, title: Path, forge: Path, ndk: Path, output: Path) -> N
         shutil.copy2(path, target)
         subprocess.run([strip, "--strip-debug", target], check=True)
         print(f"{name}: {target.stat().st_size} bytes; dependencies {sorted(needed)}")
+    # 16 KiB LOAD alignment, one NDK, libc++ symbol closure (android_elf_checks.py).
+    problems = check_stage(destination)
+    if problems:
+        raise ValueError("Staged libraries fail the release checks: " + "; ".join(problems))
 
 
 if __name__ == "__main__":

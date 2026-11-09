@@ -9,6 +9,16 @@ See [shader preparation](SHADER_PREPARATION.md) for device/cache qualification.
 Build on Linux with the Android NDK; the existing Windows PC may provide the USB
 ADB connection without hosting a second compiler/SDK installation.
 
+## Release APKs (Echoes of Time, Moonfall Curse)
+
+The developer APK above (`dev` flavor, `org.triaevum.android`) stays a developer build. The release APKs are the
+`eot` and `mc` flavors, one title each, built only by the publisher with
+`tools/android/android_release.py --title <oot3d|mm3d>` (it prints the exact commands; `--run` executes them).
+Signing comes only from the `TRIAEVUM_ANDROID_*` environment variables, and the Forge package is signed with the
+release key. The staged libraries must pass `tools/android/android_elf_checks.py` (16 KiB pages, one NDK, libc++
+closure), and every APK must pass `tools/triaevum_release/android_release_policy.py audit`. Neither APK includes game
+assets. Flow, signing, audit and qualification: [docs/TRIAEVUM_ANDROID_RELEASE.md](../../docs/TRIAEVUM_ANDROID_RELEASE.md).
+
 ## Boundaries
 
 - Retain the existing Vulkan/NRI renderer, native PICA rendering, gameplay and

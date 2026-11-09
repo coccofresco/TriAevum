@@ -22,6 +22,11 @@ decrypted cartridge image, chosen through the system document picker.
 
 ## Publisher flow (per title, one at a time)
 
+`tools/android/android_release.py --title <oot3d|mm3d> --ndk <ndk> --work <build dir> --translated-sources <dir>
+--reference-package <desktop release> --source-commit <commit> --gradle <gradle>` prints every command below for
+the title, with the title's facts applied. `--run` executes them in order and stops at the first failure. Staging
+refuses libraries that fail `tools/android/android_elf_checks.py`.
+
 1. **Translated sources.** Use the translated title sources of the title's desktop release (the same sources, never
    regenerated: Moonfall Curse builds use the registry `a32_generated_overlay_r18`).
 2. **Title module.** Configure `ports/android/native` with the NDK toolchain and build the title target:
@@ -83,3 +88,23 @@ unchanged.
 | lifecycle: background/resume, rotation, screen off | pending | pending |
 | performance at the Enhanced for Mobile defaults, thermal gate | pending | pending |
 | update over the previous version with data kept | pending | pending |
+
+## Release-note sections (drafts)
+
+These sections go into each title's release notes at the cut. They are kept here, not in `docs/releases/`, because
+the desktop packages ship their notes and the desktop line is frozen. Replace `<state>` with the qualified state.
+
+### Echoes of Time 0.8.0-beta.2
+
+**Android: <state>.** Echoes of Time for Android (`org.triaevum.echoesoftime`, arm64, Android 10 or later) is built
+from the same translated title sources as the desktop release. It includes no game assets: its installer prepares
+the game from your own decrypted cartridge image, which you choose with the system file picker. Qualified on:
+<device evidence>. Signing certificate SHA-256: <release certificate>.
+
+### Moonfall Curse 0.5.0-alpha.1
+
+**Android: <state>.** Moonfall Curse for Android (`org.triaevum.moonfallcurse`, arm64, Android 10 or later) is built
+from the same translated title sources as the desktop release (`a32_generated_overlay_r18`). It includes no game
+assets: its installer prepares the game, including the dekui layouts and the Project Restoration layout, from your
+own EUR decrypted cartridge image. Qualified on: <device evidence>. Signing certificate SHA-256: <release
+certificate>.
