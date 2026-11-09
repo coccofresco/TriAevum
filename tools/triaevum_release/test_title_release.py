@@ -56,8 +56,11 @@ class TitleReleaseTests(unittest.TestCase):
         mm3d = json.loads(json.dumps(layout["files"]))
         compose_title_layout(mm3d, "mm3d")
         paths = {item["path"]: item for item in mm3d}
-        self.assertFalse([p for p in paths if p.startswith("resources/topscreen/")])
-        for gone in ("LICENSES/SingleScreen-3.0.md", "LICENSES/OoT3D-Vanilla-UI-HUD.md",
+        # Only the SingleScreen 3.1 HD font stays: the MM3D Forge builds the HD message font from it.
+        self.assertEqual([p for p in paths if p.startswith("resources/topscreen/")],
+                         ["resources/topscreen/singlescreen-3.1/ltn16.qbf"])
+        self.assertIn("LICENSES/SingleScreen-3.0.md", paths)
+        for gone in ("LICENSES/OoT3D-Vanilla-UI-HUD.md",
                      "LICENSES/Vanilla-Plus-Link-Remodel.md", "docs/releases/v0.8.0-beta.1.md", "docs/USER_GUIDE.md"):
             self.assertNotIn(gone, paths)
         self.assertEqual(paths["README.md"]["source"], "titles/mm3d/releases/README.md")

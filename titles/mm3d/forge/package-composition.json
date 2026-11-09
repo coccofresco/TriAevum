@@ -1,7 +1,7 @@
 {
   "format": "triaevum_title_package_composition_v1",
   "title": "mm3d",
-  "comment": "Moonfall Curse package composition (C-DISTRO-2, C-DISTRO-5..12). prepare_release applies drop/replace/add to the shared layout; audit_release refuses the refused paths, waives the shared required paths they name, requires the required paths and checks the README heading. OoT3D has no such file, so its package and its audit are unchanged.",
+  "comment": "Moonfall Curse package composition (C-DISTRO-2, C-DISTRO-5..12). prepare_release applies drop/replace/add to the shared layout; audit_release refuses the refused paths, waives the shared required paths they name, requires the required paths and checks the README heading. OoT3D has no such file, so its package and its audit are unchanged. The SingleScreen 3.1 HD Latin font (resources/topscreen/singlescreen-3.1/ltn16.qbf) and its licence LICENSES/SingleScreen-3.0.md stay: the MM3D Forge builds Moonfall Curse's HD message font from it (forge-assets mm3d_ui.rs).",
   "drop": [
     "docs/USER_GUIDE.md",
     "docs/releases/v0.8.0-beta.1.md",
@@ -14,8 +14,6 @@
     "docs/TRIAEVUM_RELEASE_APPROVAL_RECORD.md",
     "resources/topscreen/singlescreen-3.0/custom_ui01.ctxb",
     "resources/topscreen/singlescreen-3.0/zelda_link_ext.zar",
-    "resources/topscreen/singlescreen-3.1/ltn16.qbf",
-    "LICENSES/SingleScreen-3.0.md",
     "LICENSES/OoT3D-Vanilla-UI-HUD.md",
     "LICENSES/Vanilla-Plus-Link-Remodel.md"
   ],
@@ -23,15 +21,30 @@
     "README.md": "titles/mm3d/releases/README.md"
   },
   "add": [
-    {"path": "docs/MOONFALL_CURSE.md", "source": "docs/MOONFALL_CURSE.md", "role": "documentation"},
-    {"path": "docs/releases/v0.5.0-alpha.1.md", "source": "titles/mm3d/releases/0.5.0-alpha.1.md", "role": "documentation"},
-    {"path": "LICENSES/mm3d-dekui.md", "source": "LICENSES/mm3d-dekui.md", "role": "license"},
-    {"path": "LICENSES/Project-Restoration.md", "source": "LICENSES/Project-Restoration.md", "role": "license"}
+    {
+      "path": "docs/MOONFALL_CURSE.md",
+      "source": "docs/MOONFALL_CURSE.md",
+      "role": "documentation"
+    },
+    {
+      "path": "docs/releases/v0.5.0-alpha.1.md",
+      "source": "titles/mm3d/releases/0.5.0-alpha.1.md",
+      "role": "documentation"
+    },
+    {
+      "path": "LICENSES/mm3d-dekui.md",
+      "source": "LICENSES/mm3d-dekui.md",
+      "role": "license"
+    },
+    {
+      "path": "LICENSES/Project-Restoration.md",
+      "source": "LICENSES/Project-Restoration.md",
+      "role": "license"
+    }
   ],
   "refuse": [
-    "resources/topscreen/*",
-    "resources/topscreen/**/*",
-    "LICENSES/SingleScreen-3.0.md",
+    "resources/topscreen/singlescreen-3.0/*",
+    "resources/topscreen/singlescreen-3.0/**/*",
     "LICENSES/OoT3D-Vanilla-UI-HUD.md",
     "LICENSES/Vanilla-Plus-Link-Remodel.md",
     "docs/USER_GUIDE.md",
@@ -45,6 +58,8 @@
     "private-plugins/**/*"
   ],
   "require": [
+    "resources/topscreen/singlescreen-3.1/ltn16.qbf",
+    "LICENSES/SingleScreen-3.0.md",
     "LICENSES/mm3d-dekui.md",
     "LICENSES/Project-Restoration.md",
     "LICENSES/iMMERSE-MXAO.md",

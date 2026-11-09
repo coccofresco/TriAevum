@@ -25,7 +25,7 @@ shows. See `docs/MOONFALL_CURSE.md` (section "Playing Moonfall Curse") and the r
   corresponding source is in `source/` (see `docs/SOURCE_OFFER.md`).
 - Open-source resources with their licences in `LICENSES/`: mm3d-dekui (`LICENSES/mm3d-dekui.md`),
   Project Restoration (`LICENSES/Project-Restoration.md`), the iMMERSE MXAO module
-  (`LICENSES/iMMERSE-MXAO.md`), and the libraries listed in `docs/THIRD_PARTY_NOTICES.md`.
+  (`LICENSES/iMMERSE-MXAO.md`), the SingleScreen 3.1 HD font (`LICENSES/SingleScreen-3.0.md`), and the libraries listed in `docs/THIRD_PARTY_NOTICES.md`.
 - Nothing from the game: the files derived from your dump are created at install time, only on your
   computer.
 
@@ -34,6 +34,8 @@ shows. See `docs/MOONFALL_CURSE.md` (section "Playing Moonfall Curse") and the r
 - mm3d-dekui, by tgacquin and contributors (GPL-2.0): the single-screen interface.
 - Project Restoration, by leoetlino and contributors (GPL-2.0-or-later).
 - iMMERSE MXAO, by Pascal Gilcher (under its own licence, as in Echoes of Time).
+- The HD Latin font of SingleScreen 3.1, by M-1 / rlgcarrot, distributed with the author's permission
+  (`LICENSES/SingleScreen-3.0.md`): the Forge builds the game's HD message font from it.
 
 Moonfall Curse is a fan project. It is not affiliated with or endorsed by Nintendo. The
 Legend of Zelda and Majora's Mask are trademarks of Nintendo.
