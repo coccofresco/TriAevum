@@ -34,6 +34,7 @@
 #endif
 #include "oot3d_native_a32_scene_view.h"
 #include "oot3d_native_pica_draw_state.h"
+#include "mm3d_heap_free_walk.h"
 #include "mm3d_photo_camera_hook.h"
 #include "mm3d_presentation_settings.h"
 #include "mm3d_timing_observer.h"
@@ -191,6 +192,7 @@ public:
       mSingleScreen->Register(mGuestPatches);
       RegisterMm3dLightingHooks(mGuestPatches);
       RegisterMm3dPhotoCamera(mGuestPatches, mPhotoCamera, setup.FreeCamera);
+      RegisterMm3dHeapFreeWalk(mGuestPatches);
       mGameplay.Register(mGuestPatches);
       mGuestCalls.Install(mGuestPatches);
       mRestoration.emplace(mGuestCalls);
