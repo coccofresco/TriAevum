@@ -204,6 +204,16 @@ class AndroidForgePackageTitleTests(unittest.TestCase):
             self.assertEqual((fixture.output / "notices/LICENSE").read_bytes(), b"license")
             self.assertFalse((fixture.output / ASSET_ROOT / "LICENSE").exists())
 
+    def test_windows_reference_manifest_under_docs(self):
+        # A Windows desktop package keeps its manifest at docs/release-manifest.json.
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            (fixture.reference / "docs").mkdir(exist_ok=True)
+            (fixture.reference / "release-manifest.json").replace(fixture.reference / "docs/release-manifest.json")
+            inventory = create_package(fixture.reference, fixture.stage, fixture.output,
+                                       source_commit="8" * 40, title="oot3d")
+            self.assertEqual([item["path"] for item in inventory["notices"]], ["LICENSE"])
+
     def test_negative_other_title(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(Path(directory))

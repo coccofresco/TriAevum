@@ -19,14 +19,14 @@ import zipfile
 
 try:
     from .audit_release import DEFAULT_POLICY, build_machine_path
-    from .common import atomic_write_json, load_json_object, normalize_relative_path, sha256_file
+    from .common import atomic_write_json, load_json_object, normalize_relative_path, release_manifest_path, sha256_file
     from .precompiled_titles import load_catalog, checked_file, CATALOG
     from .precompiled_title_layout import artifact
     from .release_platform import ANDROID
     from . import release_signature
 except ImportError:
     from audit_release import DEFAULT_POLICY, build_machine_path
-    from common import atomic_write_json, load_json_object, normalize_relative_path, sha256_file
+    from common import atomic_write_json, load_json_object, normalize_relative_path, release_manifest_path, sha256_file
     from precompiled_titles import load_catalog, checked_file, CATALOG
     from precompiled_title_layout import artifact
     from release_platform import ANDROID
@@ -135,7 +135,7 @@ def forbidden_data(data: dict) -> list[str]:
 
 def _reference_notices(reference_root: Path) -> dict[str, tuple[dict, Path]]:
     """The licences and notices the desktop package carries (copied beside forge-package/)."""
-    manifest = load_json_object(reference_root / RELEASE_MANIFEST)
+    manifest = load_json_object(release_manifest_path(reference_root))
     notices = {}
     for item in manifest["files"]:
         relative = normalize_relative_path(item["path"])
@@ -150,7 +150,7 @@ def _reference_notices(reference_root: Path) -> dict[str, tuple[dict, Path]]:
 
 
 def _reference_data(reference_root: Path) -> dict[str, tuple[dict, Path]]:
-    manifest = load_json_object(reference_root / RELEASE_MANIFEST)
+    manifest = load_json_object(release_manifest_path(reference_root))
     if manifest.get("format") != "triaevum_public_release_manifest_v1" or not isinstance(manifest.get("files"), list):
         raise ValueError("Reference package has no public release manifest")
     data = {}
