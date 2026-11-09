@@ -5,6 +5,7 @@
     <!-- Installer (InstallerActivity, InstallService) -->
     <string name="forge_title">TriAevum Forge</string>
     <string name="forge_intro">Select your own decrypted Nintendo 3DS cartridge image (.3ds or .cci). Forge prepares the game on this device, without encryption keys. It uses the network only when you choose to download the optional HD interface pack. The first installation takes several minutes. It continues in the background, also while the phone is locked, and shows its progress in a notification.</string>
+    <string name="forge_no_game_assets">No game assets are included. The game is prepared on this device only from your own copy.</string>
     <string name="forge_no_package">This build has no Forge package: it can only play a title prepared beforehand.</string>
     <string name="forge_cannot_open">The selected file cannot be opened.</string>
     <string name="forge_package_error">The application\'s Forge package cannot be prepared: %1$s</string>

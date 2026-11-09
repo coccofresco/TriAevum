@@ -5,6 +5,7 @@
     <!-- Installationsprogramm (InstallerActivity, InstallService) -->
     <string name="forge_title">TriAevum Forge</string>
     <string name="forge_intro">Wähle das Abbild deiner eigenen entschlüsselten Nintendo 3DS-Spielkarte (.3ds oder .cci). Forge bereitet das Spiel auf diesem Gerät vor, ohne Verschlüsselungsschlüssel. Das Netzwerk nutzt es nur, wenn du das optionale HD-Oberflächenpaket herunterladen willst. Die erste Installation dauert mehrere Minuten. Sie läuft im Hintergrund weiter, auch bei gesperrtem Handy, und zeigt ihren Fortschritt in einer Benachrichtigung.</string>
+    <string name="forge_no_game_assets">Es sind keine Spieldaten enthalten. Das Spiel wird nur auf diesem Gerät aus deiner eigenen Kopie vorbereitet.</string>
     <string name="forge_no_package">Dieser Build enthält kein Forge-Paket: Er kann nur ein zuvor vorbereitetes Spiel starten.</string>
     <string name="forge_cannot_open">Die ausgewählte Datei kann nicht geöffnet werden.</string>
     <string name="forge_package_error">Das Forge-Paket der App kann nicht vorbereitet werden: %1$s</string>

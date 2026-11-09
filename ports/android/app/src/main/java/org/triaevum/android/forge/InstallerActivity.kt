@@ -1247,7 +1247,12 @@ class InstallerActivity : Activity() {
             })
             addView(TextView(context).apply {
                 text = getString(R.string.forge_intro)
-                setPadding(0, dp(8), 0, dp(16))
+                setPadding(0, dp(8), 0, dp(8))
+            })
+            addView(TextView(context).apply {
+                text = getString(R.string.forge_no_game_assets)
+                setPadding(0, 0, 0, dp(16))
+                alpha = 0.8f
             })
         }
         stateTitle = TextView(this).apply {

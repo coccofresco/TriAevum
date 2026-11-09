@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Flavor eot: the product name of this APK (titles/oot3d/android.json label). Product names are not translated. -->
+<resources>
+    <string name="app_name">Echoes of Time</string>
+    <string name="forge_title">Echoes of Time Forge</string>
+</resources>
