@@ -193,6 +193,22 @@ target_link_libraries(triaevum_title_shader_preparation_tests PRIVATE
     oot3d_native_game_runtime oot3d_ui_menu oot3d_native_control_config)
 oot3d_target_defaults(triaevum_title_shader_preparation_tests FOLDER Tests)
 
+# Recorded negatives of the D4 revert (owner decision 2b): the reverted D4
+# selection and a fixed-step session without its forcing must both fail.
+# Not registered with CTest (they exit 1 by design).
+foreach(mutant D4 FIXED_STEP)
+    string(TOLOWER "${mutant}" mutant_lower)
+    set(mutant_target triaevum_title_shader_preparation_mutant_${mutant_lower})
+    add_executable(${mutant_target} EXCLUDE_FROM_ALL
+        tools/oot3d/native_game_runtime/triaevum_title_shader_preparation_tests.cpp)
+    target_compile_definitions(${mutant_target} PRIVATE TRIAEVUM_SHADER_PREPARATION_TEST_MUTANT_${mutant}=1)
+    target_include_directories(${mutant_target} PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/runtime/three_ds_recomp/include")
+    target_link_libraries(${mutant_target} PRIVATE
+        oot3d_native_game_runtime oot3d_ui_menu oot3d_native_control_config)
+    oot3d_target_defaults(${mutant_target} FOLDER TestNegatives)
+endforeach()
+
 # The title adapter resolved from the code.bin hash, and its OoT3D gates.
 add_executable(triaevum_title_adapter_tests EXCLUDE_FROM_ALL
     tools/oot3d/native_game_runtime/triaevum_title_adapter_tests.cpp)

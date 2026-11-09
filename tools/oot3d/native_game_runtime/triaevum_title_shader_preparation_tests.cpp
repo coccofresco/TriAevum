@@ -69,26 +69,30 @@ int main() {
         "a prepared title session does not restore always-available programs");
   // The session, not the adapter, decides once a title has one.
   Check(!TitlePreparedShaders(TitleAdapter::Oot3dEur, &unprepared), "the adapter overrode its session");
-  // Release decision D4: OoT3D's draws render only the specialized program
-  // (no always-available fallback while it compiles), in interactive play too.
+  // Owner decision 2b (2026-11-09, release decision D4 reverted): the window
+  // session selects the frame-reproducible program only for a fixed-step
+  // session (SetFrameReproducibleProgramSelection(hostArgs.FrameReproducible())).
+  // Interactive OoT3D play may render the always-available program while a
+  // draw's specialized program compiles; a fixed-step session still renders
+  // only the bit-exact specialized program (c24bd592).
   using Fast::Renderer3ds::DrawsUseAlwaysAvailablePrograms;
-  const bool interactive = false; // not a fixed-step session
-  const bool ootSpecialized = TitleDrawsCompleteSpecializedPrograms(TitleAdapter::Oot3dEur, nullptr);
-  Check(ootSpecialized, "OoT3D draws may render the always-available program");
-  Check(!DrawsUseAlwaysAvailablePrograms(true, interactive || ootSpecialized),
-        "interactive OoT3D draws fall back to the always-available program");
-  // Negative: MM3D's session and a generic title keep the hybrid policy, so
-  // their interactive draws do use the always-available program.
-  Check(!TitleDrawsCompleteSpecializedPrograms(TitleAdapter::Mm3d, &prepared),
-        "a prepared title session lost its hybrid policy");
-  Check(!TitleDrawsCompleteSpecializedPrograms(TitleAdapter::Generic, nullptr),
-        "a generic title lost its hybrid policy");
-  Check(DrawsUseAlwaysAvailablePrograms(
-            true, interactive || TitleDrawsCompleteSpecializedPrograms(TitleAdapter::Mm3d, &prepared)),
-        "interactive MM3D draws no longer use the always-available program");
-  // The session decides once a title has one.
-  Check(!TitleDrawsCompleteSpecializedPrograms(TitleAdapter::Oot3dEur, &prepared),
-        "the adapter overrode its session's program policy");
+  const bool ootAlwaysAvailable = PlanFor(TitleAdapter::Oot3dEur, nullptr).AlwaysAvailablePrograms;
+#if defined(TRIAEVUM_SHADER_PREPARATION_TEST_MUTANT_D4)
+  // Recorded negative: the reverted D4 selection (every OoT3D session forced).
+  const bool interactiveSelection = true;
+  const bool fixedStepSelection = true;
+#elif defined(TRIAEVUM_SHADER_PREPARATION_TEST_MUTANT_FIXED_STEP)
+  // Recorded negative: a fixed-step session that lost its forcing.
+  const bool interactiveSelection = false;
+  const bool fixedStepSelection = false;
+#else
+  const bool interactiveSelection = false; // FrameReproducible() of an interactive session
+  const bool fixedStepSelection = true;    // FrameReproducible() of a fixed-step session
+#endif
+  Check(DrawsUseAlwaysAvailablePrograms(ootAlwaysAvailable, interactiveSelection),
+        "interactive OoT3D play no longer admits the always-available (uber) program");
+  Check(!DrawsUseAlwaysAvailablePrograms(ootAlwaysAvailable, fixedStepSelection),
+        "a fixed-step OoT3D session renders the always-available (uber) program");
   std::cout << "triaevum_title_shader_preparation_tests: ok\n";
   return 0;
 }

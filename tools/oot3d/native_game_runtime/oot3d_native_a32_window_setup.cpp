@@ -1436,12 +1436,8 @@ void NativeA32WindowSession::Setup() {
       programPreparation != nullptr &&
       programPreparation->UsesAlwaysAvailablePrograms();
   if (programPreparation != nullptr) {
-    // Fixed-step sessions, and every OoT3D session (release decision D4:
-    // OoT3D renders only its bit-exact specialized programs), complete a
-    // draw's specialized program instead of the always-available one.
     programPreparation->SetFrameReproducibleProgramSelection(
-        hostArgs.FrameReproducible() ||
-        Oot3dNativeGame::TitleDrawsCompleteSpecializedPrograms(titleAdapter, titleSession.get()));
+        hostArgs.FrameReproducible());
   }
   // The title pass programs serve the shared renderer passes (shadow
   // casters among them) of every title: registering them is a lookup table,
