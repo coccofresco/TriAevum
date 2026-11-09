@@ -1,21 +1,28 @@
 """Per-title release facts for prepare_release: each title's Forge is its own
 release (owner decision 2026-11-08). OoT3D's values reproduce the existing
 release exactly; MM3D's Forge is built with the title-mm3d feature, carries its
-own recipe file and bundles Project Restoration's members as package
-resources (they are product content, never a user input)."""
+own recipe file and bundles Project Restoration's layout recipe, patches and
+original members as package resources (product content, never a user input;
+the game members are rebuilt from the user's dump at install time)."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 MM3D_FINGERPRINTS = ROOT / "titles/mm3d/dekui/setup/setup-fingerprints.json"
 # forge-assets mm3d_ui::RESTORATION_RESOURCES: the members' package folder,
 # without the `romfs` component the release policy forbids.
 RESTORATION_RESOURCES = "resources/mm3d/project-restoration"
-RESTORATION_ROLES = {".gar": "restoration_layout_asset"}
+# The layout recipe, its patches and the Restoration-original members
+# (tools/mm3d/restoration_layout.py, C-DISTRO-1): no game bytes ship.
+RESTORATION_RECIPE = ROOT / "titles/mm3d/restoration/package"
+RESTORATION_RECIPE_NAME = "layout.recipe.json"
+sys.path.insert(0, str(ROOT / "tools/mm3d"))
+import restoration_layout  # noqa: E402
 
 TITLES = {
     "oot3d": {
@@ -61,30 +68,45 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def restoration_members(source: Path, fingerprints: Path = MM3D_FINGERPRINTS) -> list[dict]:
-    """Layout items for every Restoration romfs member MM3D's preparation
-    reads, each verified against its pinned fingerprint. `source` is the
-    member tree in its own layout (`romfs/...`)."""
-    manifest = json.loads(fingerprints.read_text(encoding="utf-8"))
-    items = []
-    for entry in manifest["files"]:
-        output = entry["output"]
-        if entry.get("input_root") != "restoration" or not output.startswith("romfs/") or ".mm3d-" in output:
-            continue
-        relative = entry["input"].removeprefix("romfs/")
-        if relative == entry["input"] or not relative or any(
-                part in ("", ".", "..") for part in relative.split("/")):
-            raise ValueError(f"Invalid Restoration member {entry['input']}")
+def restoration_members(source: Path, staging: Path, fingerprints: Path = MM3D_FINGERPRINTS,
+                        recipe_dir: Path = RESTORATION_RECIPE) -> list[dict]:
+    """Layout items of the MM3D package's Restoration folder (C-DISTRO-1): the
+    layout recipe and its BPS patches from the tree, and the
+    Restoration-original members cut from the release files in `source`
+    (`romfs/layout/...`, each checked against its pinned fingerprint) into
+    `staging`. No .gar/.mfpj is packaged: the Forge rebuilds the three
+    layout files from the user's dump at install time."""
+    recipe = json.loads((recipe_dir / RESTORATION_RECIPE_NAME).read_text(encoding="utf-8"))
+    expected = restoration_layout.fingerprinted_inputs(fingerprints)
+    if recipe.get("format") != restoration_layout.FORMAT or \
+            {o["path"]: o["sha256"] for o in recipe["outputs"]} != expected:
+        raise ValueError("The Restoration layout recipe does not describe the fingerprinted inputs")
+    release = {}
+    for relative, digest in expected.items():
         member = source / "romfs" / relative
         if not member.is_file() or member.is_symlink():
             raise ValueError(f"Project Restoration member is missing: {member}")
-        if _sha256(member) != entry["input_sha256"]:
+        if _sha256(member) != digest:
             raise ValueError(f"Project Restoration member {relative} does not match its fingerprint")
-        path = f"{RESTORATION_RESOURCES}/{relative}"
-        if any(item["path"] == path for item in items):
-            continue  # one member can feed several outputs
-        items.append({"source": str(member.resolve()), "path": path,
-                      "role": RESTORATION_ROLES.get(member.suffix, "title_neutral_resource")})
-    if not items:
-        raise ValueError("The MM3D fingerprints name no Project Restoration member")
+        release[relative] = member.read_bytes()
+    items = [{"source": str((recipe_dir / RESTORATION_RECIPE_NAME).resolve()),
+              "path": f"{RESTORATION_RESOURCES}/{RESTORATION_RECIPE_NAME}", "role": "restoration_layout_recipe"}]
+    shipped = restoration_layout.ship_members(recipe, release)
+    for relative, digest in sorted(recipe["files"].items()):
+        if any(part in ("", ".", "..") for part in relative.split("/")) or not relative.startswith("layout/"):
+            raise ValueError(f"Invalid Restoration layout resource {relative}")
+        if relative in shipped:
+            path = staging / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(shipped[relative])
+            role = "restoration_original_member"
+        else:
+            path = recipe_dir / relative
+            role = "restoration_patch"
+        if not path.is_file() or _sha256(path) != digest:
+            raise ValueError(f"Restoration layout resource {relative} does not match the recipe")
+        items.append({"source": str(path.resolve()), "path": f"{RESTORATION_RESOURCES}/{relative}", "role": role})
+    for item in items:
+        if Path(item["path"]).suffix in (".gar", ".mfpj"):
+            raise ValueError(f"A layout archive would be packaged: {item['path']}")
     return items

@@ -51,42 +51,82 @@ class TitleReleaseTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             title_release("mm3d-usa")
 
-    def test_members_are_verified_and_policy_clean(self):
+    @staticmethod
+    def synthetic_release(root: Path):
+        """A recipe folder and a release tree built by the real generator."""
+        import restoration_layout as rl
+
+        def gar(members):
+            return rl.emit_gar({"hash": "jenkins", "types": ["unknown", "mfpk", "mfl", "ctxb"], "align": 4,
+                                "members": members})
+        play = gar([("Play.mfpk", b"P" * 16), ("Mod.mfl", b"M" * 32), ("Hud.mfl", b"H" * 32)])
+        project = b"MFPJ" + b"\1" * 28
+        release = {"layout/Joker.Main.Play.gar": gar([("Play.mfpk", b"P" * 16), ("Mod.mfl", b"M" * 31 + b"m")]),
+                   "layout/Joker.Main.New.gar": gar([("Hud.mfl", b"H" * 16 + b"h" * 16), ("t.ctxb", b"T" * 32)]),
+                   "layout/Joker.mfpj": project + b"New"}
+        recipe, files = rl.build(play, project, release)
+        recipe_dir = root / "recipe"
+        for path, data in files.items():
+            if "/patches/" in path:
+                (recipe_dir / path).parent.mkdir(parents=True, exist_ok=True)
+                (recipe_dir / path).write_bytes(data)
+        recipe_dir.mkdir(exist_ok=True)
+        (recipe_dir / "layout.recipe.json").write_bytes(rl.recipe_bytes(recipe))
+        for name, data in release.items():
+            (root / "src/romfs" / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / "src/romfs" / name).write_bytes(data)
+        return recipe_dir, fingerprints(root, release)
+
+    def test_members_are_recipe_patches_and_original_members_only(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            members = {"layout/Joker.Main.New.gar": b"new", "layout/Joker.mfpj": b"mfpj"}
-            for name, data in members.items():
-                (root / "src/romfs" / name).parent.mkdir(parents=True, exist_ok=True)
-                (root / "src/romfs" / name).write_bytes(data)
-            items = restoration_members(root / "src", fingerprints(root, members))
+            recipe_dir, manifest = self.synthetic_release(root)
+            items = restoration_members(root / "src", root / "staging", manifest, recipe_dir)
             self.assertEqual({item["path"]: item["role"] for item in items}, {
-                f"{RESTORATION_RESOURCES}/layout/Joker.Main.New.gar": "restoration_layout_asset",
-                f"{RESTORATION_RESOURCES}/layout/Joker.mfpj": "title_neutral_resource"})
+                f"{RESTORATION_RESOURCES}/layout.recipe.json": "restoration_layout_recipe",
+                f"{RESTORATION_RESOURCES}/layout/patches/Main.Play.Mod.mfl.bps": "restoration_patch",
+                f"{RESTORATION_RESOURCES}/layout/patches/Main.New.Hud.mfl.bps": "restoration_patch",
+                f"{RESTORATION_RESOURCES}/layout/patches/Joker.mfpj.bps": "restoration_patch",
+                f"{RESTORATION_RESOURCES}/layout/members/t.ctxb": "restoration_original_member"})
+            self.assertEqual((root / "staging/layout/members/t.ctxb").read_bytes(), b"T" * 32)
             for item in items:
                 self.assertFalse(set(item["path"].split("/")) & set(POLICY["forbidden_path_components"]))
+                self.assertNotIn(Path(item["path"]).suffix, (".gar", ".mfpj"))
 
     def test_a_changed_member_is_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            manifest = fingerprints(root, {"layout/Joker.Main.New.gar": b"new"})
-            (root / "src/romfs/layout").mkdir(parents=True)
+            recipe_dir, manifest = self.synthetic_release(root)
             (root / "src/romfs/layout/Joker.Main.New.gar").write_bytes(b"tampered")
             with self.assertRaisesRegex(ValueError, "fingerprint"):
-                restoration_members(root / "src", manifest)
+                restoration_members(root / "src", root / "staging", manifest, recipe_dir)
 
     def test_a_missing_member_is_refused(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            manifest = fingerprints(root, {"layout/Joker.Main.Play.gar": b"play"})
+            recipe_dir, manifest = self.synthetic_release(root)
+            (root / "src/romfs/layout/Joker.mfpj").unlink()
             with self.assertRaisesRegex(ValueError, "missing"):
-                restoration_members(root / "src", manifest)
+                restoration_members(root / "src", root / "staging", manifest, recipe_dir)
 
-    def test_real_fingerprints_pin_the_policy_gar_hashes(self):
-        manifest = json.loads((Path(__file__).resolve().parents[2] /
-                               "titles/mm3d/dekui/setup/setup-fingerprints.json").read_text(encoding="utf-8"))
-        gar = sorted({e["input_sha256"] for e in manifest["files"]
-                     if e.get("input_root") == "restoration" and e["input"].endswith(".gar")})
-        self.assertEqual(gar, sorted(POLICY["pinned_role_sha256"]["restoration_layout_asset"]))
+    def test_a_changed_patch_is_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            recipe_dir, manifest = self.synthetic_release(root)
+            (recipe_dir / "layout/patches/Joker.mfpj.bps").write_bytes(b"BPS1 changed")
+            with self.assertRaisesRegex(ValueError, "does not match the recipe"):
+                restoration_members(root / "src", root / "staging", manifest, recipe_dir)
+
+    def test_real_recipe_files_are_the_policy_pins(self):
+        recipe_path = Path(__file__).resolve().parents[2] / "titles/mm3d/restoration/package/layout.recipe.json"
+        import hashlib
+        recipe = json.loads(recipe_path.read_text(encoding="utf-8"))
+        pins = POLICY["pinned_role_sha256"]
+        self.assertEqual(pins["restoration_layout_recipe"], [hashlib.sha256(recipe_path.read_bytes()).hexdigest()])
+        self.assertEqual(sorted(pins["restoration_patch"]),
+                         sorted(d for p, d in recipe["files"].items() if "/patches/" in p))
+        self.assertEqual(sorted(pins["restoration_original_member"]),
+                         sorted(d for p, d in recipe["files"].items() if "/members/" in p))
 
     def test_forge_features_reach_cargo(self):
         self.assertEqual(rust_forge_build.feature_arguments(()), [])

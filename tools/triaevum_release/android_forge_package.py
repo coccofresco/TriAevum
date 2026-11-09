@@ -42,7 +42,7 @@ DATA_ROLES = frozenset({
     "revision_recipe", "input_copy_adapter", "title_neutral_resource", "default_environment_profile",
     "precomputed_interior_sun", "precomputed_scene_lights", "portable_pipeline_recipes",
     "portable_shader_corpus", "portable_shader_qualification", "topscreen_singlescreen_asset",
-    "restoration_layout_asset",
+    "restoration_layout_recipe", "restoration_patch", "restoration_original_member",
 })
 # Desktop binaries, notices, documents and corresponding source stay out of the
 # APK's assets; the catalog is rewritten. An unclassified role fails closed.
