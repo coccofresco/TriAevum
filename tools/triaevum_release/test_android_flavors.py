@@ -63,12 +63,35 @@ def flavor_errors(app: Path = APP) -> list[str]:
         errors.append("build.gradle.kts release type is debuggable or ships the dev identity")
     if "titles/$title/android.json" not in gradle:
         errors.append("build.gradle.kts does not read the title facts")
+    # A5: a signed release demands the Forge package signature on the device.
+    if 'buildConfigField("boolean", "VERIFY_FORGE_PACKAGE", (canSign && !unsignedCandidate).toString())' not in gradle:
+        errors.append("build.gradle.kts: a signed release does not verify the Forge package")
+    package = (app / "src/main/java/org/triaevum/android/forge/ForgePackage.kt")
+    if package.is_file():
+        text = package.read_text(encoding="utf-8")
+        copy, check = text.find("copyTree(context.assets, ASSET_ROOT, staging)"), text.find(
+            "if (BuildConfig.VERIFY_FORGE_PACKAGE) requireSigned(staging)")
+        if check < 0 or copy < 0 or check < copy or check > text.find("staging.renameTo(target)") \
+                or "ForgeNative.verifyPackage" not in text or '!= "signed"' not in text:
+            errors.append("ForgePackage.prepare publishes the package without the signature check")
     return errors
 
 
 class FlavorContractTests(unittest.TestCase):
     def test_flavors(self):
         self.assertEqual(flavor_errors(), [])
+
+    def test_negative_forge_package_published_unverified(self):
+        import shutil
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp) / "app"
+            shutil.copytree(APP / "src", app / "src")
+            shutil.copy2(APP / "build.gradle.kts", app / "build.gradle.kts")
+            kt = app / "src/main/java/org/triaevum/android/forge/ForgePackage.kt"
+            kt.write_text(kt.read_text(encoding="utf-8").replace(
+                "        if (BuildConfig.VERIFY_FORGE_PACKAGE) requireSigned(staging)\n", ""), encoding="utf-8")
+            self.assertIn("ForgePackage.prepare publishes the package without the signature check", flavor_errors(app))
 
     def test_negative_missing_locale_and_literal_secret(self):
         import shutil

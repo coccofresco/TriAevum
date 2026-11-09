@@ -60,7 +60,12 @@ android {
         minSdk = 29
         targetSdk = 35
         ndk { abiFilters += "arm64-v8a" }
+        // Whether ForgePackage.prepare demands the publisher signature of the
+        // Forge package (A5). Only a signed release turns it on; the dev
+        // flavor and unsigned release candidates carry unsigned packages.
+        buildConfigField("boolean", "VERIFY_FORGE_PACKAGE", "false")
     }
+    buildFeatures { buildConfig = true }
     signingConfigs {
         create("release") {
             if (canSign) {
@@ -98,6 +103,7 @@ android {
             isJniDebuggable = false
             isMinifyEnabled = false
             signingConfig = if (canSign && !unsignedCandidate) signingConfigs.getByName("release") else null
+            buildConfigField("boolean", "VERIFY_FORGE_PACKAGE", (canSign && !unsignedCandidate).toString())
         }
     }
     compileOptions {
