@@ -228,8 +228,7 @@ public:
     // prefix> (e.g. rst.MainScreen_) reports those sites to stderr (game.err.log).
     if (const char *trace = std::getenv("TRIAEVUM_MM3D_GUEST_PATCH_TRACE"); trace && *trace)
       mGuestPatches.SetTrace(trace, [](const std::string &line) {
-        std::fprintf(stderr, "%s
-", line.c_str());
+        std::fprintf(stderr, "%s\n", line.c_str());
         std::fflush(stderr);
       });
     if (!mGuestPatches.Empty()) {
