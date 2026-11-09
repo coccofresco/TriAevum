@@ -96,12 +96,27 @@ target_include_directories(audio_output_policy_tests PRIVATE ../include)
 target_link_libraries(audio_output_policy_tests PRIVATE three_ds_recomp_runtime)
 add_test(NAME audio_output_policy_tests COMMAND audio_output_policy_tests)
 
+# SDL audio device negotiation on the dummy driver (#79, #133).
+add_executable(sdl_audio_negotiation_tests sdl_audio_negotiation_tests.cpp)
+target_compile_features(sdl_audio_negotiation_tests PRIVATE cxx_std_20)
+target_include_directories(sdl_audio_negotiation_tests PRIVATE ../include)
+target_link_libraries(sdl_audio_negotiation_tests PRIVATE three_ds_recomp_runtime)
+add_test(NAME sdl_audio_negotiation_tests COMMAND sdl_audio_negotiation_tests)
+
 add_executable(vulkan_present_dispatch_tests
     vulkan_present_dispatch_tests.cpp
     ../src/fast/extension/vulkan_adapter_policy.cpp)
 target_compile_features(vulkan_present_dispatch_tests PRIVATE cxx_std_20)
 target_include_directories(vulkan_present_dispatch_tests PRIVATE ../include)
 add_test(NAME vulkan_present_dispatch_tests COMMAND vulkan_present_dispatch_tests)
+
+# The renderer path the device profile chooses for the AMD Windows reports
+# (#117-#120, #125, #126) and its log line.
+add_executable(vulkan_device_path_tests vulkan_device_path_tests.cpp)
+target_compile_features(vulkan_device_path_tests PRIVATE cxx_std_20)
+target_include_directories(vulkan_device_path_tests PRIVATE ../include)
+target_link_libraries(vulkan_device_path_tests PRIVATE Vulkan::Vulkan)
+add_test(NAME vulkan_device_path_tests COMMAND vulkan_device_path_tests)
 
 if(TARGET SDL2::SDL2)
     add_executable(sdl_video_driver_policy_tests sdl_video_driver_policy_tests.cpp)

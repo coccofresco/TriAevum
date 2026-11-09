@@ -4,6 +4,7 @@
 #include "gfx_vulkan_internal.h"
 #include "fast/renderer3ds/vulkan_commands.h"
 #include "fast/renderer3ds/vulkan_memory_budget.h"
+#include "fast/renderer3ds/vulkan_device_path_report.h"
 
 namespace Fast {
 
@@ -462,6 +463,11 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     }
     const auto features = Renderer3ds::PicaVulkanCoreFeatures(
         supportedFeatures.features, driverProperties.driverID);
+    // The chosen renderer path, in the release log beside the device line.
+    SPDLOG_WARN("{}", Renderer3ds::DescribeVulkanDevicePath({
+        deviceProperties.deviceName, driverProperties.driverID, libraryPolicy, librarySupported,
+        supportedFeatures.features.robustBufferAccess == VK_TRUE, features.robustBufferAccess == VK_TRUE,
+        mExtendedDynamicStateEnabled}));
     mMaxSamplerAnisotropy = features.samplerAnisotropy == VK_TRUE
         ? deviceProperties.limits.maxSamplerAnisotropy : 1.0F;
     // NRI's Vulkan helper and NIS implementation create timeline fences,
