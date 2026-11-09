@@ -367,7 +367,30 @@ void TestTrace() {
 
 } // namespace
 
+// F07: an observer stays a developer dispatch site but is not watched by the
+// product, which would otherwise leave the compiled module at every hit.
+void TestObserverNotWatchedByProduct() {
+    int calls = 0;
+    Mm3dGuestPatches patches;
+    auto site = CompareSite(&calls);
+    site.Observer = true;
+    site.Handler = [](a32::GuestState&, a32::MemoryBus&) -> std::optional<std::uint32_t> {
+        return std::nullopt;
+    };
+    patches.Add(std::move(site));
+    WordMemory memory;
+    memory.Words = {{kSite, kCmpR1R2}, {kSite + 4U, kBeq}, {0x1000U, 7U}};
+    Require(patches.Verify(memory) == 1U, "the observer was not enabled");
+    Require(patches.EnabledPcs() == std::vector<std::uint32_t>{kSite}, "the observer left the developer filter");
+    Require(patches.ProductPcs().empty(), "the product watches an observer");
+    a32::GuestState state;
+    a32::ExecutionResult result;
+    Require(!Mm3dGuestPatches::Execute(kSite, state, memory, &result, &patches),
+            "an observer replaced its instruction");
+}
+
 int main() {
+    TestObserverNotWatchedByProduct();
     TestProductBoundaries();
     TestHandlerNeverReturningNext();
     TestProductReturnCheck();

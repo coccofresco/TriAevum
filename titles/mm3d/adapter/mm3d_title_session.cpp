@@ -271,7 +271,7 @@ public:
       std::fprintf(stderr, "MM3D product: %zu of %zu guest-patch site(s) enabled; every boundary starts a module block\n",
                    enabledSites, mGuestPatches.Statistics().size());
       process.SetNativeFunctionCallback(&Mm3dGuestPatches::Execute,
-                                        &mGuestPatches, mGuestPatches.EnabledPcs());
+                                        &mGuestPatches, mGuestPatches.ProductPcs());
 #else
       // Each site whose code matches the mounted image replaces its
       // instruction; the registry starts a block at every site.

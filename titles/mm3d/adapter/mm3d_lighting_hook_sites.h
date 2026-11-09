@@ -147,6 +147,7 @@ inline void RegisterMm3dLightingHooks(Mm3dGuestPatches& patches) {
         // Observers always execute the original instruction, so Pc + 4 is a
         // continuation only when that instruction can fall through.
         site.ContinuesAtNext = !Mm3dIsUnconditionalReturn(hook.Words[0]);
+        site.Observer = true;
         patches.Add(std::move(site));
     }
 }

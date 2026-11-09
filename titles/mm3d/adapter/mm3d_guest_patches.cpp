@@ -1,6 +1,7 @@
 #include "mm3d_guest_patches.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstdio>
 #include <stdexcept>
 
@@ -65,6 +66,16 @@ std::vector<std::uint32_t> Mm3dGuestPatches::EnabledPcs() const {
     std::vector<std::uint32_t> pcs;
     for (const auto& entry : mSites) {
         if (entry.Stats.Enabled) {
+            pcs.push_back(entry.Site.Pc);
+        }
+    }
+    return pcs;
+}
+
+std::vector<std::uint32_t> Mm3dGuestPatches::ProductPcs() const {
+    std::vector<std::uint32_t> pcs;
+    for (const auto& entry : mSites) {
+        if (entry.Stats.Enabled && !entry.Site.Observer) {
             pcs.push_back(entry.Site.Pc);
         }
     }
@@ -158,6 +169,8 @@ bool Mm3dGuestPatches::Execute(std::uint32_t pc, a32::GuestState& state, a32::Me
     auto* patches = static_cast<Mm3dGuestPatches*>(user);
     const std::uint32_t lrAtEntry = state.r[14];
     const auto next = entry->Site.Handler(state, memory);
+    // An observer must decline: the product does not dispatch it.
+    assert(!entry->Site.Observer || !next.has_value());
     if (!next.has_value()) {
         ++entry->Stats.Declined;
         self->Trace(*entry, state.thread_pointer, lrAtEntry, "declined", pc);

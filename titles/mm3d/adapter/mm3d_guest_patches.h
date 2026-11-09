@@ -59,6 +59,11 @@ struct Mm3dGuestPatchSite {
     // Pc, so only a handler's own Pc + 4 needs a module boundary there; the
     // registry runtime keeps the boundary ContinuesAtNext gives.
     bool HandlerReturnsNext = true;
+    // True for an observer whose handler always declines and has no effect
+    // (the lighting observers). The product dispatch does not watch it
+    // (ProductPcs): leaving the compiled module there would only cost an
+    // exit per hit (F07). The developer registry still dispatches it.
+    bool Observer = false;
 };
 
 class Mm3dGuestPatches {
@@ -90,6 +95,8 @@ class Mm3dGuestPatches {
                        const oot3d::recomp::a32::Registry* registry = nullptr);
     // The enabled sites' PCs, sorted: the native-function filter.
     std::vector<std::uint32_t> EnabledPcs() const;
+    // The enabled non-observer sites' PCs, sorted: the product filter.
+    std::vector<std::uint32_t> ProductPcs() const;
     // Guest PCs a handler may continue at besides a site's next
     // instruction (a branch into the middle of a function): each must start
     // a registry block too, as the runtime does not interpret code outside
