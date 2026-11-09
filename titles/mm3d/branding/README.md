@@ -1,7 +1,9 @@
 # MM3D (Moonfall Curse) branding
 
 Artwork supplied by the project owner on 2026-11-08 for the MM3D product and
-its Forge. Local to `titles/mm3d` (never exported or published), modelled on
+its Forge. It lives in `titles/mm3d`, which is part of the shared public
+source tree, and ships with the distributed Moonfall Curse product (the user's
+own EUR CTR-P-AJRP dump stays the only user input). It is modelled on
 `tools/triaevum_release/branding/README.md` (OoT3D), whose mechanism it
 reuses: the same generator, the same sizes, the same consumers selected per
 title.
