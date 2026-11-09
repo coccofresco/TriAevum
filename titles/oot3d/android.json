@@ -1,0 +1,8 @@
+{
+  "_about": "OoT3D Android product facts (owner directive 2026-11-09 12:20; application id proposed in ANDROID PLAN owner question 2, changeable until the first public release). Read by tools/triaevum_release/android_release_policy.py and the Gradle flavor eot.",
+  "title": "oot3d",
+  "flavor": "eot",
+  "application_id": "org.triaevum.echoesoftime",
+  "label": "Echoes of Time",
+  "version_name": "0.8.0-beta.2"
+}
