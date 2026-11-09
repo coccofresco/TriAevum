@@ -9,7 +9,7 @@ use super::Msg;
 pub fn text(msg: &Msg) -> String {
     use Msg::*;
     let fixed = match *msg {
-        WindowTitle => "TriAevum Forge \u{2014} Echoes of Time",
+        WindowTitle => return format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME),
         DialogTitle => "TriAevum Forge",
         NavHome => "Home",
         NavEnhancements => "Enhancements",
@@ -153,7 +153,7 @@ pub fn text(msg: &Msg) -> String {
         Starting => "Starting title preparation...",
         DownloadingHdFirst => "Downloading the HD textures before the title preparation...",
         DownloadingModFirst => "Downloading the enabled mod before the title preparation...",
-        ReadyDialog => "The title is ready. You can launch TriAevum \u{2014} Echoes of Time now.",
+        ReadyDialog => return format!("The title is ready. You can launch TriAevum \u{2014} {} now.", super::TITLE_NAME),
         CloseWhileBusy => "Title preparation is still running. Close Forge?",
         ConfirmCancel => "Stop the preparation? What was installed before stays usable.",
         EnhancementsBody => "Choose the enhancements you want, then press Apply changes. Without them the game uses its native assets.",
@@ -503,8 +503,11 @@ pub fn text(msg: &Msg) -> String {
         }
         Version { version } => return format!("Version {version}"),
         AboutBody => {
-            "TriAevum Forge prepares TriAevum \u{2014} Echoes of Time from your own decrypted ROM. It is free \
-             software under the GNU General Public License, version 3 or later, and ships no game data."
+            return format!(
+                "TriAevum Forge prepares TriAevum \u{2014} {} from your own decrypted ROM. It is free \
+             software under the GNU General Public License, version 3 or later, and ships no game data.",
+                super::TITLE_NAME
+            )
         }
         SupportedRevisions => "Supported game revisions",
         NoSupportedRevisions => "This package lists no supported game revisions.",

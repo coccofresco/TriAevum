@@ -10,7 +10,7 @@ pub fn text(msg: &Msg) -> Option<String> {
     use Msg::*;
     #[allow(unreachable_patterns)]
     let fixed = match *msg {
-        WindowTitle => "TriAevum Forge \u{2014} Echoes of Time",
+        WindowTitle => return format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME),
         DialogTitle => "TriAevum Forge",
         NavHome => "Inicio",
         NavEnhancements => "Mejoras",
@@ -170,7 +170,7 @@ pub fn text(msg: &Msg) -> Option<String> {
         Starting => "Iniciando la preparación del título...",
         DownloadingHdFirst => "Descargando las texturas HD antes de preparar el título...",
         DownloadingModFirst => "Descargando el mod activado antes de preparar el título...",
-        ReadyDialog => "El título está listo. Ya puedes iniciar TriAevum \u{2014} Echoes of Time.",
+        ReadyDialog => return format!("El título está listo. Ya puedes iniciar TriAevum \u{2014} {}.", super::TITLE_NAME),
         CloseWhileBusy => "La preparación del título sigue en curso. ¿Cerrar Forge?",
         ConfirmCancel => "¿Detener la preparación? Lo que estaba instalado antes sigue siendo utilizable.",
         EnhancementsBody => "Elige las mejoras que quieras y pulsa «Aplicar cambios». Sin ellas, el juego usa sus recursos nativos.",
@@ -561,9 +561,12 @@ pub fn text(msg: &Msg) -> Option<String> {
         }
         Version { version } => return Some(format!("Versión {version}")),
         AboutBody => {
-            "TriAevum Forge prepara TriAevum \u{2014} Echoes of Time a partir de tu propia ROM descifrada. Es \
+            return format!(
+                "TriAevum Forge prepara TriAevum \u{2014} {} a partir de tu propia ROM descifrada. Es \
              software libre bajo la GNU General Public License, versión 3 o posterior, y no incluye datos del \
-             juego."
+             juego.",
+                super::TITLE_NAME
+            )
         }
         SupportedRevisions => "Revisiones del juego compatibles",
         NoSupportedRevisions => "Este paquete no indica ninguna revisión del juego compatible.",

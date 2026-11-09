@@ -25,6 +25,14 @@ mod pseudo;
 
 use forge_core::explain::Explanation;
 
+/// The game this Forge prepares, as the window names it: the product name of
+/// the title's `product.json` (owner decision 2026-11-09: the MM3D Forge is
+/// "Moonfall Curse"; every other text stays shared between the two Forges).
+#[cfg(not(feature = "title-mm3d"))]
+pub const TITLE_NAME: &str = "Echoes of Time";
+#[cfg(feature = "title-mm3d")]
+pub const TITLE_NAME: &str = "Moonfall Curse";
+
 /// Declares [`Msg`] with its id (the variant name) and count.
 macro_rules! messages {
     ($($name:ident $({ $($field:ident: $type:ty),* $(,)? })?),* $(,)?) => {
