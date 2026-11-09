@@ -86,6 +86,9 @@ class ElfChecksTests(unittest.TestCase):
         libraries = dict(good(), **{"libtriaevum_title_aot.so": elf(ndk="r27")})
         self.assertTrue(any("different NDKs" in error for error in stage_errors(libraries)))
 
+    def test_prebuilt_libcxx_may_name_another_ndk(self):
+        self.assertEqual(stage_errors(dict(good(), **{LIBCXX: elf(exports=[SYMBOL], ndk="r28")})), [])
+
     def test_negative_libcxx_closure(self):
         libraries = dict(good(), **{LIBCXX: elf(exports=["_ZNSt6__ndk1other"])})
         self.assertTrue(any("libc++ symbols not in the staged" in error for error in stage_errors(libraries)))

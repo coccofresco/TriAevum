@@ -4,8 +4,8 @@
 - 16 KiB pages: every LOAD segment of every library is aligned to 16 KiB
   (Android 15+ devices with 16 KiB pages; tools/triaevum_release/
   android_release_policy.py elf_errors, also run by the APK audit).
-- One NDK: every library that carries the NDK's `.note.android.ident`
-  names the same NDK version and build (a library linked by another NDK can
+- One NDK: every library we build that carries the NDK's
+  `.note.android.ident` names the same NDK version and build (a library linked by another NDK can
   disagree with libc++_shared.so about the C++ ABI).
 - libc++ closure: every libc++ symbol (`std::__ndk1`) a library imports is
   exported by the staged libc++_shared.so.
@@ -91,7 +91,9 @@ def stage_errors(libraries: dict[str, bytes]) -> list[str]:
     errors = []
     for name, data in sorted(libraries.items()):
         errors.extend(elf_errors(name, data))
-    idents = {name: android_ident(data) for name, data in libraries.items()}
+    # libc++_shared.so is the NDK's prebuilt (NDK r30 ships one whose note names an
+    # earlier NDK); its compatibility is the symbol closure below.
+    idents = {name: android_ident(data) for name, data in libraries.items() if name != LIBCXX}
     ndks = {(ident[1], ident[2]) for ident in idents.values() if ident and ident[1]}
     if len(ndks) > 1:
         errors.append("libraries were linked by different NDKs: " + ", ".join(

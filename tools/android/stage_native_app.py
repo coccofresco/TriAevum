@@ -51,7 +51,8 @@ def stage(runtime: Path, title: Path, forge: Path, ndk: Path, output: Path) -> N
             raise ValueError(f"Unpackaged dependency for {name}: {needed - allowed}")
         target = destination / name
         shutil.copy2(path, target)
-        subprocess.run([strip, "--strip-debug", target], check=True)
+        # --strip-all: .symtab is not needed at run time and the APK audit refuses it.
+        subprocess.run([strip, "--strip-all", target], check=True)
         print(f"{name}: {target.stat().st_size} bytes; dependencies {sorted(needed)}")
     # 16 KiB LOAD alignment, one NDK, libc++ symbol closure (android_elf_checks.py).
     problems = check_stage(destination)
