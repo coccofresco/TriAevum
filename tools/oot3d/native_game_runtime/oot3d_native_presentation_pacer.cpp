@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <thread>
 
 #ifdef _WIN32
@@ -187,6 +188,13 @@ void NativeRealtimeRefreshPacer::ObservePresentation(
     }
     ++mStats.PresentationIntervals;
     mStats.TotalIntervalSeconds += interval;
+    // One line per presentation gap above 25 ms, in log order with the
+    // renderer's pipeline/shader lines, so a hitch can be attributed.
+    if (interval > 0.025) {
+        std::fprintf(stderr, "TRIAEVUM_PRESENTATION_HITCH interval_ms=%.1f presentation=%llu\n",
+                     interval * 1000.0,
+                     static_cast<unsigned long long>(mStats.PresentationIntervals));
+    }
     if (mStats.PresentationIntervals == 1U) {
         mStats.MinimumIntervalSeconds = interval;
         mStats.MaximumIntervalSeconds = interval;
