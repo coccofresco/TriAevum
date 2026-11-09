@@ -26,6 +26,18 @@ class BuildPathScanTests(unittest.TestCase):
             self.assertEqual(build_path_scan.main([str(dirty)]), 1)
             self.assertEqual(build_path_scan.main([str(Path(folder, "none"))]), 2)
 
+    def test_allow_markers_cover_third_party_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            vendor = Path(folder, "vendor.bin")
+            vendor.write_bytes(b"Q:\\vcpkg\\buildtrees\\sdl2\\SDL_render_sw.c\0"
+                               b"Q:/dvs/p4/build/sw/ngx/common_lib.cpp\0")
+            mixed = Path(folder, "mixed.bin")
+            mixed.write_bytes(vendor.read_bytes() + b"Q:/work/runtime/src/a.cpp")
+            allow = ["--allow", "/vcpkg/buildtrees/", "--allow", "/dvs/p4/build/"]
+            self.assertEqual(build_path_scan.main([str(vendor)]), 1)
+            self.assertEqual(build_path_scan.main([str(vendor), *allow]), 0)
+            self.assertEqual(build_path_scan.main([str(mixed), *allow]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
