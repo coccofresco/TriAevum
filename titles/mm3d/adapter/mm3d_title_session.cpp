@@ -224,6 +224,14 @@ public:
         word != kMm3dMtx44FrustumFirstWord) {
       throw std::runtime_error("MM3D adapter: the perspective frustum builder is not at its address");
     }
+    // F07 diagnostic, default off: TRIAEVUM_MM3D_GUEST_PATCH_TRACE=<site name
+    // prefix> (e.g. rst.MainScreen_) reports those sites to stderr (game.err.log).
+    if (const char *trace = std::getenv("TRIAEVUM_MM3D_GUEST_PATCH_TRACE"); trace && *trace)
+      mGuestPatches.SetTrace(trace, [](const std::string &line) {
+        std::fprintf(stderr, "%s
+", line.c_str());
+        std::fflush(stderr);
+      });
     if (!mGuestPatches.Empty()) {
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
       // The product runs the compiled title module: each site the mounted
@@ -233,6 +241,7 @@ public:
         mRestoration->ApplyDataPatches(process.Memory());
       }
       const std::size_t enabledSites = mGuestPatches.Verify(process.Memory(), nullptr);
+      mGuestPatches.TraceVerify();
       // Each continuation a handler returns must be one its site declares.
       mGuestPatches.SetProductReturnCheck(true);
       const auto entries = Oot3dCompiledFunctionEntryPoints(true, false);
@@ -280,6 +289,7 @@ public:
             throw std::runtime_error("MM3D glyph emission: missing A32 hook/continuation boundary; regenerate from --block-boundaries");
       }
       mGuestPatches.Verify(process.Memory(), &Oot3dNativeA32Registry());
+      mGuestPatches.TraceVerify();
       if (!mComposition.VerifyHooks(process.Memory(), &Oot3dNativeA32Registry()))
         throw std::runtime_error("MM3D lighting: wrong image or missing observer block; regenerate registry boundaries");
 #if defined(TRIAEVUM_DEVELOPER_TOOLS)

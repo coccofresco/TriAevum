@@ -4,6 +4,8 @@
 
 #include <cstdint>
 #include <functional>
+#include <array>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -108,6 +110,14 @@ class Mm3dGuestPatches {
     // compiled code at a PC that is no module entry. A violation is counted
     // per site (Statistics, runtime.json) and reported on stderr once.
     void SetProductReturnCheck(bool enabled) noexcept { mProductReturnCheck = enabled; }
+    // F07 diagnostic (env TRIAEVUM_MM3D_GUEST_PATCH_TRACE=<site name prefix>,
+    // default off): each consult of a site whose name starts with the prefix
+    // (a SkipOnce resume, a decline, a replacement and its continuation) is
+    // reported to the sink with the site's counters and the trail of the
+    // last sites consulted on any thread. An empty prefix turns it off.
+    void SetTrace(std::string prefix, std::function<void(const std::string&)> sink);
+    // Reports the traced sites' Verify outcome (enabled, mismatch) to the sink.
+    void TraceVerify() const;
     std::uint64_t ReturnViolations() const noexcept { return mReturnViolations; }
     // Whether a continuation is declared for the site (the check above).
     bool DeclaredContinuation(const Mm3dGuestPatchSite& site, std::uint32_t next,
@@ -134,6 +144,12 @@ class Mm3dGuestPatches {
     std::vector<Entry> mSites; // sorted by PC
     std::vector<std::uint32_t> mTargets;
     bool mProductReturnCheck = false;
+    std::string mTracePrefix;
+    std::function<void(const std::string&)> mTraceSink;
+    std::array<std::uint32_t, 16> mTrail{};
+    std::size_t mTrailNext = 0;
+    void Trace(const Entry& entry, std::uint32_t thread, std::uint32_t lr, const char* what,
+               std::uint32_t next);
     std::uint64_t mReturnViolations = 0;
 };
 

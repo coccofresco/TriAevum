@@ -6,7 +6,9 @@
 #include <iostream>
 #include <map>
 #include <stdexcept>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace {
 
@@ -320,6 +322,49 @@ void TestHandlerNeverReturningNext() {
             "a module lacking the observer's own PC was accepted");
 }
 
+// F07 diagnostic: the env-gated trace reports only the sites its prefix
+// names (consults, declines, SkipOnce resumes, the Verify outcome) and
+// nothing when it is off.
+void TestTrace() {
+    int calls = 0;
+    std::vector<std::string> lines;
+    const auto run = [&](const std::string& prefix) {
+        lines.clear();
+        Mm3dGuestPatches patches;
+        auto site = CompareSite(&calls);
+        site.Name = "rst.MainScreen_Init";
+        patches.Add(std::move(site));
+        patches.SetTrace(prefix, [&](const std::string& line) { lines.push_back(line); });
+        WordMemory memory;
+        memory.Words = {{kSite, kCmpR1R2}, {kSite + 4U, kBeq}, {0x1000U, 7U}};
+        patches.Verify(memory);
+        patches.TraceVerify();
+        a32::GuestState state;
+        state.thread_pointer = 0x1234U;
+        a32::ExecutionResult result;
+        Mm3dGuestPatches::Execute(kSite, state, memory, &result, &patches);
+        patches.SkipOnce(kSite, 0x1234U);
+        Mm3dGuestPatches::Execute(kSite, state, memory, &result, &patches);
+        memory.Words.erase(0x1000U);
+        Mm3dGuestPatches::Execute(kSite, state, memory, &result, &patches);
+    };
+    const auto has = [&](std::string_view text) {
+        return std::any_of(lines.begin(), lines.end(), [&](const std::string& line) {
+            return line.find(text) != std::string::npos;
+        });
+    };
+    run("rst.MainScreen_");
+    Require(lines.size() == 4U && has("verify site=rst.MainScreen_Init") && has("enabled=1") &&
+                has("replaced site=rst.MainScreen_Init") && has("skip_once_resume") &&
+                has("declined") && has("thread=0x00001234") && has("trail=005A745C,"),
+            "the trace did not report the traced site");
+    // Negatives: off by default, and another prefix reports nothing.
+    run("");
+    Require(lines.empty(), "the trace reported while off");
+    run("mm3d.");
+    Require(lines.empty(), "the trace reported a site outside its prefix");
+}
+
 } // namespace
 
 int main() {
@@ -333,6 +378,7 @@ int main() {
     TestPrepare();
     TestInvalidSites();
     TestCondition();
+    TestTrace();
     std::cout << "mm3d_guest_patches_tests: ok\n";
     return 0;
 }

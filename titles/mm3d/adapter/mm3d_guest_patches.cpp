@@ -142,11 +142,16 @@ bool Mm3dGuestPatches::Execute(std::uint32_t pc, a32::GuestState& state, a32::Me
     if (entry == nullptr || !entry->Stats.Enabled) {
         return false;
     }
+    auto* self = static_cast<Mm3dGuestPatches*>(user);
+    if (self->mTraceSink) {
+        self->mTrail[self->mTrailNext++ % self->mTrail.size()] = pc;
+    }
     if (!entry->SkipThreads.empty()) {
         const auto skip = std::find(entry->SkipThreads.begin(), entry->SkipThreads.end(),
                                     state.thread_pointer);
         if (skip != entry->SkipThreads.end()) {
             entry->SkipThreads.erase(skip);
+            self->Trace(*entry, state.thread_pointer, state.r[14], "skip_once_resume", pc);
             return false;
         }
     }
@@ -155,9 +160,11 @@ bool Mm3dGuestPatches::Execute(std::uint32_t pc, a32::GuestState& state, a32::Me
     const auto next = entry->Site.Handler(state, memory);
     if (!next.has_value()) {
         ++entry->Stats.Declined;
+        self->Trace(*entry, state.thread_pointer, lrAtEntry, "declined", pc);
         return false;
     }
     ++entry->Stats.Replacements;
+    self->Trace(*entry, state.thread_pointer, lrAtEntry, "replaced", *next);
     if (patches->mProductReturnCheck && !patches->DeclaredContinuation(entry->Site, *next, lrAtEntry)) {
         if (entry->Stats.ReturnViolations++ == 0U)
             std::fprintf(stderr,
@@ -177,6 +184,45 @@ bool Mm3dGuestPatches::DeclaredContinuation(const Mm3dGuestPatchSite& site, std:
     if (next == site.Pc + 4U) return site.HandlerReturnsNext;
     if (std::find(mTargets.begin(), mTargets.end(), next) != mTargets.end()) return true;
     return (next & ~1U) == (lrAtEntry & ~1U);
+}
+
+void Mm3dGuestPatches::SetTrace(std::string prefix,
+                                std::function<void(const std::string&)> sink) {
+    mTracePrefix = std::move(prefix);
+    mTraceSink = mTracePrefix.empty() ? nullptr : std::move(sink);
+}
+
+void Mm3dGuestPatches::TraceVerify() const {
+    if (!mTraceSink) return;
+    for (const auto& entry : mSites) {
+        if (entry.Site.Name.rfind(mTracePrefix, 0) != 0) continue;
+        char line[256];
+        std::snprintf(line, sizeof line,
+                      "MM3D guest patch trace: verify site=%s pc=0x%08X enabled=%d "
+                      "mismatch=0x%08X missing_block=%d",
+                      entry.Site.Name.c_str(), entry.Site.Pc, entry.Stats.Enabled ? 1 : 0,
+                      entry.Stats.MismatchAddress.value_or(0U), entry.Stats.MissingBlock ? 1 : 0);
+        mTraceSink(line);
+    }
+}
+
+void Mm3dGuestPatches::Trace(const Entry& entry, std::uint32_t thread, std::uint32_t lr,
+                             const char* what, std::uint32_t next) {
+    if (!mTraceSink || entry.Site.Name.rfind(mTracePrefix, 0) != 0) return;
+    char line[640];
+    int n = std::snprintf(line, sizeof line,
+                          "MM3D guest patch trace: %s site=%s pc=0x%08X thread=0x%08X lr=0x%08X "
+                          "next=0x%08X replacements=%llu declined=%llu pending_skips=%zu trail=",
+                          what, entry.Site.Name.c_str(), entry.Site.Pc, thread, lr, next,
+                          static_cast<unsigned long long>(entry.Stats.Replacements),
+                          static_cast<unsigned long long>(entry.Stats.Declined),
+                          entry.SkipThreads.size());
+    for (std::size_t i = 0; i < mTrail.size(); ++i) {
+        if (n <= 0 || n >= static_cast<int>(sizeof line) - 12) break;
+        const auto pc = mTrail[(mTrailNext + i) % mTrail.size()];
+        if (pc != 0U) n += std::snprintf(line + n, sizeof line - n, "%08X,", pc);
+    }
+    mTraceSink(line);
 }
 
 void Mm3dGuestPatches::SkipOnce(std::uint32_t pc, std::uint32_t thread) {
