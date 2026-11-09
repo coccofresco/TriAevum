@@ -10,7 +10,7 @@ pub fn text(msg: &Msg) -> Option<String> {
     use Msg::*;
     #[allow(unreachable_patterns)]
     let fixed = match *msg {
-        WindowTitle => return format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME),
+        WindowTitle => return Some(format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME)),
         DialogTitle => "TriAevum Forge",
         NavHome => "Home",
         NavEnhancements => "Miglioramenti",
@@ -168,7 +168,7 @@ pub fn text(msg: &Msg) -> Option<String> {
         Starting => "Avvio della preparazione del gioco...",
         DownloadingHdFirst => "Download delle texture HD prima della preparazione del gioco...",
         DownloadingModFirst => "Download della mod attivata prima della preparazione del gioco...",
-        ReadyDialog => return format!("Il gioco è pronto. Ora puoi avviare TriAevum \u{2014} {}.", super::TITLE_NAME),
+        ReadyDialog => return Some(format!("Il gioco è pronto. Ora puoi avviare TriAevum \u{2014} {}.", super::TITLE_NAME)),
         CloseWhileBusy => "La preparazione del gioco è ancora in corso. Chiudere Forge?",
         ConfirmCancel => "Interrompere la preparazione? Ciò che era installato prima resta utilizzabile.",
         EnhancementsBody => "Scegli i miglioramenti che vuoi, poi premi «Applica le modifiche». Senza di essi il gioco usa le sue risorse native.",
@@ -547,11 +547,11 @@ pub fn text(msg: &Msg) -> Option<String> {
         }
         Version { version } => return Some(format!("Versione {version}")),
         AboutBody => {
-            return format!(
+            return Some(format!(
                 "TriAevum Forge prepara TriAevum \u{2014} {} dalla tua ROM decriptata. È software libero \
              distribuito con la GNU General Public License, versione 3 o successiva, e non contiene dati del gioco.",
                 super::TITLE_NAME
-            )
+            ))
         }
         SupportedRevisions => "Revisioni del gioco supportate",
         NoSupportedRevisions => "Questo pacchetto non elenca nessuna revisione del gioco supportata.",

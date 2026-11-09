@@ -9,7 +9,7 @@ pub fn text(msg: &Msg) -> Option<String> {
     use Msg::*;
     #[allow(unreachable_patterns)]
     let fixed = match *msg {
-        WindowTitle => return format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME),
+        WindowTitle => return Some(format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME)),
         DialogTitle => "TriAevum Forge",
         NavHome => "Accueil",
         NavEnhancements => "Améliorations",
@@ -171,7 +171,7 @@ pub fn text(msg: &Msg) -> Option<String> {
         Starting => "Démarrage de la préparation du jeu...",
         DownloadingHdFirst => "Téléchargement des textures HD avant la préparation du jeu...",
         DownloadingModFirst => "Téléchargement du mod activé avant la préparation du jeu...",
-        ReadyDialog => return format!("Le jeu est prêt. Vous pouvez lancer TriAevum \u{2014} {} maintenant.", super::TITLE_NAME),
+        ReadyDialog => return Some(format!("Le jeu est prêt. Vous pouvez lancer TriAevum \u{2014} {} maintenant.", super::TITLE_NAME)),
         CloseWhileBusy => "La préparation du jeu est toujours en cours. Fermer Forge ?",
         ConfirmCancel => "Arrêter la préparation ? Ce qui était installé auparavant reste utilisable.",
         EnhancementsBody => "Choisissez les améliorations voulues, puis cliquez sur « Appliquer les modifications ». Sans elles, le jeu utilise ses ressources natives.",
@@ -569,12 +569,12 @@ pub fn text(msg: &Msg) -> Option<String> {
         }
         Version { version } => return Some(format!("Version {version}")),
         AboutBody => {
-            return format!(
+            return Some(format!(
                 "TriAevum Forge prépare TriAevum \u{2014} {} à partir de votre propre ROM déchiffrée. C'est \
              un logiciel libre distribué sous la GNU General Public License, version 3 ou ultérieure, et il ne \
              contient aucune donnée de jeu.",
                 super::TITLE_NAME
-            )
+            ))
         }
         SupportedRevisions => "Révisions du jeu prises en charge",
         NoSupportedRevisions => "Ce paquet n'indique aucune révision du jeu prise en charge.",

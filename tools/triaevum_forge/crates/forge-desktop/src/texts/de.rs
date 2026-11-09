@@ -10,7 +10,7 @@ pub fn text(msg: &Msg) -> Option<String> {
     use Msg::*;
     #[allow(unreachable_patterns)]
     let fixed = match *msg {
-        WindowTitle => return format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME),
+        WindowTitle => return Some(format!("TriAevum Forge \u{2014} {}", super::TITLE_NAME)),
         DialogTitle => "TriAevum Forge",
         NavHome => "Start",
         NavEnhancements => "Verbesserungen",
@@ -168,7 +168,7 @@ pub fn text(msg: &Msg) -> Option<String> {
         Starting => "Die Vorbereitung des Spiels wird gestartet...",
         DownloadingHdFirst => "Die HD-Texturen werden vor der Vorbereitung des Spiels heruntergeladen...",
         DownloadingModFirst => "Die aktivierte Mod wird vor der Vorbereitung des Spiels heruntergeladen...",
-        ReadyDialog => return format!("Das Spiel ist bereit. Du kannst TriAevum \u{2014} {} jetzt starten.", super::TITLE_NAME),
+        ReadyDialog => return Some(format!("Das Spiel ist bereit. Du kannst TriAevum \u{2014} {} jetzt starten.", super::TITLE_NAME)),
         CloseWhileBusy => "Die Vorbereitung des Spiels läuft noch. Forge schließen?",
         ConfirmCancel => "Vorbereitung beenden? Was vorher installiert war, bleibt nutzbar.",
         EnhancementsBody => "Wähle die gewünschten Verbesserungen und drücke dann „Änderungen anwenden“. Ohne sie verwendet das Spiel seine nativen Inhalte.",
@@ -564,12 +564,12 @@ pub fn text(msg: &Msg) -> Option<String> {
         }
         Version { version } => return Some(format!("Version {version}")),
         AboutBody => {
-            return format!(
+            return Some(format!(
                 "TriAevum Forge bereitet TriAevum \u{2014} {} aus deinem eigenen entschlüsselten ROM vor. Es \
              ist freie Software unter der GNU General Public License, Version 3 oder neuer, und enthält keine \
              Spieldaten.",
                 super::TITLE_NAME
-            )
+            ))
         }
         SupportedRevisions => "Unterstützte Spielrevisionen",
         NoSupportedRevisions => "Dieses Paket führt keine unterstützten Spielrevisionen auf.",
