@@ -18,6 +18,8 @@ std::span<const uint32_t> Oot3dWholeAotEntryPoints() noexcept;
 bool Oot3dWholeAotPluginV2Available() noexcept;
 bool Oot3dWholeAotPluginObservesMemoryWrites() noexcept;
 bool Oot3dWholeAotPluginExecutionActive() noexcept;
+// The loaded title module honours resumable exit requests (F07 option 2).
+bool Oot3dWholeAotPluginExitRequestSupported() noexcept;
 [[noreturn]] void Oot3dWholeAotPluginObservableExit(
     uint32_t pc, const oot3d::recomp::a32::GuestState &state);
 

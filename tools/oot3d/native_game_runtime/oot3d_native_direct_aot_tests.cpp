@@ -43,6 +43,8 @@ int main(int argc, char** argv) {
   const auto entries = Oot3dWholeAotEntryPoints();
   if (entries.size() != 1 || entries[0] != 0x1000) return Fail("unexpected entry points");
   if (Oot3dWholeAotPluginExecutionActive()) return Fail("execution active before any call");
+  // A plugin built from this tree carries the capability tail (F07 option 2).
+  if (!Oot3dWholeAotPluginExitRequestSupported()) return Fail("exit-request capability missing");
 
   try {
     ConfigureTitlePlugin(argv[1]);

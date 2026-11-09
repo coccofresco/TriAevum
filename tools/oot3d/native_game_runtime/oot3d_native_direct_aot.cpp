@@ -139,7 +139,7 @@ const Oot3dWholeAotProgramV2 *WholeAotProgram() noexcept {
 #endif
     if (candidate == nullptr ||
         candidate->AbiVersion != kOot3dWholeAotPluginAbiV2 ||
-        candidate->StructSize < sizeof(Oot3dWholeAotProgramV2) ||
+        candidate->StructSize < kOot3dWholeAotProgramV2MinimumSize ||
         candidate->MemoryWriteObservationVersion != NativeA32Memory::WriteObservationAbiVersion() ||
         candidate->EntryPoints == nullptr || candidate->EntryPointCount == 0U ||
         candidate->Execute == nullptr || candidate->ExecutionActive == nullptr ||
@@ -290,8 +290,15 @@ bool Oot3dWholeAotPluginV2Available() noexcept {
 bool Oot3dWholeAotPluginObservesMemoryWrites() noexcept {
   const auto* program = WholeAotProgram();
   if (program == nullptr) return DirectAotProgram() != nullptr;
-  return program->StructSize >= sizeof(Oot3dWholeAotProgramV2) &&
+  return program->StructSize >= kOot3dWholeAotProgramV2MinimumSize &&
          program->MemoryWriteObservationVersion == NativeA32Memory::WriteObservationAbiVersion();
+}
+
+bool Oot3dWholeAotPluginExitRequestSupported() noexcept {
+  const Oot3dWholeAotProgramV2 *program = WholeAotProgram();
+  return program != nullptr &&
+         program->StructSize >= sizeof(Oot3dWholeAotProgramV2) &&
+         (program->Capabilities & kOot3dWholeAotCapabilityExitRequest) != 0U;
 }
 
 bool Oot3dWholeAotPluginExecutionActive() noexcept {

@@ -47,6 +47,10 @@ struct ProductPatchExitContext {
     const uint32_t* PatchPcs = nullptr;
     size_t PatchPcCount = 0U;
     std::optional<uint32_t> Resumed;
+    // F07 option 2: the module honours resumable exit requests; the PC whose
+    // exit was requested, until the module returns at it.
+    bool ExitRequests = false;
+    std::optional<uint32_t> ExitRequestedAt;
 };
 
 uint64_t gProductPatchExitRequests = 0U;
@@ -58,6 +62,14 @@ uint64_t gProductBlocksConsumed = 0U;
     Oot3dNativeGame::Oot3dWholeAotPluginObservableExit(pc, state);
 #else
     Oot3dNativeGame::Oot3dWholeAotExitAt(pc, state);
+#endif
+}
+
+bool CompiledModuleHonoursExitRequests() noexcept {
+#if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
+    return Oot3dNativeGame::Oot3dWholeAotPluginExitRequestSupported();
+#else
+    return true; // the module is compiled into this executable, same header
 #endif
 }
 
@@ -79,6 +91,14 @@ void ProductPatchExitBlockEntry(
             context.Resumed.reset();
         } else if (CompiledModuleExecuting()) {
             ++gProductPatchExitRequests;
+            if (context.ExitRequests) {
+                // Resumable exit request (no exception): the block returns
+                // like a block limit at pc and the loop offers pc to the
+                // native function. The delegate runs when pc is re-entered.
+                context.ExitRequestedAt = pc;
+                state.r[15] = Oot3dNativeGame::kOot3dAotExitRequestPc;
+                return;
+            }
             ExitCompiledModuleAt(pc, state);
         }
     }
@@ -153,6 +173,7 @@ oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
         patchExit.DelegatePcCount = blockEntryPcCount;
         patchExit.PatchPcs = nativeFunctionPcs;
         patchExit.PatchPcCount = nativeFunctionPcCount;
+        patchExit.ExitRequests = CompiledModuleHonoursExitRequests();
         blockEntry = &ProductPatchExitBlockEntry;
         blockEntryUser = &patchExit;
         blockEntryPcs = filter.data();
@@ -202,6 +223,15 @@ oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
             };
         }
 
+        if (patchExits && patchExit.ExitRequestedAt.has_value()) {
+            // The module stopped at the requested patch PC: continue in this
+            // loop, which offers that PC to the native function.
+            if (result.kind == ExitKind::BlockLimit &&
+                result.pc == *patchExit.ExitRequestedAt) {
+                result.kind = ExitKind::Branch;
+            }
+            patchExit.ExitRequestedAt.reset();
+        }
         consumed = std::clamp(consumed, 1U, remaining);
         consumedTotal += consumed;
         gProductBlocksConsumed += consumed;

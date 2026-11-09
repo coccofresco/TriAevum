@@ -45,7 +45,8 @@ triaevum_title_whole_aot_query(uint32_t requestedAbi) noexcept {
         kOot3dWholeAotPluginAbiV2, sizeof(Oot3dWholeAotProgramV2),
         entries.data(), entries.size(), ExecuteOot3dWholeAotFunction,
         PluginExecutionActive, PluginObservableExit,
-        NativeA32Memory::WriteObservationAbiVersion()};
+        NativeA32Memory::WriteObservationAbiVersion(),
+        kOot3dWholeAotCapabilityExitRequest};
   }();
   return &program;
 }

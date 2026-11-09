@@ -196,6 +196,26 @@ constexpr Oot3dAotExternalStateAccess Oot3dAotExternalStateAccessFor(
     }
 }
 
+// F07 option 2: a block-entry callback may request a resumable exit at the
+// block it is notified of, without an exception, by setting the guest PC it
+// receives to kOot3dAotExitRequestPc. The block then returns like a block
+// limit at its PC. A callback that never writes that value (every OoT3D
+// callback) sees no change. Modules built with this header advertise
+// kOot3dWholeAotCapabilityExitRequest; the runtime requests only from those.
+inline constexpr uint32_t kOot3dAotExitRequestPc = 0xFFFFFFFFU;
+
+inline bool Oot3dAotNotifyBlock(Oot3dWholeAotContext& context,
+                                Oot3dWholeAotFrame& frame, uint32_t pc) {
+    const uint32_t previousPc = frame.Guest.r[15];
+    context.BlockEntry(pc, frame.Guest, context.CallbackMemory,
+                       context.BlockEntryUser);
+    if (frame.Guest.r[15] != kOot3dAotExitRequestPc) {
+        return true;
+    }
+    frame.Guest.r[15] = previousPc;
+    return false;
+}
+
 inline bool Oot3dAotConsumeBlock(Oot3dWholeAotContext& context) noexcept {
     if (context.BlocksRemaining == 0U) {
         return false;
@@ -234,9 +254,7 @@ inline bool Oot3dAotEnterBlock(
     if (!Oot3dAotShouldNotifyBlock(context, pc, firstBlock)) {
         return true;
     }
-    context.BlockEntry(pc, frame.Guest, context.CallbackMemory,
-                       context.BlockEntryUser);
-    return true;
+    return Oot3dAotNotifyBlock(context, frame, pc);
 }
 
 inline bool Oot3dAotEnterBlock(
@@ -250,10 +268,9 @@ inline bool Oot3dAotEnterBlock(
         return true;
     }
     state.Flush(0x7FFFU, true);
-    context.BlockEntry(pc, frame.Guest, context.CallbackMemory,
-                       context.BlockEntryUser);
+    const bool proceed = Oot3dAotNotifyBlock(context, frame, pc);
     state.Reload(0x7FFFU, true);
-    return true;
+    return proceed;
 }
 
 template <typename CommitState, typename ReloadState>
@@ -270,11 +287,10 @@ inline bool Oot3dAotEnterBlock(
     }
     commitState();
     state.Flush(0x7FFFU, true);
-    context.BlockEntry(pc, frame.Guest, context.CallbackMemory,
-                       context.BlockEntryUser);
+    const bool proceed = Oot3dAotNotifyBlock(context, frame, pc);
     state.Reload(0x7FFFU, true);
     reloadState();
-    return true;
+    return proceed;
 }
 
 inline Oot3dWholeAotFlow Oot3dAotCallExternal(

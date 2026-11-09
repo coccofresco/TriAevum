@@ -39,10 +39,21 @@ struct Oot3dWholeAotProgramV2 final {
   // stride. Recompile every shard and its support library; older modules are
   // rejected rather than allowed to bypass cache invalidation.
   uint32_t MemoryWriteObservationVersion = 0U;
+  // Optional tail, gated by StructSize >= 64: capability bits of the module.
+  // A module built before the tail reports StructSize 56 and has none.
+  uint64_t Capabilities = 0U;
 };
 
+// The module's compiled blocks honour a block-entry callback's resumable exit
+// request (kOot3dAotExitRequestPc, oot3d_native_whole_aot_runtime.h). Without
+// it a product patch exit must leave the module by an observable exit.
+inline constexpr uint64_t kOot3dWholeAotCapabilityExitRequest = 1U;
+// The smallest program a module may report (modules built before the tail).
+inline constexpr uint32_t kOot3dWholeAotProgramV2MinimumSize = 56U;
+
 static_assert(offsetof(Oot3dWholeAotProgramV2, MemoryWriteObservationVersion) == 48U);
-static_assert(sizeof(Oot3dWholeAotProgramV2) == 56U);
+static_assert(offsetof(Oot3dWholeAotProgramV2, Capabilities) == 56U);
+static_assert(sizeof(Oot3dWholeAotProgramV2) == 64U);
 
 extern "C"
 #ifdef TRIAEVUM_TITLE_AOT_EXPORT
