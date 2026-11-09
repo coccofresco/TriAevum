@@ -111,6 +111,13 @@ if(TARGET SDL2::SDL2)
     add_test(NAME sdl_video_driver_policy_tests COMMAND sdl_video_driver_policy_tests)
     set_tests_properties(sdl_video_driver_policy_tests PROPERTIES
         ENVIRONMENT_MODIFICATION "SDL_VIDEODRIVER=unset:")
+    add_executable(sdl_text_input_policy_tests sdl_text_input_policy_tests.cpp)
+    target_compile_features(sdl_text_input_policy_tests PRIVATE cxx_std_20)
+    target_include_directories(sdl_text_input_policy_tests PRIVATE ../include)
+    target_link_libraries(sdl_text_input_policy_tests PRIVATE SDL2::SDL2)
+    add_test(NAME sdl_text_input_policy_tests COMMAND sdl_text_input_policy_tests)
+    add_test(NAME sdl_text_input_policy_negative COMMAND sdl_text_input_policy_tests --negative)
+    set_tests_properties(sdl_text_input_policy_negative PROPERTIES WILL_FAIL TRUE)
 endif()
 
 FetchContent_Declare(
