@@ -1198,8 +1198,15 @@ AxisInputSample ConvertHostStickToNative(
     if (magnitude <= deadZone) {
         return {};
     }
-    const double scale = (std::min(magnitude, 1.0) - deadZone) /
-                         (1.0 - deadZone) *
+    // Issue #128: physical sticks rarely report the full host range at full
+    // tilt (worn or circular-gated sticks stop near 85-95 percent), and the
+    // guest only runs near the circle pad maximum. The outer band saturates
+    // to the native maximum, so a stick pushed to its rim always reaches it;
+    // the range below the band stays linear. Native range unchanged.
+    const double outer =
+        kHostStickOuterSaturation > deadZone ? kHostStickOuterSaturation : 1.0;
+    const double scale = (std::min(magnitude, outer) - deadZone) /
+                         (outer - deadZone) *
                          static_cast<double>(kNativeStickMaximum) /
                          magnitude;
     return {

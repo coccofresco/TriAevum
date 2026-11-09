@@ -37,6 +37,7 @@
 #endif
 #include <SDL2/SDL_video.h>
 #endif
+#include "fast/backends/sdl_text_input_policy.h"
 
 #if defined(__ANDROID__) || defined(__IOS__)
 #include "ship/port/mobile/MobileImpl.h"
@@ -309,6 +310,8 @@ void Fast3dGui::HandleWindowEvents(Fast::WindowEvent event) {
             ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(event.Sdl.Event));
 #if defined(__ANDROID__) || defined(__IOS__)
             Ship::Mobile::ImGuiProcessEvent(ImGui::GetIO().WantTextInput);
+#else
+            DesktopSdlTextInputGate().Apply(ImGui::GetIO().WantTextInput);
 #endif
             break;
 #ifdef ENABLE_OOT3D_VULKAN
@@ -372,6 +375,7 @@ void Fast3dGui::HandleWindowEvents(Fast::WindowEvent event) {
                     ImGui_ImplSDL2_ProcessEvent(&sdlEvent);
                     break;
             }
+            DesktopSdlTextInputGate().Apply(io.WantTextInput);
             break;
         }
 #endif

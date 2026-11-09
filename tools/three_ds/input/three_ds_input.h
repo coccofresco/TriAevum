@@ -13,6 +13,9 @@
 namespace ThreeDsRecomp::Input {
 
 inline constexpr std::int16_t kNativeStickMaximum = 154;
+// Fraction of the host stick radius from which the circle pad reports its
+// native maximum (issue #128).
+inline constexpr double kHostStickOuterSaturation = 0.90;
 inline constexpr std::uint16_t kTouchWidth = 320U;
 inline constexpr std::uint16_t kTouchHeight = 240U;
 
