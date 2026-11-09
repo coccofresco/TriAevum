@@ -2,6 +2,12 @@
 #include "oot3d_cpu_phase_probe.h"
 
 #include "oot3d_native_compiled_functions.h"
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+#include "oot3d_native_whole_aot_runtime.h"
+#if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
+#include "oot3d_native_direct_aot.h"
+#endif
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -24,6 +30,97 @@ uint64_t ElapsedNanoseconds(TimingClock::time_point start) {
 }
 
 #if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+// F07: the compiled title module resolves direct and indirect calls and
+// branches between its own functions without returning to the dispatch loop,
+// so a native function (title guest patch) at a module entry, e.g. the
+// Project Restoration MainScreen_Init hook reached through a vtable, was never
+// consulted. Each patch PC is therefore also a block-entry observation: when
+// compiled code reaches it, execution leaves the module there (observable
+// exit) and the loop below offers it to the native function, as the
+// developer registry dispatch does. The PC the loop itself entered the module
+// at has already been offered (declined or skip-once) and runs once.
+struct ProductPatchExitContext {
+    oot3d::recomp::a32::BlockEntryCallback Delegate = nullptr;
+    void* DelegateUser = nullptr;
+    const uint32_t* DelegatePcs = nullptr;
+    size_t DelegatePcCount = 0U;
+    const uint32_t* PatchPcs = nullptr;
+    size_t PatchPcCount = 0U;
+    std::optional<uint32_t> Resumed;
+};
+
+[[noreturn]] void ExitCompiledModuleAt(
+    uint32_t pc, const oot3d::recomp::a32::GuestState& state) {
+#if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
+    Oot3dNativeGame::Oot3dWholeAotPluginObservableExit(pc, state);
+#else
+    Oot3dNativeGame::Oot3dWholeAotExitAt(pc, state);
+#endif
+}
+
+bool CompiledModuleExecuting() noexcept {
+#if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
+    return Oot3dNativeGame::Oot3dWholeAotPluginExecutionActive();
+#else
+    return Oot3dNativeGame::Oot3dWholeAotExecutionActive();
+#endif
+}
+
+void ProductPatchExitBlockEntry(
+    uint32_t pc, oot3d::recomp::a32::GuestState& state,
+    oot3d::recomp::a32::MemoryBus& memory, void* user) {
+    auto& context = *static_cast<ProductPatchExitContext*>(user);
+    if (std::binary_search(context.PatchPcs,
+                           context.PatchPcs + context.PatchPcCount, pc)) {
+        if (context.Resumed == pc) {
+            context.Resumed.reset();
+        } else if (CompiledModuleExecuting()) {
+            ExitCompiledModuleAt(pc, state);
+        }
+    }
+    if (context.Delegate != nullptr &&
+        (context.DelegatePcCount == 0U ||
+         std::binary_search(context.DelegatePcs,
+                            context.DelegatePcs + context.DelegatePcCount, pc))) {
+        context.Delegate(pc, state, memory, context.DelegateUser);
+    }
+}
+
+// Sorted union of the block-entry filter and the patch PCs; empty (every
+// block) when the delegate observes every block.
+const std::vector<uint32_t>& ProductPatchExitFilter(
+    oot3d::recomp::a32::BlockEntryCallback blockEntry,
+    const uint32_t* blockEntryPcs, size_t blockEntryPcCount,
+    const uint32_t* patchPcs, size_t patchPcCount) {
+    thread_local std::vector<uint32_t> filter;
+    thread_local bool cached = false;
+    thread_local const uint32_t* keyBlock = nullptr;
+    thread_local size_t keyBlockCount = 0U;
+    thread_local const uint32_t* keyPatch = nullptr;
+    thread_local size_t keyPatchCount = 0U;
+    thread_local bool keyAll = false;
+    const bool all = blockEntry != nullptr && blockEntryPcCount == 0U;
+    if (cached && keyBlock == blockEntryPcs && keyBlockCount == blockEntryPcCount &&
+        keyPatch == patchPcs && keyPatchCount == patchPcCount && keyAll == all) {
+        return filter;
+    }
+    filter.clear();
+    if (!all) {
+        if (blockEntry != nullptr)
+            filter.assign(blockEntryPcs, blockEntryPcs + blockEntryPcCount);
+        filter.insert(filter.end(), patchPcs, patchPcs + patchPcCount);
+        std::sort(filter.begin(), filter.end());
+        filter.erase(std::unique(filter.begin(), filter.end()), filter.end());
+    }
+    cached = true;
+    keyBlock = blockEntryPcs;
+    keyBlockCount = blockEntryPcCount;
+    keyPatch = patchPcs;
+    keyPatchCount = patchPcCount;
+    keyAll = all;
+    return filter;
+}
+
 oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
     oot3d::recomp::a32::GuestState& state, NativeA32Memory& memory,
     uint32_t blockLimit,
@@ -38,6 +135,25 @@ oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
     using oot3d::recomp::a32::ExecutionResult;
     using oot3d::recomp::a32::ExitKind;
     using oot3d::recomp::a32::FallbackReason;
+
+    ProductPatchExitContext patchExit;
+    const bool patchExits =
+        nativeFunction != nullptr && nativeFunctionPcCount != 0U;
+    if (patchExits) {
+        const auto& filter = ProductPatchExitFilter(
+            blockEntry, blockEntryPcs, blockEntryPcCount,
+            nativeFunctionPcs, nativeFunctionPcCount);
+        patchExit.Delegate = blockEntry;
+        patchExit.DelegateUser = blockEntryUser;
+        patchExit.DelegatePcs = blockEntryPcs;
+        patchExit.DelegatePcCount = blockEntryPcCount;
+        patchExit.PatchPcs = nativeFunctionPcs;
+        patchExit.PatchPcCount = nativeFunctionPcCount;
+        blockEntry = &ProductPatchExitBlockEntry;
+        blockEntryUser = &patchExit;
+        blockEntryPcs = filter.data();
+        blockEntryPcCount = filter.size();
+    }
 
     uint32_t consumedTotal = 0U;
     while (consumedTotal < blockLimit) {
@@ -58,6 +174,15 @@ oot3d::recomp::a32::ExecutionResult DispatchWholeAotProduct(
                                state.r[15]) &&
             nativeFunction(state.r[15], state, memory, &result,
                            nativeFunctionUser);
+        if (patchExits) {
+            patchExit.Resumed.reset();
+            if (!functionHandled &&
+                std::binary_search(nativeFunctionPcs,
+                                   nativeFunctionPcs + nativeFunctionPcCount,
+                                   state.r[15])) {
+                patchExit.Resumed = state.r[15];
+            }
+        }
         const bool modHandled = functionHandled || (productMod != nullptr && productMod(
             state.r[15], state, memory, &result, remaining, &consumed, productModUser));
         const bool handled = modHandled || ExecuteOot3dCompiledFunction(
