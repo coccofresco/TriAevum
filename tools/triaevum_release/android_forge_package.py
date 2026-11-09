@@ -124,9 +124,16 @@ def package_title(data: dict, title: str | None) -> str:
     return named[0]
 
 
-def forbidden_data(data: dict) -> list[str]:
+def forbidden_data(data: dict, policy: dict | None = None) -> list[str]:
+    """Reference data that looks like game content. A file the release manifest
+    lists under a role the release policy pins by SHA-256 (the licensed
+    SingleScreen 3.0 topscreen assets, topscreen_singlescreen_asset) is release
+    data whatever its extension; anything else is still judged by its name."""
+    pinned = (policy or {}).get("pinned_role_sha256", {})
     hits = []
-    for path in data:
+    for path, (record, _) in data.items():
+        if record["sha256"] in pinned.get(record["role"], ()):
+            continue
         parts = PurePosixPath(path.casefold()).parts
         if parts[-1].endswith(FORBIDDEN_DATA_SUFFIXES) or any(part in FORBIDDEN_DATA_COMPONENTS for part in parts[:-1]):
             hits.append(path)
@@ -187,7 +194,7 @@ def create_package(reference_root: Path, native_stage: Path, output: Path, *, so
     reference = load_catalog(reference_root)
     data = _reference_data(reference_root)
     product = package_title(data, title)
-    refused = forbidden_data(data)
+    refused = forbidden_data(data, load_json_object(DEFAULT_POLICY))
     if refused:
         raise ValueError(f"Reference release data holds game content: {refused[:5]}")
     notices = _reference_notices(reference_root)

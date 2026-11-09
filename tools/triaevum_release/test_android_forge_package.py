@@ -222,6 +222,32 @@ class AndroidForgePackageTitleTests(unittest.TestCase):
                                title="mm3d")
             self.assertFalse(fixture.output.exists())
 
+    def test_policy_pinned_topscreen_asset_is_release_data(self):
+        # The SingleScreen 3.0 .zar of the desktop release (manifest role
+        # topscreen_singlescreen_asset, pinned by the release policy) is copied.
+        real = Path(__file__).resolve().parents[2] / "runtime/triaevum_resources/topscreen/singlescreen-3.0/zelda_link_ext.zar"
+        name = "resources/topscreen/singlescreen-3.0/zelda_link_ext.zar"
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(Path(directory))
+            path = fixture.reference / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(real.read_bytes())
+            fixture.files.append(dict(artifact(path, name), role="topscreen_singlescreen_asset"))
+            fixture.write_manifest()
+            fixture.create()
+            self.assertTrue(any(p.name == "zelda_link_ext.zar" for p in fixture.output.rglob("*")))
+        # A .zar that is not the pinned asset (other bytes, or another role) is still refused.
+        for role, data in (("topscreen_singlescreen_asset", b"other zar"), ("title_neutral_resource", real.read_bytes())):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as directory:
+                fixture = Fixture(Path(directory))
+                path = fixture.reference / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                fixture.files.append(dict(artifact(path, name), role=role))
+                fixture.write_manifest()
+                with self.assertRaisesRegex(ValueError, "holds game content"):
+                    fixture.create()
+
     def test_negative_game_content_and_missing_licences(self):
         for name in ("restoration/actors.gar", "restoration/title.mfpj", "resources/romfs/a.bin"):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as directory:
