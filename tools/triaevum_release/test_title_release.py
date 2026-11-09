@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 
 import rust_forge_build
-from title_release import RESTORATION_RESOURCES, restoration_members, retarget_recipe, title_release
+from title_release import (RESTORATION_RESOURCES, ROOT, compose_title_layout, restoration_members,
+                           retarget_recipe, title_release)
 
 POLICY = json.loads((Path(__file__).parent / "release_policy.json").read_text(encoding="utf-8"))
 
@@ -46,6 +47,32 @@ class TitleReleaseTests(unittest.TestCase):
         # own steel-mask icon, owner decision 2026-11-08): each crate's feature.
         for crate in ("forge-desktop", "forge-cli", "forge-update-helper"):
             self.assertIn(f"{crate}/title-mm3d", facts["forge_features"])
+
+    def test_composition_reshapes_only_the_mm3d_layout(self):
+        layout = json.loads((ROOT / "tools/triaevum_release/runtime_release_layout.example.json").read_text())
+        oot3d = json.loads(json.dumps(layout["files"]))
+        compose_title_layout(oot3d, "oot3d")
+        self.assertEqual(oot3d, layout["files"])
+        mm3d = json.loads(json.dumps(layout["files"]))
+        compose_title_layout(mm3d, "mm3d")
+        paths = {item["path"]: item for item in mm3d}
+        self.assertFalse([p for p in paths if p.startswith("resources/topscreen/")])
+        for gone in ("LICENSES/SingleScreen-3.0.md", "LICENSES/OoT3D-Vanilla-UI-HUD.md",
+                     "LICENSES/Vanilla-Plus-Link-Remodel.md", "docs/releases/v0.8.0-beta.1.md", "docs/USER_GUIDE.md"):
+            self.assertNotIn(gone, paths)
+        self.assertEqual(paths["README.md"]["source"], "titles/mm3d/releases/README.md")
+        for added in ("LICENSES/mm3d-dekui.md", "LICENSES/Project-Restoration.md",
+                      "docs/MOONFALL_CURSE.md", "docs/releases/v0.5.0-alpha.1.md"):
+            self.assertIn(added, paths)
+            self.assertTrue((ROOT / paths[added]["source"]).is_file(), added)
+        self.assertIn("LICENSES/iMMERSE-MXAO.md", paths)
+        self.assertTrue((ROOT / "titles/mm3d/releases/README.md").read_text(encoding="utf-8")
+                        .startswith("# Moonfall Curse\n"))
+
+    def test_composition_refuses_a_stale_drop(self):
+        layout = [{"source": "README.md", "path": "README.md", "role": "documentation"}]
+        with self.assertRaisesRegex(ValueError, "names paths the layout lacks"):
+            compose_title_layout(layout, "mm3d")
 
     def test_unknown_title_is_refused(self):
         with self.assertRaises(ValueError):

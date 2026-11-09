@@ -24,7 +24,7 @@ try:
     from .shader_corpus_layout import bind_shader_corpus
     from .precomputed_tables import bind_precomputed_tables
     from .forge import load_recipe
-    from .title_release import restoration_members, retarget_recipe, title_release
+    from .title_release import compose_title_layout, restoration_members, retarget_recipe, title_release
     from . import release_signature
 except ImportError:
     from rust_forge_build import build as build_rust_forge
@@ -43,7 +43,7 @@ except ImportError:
     from precomputed_tables import bind_precomputed_tables
     import release_signature
     from forge import load_recipe
-    from title_release import restoration_members, retarget_recipe, title_release
+    from title_release import compose_title_layout, restoration_members, retarget_recipe, title_release
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -138,6 +138,8 @@ def prepare(args) -> dict:
                              features=title["forge_features"])
     layout["files"].extend(forge["files"])
     retarget_recipe(layout["files"], args.title)
+    # The title's own README, documents and licences (C-DISTRO-2, 5..11); none for OoT3D.
+    compose_title_layout(layout["files"], args.title)
     if args.restoration_resources is not None:
         layout["files"].extend(restoration_members(args.restoration_resources, work / "restoration-members"))
     artifacts = {

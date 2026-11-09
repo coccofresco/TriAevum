@@ -8,7 +8,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from audit_release import DEFAULT_POLICY, _matches_any, audit_release, revision_recipe_path
+from audit_release import (DEFAULT_POLICY, REPO_ROOT, _matches_any, audit_release,
+                           revision_recipe_path, title_package_composition)
 from common import atomic_write_json, sha256_file
 from package_release import package_release
 from test_vulkan_imports import pe_import_fixture
@@ -611,6 +612,89 @@ class PublicReleaseAuditTests(unittest.TestCase):
                     source_commit="0" * 40,
                     readiness_path=readiness,
                 )
+
+
+class TitleAwareAuditTests(unittest.TestCase):
+    """C-DISTRO-12: a Moonfall Curse package refuses the other title's README,
+    TopScreen resources and OoT3D-only licences, and requires its own; an
+    OoT3D package (no composition file) is audited exactly as before."""
+
+    COMPOSITION = json.loads((REPO_ROOT / "titles/mm3d/forge/package-composition.json").read_text())
+
+    def audit(self, recipe: str | None, extra: dict[str, tuple[str, bytes]], drop=(), readme=None):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_clean_package(root)
+            manifest_path = root / MANIFEST
+            manifest = json.loads(manifest_path.read_text())
+            files = dict(extra)
+            if recipe is not None:
+                # The release's single revision recipe names its title.
+                fixture = [item["path"] for item in manifest["files"] if item["role"] == "revision_recipe"]
+                drop = tuple(drop) + tuple(path for path in fixture if path != recipe)
+                if recipe not in fixture:
+                    files[recipe] = ("revision_recipe", b"{}")
+            for relative in drop:
+                (root / relative).unlink()
+            manifest["files"] = [item for item in manifest["files"] if item["path"] not in drop]
+            if readme is not None:
+                (root / "README.md").write_bytes(readme)
+                for item in manifest["files"]:
+                    if item["path"] == "README.md":
+                        item["bytes"], item["sha256"] = len(readme), sha256_file(root / "README.md")
+            for relative, (role, data) in files.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+                manifest["files"].append({"path": relative, "role": role, "bytes": len(data),
+                                          "sha256": sha256_file(path)})
+            atomic_write_json(manifest_path, manifest)
+            return list(audit_release(root).errors)
+
+    def mm3d_package(self):
+        extra = {path: ("license" if path.startswith("LICENSES/") else
+                        "separately_licensed_module" if path.endswith(".dll") else "documentation",
+                        b"MZ fixture" if path.endswith(".dll") else b"text fixture\n")
+                 for path in self.COMPOSITION["require"] if path not in FILES}
+        topscreen = [path for path in FILES if _matches_any(path, self.COMPOSITION["refuse"])]
+        return extra, topscreen
+
+    def title_errors(self, errors):
+        return [error for error in errors if error.startswith("mm3d package")]
+
+    def test_moonfall_curse_composition_passes(self):
+        extra, topscreen = self.mm3d_package()
+        errors = self.audit("recipes/mm3d.json", extra, drop=topscreen, readme=b"# Moonfall Curse\n")
+        self.assertEqual(self.title_errors(errors), [])
+        self.assertFalse(any("required release file is missing: resources/topscreen" in e for e in errors), errors)
+
+    def test_planted_negatives_are_refused(self):
+        extra, topscreen = self.mm3d_package()
+        # The EoT README.
+        errors = self.audit("recipes/mm3d.json", extra, drop=topscreen,
+                            readme="# TriAevum \u2014 Echoes of Time\n".encode())
+        self.assertTrue(any("README.md is not the title's README" in e for e in errors), errors)
+        # Each OoT3D-only resource or licence, one at a time.
+        for planted in topscreen + ["LICENSES/OoT3D-Vanilla-UI-HUD.md", "LICENSES/Vanilla-Plus-Link-Remodel.md",
+                                    "docs/releases/v0.8.0-beta.1.md", "docs/TRIAEVUM_TOPSCREEN_INSTALLATION.md"]:
+            kept = [path for path in topscreen if path != planted]
+            plant = {} if planted in FILES else {planted: ("license" if planted.startswith("LICENSES/")
+                                                           else "documentation", b"planted\n")}
+            errors = self.audit("recipes/mm3d.json", {**extra, **plant}, drop=kept, readme=b"# Moonfall Curse\n")
+            self.assertIn(f"mm3d package must not contain {planted}", errors, planted)
+        # A missing title licence (and the iMMERSE module, owner Q2).
+        for required in ("LICENSES/mm3d-dekui.md", "LICENSES/Project-Restoration.md", "runtime/triaevum_immerse.dll"):
+            less = {path: value for path, value in extra.items() if path != required}
+            gone = tuple(topscreen) + ((required,) if required in FILES else ())
+            errors = self.audit("recipes/mm3d.json", less, drop=gone, readme=b"# Moonfall Curse\n")
+            self.assertIn(f"mm3d package is missing {required}", errors, required)
+
+    def test_oot3d_audit_is_unchanged(self):
+        self.assertIsNone(title_package_composition({"files": [{"path": "recipes/oot3d.json",
+                                                               "role": "revision_recipe"}]}))
+        errors = self.audit("recipes/oot3d.json", {})
+        self.assertEqual(self.title_errors(errors), [])
+        self.assertFalse(any("mm3d" in e for e in errors), errors)
 
 
 class RevisionRecipePathTests(unittest.TestCase):

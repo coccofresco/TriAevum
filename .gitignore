@@ -87,6 +87,8 @@ graphs/
 [Rr]eleases/
 !/docs/releases/
 !/docs/releases/*.md
+!/titles/mm3d/releases/
+!/titles/mm3d/releases/*.md
 x64/
 x86/
 bld/

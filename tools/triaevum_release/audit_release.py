@@ -288,6 +288,47 @@ def _source_archive_errors(
         yield f"corresponding-source ZIP cannot be audited: {exc}"
 
 
+REPO_ROOT = ROOT.parents[1]
+
+
+def title_package_composition(manifest: dict, repo_root: Path = REPO_ROOT) -> tuple[str, dict] | None:
+    """The package's title composition (titles/<title>/forge/package-composition.json,
+    C-DISTRO-12), keyed by the release's single revision recipe recipes/<title>.json.
+    None when the title has no composition (OoT3D): its audit is unchanged."""
+    files = manifest.get("files") if isinstance(manifest.get("files"), list) else []
+    recipes = [str(item.get("path", "")) for item in files
+               if isinstance(item, dict) and item.get("role") == "revision_recipe"]
+    if len(recipes) != 1 or not re.fullmatch(r"recipes/[a-z0-9]+[.]json", recipes[0]):
+        return None
+    title = recipes[0][len("recipes/"):-len(".json")]
+    path = repo_root / "titles" / title / "forge" / "package-composition.json"
+    if not path.is_file():
+        return None
+    composition = load_json_object(path)
+    if composition.get("format") != "triaevum_title_package_composition_v1" or composition.get("title") != title:
+        raise ValueError(f"invalid {title} package composition")
+    return title, composition
+
+
+def _title_composition_errors(root: Path, title: str, composition: dict,
+                              files: Iterable[str]) -> Iterable[str]:
+    present = set(files)
+    for relative in sorted(present):
+        if _matches_any(relative, composition.get("refuse", [])):
+            yield f"{title} package must not contain {relative}"
+    for required in composition.get("require", []):
+        if required not in present:
+            yield f"{title} package is missing {required}"
+    heading = composition.get("readme_heading")
+    if heading:
+        try:
+            first = (root / "README.md").read_text(encoding="utf-8").splitlines()[0].strip()
+        except (OSError, UnicodeDecodeError, IndexError):
+            first = ""
+        if first != heading:
+            yield f"{title} package README.md is not the title's README (first line: {first[:60]})"
+
+
 def revision_recipe_path(declared: dict) -> str:
     """The release's own recipe catalog: Forge is per title (owner decision
     2026-11-08), so a release holds exactly one revision_recipe
@@ -350,6 +391,15 @@ def audit_release(
         policy = resolve_policy(policy, platform.target, forge_profile_name(policy, release))
     except ValueError as exc:
         return ReleaseAuditResult({}, (str(exc),))
+    try:
+        title_composition = title_package_composition(manifest)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return ReleaseAuditResult({}, (str(exc),))
+    if title_composition is not None:
+        # The shared required paths the title refuses (OoT3D's TopScreen files) do not apply.
+        refused = title_composition[1].get("refuse", [])
+        policy = {**policy, "required_paths": [path for path in policy.get("required_paths", [])
+                                               if not _matches_any(str(path), refused)]}
     precompiled = release.get("distribution_model") == MODEL
     if release.get("contains_title_code") is not precompiled:
         reject("release.contains_title_code must accurately declare the distribution model")
@@ -691,6 +741,10 @@ def audit_release(
     )
     for violation in manifest_violations:
         reject(f"release manifest policy violation: {violation}")
+
+    if title_composition is not None:
+        for error in _title_composition_errors(root, *title_composition, list(actual) + list(declared)):
+            reject(error)
 
     if platform == MACOS:
         for error in macos_notice_errors(lambda name: (root / name).read_bytes()):

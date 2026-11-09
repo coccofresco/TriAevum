@@ -15,6 +15,23 @@ graph, F1, packaging and Forge. Improvements to those layers are shared with
 the OoT3D repository by cherry-pick. The same rules apply as in `AGENTS.md`:
 no ROM, code.bin, RomFS, savestates or generated title code in Git.
 
+## Playing Moonfall Curse
+
+This section is for players. The rest of this document describes the port.
+
+- **What you need**: your own dump of the European Majora's Mask 3D cartridge
+  (CTR-P-AJRP). It is the only input. No game assets are included in the package.
+- **Install**: extract the package, start `TriAevumForge.exe` (Linux:
+  `TriAevumForge`), choose your dump and let the Forge prepare the game. It
+  checks the dump, prepares the title and rebuilds Project Restoration's HD HUD
+  layouts from it.
+- **Play**: start `Moonfall_Curse.exe` (Linux: `Moonfall_Curse`). The
+  interface is mm3d-dekui's single screen; Project Restoration's changes are
+  built in. Settings are in the in-game F1 menu.
+- **Your data**: settings, saves, logs and caches live in the data folder the
+  Forge shows.
+- **Known limits** of this alpha: see `docs/releases/v0.5.0-alpha.1.md`.
+
 ## Title
 
 EUR cartridge image, decrypted (NoCrypto): product `CTR-P-AJRP`, program

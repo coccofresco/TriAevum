@@ -60,6 +60,47 @@ def retarget_recipe(layout_files: list[dict], title: str) -> None:
     recipes[0]["path"] = facts["recipe_path"]
 
 
+def title_composition_path(title: str, root: Path = ROOT) -> Path:
+    """The title's package composition (titles/<title>/forge/package-composition.json).
+    A title without one (OoT3D) ships the shared layout unchanged."""
+    return root / "titles" / title / "forge" / "package-composition.json"
+
+
+def load_title_composition(title: str, root: Path = ROOT) -> dict | None:
+    path = title_composition_path(title, root)
+    if not path.is_file():
+        return None
+    composition = json.loads(path.read_text(encoding="utf-8"))
+    if composition.get("format") != "triaevum_title_package_composition_v1" or composition.get("title") != title:
+        raise ValueError(f"{path}: not a {title} package composition")
+    return composition
+
+
+def compose_title_layout(layout_files: list[dict], title: str, root: Path = ROOT) -> None:
+    """Apply the title's composition to the shared layout, in place: drop the
+    other title's documents, resources and licences, replace the README and
+    add the title's own documents and licences. Every dropped or replaced path
+    must be in the layout, so a renamed shared file cannot pass silently."""
+    title_release(title)
+    composition = load_title_composition(title, root)
+    if composition is None:
+        return
+    paths = {item["path"] for item in layout_files}
+    missing = sorted((set(composition["drop"]) | set(composition["replace"])) - paths)
+    if missing:
+        raise ValueError(f"{title} composition names paths the layout lacks: {', '.join(missing)}")
+    layout_files[:] = [item for item in layout_files if item["path"] not in set(composition["drop"])]
+    for item in layout_files:
+        if item["path"] in composition["replace"]:
+            item["source"] = composition["replace"][item["path"]]
+    for extra in composition["add"]:
+        if extra["path"] in {item["path"] for item in layout_files}:
+            raise ValueError(f"{title} composition adds a path the layout already has: {extra['path']}")
+        if not (root / extra["source"]).is_file():
+            raise ValueError(f"{title} composition source is missing: {extra['source']}")
+        layout_files.append({"source": extra["source"], "path": extra["path"], "role": extra["role"]})
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
