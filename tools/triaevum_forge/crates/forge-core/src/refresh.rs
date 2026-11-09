@@ -448,6 +448,10 @@ mod tests {
         assert_eq!(order("0.1.0-alpha.1", "0.1.0-alpha.2"), Ordering::Less);
         assert_eq!(order("0.1.0-alpha.1", "0.1.0-beta.1"), Ordering::Less);
         assert_eq!(order("0.1.0-alpha.1", "0.1.0"), Ordering::Less);
+        // Moonfall Curse alpha 1 is 0.5.0-alpha.1 (owner decision 2026-11-09).
+        assert_eq!(order("0.5.0-alpha.1", "0.5.0-alpha.2"), Ordering::Less);
+        assert_eq!(order("0.5.0-alpha.1", "0.5.0"), Ordering::Less);
+        assert_eq!(order("0.5.0-alpha.2", "0.5.0-alpha.1"), Ordering::Greater);
         assert_eq!(compare_versions("unknown", "0.8.0"), None);
         assert_eq!(compare_versions("0.8.0-", "0.8.0"), None);
     }
