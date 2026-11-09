@@ -31,7 +31,9 @@ REQUIRED_LIBRARIES = (
     "libSDL2.so", "libTriAevum.so", "libtriaevum_title_bootstrap.so", "libtriaevum_title_aot.so",
     "libtriaevum_forge.so", "libc++_shared.so",
 )
-FORGE_CATALOG = "assets/forge-package/precompiled-titles.json"
+# Where android_forge_package.py writes them (precompiled_titles.CATALOG,
+# android_forge_package.INVENTORY / SIGNATURE) under the APK assets.
+FORGE_CATALOG = "assets/forge-package/recipes/precompiled-titles.json"
 FORGE_INVENTORY = "assets/forge-package/forge-package.json"
 # The publisher signature forge-android verifies before Forge reads a package file (A5).
 FORGE_SIGNATURE = "assets/forge-package/release-signature.json"

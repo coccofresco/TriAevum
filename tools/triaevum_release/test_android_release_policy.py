@@ -164,6 +164,16 @@ class AuditTests(unittest.TestCase):
         path = apk(self.root / "unsigned.apk", signed=False)
         self.assertIn(f"missing {FORGE_SIGNATURE} (android_forge_package.py --sign)", self.audit(path))
 
+    def test_package_paths_match_the_packager(self):
+        # The audit must look where android_forge_package.py writes (the first
+        # real mcRelease audit found the catalog path wrong).
+        import android_forge_package
+        import precompiled_titles
+        root = "assets/" + android_forge_package.ASSET_ROOT + "/"
+        self.assertEqual(FORGE_CATALOG, root + precompiled_titles.CATALOG)
+        self.assertEqual(FORGE_INVENTORY, root + android_forge_package.INVENTORY)
+        self.assertEqual(FORGE_SIGNATURE, root + android_forge_package.SIGNATURE)
+
     def test_runtime_titles_per_product(self):
         self.assertEqual(android_facts("oot3d")["runtime_titles"], ["oot3d"])
         self.assertEqual(android_facts("mm3d")["runtime_titles"], ["oot3d", "mm3d"])
