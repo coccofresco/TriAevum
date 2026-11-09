@@ -104,7 +104,7 @@ fn push32(out: &mut Vec<u8>, value: u32) {
 }
 
 /// CRC-32 (IEEE 802.3, reflected, as zlib computes it).
-fn crc32(data: &[u8]) -> u32 {
+pub(crate) fn crc32(data: &[u8]) -> u32 {
     static TABLE: std::sync::OnceLock<[u32; 256]> = std::sync::OnceLock::new();
     let table = TABLE.get_or_init(|| {
         let mut table = [0u32; 256];

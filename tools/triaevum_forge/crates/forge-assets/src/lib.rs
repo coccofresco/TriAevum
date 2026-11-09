@@ -17,6 +17,8 @@ mod model_catalog;
 mod mm3d_layout;
 mod mm3d_font;
 mod mm3d_messages;
+#[cfg(feature = "title-mm3d")]
+pub mod mm3d_restoration_layout;
 pub mod mm3d_ui;
 mod pymath;
 mod pyvalue;

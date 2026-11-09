@@ -15,7 +15,7 @@ default = ["https"]
 # The verified HD texture download of the install job (desktop).
 https = ["forge-mods/https"]
 # The MM3D Forge (installed game executable "Moonfall_Curse.exe").
-title-mm3d = ["forge-catalog/title-mm3d"]
+title-mm3d = ["forge-catalog/title-mm3d", "forge-assets/title-mm3d"]
 
 [dependencies]
 forge-assets = { path = "../forge-assets" }
