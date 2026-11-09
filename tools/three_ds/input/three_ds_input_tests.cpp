@@ -1067,6 +1067,28 @@ int main() try {
                     length <= kNativeStickMaximum + 1.0,
                 "full circle pad deflection lost range at some angle");
     }
+    // Issue #128: a real stick at full tilt reports about 90 percent of the
+    // host range. Every axis and diagonal must still reach the native maximum
+    // (run), and a half tilt must stay below it (walk).
+    for (const double rim : {0.90, 0.93, 0.97}) {
+        for (int degrees = 0; degrees < 360; degrees += 45) {
+            const double radians = degrees * 3.14159265358979323846 / 180.0;
+            const auto tilt = ConvertHostStickToNative(
+                static_cast<std::int16_t>(std::lround(rim * 32767.0 * std::cos(radians))),
+                static_cast<std::int16_t>(std::lround(rim * 32767.0 * std::sin(radians))),
+                25);
+            const auto length = std::hypot(static_cast<double>(tilt.X),
+                                           static_cast<double>(tilt.Y));
+            Require(length >= kNativeStickMaximum - 1.0 &&
+                        length <= kNativeStickMaximum + 1.0,
+                    "issue 128: full tilt of a real stick does not reach the native maximum");
+        }
+    }
+    {
+        const auto half = ConvertHostStickToNative(0, 18000, 25);
+        Require(half.X == 0 && half.Y > 40 && half.Y < kNativeStickMaximum - 20,
+                "issue 128: a half tilt must keep a walking magnitude");
+    }
 
     return 0;
 } catch (const std::exception& error) {
