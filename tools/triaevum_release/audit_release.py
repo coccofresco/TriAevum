@@ -311,12 +311,17 @@ def title_package_composition(manifest: dict, repo_root: Path = REPO_ROOT) -> tu
 
 
 def _title_composition_errors(root: Path, title: str, composition: dict,
-                              files: Iterable[str]) -> Iterable[str]:
+                              files: Iterable[str], target: str = WINDOWS.target) -> Iterable[str]:
+    """`require` holds for every target; `require_by_target` adds the files a
+    release target ships under its own name (the Windows iMMERSE DLL)."""
     present = set(files)
     for relative in sorted(present):
         if _matches_any(relative, composition.get("refuse", [])):
             yield f"{title} package must not contain {relative}"
-    for required in composition.get("require", []):
+    by_target = composition.get("require_by_target", {})
+    if not isinstance(by_target, dict):
+        raise ValueError(f"invalid {title} package composition require_by_target")
+    for required in list(composition.get("require", [])) + list(by_target.get(target, [])):
         if required not in present:
             yield f"{title} package is missing {required}"
     heading = composition.get("readme_heading")
@@ -743,7 +748,8 @@ def audit_release(
         reject(f"release manifest policy violation: {violation}")
 
     if title_composition is not None:
-        for error in _title_composition_errors(root, *title_composition, list(actual) + list(declared)):
+        for error in _title_composition_errors(root, *title_composition, list(actual) + list(declared),
+                                               platform.target):
             reject(error)
 
     if platform == MACOS:

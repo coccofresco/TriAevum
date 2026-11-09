@@ -8,7 +8,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from audit_release import (DEFAULT_POLICY, REPO_ROOT, _matches_any, audit_release,
+from audit_release import (DEFAULT_POLICY, REPO_ROOT, _matches_any, _title_composition_errors, audit_release,
                            revision_recipe_path, title_package_composition)
 from common import atomic_write_json, sha256_file
 from package_release import package_release
@@ -655,9 +655,27 @@ class TitleAwareAuditTests(unittest.TestCase):
         extra = {path: ("license" if path.startswith("LICENSES/") else
                         "separately_licensed_module" if path.endswith(".dll") else "documentation",
                         b"MZ fixture" if path.endswith(".dll") else b"text fixture\n")
-                 for path in self.COMPOSITION["require"] if path not in FILES}
+                 for path in self.COMPOSITION["require"] + self.windows_only() if path not in FILES}
         topscreen = [path for path in FILES if _matches_any(path, self.COMPOSITION["refuse"])]
         return extra, topscreen
+
+    def windows_only(self):
+        return self.COMPOSITION["require_by_target"]["x86_64-pc-windows-msvc"]
+
+    def test_immerse_dll_is_required_only_on_windows(self):
+        # The iMMERSE DLL name is Windows-only: a Linux MC package must not be refused for it.
+        others = list(self.COMPOSITION["require"])
+        self.assertNotIn("runtime/triaevum_immerse.dll", others)
+        self.assertEqual(self.windows_only(), ["runtime/triaevum_immerse.dll"])
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "README.md").write_text("# Moonfall Curse\n", encoding="utf-8")
+            linux = list(_title_composition_errors(root, "mm3d", self.COMPOSITION, others,
+                                                   "x86_64-unknown-linux-gnu"))
+            self.assertEqual(linux, [])
+            windows = list(_title_composition_errors(root, "mm3d", self.COMPOSITION, others,
+                                                     "x86_64-pc-windows-msvc"))
+            self.assertEqual(windows, ["mm3d package is missing runtime/triaevum_immerse.dll"])
 
     def title_errors(self, errors):
         return [error for error in errors if error.startswith("mm3d package")]

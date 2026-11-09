@@ -64,9 +64,13 @@
     "LICENSES/Project-Restoration.md",
     "LICENSES/iMMERSE-MXAO.md",
     "LICENSES/iMMERSE-LICENSE.txt",
-    "runtime/triaevum_immerse.dll",
     "docs/MOONFALL_CURSE.md",
     "docs/releases/v0.5.0-alpha.1.md"
   ],
+  "require_by_target": {
+    "x86_64-pc-windows-msvc": [
+      "runtime/triaevum_immerse.dll"
+    ]
+  },
   "readme_heading": "# Moonfall Curse"
 }
