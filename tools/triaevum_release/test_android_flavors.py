@@ -40,6 +40,11 @@ def flavor_errors(app: Path = APP) -> list[str]:
                 errors.append(f"{flavor}/{path.parent.name}: app_name {values.get('app_name')!r}")
             if facts["label"] not in values.get("forge_title", ""):
                 errors.append(f"{flavor}/{path.parent.name}: forge_title lacks the product name")
+    # aapt2 refuses an unescaped apostrophe in a string resource.
+    for path in sorted((app / "src").glob("*/res/values*/strings.xml")):
+        for name, text in strings(path).items():
+            if re.search(r"(?<!\\)'", text) and not (text.startswith('"') and text.endswith('"')):
+                errors.append(f"{path.parent.parent.parent.name}/{path.parent.name}: unescaped apostrophe in {name}")
     for path in sorted((app / "src/main/res").glob("values*/strings.xml")):
         if not strings(path).get("forge_no_game_assets"):
             errors.append(f"main/{path.parent.name}: no forge_no_game_assets")
@@ -80,6 +85,17 @@ def flavor_errors(app: Path = APP) -> list[str]:
 class FlavorContractTests(unittest.TestCase):
     def test_flavors(self):
         self.assertEqual(flavor_errors(), [])
+
+    def test_negative_unescaped_apostrophe(self):
+        import shutil
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            app = Path(temp) / "app"
+            shutil.copytree(APP / "src", app / "src")
+            shutil.copy2(APP / "build.gradle.kts", app / "build.gradle.kts")
+            fr = app / "src/main/res/values-fr/strings.xml"
+            fr.write_text(fr.read_text(encoding="utf-8").replace("n\\'est", "n'est"), encoding="utf-8")
+            self.assertIn("main/values-fr: unescaped apostrophe in forge_no_game_assets", flavor_errors(app))
 
     def test_negative_forge_package_published_unverified(self):
         import shutil
