@@ -66,6 +66,15 @@ class AndroidReleaseRecipeTests(unittest.TestCase):
         self.assertNotEqual(mc["forge build"][1]["CARGO_TARGET_DIR"], eot["forge build"][1]["CARGO_TARGET_DIR"])
         self.assertNotEqual(mc["runtime build"][0], eot["runtime build"][0])
 
+    def test_python_steps_start(self):
+        # Every Python step must at least parse its arguments the way the recipe runs it.
+        import subprocess
+        for step in ("stage", "forge package"):
+            command = steps("mm3d")[step][0]
+            completed = subprocess.run([*command[:3], "--help"], cwd=android_release.ROOT,
+                                       capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, f"{step}: {completed.stderr[-400:]}")
+
     def test_no_private_paths_in_the_recipe_source(self):
         text = Path(android_release.__file__).read_text(encoding="utf-8")
         for marker in ("C:/", "I:/", "E:/", "/home/", "Users"):

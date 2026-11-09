@@ -94,7 +94,8 @@ def recipe(title: str, *, ndk: Path, work: Path, translated_sources: Path, refer
                    "--runtime-build", str(runtime), "--title-module", str(title_build / "libtriaevum_title_aot.so"),
                    "--forge-library", str(forge / TARGET / "release/libtriaevum_forge.so"),
                    "--ndk", str(ndk), "--output", str(stage)], {}),
-        ("forge package", [sys.executable, "-I", str(ROOT / "tools/triaevum_release/android_forge_package.py"),
+        # A package module (relative imports): run with -m from the repository root.
+        ("forge package", [sys.executable, "-m", "tools.triaevum_release.android_forge_package",
                            "--title", title, "--reference-package", str(reference_package),
                            "--native-stage", str(stage), "--source-commit", source_commit, "--output", str(package),
                            *(["--sign"] if environ.get("TRIAEVUM_RELEASE_SIGNING_KEY") else [])], {}),

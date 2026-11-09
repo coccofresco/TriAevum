@@ -5,8 +5,11 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 
-from android_elf_checks import check_stage
+# `python -I` (the release recipe) leaves the script's folder off sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from android_elf_checks import check_stage  # noqa: E402
 
 
 def host_llvm(ndk: Path) -> Path:
