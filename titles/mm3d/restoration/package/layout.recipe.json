@@ -1,0 +1,259 @@
+{
+ "format": "triaevum_restoration_layout_v1",
+ "upstream": {
+  "project": "leoetlino/project-restoration",
+  "commit": "8bb2a7b8",
+  "license": "GPL-2.0-or-later",
+  "notice": "LICENSES/Project-Restoration.md"
+ },
+ "dump": {
+  "archive": "layout/Joker.Main.Play.gar",
+  "archive_sha256": "b9f0f6461c9952c4b975eef99a27a76dbbe06d9faf1c0dd610e8e35247219cd0"
+ },
+ "outputs": [
+  {
+   "path": "layout/Joker.Main.New.gar",
+   "sha256": "3b5918df9251366f3688965bed882e56d1056d5e6dee2a479a8596cb884fc639",
+   "size": 169516,
+   "gar": {
+    "version": 2,
+    "hash": "jenkins",
+    "types": [
+     "unknown",
+     "mfpk",
+     "mfl",
+     "ctxb"
+    ],
+    "align": 4
+   },
+   "members": [
+    {
+     "name": "New.mfpk",
+     "source": {
+      "ship": "layout/members/New.mfpk",
+      "sha256": "d61e3c7e90afba082b9b00859328f2e060e3fbee66239dc51042b4d1bb2011da",
+      "size": 64
+     }
+    },
+    {
+     "name": "ItemIconBase.mfl",
+     "source": {
+      "ship": "layout/members/ItemIconBase.mfl",
+      "sha256": "0f3079d21d0a848289ed90e94336a9f6b68704c77ac9f9b7d04a321e22707add",
+      "size": 256
+     }
+    },
+    {
+     "name": "HudDpad.mfl",
+     "source": {
+      "ship": "layout/members/HudDpad.mfl",
+      "sha256": "6fab0d7e2519344fe7df8a901d44d38a5e4d0e7eee50e5f90fe537f19b828e2c",
+      "size": 896
+     }
+    },
+    {
+     "name": "AActionIconBase.mfl",
+     "source": {
+      "ship": "layout/members/AActionIconBase.mfl",
+      "sha256": "c3dc8693bc6359686dee07fb96dc4be1404c728dddbc7d170388a5626ba35ae9",
+      "size": 272
+     }
+    },
+    {
+     "name": "Heart.mfl",
+     "source": {
+      "patch": "layout/patches/Main.New.Heart.mfl.bps",
+      "base": "layout/Joker.Main.Play.gar#Heart.mfl",
+      "base_sha256": "5eb216975378eedba2352eaa130dd35e75e36ea9cca9f43de2def51671c50123",
+      "sha256": "92ebee5f56c755bd3bf7fa66b22fa8c58e41e0b64ae6ea43e7a711f84e402563",
+      "size": 672
+     }
+    },
+    {
+     "name": "Carrot.mfl",
+     "source": {
+      "patch": "layout/patches/Main.New.Carrot.mfl.bps",
+      "base": "layout/Joker.Main.Play.gar#Carrot.mfl",
+      "base_sha256": "80a546caa0b2b3e9c85a1dc1d00a9cd787fcd463484cab4ec87cb71d2b0a0323",
+      "sha256": "687e8b85ed571b8aa9b39677d459a4cbc1e78c99b5211fb116da106b3a820ddd",
+      "size": 1168
+     }
+    },
+    {
+     "name": "ChatAlert.mfl",
+     "source": {
+      "patch": "layout/patches/Main.New.ChatAlert.mfl.bps",
+      "base": "layout/Joker.Main.Play.gar#ChatAlert.mfl",
+      "base_sha256": "6f15dc3344b61e5fac5f0a7930a526c79fef4f2b0fe444f4cbdf25f26aae6948",
+      "sha256": "93090a6c6820084664e6cbe3f762fd3e9a204d88f8f48f9661a2f05941826602",
+      "size": 800
+     }
+    },
+    {
+     "name": "Hud2.mfl",
+     "source": {
+      "ship": "layout/members/Hud2.mfl",
+      "sha256": "19814f879d8944ff9cd8ca7e30eb7bed3e55285ee79e6af4c4c9420f9b5feb0e",
+      "size": 12768
+     }
+    },
+    {
+     "name": "HudItemIconSet.mfl",
+     "source": {
+      "ship": "layout/members/HudItemIconSet.mfl",
+      "sha256": "6bc5ef3e6d7d3d24571a3a9a3cb7b70a858499e0ccf0af2ae7087fcddd1894b6",
+      "size": 4976
+     }
+    },
+    {
+     "name": "Hud.mfl",
+     "source": {
+      "patch": "layout/patches/Main.New.Hud.mfl.bps",
+      "base": "layout/Joker.Main.Play.gar#Hud.mfl",
+      "base_sha256": "23dd453c903bf22ee2a3c8e3211392f80eafefcff42a17c74c25b7c8615f9659",
+      "sha256": "0b99c88543a47e01c2e55e41f5f4d196a252f7981ea94ee791a74b7d872e7b68",
+      "size": 15872
+     }
+    },
+    {
+     "name": "hud_patrs01_action_text.ctxb",
+     "source": {
+      "ship": "layout/members/hud_patrs01_action_text.ctxb",
+      "sha256": "8ee7d8087bccdcd51f986512f655aa9659631041b725e28edd09eaaaff3d7ac5",
+      "size": 131144
+     }
+    }
+   ]
+  },
+  {
+   "path": "layout/Joker.Main.Play.gar",
+   "sha256": "5b143a1e033a409e6ee9272d4d04f1902f4b2a11cc443f9b6c8128471617a16c",
+   "size": 67968,
+   "gar": {
+    "version": 2,
+    "hash": "jenkins",
+    "types": [
+     "unknown",
+     "mfpk",
+     "mfl",
+     "ctxb"
+    ],
+    "align": 4
+   },
+   "members": [
+    {
+     "name": "Play.mfpk",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#Play.mfpk",
+      "sha256": "0d66533fee15011562d36235e15f5e07b8b9c58e7f7b2384810837e874e25a3a",
+      "size": 80
+     }
+    },
+    {
+     "name": "EventTimer.mfl",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#EventTimer.mfl",
+      "sha256": "98565c559fadabd6d136789a821138fef9925aa4f366cc1b92c8b5411321ae94",
+      "size": 5632
+     }
+    },
+    {
+     "name": "AActionIcon.mfl",
+     "source": {
+      "patch": "layout/patches/Main.Play.AActionIcon.mfl.bps",
+      "base": "layout/Joker.Main.Play.gar#AActionIcon.mfl",
+      "base_sha256": "8ddf7de564fe4a236e2a2d5334715b4516c6c1792901863a754b4a70f087056c",
+      "sha256": "90e5680fa8c6d82c59a42bb395b419685f136d1769a3237192798d231a7e7001",
+      "size": 1216
+     }
+    },
+    {
+     "name": "BActionIcon.mfl",
+     "source": {
+      "patch": "layout/patches/Main.Play.BActionIcon.mfl.bps",
+      "base": "layout/Joker.Main.Play.gar#BActionIcon.mfl",
+      "base_sha256": "dcd5e9687dd67c6481a89d180c09f6a1d6a946522c79940766856925fe3df6a4",
+      "sha256": "5bf3ca83a20cca49f9723e351b734bd4821237b9b31871be27c0c7b9392641a5",
+      "size": 1520
+     }
+    },
+    {
+     "name": "TouchPanel.mfl",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#TouchPanel.mfl",
+      "sha256": "84a167bef747da99370e31b2ac377e91c490042d8ddeccf2a253241bb24326ba",
+      "size": 14304
+     }
+    },
+    {
+     "name": "BackGround.mfl",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#BackGround.mfl",
+      "sha256": "0546f78da8f3e879531d7532afdc577daa99c1dbb7bc296a6fc2bc7f279f3844",
+      "size": 464
+     }
+    },
+    {
+     "name": "ItemIconSet.mfl",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#ItemIconSet.mfl",
+      "sha256": "58d8512d97b8653bf8398d93ffa71dac22122a0345d7d9e37598003da84f204d",
+      "size": 5472
+     }
+    },
+    {
+     "name": "ItemIconSet2.mfl",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#ItemIconSet2.mfl",
+      "sha256": "e807b48a2d82f98402e42270ffe476dc0d97311fe1202b10cb2e3d602a21d5cf",
+      "size": 5616
+     }
+    },
+    {
+     "name": "ItemIconButton.mfl",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#ItemIconButton.mfl",
+      "sha256": "8c54cec95c5cd932a181d9cc5b4c406dad4447165beb4207c0edcc1c90524636",
+      "size": 208
+     }
+    },
+    {
+     "name": "menu_top_parts00.ctxb",
+     "source": {
+      "dump": "layout/Joker.Main.Play.gar#menu_top_parts00.ctxb",
+      "sha256": "74dc9c4d99acd144caf4dbc204aaef89f4879aa0cd906a4b9d767da82b0a5e65",
+      "size": 32840
+     }
+    }
+   ]
+  },
+  {
+   "path": "layout/Joker.mfpj",
+   "sha256": "ab79c65145c39a24dab8bf795e923ef5a56c1a85670a92ab86819af50402b237",
+   "size": 6624,
+   "source": {
+    "patch": "layout/patches/Joker.mfpj.bps",
+    "base": "layout/Joker.mfpj",
+    "base_sha256": "945509d90bc5ebcb428f84ab58e4dd8d2557b3651e91b0eca84adb97abc0f0d8",
+    "sha256": "ab79c65145c39a24dab8bf795e923ef5a56c1a85670a92ab86819af50402b237",
+    "size": 6624
+   }
+  }
+ ],
+ "files": {
+  "layout/members/AActionIconBase.mfl": "c3dc8693bc6359686dee07fb96dc4be1404c728dddbc7d170388a5626ba35ae9",
+  "layout/members/Hud2.mfl": "19814f879d8944ff9cd8ca7e30eb7bed3e55285ee79e6af4c4c9420f9b5feb0e",
+  "layout/members/HudDpad.mfl": "6fab0d7e2519344fe7df8a901d44d38a5e4d0e7eee50e5f90fe537f19b828e2c",
+  "layout/members/HudItemIconSet.mfl": "6bc5ef3e6d7d3d24571a3a9a3cb7b70a858499e0ccf0af2ae7087fcddd1894b6",
+  "layout/members/ItemIconBase.mfl": "0f3079d21d0a848289ed90e94336a9f6b68704c77ac9f9b7d04a321e22707add",
+  "layout/members/New.mfpk": "d61e3c7e90afba082b9b00859328f2e060e3fbee66239dc51042b4d1bb2011da",
+  "layout/members/hud_patrs01_action_text.ctxb": "8ee7d8087bccdcd51f986512f655aa9659631041b725e28edd09eaaaff3d7ac5",
+  "layout/patches/Joker.mfpj.bps": "8c817c05553cac5e19f47d7020be9ded6c56c0b26e5d10ff2c96f377ca9ddd4b",
+  "layout/patches/Main.New.Carrot.mfl.bps": "4dc95d1a920db24c9fdb3b636ef0c15202f341658db7a92d210f25fc909660c5",
+  "layout/patches/Main.New.ChatAlert.mfl.bps": "a2f5c94ab872fcfb964cc74cd1a5977108e2b536c7ebfb3ca399ca783bf7b45f",
+  "layout/patches/Main.New.Heart.mfl.bps": "752f66f30721191b2f9a6fb11995821f8130635219fd849a3aa93b705e2ca586",
+  "layout/patches/Main.New.Hud.mfl.bps": "7496fe3589fa8f7d2e56b9ae690ebb719334567f3093d05b5d2ea459ebf76ce2",
+  "layout/patches/Main.Play.AActionIcon.mfl.bps": "bdf12bef65868c3b0d35fec3c1fadf93f34a97bf79b9c47fb5280710a1094206",
+  "layout/patches/Main.Play.BActionIcon.mfl.bps": "4fa3a63a836296999d74651ac3d816d623c5ae6b44aaeb476d11c8983687f322"
+ }
+}
