@@ -432,6 +432,7 @@ tags
 !/tools/triaevum_release/branding/**/*.png
 !/tools/triaevum_release/branding/**/*.jpg
 !/ports/android/app/src/main/res/mipmap*/*.png
+!/ports/android/app/src/mc/res/mipmap*/*.png
 *.sav
 shipofharkinian.ini
 shipofharkinian.json
