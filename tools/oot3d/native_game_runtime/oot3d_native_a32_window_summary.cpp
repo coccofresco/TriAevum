@@ -2352,6 +2352,24 @@ void WriteNativeA32WindowRuntimeSummary(const NativeA32WindowSummaryInputs &in) 
                    {"dispatch_calls", timing.DispatchCalls},
                    {"dispatch_seconds",
                     timing.DispatchNanoseconds * nanosecondsToSeconds},
+                   {"patch_exit_requests", timing.PatchExitRequests},
+                   {"dispatch_calls_by_thread", timing.DispatchCallsByThread},
+                   {"dispatch_seconds_by_thread",
+                    [&] {
+                      nlohmann::json seconds = nlohmann::json::array();
+                      for (const uint64_t ns : timing.DispatchNanosecondsByThread)
+                        seconds.push_back(ns * nanosecondsToSeconds);
+                      return seconds;
+                    }()},
+                   {"guest_clock_phase",
+                    {{"phases", timing.ClockPhases},
+                     {"dispatch_calls", timing.ClockDispatchCalls},
+                     {"dispatch_seconds",
+                      timing.ClockDispatchNanoseconds * nanosecondsToSeconds},
+                     {"whole_aot_calls", timing.ClockWholeAotCalls},
+                     {"indirect_calls", timing.ClockIndirectCalls},
+                     {"block_limit_exits", timing.ClockBlockLimitExits},
+                     {"patch_exit_requests", timing.ClockPatchExitRequests}}},
                    {"svc_calls", timing.SvcCalls},
                    {"svc_seconds",
                     timing.SvcNanoseconds * nanosecondsToSeconds},

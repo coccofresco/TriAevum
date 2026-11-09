@@ -126,6 +126,19 @@ struct NativeA32ProcessTimingStats {
     std::array<uint64_t, 256> SvcNanosecondsByImmediate{};
     uint64_t FallbackCalls = 0;
     uint64_t FallbackNanoseconds = 0;
+    // F07 / PERF-CLOCK (profile runs): product guest-patch exit requests,
+    // dispatch per guest thread (slot 0 primary, last slot = overflow), and
+    // the guest clock phase (AdvanceGuestClockTo) counters.
+    uint64_t PatchExitRequests = 0;
+    std::array<uint64_t, 16> DispatchCallsByThread{};
+    std::array<uint64_t, 16> DispatchNanosecondsByThread{};
+    uint64_t ClockPhases = 0;
+    uint64_t ClockDispatchCalls = 0;
+    uint64_t ClockDispatchNanoseconds = 0;
+    uint64_t ClockIndirectCalls = 0;
+    uint64_t ClockWholeAotCalls = 0;
+    uint64_t ClockBlockLimitExits = 0;
+    uint64_t ClockPatchExitRequests = 0;
 };
 
 class NativeA32Process {
@@ -191,6 +204,8 @@ class NativeA32Process {
     // replace guest functions. The window setup clears it for other titles.
     void SetManualCompiledFunctionsEnabled(bool enabled) noexcept;
     NativeA32ProcessTimingStats TimingStats() const noexcept;
+    void BeginClockPhase() noexcept;
+    void EndClockPhase() noexcept;
     uint64_t StateFingerprint() const;
     nlohmann::json CaptureState() const;
     bool RestoreState(const nlohmann::json& state,
@@ -265,6 +280,12 @@ class NativeA32Process {
     PendingFallback mPendingFallback;
     oot3d::recomp::a32::BlockEntryCallback mBlockEntryCallback = nullptr;
     void* mBlockEntryUser = nullptr;
+    bool mClockPhase = false;
+    uint64_t mClockStartIndirectCalls = 0;
+    uint64_t mClockStartWholeAotCalls = 0;
+    uint64_t mClockStartBlockLimitExits = 0;
+    uint64_t mClockStartPatchExitRequests = 0;
+    uint64_t mPatchExitRequestsAtReset = 0;
     std::vector<uint32_t> mBlockEntryFilterPcs;
     oot3d::recomp::a32::NativeFunctionCallback mNativeFunctionCallback =
         nullptr;

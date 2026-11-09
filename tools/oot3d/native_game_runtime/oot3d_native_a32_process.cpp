@@ -49,6 +49,8 @@ struct ProductPatchExitContext {
     std::optional<uint32_t> Resumed;
 };
 
+uint64_t gProductPatchExitRequests = 0U;
+
 [[noreturn]] void ExitCompiledModuleAt(
     uint32_t pc, const oot3d::recomp::a32::GuestState& state) {
 #if defined(OOT3D_NATIVE_DIRECT_AOT_PLUGIN)
@@ -75,6 +77,7 @@ void ProductPatchExitBlockEntry(
         if (context.Resumed == pc) {
             context.Resumed.reset();
         } else if (CompiledModuleExecuting()) {
+            ++gProductPatchExitRequests;
             ExitCompiledModuleAt(pc, state);
         }
     }
@@ -755,9 +758,20 @@ NativeA32ProcessRunResult NativeA32Process::Run(
         cpuDispatch.Stop();
         mFaultTrail.Record(dispatchFrom, exit.pc, static_cast<uint8_t>(exit.kind));
         if (mTimingEnabled) {
-            ++mTimingStats.DispatchCalls;
-            mTimingStats.DispatchNanoseconds +=
+            const uint64_t dispatchNanoseconds =
                 ElapsedNanoseconds(dispatchStart);
+            ++mTimingStats.DispatchCalls;
+            mTimingStats.DispatchNanoseconds += dispatchNanoseconds;
+            const size_t threadSlot = std::min<size_t>(
+                mCurrentThreadId,
+                mTimingStats.DispatchNanosecondsByThread.size() - 1U);
+            ++mTimingStats.DispatchCallsByThread[threadSlot];
+            mTimingStats.DispatchNanosecondsByThread[threadSlot] +=
+                dispatchNanoseconds;
+            if (mClockPhase) {
+                ++mTimingStats.ClockDispatchCalls;
+                mTimingStats.ClockDispatchNanoseconds += dispatchNanoseconds;
+            }
         }
 
         if (mPendingFallback.Active) {
@@ -1070,6 +1084,9 @@ void NativeA32Process::SetNativeBlockCallback(
 void NativeA32Process::SetTimingEnabled(bool enabled) noexcept {
     mTimingEnabled = enabled;
     mTimingStats = {};
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+    mPatchExitRequestsAtReset = gProductPatchExitRequests;
+#endif
 }
 
 void NativeA32Process::SetManualCompiledFunctionsEnabled(bool enabled) noexcept {
@@ -1077,7 +1094,38 @@ void NativeA32Process::SetManualCompiledFunctionsEnabled(bool enabled) noexcept 
 }
 
 NativeA32ProcessTimingStats NativeA32Process::TimingStats() const noexcept {
-    return mTimingStats;
+    auto stats = mTimingStats;
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+    stats.PatchExitRequests = gProductPatchExitRequests - mPatchExitRequestsAtReset;
+#endif
+    return stats;
+}
+
+// PERF-CLOCK: the guest clock phase (AdvanceGuestClockTo) as a delta of the
+// dispatch, whole-AOT and patch-exit counters. Profile runs only.
+void NativeA32Process::BeginClockPhase() noexcept {
+    if (!mTimingEnabled) return;
+    mClockPhase = true;
+    const auto compiled = GetOot3dCompiledFunctionStats();
+    mClockStartIndirectCalls = compiled.WholeAotIndirectCalls;
+    mClockStartWholeAotCalls = compiled.WholeAotCalls;
+    mClockStartBlockLimitExits = compiled.WholeAotBlockLimitExits;
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+    mClockStartPatchExitRequests = gProductPatchExitRequests;
+#endif
+}
+
+void NativeA32Process::EndClockPhase() noexcept {
+    if (!mClockPhase) return;
+    mClockPhase = false;
+    const auto compiled = GetOot3dCompiledFunctionStats();
+    ++mTimingStats.ClockPhases;
+    mTimingStats.ClockIndirectCalls += compiled.WholeAotIndirectCalls - mClockStartIndirectCalls;
+    mTimingStats.ClockWholeAotCalls += compiled.WholeAotCalls - mClockStartWholeAotCalls;
+    mTimingStats.ClockBlockLimitExits += compiled.WholeAotBlockLimitExits - mClockStartBlockLimitExits;
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+    mTimingStats.ClockPatchExitRequests += gProductPatchExitRequests - mClockStartPatchExitRequests;
+#endif
 }
 
 uint64_t NativeA32Process::StateFingerprint() const {
@@ -1303,6 +1351,9 @@ bool NativeA32Process::RestoreState(const nlohmann::json& state,
         mSecondaryThreads = std::move(secondaryThreads);
         mPendingFallback = std::move(pendingFallback);
         mTimingStats = {};
+#if defined(OOT3D_WHOLE_AOT_PRODUCT_MODE)
+    mPatchExitRequestsAtReset = gProductPatchExitRequests;
+#endif
         return true;
     } catch (const std::exception& exception) {
         if (error != nullptr) {
