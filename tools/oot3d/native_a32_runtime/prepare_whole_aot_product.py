@@ -43,6 +43,7 @@ def product_cache_key(manifest_path: Path) -> str:
         ROOT / "generate_whole_aot.py",
         ROOT / "whole_aot_program.py",
         ROOT / "whole_aot_cpp.py",
+        ROOT / "whole_aot_thumb.py",
         ROOT / "whole_aot_optimization_ir.py",
         ROOT / "oot3d_aot_architectural_state.h",
         ROOT / "upstream/src/oot3d_pack/a32_cpp_aot.py",

@@ -3248,11 +3248,14 @@ def generate(
     program_sha256 = _sha256(program_bytes)
     selection_sha256 = _sha256(selection_bytes)
     code_sha256 = _sha256(code)
-    generator_sha256 = _sha256(Path(__file__).read_bytes())
+    # The Thumb decoder module is part of the generator: it decides the lowered
+    # C++ of every Thumb block.
+    generator_bytes = Path(__file__).read_bytes() + Path(__file__).with_name("whole_aot_thumb.py").read_bytes()
+    generator_sha256 = _sha256(generator_bytes)
     memory_contract = ""
     if memory_entries:
         generator_sha256 = _sha256(
-            Path(__file__).read_bytes() + Path(__file__).with_name("whole_aot_memory_regions.py").read_bytes())
+            generator_bytes + Path(__file__).with_name("whole_aot_memory_regions.py").read_bytes())
         memory_contract = _sha256(
             (Path(__file__).parents[1] / "native_game_runtime/oot3d_native_a32_memory_region.h").read_bytes())
     manifest_path = output / MANIFEST_NAME

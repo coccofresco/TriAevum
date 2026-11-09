@@ -9,3 +9,4 @@ entry,classification,guard_word,meaning
 0x0014C218,unreferenced_code,0xE12FFF1E,"duplicate bx lr after the svc 0x3C stub at 0x14C210; no static reference"
 0x005B39B0,unreferenced_code,0xE92D4010,"A32 function (push {r4, lr}; reads the plate_up_anim string by ADR) between two strings; no static edge or pointer names it"
 0x005FEBBC,unreferenced_code,0xE59F00A4,"A32 function (ldr r0, [pc]; push {r4-r8, lr}; blx 0x303484 Thumb) after a literal pool; no static edge or pointer names it"
+0x00112D44,unreferenced_code,0xE28F0000,"A32 stub (adr r0, 'data:' string at 0x112D4C; b 0x13C20C) before the inline string; no static edge or pointer names it (the code-shape guard refuses to call it data)"

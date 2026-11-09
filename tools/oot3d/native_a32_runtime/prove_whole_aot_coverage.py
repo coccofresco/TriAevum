@@ -31,8 +31,9 @@ COMPLETENESS: every byte of the executable image [base, base + size) is
       data_island  - a run inside a non-code island (bytes between translated
                      instructions) that holds such an address elsewhere.
   fill/string/padding/addressed/data_island never apply to a code-shaped
-  run (a function prologue, an A32 BX lr, or straight-line Thumb ending in a
-  return): such a run stays residual unless a guarded title data fact
+  run (a function prologue, an A32 BX lr, AL-condition A32 words ending in
+  an unconditional terminator, or straight-line Thumb ending in a return or
+  a branch): such a run stays residual unless a guarded title data fact
   covers it.
   Anything else is RESIDUAL and fails the proof (exit 1).
 
@@ -136,11 +137,57 @@ def _a32_adr_target(pc: int, raw: int) -> int | None:
     return (pc + 8 + immediate if opcode == 4 else pc + 8 - immediate) & 0xFFFFFFFF
 
 
+_A32_SHAPE_WINDOW = 4  # AL-condition A32 words ending in a terminator
+_A32_SHAPE_STRAIGHT = 6  # AL-condition A32 words in a row
+_THUMB_SHAPE_MINIMUM = 3  # decoded Thumb instructions before a plain B
+
+
+def _a32_terminator(word: int) -> bool:
+    """Unconditional A32 control transfer that ends straight-line code: B,
+    BX/BLX reg, POP/LDM sp! with pc, LDR pc, [sp], #4, MOV pc, lr."""
+    return ((word & 0xFF000000) == 0xEA000000
+            or (word & 0xFFFFFFD0) == 0xE12FFF10
+            or (word & 0xFFFF8000) == 0xE8BD8000
+            or word in (0xE49DF004, 0xE1A0F00E))
+
+
+def _thumb_shaped_from(code: bytes, offset: int, end: int) -> bool:
+    # A plain B ends the straight line only after instructions a compiler
+    # emits: a 0x0000 halfword (MOVS r0, r0) marks a byte table instead.
+    decoded = 0
+    zero_halfword = False
+    while offset + 2 <= end:
+        try:
+            item = thumb_decoder.decode(code, 0, offset)
+        except thumb_decoder.ThumbDecodeError:
+            return False
+        if offset + item.size > end:
+            return False
+        if item.kind in ("bx", "pop_pc"):
+            return True
+        if item.kind == "b":
+            return decoded >= _THUMB_SHAPE_MINIMUM and not zero_halfword
+        if item.kind in ("udf", "blx_reg"):
+            return False
+        zero_halfword |= code[offset] == 0 and code[offset + 1] == 0
+        decoded += 1  # bcc / bl / blx_imm continue the straight line
+        offset += item.size
+    return False
+
+
 def _code_shaped(code: bytes, start: int, end: int) -> bool:
-    """A run that looks like code is never data: it holds a function
-    prologue (Thumb PUSH {.., lr} or A32 PUSH {.., lr}) or an A32 BX lr at
-    natural alignment, or it decodes from its start as straight-line Thumb
-    code ending in a return (BX lr / POP {.., pc}) inside the run."""
+    """A run that looks like code is never data. It is code-shaped when it
+    holds a function prologue (Thumb PUSH {.., lr} or A32 PUSH {.., lr}) or
+    an A32 BX lr at natural alignment; or a window of AL-condition A32 words
+    ending in an unconditional A32 terminator (B, BX reg, POP {.., pc},
+    LDR pc, [sp], #4, MOV pc, lr), which is the tail of a function whose
+    prologue lies in another run; or six AL-condition A32 words in a row; or
+    one AL word that only code holds (B/BL with a target inside the image,
+    BX reg, the NOP hint, POP/VPOP, LDR rX, [pc, #imm], arithmetic
+    with an immediate operand); or when it decodes from its start as
+    straight-line Thumb code (conditional branches and calls continue it)
+    ending inside the run in a return (BX / POP {.., pc}) or, after a few
+    instructions, in an unconditional B."""
     for offset in range(start + (start & 1), end - 1, 2):
         if code[offset + 1] == 0xB5:
             return True
@@ -148,18 +195,28 @@ def _code_shaped(code: bytes, start: int, end: int) -> bool:
             word = int.from_bytes(code[offset:offset + 4], "little")
             if (word & 0xFFFF4000) == 0xE92D4000 or word == 0xE12FFF1E:
                 return True
-    offset = start + (start & 1)
-    while offset + 2 <= end:
-        try:
-            item = thumb_decoder.decode(code, 0, offset)
-        except thumb_decoder.ThumbDecodeError:
-            return False
-        if item.kind in ("bx", "pop_pc") and offset + item.size <= end:
+    streak = 0
+    for offset in range((start + 3) & ~3, end - 3, 4):
+        word = int.from_bytes(code[offset:offset + 4], "little")
+        streak = streak + 1 if (word >> 28) == 0xE else 0
+        if streak >= _A32_SHAPE_WINDOW and _a32_terminator(word):
             return True
-        if item.kind in thumb_decoder.TERMINAL_KINDS:
-            return False
-        offset += item.size
-    return False
+        if streak >= _A32_SHAPE_STRAIGHT:
+            return True
+        if ((word & 0xFFFFFFF0) == 0xE12FFF10 or word == 0xE320F000
+                or (word & 0xFFFF0000) in (0xE8BD0000, 0xECBD0000)
+                or (word & 0xFF7F0000) == 0xE51F0000
+                or (word & 0xFF000000) == 0xE2000000):
+            # AL BX reg, the ARMv6K NOP hint, POP/VPOP, LDR rX, [pc, #imm],
+            # AL AND/EOR/SUB/RSB/ADD/ADC/SBC/RSC with an immediate operand
+            # (0xE3 is left out: reciprocal tables hold 0xE38E38E3).
+            return True
+        if (word & 0xFE000000) == 0xEA000000:
+            # An AL B/BL whose target lies inside the image.
+            delta = ((word & 0xFFFFFF) ^ 0x800000) - 0x800000
+            if 0 <= offset + 8 + 4 * delta < len(code):
+                return True
+    return _thumb_shaped_from(code, start + (start & 1), end)
 
 
 def _run_class(code: bytes, start: int, end: int) -> str | None:

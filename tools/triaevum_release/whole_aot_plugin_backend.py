@@ -115,7 +115,7 @@ def _run(arguments: Sequence[str], cwd: Path, label: str) -> None:
     )
 
 
-def _load_generator() -> tuple[Any, Path, Path]:
+def _load_generator() -> tuple[Any, Path, Path, Path]:
     if str(A32_ROOT) not in sys.path:
         sys.path.insert(0, str(A32_ROOT))
     try:
@@ -129,7 +129,10 @@ def _load_generator() -> tuple[Any, Path, Path]:
         A32_ROOT / "whole_aot_optimization_ir.py",
         "whole-AOT optimization model",
     )
-    return whole_aot_cpp, generator, optimizer
+    # The generator lowers Thumb code through its own decoder module; a change
+    # there changes the generated C++, so it is a generation input.
+    thumb = _regular_file(A32_ROOT / "whole_aot_thumb.py", "whole-AOT Thumb decoder")
+    return whole_aot_cpp, generator, optimizer, thumb
 
 
 def _validate_cached_plugin(
@@ -201,7 +204,7 @@ def build_whole_aot_plugin(
         RUNTIME_ROOT / "triaevum_title_whole_aot_plugin.cpp",
         "whole-AOT plugin wrapper",
     )
-    generator_module, generator, optimizer = _load_generator()
+    generator_module, generator, optimizer, thumb = _load_generator()
 
     input_hashes = {
         "program": sha256_file(program),
@@ -209,6 +212,7 @@ def build_whole_aot_plugin(
         "code": sha256_file(code),
         "generator": sha256_file(generator),
         "optimizer": sha256_file(optimizer),
+        "thumb_decoder": sha256_file(thumb),
     }
     generation_key = _identity(
         tuple(input_hashes.items())

@@ -93,6 +93,7 @@ def required_data(
         "generate_aot.py",
         "whole_aot_program.py",
         "whole_aot_cpp.py",
+        "whole_aot_thumb.py",
         "whole_aot_optimization_ir.py",
         "runtime_discovered_entries.csv",
         "whole_aot_product_manifest.json",

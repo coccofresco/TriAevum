@@ -29,6 +29,7 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                 a32 / "oot3d_native_a32_vfp_ops.h",
                 a32 / "whole_aot_cpp.py",
                 a32 / "whole_aot_optimization_ir.py",
+                a32 / "whole_aot_thumb.py",
             ):
                 path.write_text(path.name, encoding="utf-8")
 
@@ -88,6 +89,7 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                         SimpleNamespace(generate=generate),
                         a32 / "whole_aot_cpp.py",
                         a32 / "whole_aot_optimization_ir.py",
+                        a32 / "whole_aot_thumb.py",
                     ),
                 ),
                 patch.object(
@@ -171,13 +173,21 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                 with self.assertRaisesRegex(backend.WholeAotPluginError, "profile data"):
                     backend.build_whole_aot_plugin(**missing)
 
+                # The Thumb decoder decides the lowered C++ of Thumb blocks: a
+                # change there must move the generation key (new generated dir).
+                (a32 / "whole_aot_thumb.py").write_bytes(b"changed thumb decoder")
+                rethumbed = backend.build_whole_aot_plugin(**arguments)
+                self.assertNotEqual(rethumbed["generated_directory"], recovered["generated_directory"])
+                self.assertNotEqual(rethumbed["cache_key"], recovered["cache_key"])
+
             self.assertEqual(built["status"], "built")
             self.assertEqual(built["backend"], "generated_cpp_whole_aot_plugin_v2")
             self.assertEqual(built["functions"], 2)
             self.assertEqual(reused["status"], "reused")
             self.assertEqual(reused["plugin_sha256"], built["plugin_sha256"])
-            # Four earlier links plus the two profiled builds (wrapper + link each).
-            self.assertEqual(len(commands), 12)
+            # Four earlier links, the two profiled builds and the Thumb-decoder
+            # rebuild (wrapper + link each).
+            self.assertEqual(len(commands), 14)
             self.assertNotEqual(relinked["cache_key"], built["cache_key"])
             self.assertTrue(Path(str(reused["plugin"])).is_file())
 
@@ -196,6 +206,7 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                 a32 / "oot3d_native_a32_vfp_ops.h",
                 a32 / "whole_aot_cpp.py",
                 a32 / "whole_aot_optimization_ir.py",
+                a32 / "whole_aot_thumb.py",
             ):
                 path.write_text(path.name, encoding="utf-8")
             program, selection, code = root / "program.json", root / "selection.json", root / "code.bin"
@@ -224,7 +235,8 @@ class WholeAotPluginBackendTests(unittest.TestCase):
                 patch.object(backend, "A32_ROOT", a32),
                 patch.object(backend, "RUNTIME_ROOT", runtime),
                 patch.object(backend, "_load_generator", return_value=(
-                    SimpleNamespace(generate=generate), a32 / "whole_aot_cpp.py", a32 / "whole_aot_optimization_ir.py")),
+                    SimpleNamespace(generate=generate), a32 / "whole_aot_cpp.py", a32 / "whole_aot_optimization_ir.py",
+                    a32 / "whole_aot_thumb.py")),
                 patch.object(backend, "build_generated_cpp_archive", return_value={
                     "archive": str(archive), "archive_sha256": backend.sha256_file(archive),
                     "archive_cache_key": "a" * 64, "objects_compiled": 1, "objects_reused": 0}),

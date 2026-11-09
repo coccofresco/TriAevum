@@ -2199,6 +2199,11 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 1125700,
+      "name": "dispatch_entry_00112D44",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 1125716,
       "name": "mm3d_fun_00112D54",
       "reason": "whole-program closed-CFG lowering"
@@ -5546,6 +5551,16 @@
     {
       "entry": 1265664,
       "name": "mm3d_fun_00135000",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1265732,
+      "name": "mm3d_guest_patch_00135044",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 1265736,
+      "name": "mm3d_guest_patch_00135048",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -77324,6 +77339,31 @@
       "reason": "whole-program closed-CFG lowering"
     },
     {
+      "entry": 5850692,
+      "name": "mm3d_guest_patch_00594644",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 5850696,
+      "name": "mm3d_guest_patch_00594648",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 5852376,
+      "name": "mm3d_guest_patch_00594CD8",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 5852568,
+      "name": "mm3d_guest_patch_00594D98",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 5852572,
+      "name": "mm3d_guest_patch_00594D9C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
       "entry": 5853696,
       "name": "mm3d_fun_00595200",
       "reason": "whole-program closed-CFG lowering"
@@ -77456,6 +77496,16 @@
     {
       "entry": 5863196,
       "name": "mm3d_fun_0059771C",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 5863284,
+      "name": "mm3d_guest_patch_00597774",
+      "reason": "whole-program closed-CFG lowering"
+    },
+    {
+      "entry": 5863288,
+      "name": "mm3d_guest_patch_00597778",
       "reason": "whole-program closed-CFG lowering"
     },
     {
@@ -94707,6 +94757,27 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
+      "entry": 1265664,
+      "name": "mm3d_fun_00135000",
+      "dispatch_entry": 1265732,
+      "selected_owner": 1265732,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1265732,
+      "name": "mm3d_guest_patch_00135044",
+      "dispatch_entry": 1265808,
+      "selected_owner": 1265664,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 1265736,
+      "name": "mm3d_guest_patch_00135048",
+      "dispatch_entry": 1265808,
+      "selected_owner": 1265664,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
       "entry": 1272308,
       "name": "mm3d_fun_001369F4",
       "dispatch_entry": 1272424,
@@ -104094,6 +104165,13 @@
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {
+      "entry": 5850480,
+      "name": "mm3d_fun_00594570",
+      "dispatch_entry": 5850696,
+      "selected_owner": 5850696,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
       "entry": 5850608,
       "name": "mm3d_guest_patch_005945F0",
       "dispatch_entry": 5850652,
@@ -104104,6 +104182,27 @@
       "entry": 5850612,
       "name": "mm3d_guest_patch_005945F4",
       "dispatch_entry": 5850652,
+      "selected_owner": 5850480,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 5850692,
+      "name": "mm3d_guest_patch_00594644",
+      "dispatch_entry": 5850696,
+      "selected_owner": 5850696,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 5850696,
+      "name": "mm3d_guest_patch_00594648",
+      "dispatch_entry": 5850704,
+      "selected_owner": 5850480,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 5852376,
+      "name": "mm3d_guest_patch_00594CD8",
+      "dispatch_entry": 5852384,
       "selected_owner": 5850480,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
@@ -104196,6 +104295,20 @@
       "name": "mm3d_guest_patch_00597480",
       "dispatch_entry": 5862704,
       "selected_owner": 5861916,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 5863284,
+      "name": "mm3d_guest_patch_00597774",
+      "dispatch_entry": 5863292,
+      "selected_owner": 5863196,
+      "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
+    },
+    {
+      "entry": 5863288,
+      "name": "mm3d_guest_patch_00597778",
+      "dispatch_entry": 5863292,
+      "selected_owner": 5863196,
       "reason": "shared resume alias uses one canonical dispatch owner; the callable body remains selected"
     },
     {

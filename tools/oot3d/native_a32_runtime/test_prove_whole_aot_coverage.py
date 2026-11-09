@@ -120,6 +120,42 @@ class DataClassTests(unittest.TestCase):
         result = prove(program, selection, code, len(code))
         self.assertEqual(result["residual_bytes"], 8)
 
+    def _residual(self, tail: bytes) -> list[str]:
+        program, selection, code = _data_program(tail)
+        return prove(program, selection, code, len(code))["residual_runs"]
+
+    def test_negative_a32_function_tail_is_never_data(self) -> None:
+        # ADR names 0x10, but the run is the tail of a real A32 function
+        # whose prologue lies elsewhere: ldr r0, [r6, #0xA8]; nop; vpop
+        # {d8}; ldmia sp!, {r4-r10, lr} - code, so it stays residual.
+        words = (0xE59600A8, 0xE320F000, 0xECBD8B04, 0xE8BD47F0)
+        tail = b"".join(word.to_bytes(4, "little") for word in words)
+        self.assertEqual(self._residual(tail), ["0x00100008+16"])
+
+    def test_negative_a32_branch_word_is_never_data(self) -> None:
+        # A lone AL BL into the image (bl 0x100000) is code, even addressed.
+        tail = (0xEBFFFFFC).to_bytes(4, "little") + bytes.fromhex("01020304")
+        self.assertIn("0x00100008+8", self._residual(tail))
+
+    def test_negative_a32_straight_line_is_never_data(self) -> None:
+        # Six AL-condition words in a row without a terminator.
+        tail = b"".join((0xE1A00000 | index << 12).to_bytes(4, "little") for index in range(1, 7))
+        self.assertEqual(self._residual(tail), ["0x00100008+24"])
+
+    def test_negative_thumb_branch_line_is_never_data(self) -> None:
+        # ldr r2, [r0]; ldr r1, [r2]; bpl; b: straight-line Thumb ending in B.
+        tail = bytes.fromhex("0268 1168 01d5 09e0".replace(" ", ""))
+        self.assertEqual(self._residual(tail), ["0x00100008+8"])
+
+    def test_reciprocal_table_and_byte_table_stay_data(self) -> None:
+        # 0xE38E38E3 (a reciprocal constant) is not an arithmetic AL word, and
+        # a byte table holding 0x0000 is not Thumb code even when a 0xE4E0
+        # halfword decodes as B: both stay addressed data.
+        reciprocal = b"".join(word.to_bytes(4, "little") for word in (0xF0F0F0F0, 0xE38E38E3, 0xD79435E5))
+        self.assertEqual(self._classes(reciprocal)["addressed"], 12)
+        table = bytes.fromhex("ff000000 00041014 40445054 e0e4f0f4".replace(" ", ""))
+        self.assertEqual(self._classes(table)["addressed"], 16)
+
     def test_guarded_title_data_facts(self) -> None:
         program, selection, code = _data_program(bytes.fromhex("0102030405060708"))
         code = (0xE3A00000).to_bytes(4, "little") + code[4:]
