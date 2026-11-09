@@ -30,6 +30,10 @@ struct Mm3dGuestPatchSite {
     // image.
     std::vector<std::pair<std::uint32_t, std::uint32_t>> Guard;
     std::string Name;
+    // F07 diagnostic only: a second name the env trace prefix may match (the
+    // restoration sites are named by hook file, the trace by action, e.g.
+    // rst.MainScreen_Init). Never used for dispatch or receipts.
+    std::string TraceName;
     // Runs in place of the instruction at Pc, on the guest thread's state
     // and memory, and returns the PC the guest continues at (Pc + 4 to fall
     // through), or nothing to execute the original instruction instead.
@@ -148,6 +152,7 @@ class Mm3dGuestPatches {
     std::function<void(const std::string&)> mTraceSink;
     std::array<std::uint32_t, 16> mTrail{};
     std::size_t mTrailNext = 0;
+    bool TraceMatches(const Entry& entry) const;
     void Trace(const Entry& entry, std::uint32_t thread, std::uint32_t lr, const char* what,
                std::uint32_t next);
     std::uint64_t mReturnViolations = 0;

@@ -192,15 +192,21 @@ void Mm3dGuestPatches::SetTrace(std::string prefix,
     mTraceSink = mTracePrefix.empty() ? nullptr : std::move(sink);
 }
 
+bool Mm3dGuestPatches::TraceMatches(const Entry& entry) const {
+    return entry.Site.Name.rfind(mTracePrefix, 0) == 0 ||
+           (!entry.Site.TraceName.empty() && entry.Site.TraceName.rfind(mTracePrefix, 0) == 0);
+}
+
 void Mm3dGuestPatches::TraceVerify() const {
     if (!mTraceSink) return;
     for (const auto& entry : mSites) {
-        if (entry.Site.Name.rfind(mTracePrefix, 0) != 0) continue;
+        if (!TraceMatches(entry)) continue;
         char line[256];
         std::snprintf(line, sizeof line,
-                      "MM3D guest patch trace: verify site=%s pc=0x%08X enabled=%d "
+                      "MM3D guest patch trace: verify site=%s%s%s pc=0x%08X enabled=%d "
                       "mismatch=0x%08X missing_block=%d",
-                      entry.Site.Name.c_str(), entry.Site.Pc, entry.Stats.Enabled ? 1 : 0,
+                      entry.Site.Name.c_str(), entry.Site.TraceName.empty() ? "" : " action=",
+                      entry.Site.TraceName.c_str(), entry.Site.Pc, entry.Stats.Enabled ? 1 : 0,
                       entry.Stats.MismatchAddress.value_or(0U), entry.Stats.MissingBlock ? 1 : 0);
         mTraceSink(line);
     }
@@ -208,12 +214,13 @@ void Mm3dGuestPatches::TraceVerify() const {
 
 void Mm3dGuestPatches::Trace(const Entry& entry, std::uint32_t thread, std::uint32_t lr,
                              const char* what, std::uint32_t next) {
-    if (!mTraceSink || entry.Site.Name.rfind(mTracePrefix, 0) != 0) return;
+    if (!mTraceSink || !TraceMatches(entry)) return;
     char line[640];
     int n = std::snprintf(line, sizeof line,
-                          "MM3D guest patch trace: %s site=%s pc=0x%08X thread=0x%08X lr=0x%08X "
+                          "MM3D guest patch trace: %s site=%s%s%s pc=0x%08X thread=0x%08X lr=0x%08X "
                           "next=0x%08X replacements=%llu declined=%llu pending_skips=%zu trail=",
-                          what, entry.Site.Name.c_str(), entry.Site.Pc, thread, lr, next,
+                          what, entry.Site.Name.c_str(), entry.Site.TraceName.empty() ? "" : " action=",
+                          entry.Site.TraceName.c_str(), entry.Site.Pc, thread, lr, next,
                           static_cast<unsigned long long>(entry.Stats.Replacements),
                           static_cast<unsigned long long>(entry.Stats.Declined),
                           entry.SkipThreads.size());

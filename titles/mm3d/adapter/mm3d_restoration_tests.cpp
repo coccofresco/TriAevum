@@ -11,6 +11,7 @@
 #include <iostream>
 #include <map>
 #include <string_view>
+#include <vector>
 #include <nlohmann/json.hpp>
 
 namespace {
@@ -231,6 +232,26 @@ void TestReadMessageEdits() {
 
 } // namespace
 
+// F07 diagnostic: the env trace prefix names restoration sites by action
+// (rst.MainScreen_...), as the real Register builds them; the dispatch name
+// stays the hook file. A prefix that names no action reports nothing.
+void TestTraceNamesRealRegistration() {
+    WordMemory memory;
+    for(const auto& site:SourceSites)for(unsigned i=0;i<site.guard_count;++i)memory.Words[site.guards[i].first]=site.guards[i].second;
+    std::size_t mainScreen=0;for(const auto& site:SourceSites)if(site.action.starts_with("MainScreen_"))++mainScreen;
+    Require(mainScreen>0, "no MainScreen_ restoration site");
+    const auto lines=[&](const std::string& prefix){
+        Mm3dGuestCalls calls;Mm3dRestorationPort port(calls);Mm3dGuestPatches patches;calls.Install(patches);port.Register(patches);
+        std::vector<std::string> out;patches.SetTrace(prefix,[&](const std::string& l){out.push_back(l);});
+        (void)patches.Verify(memory);patches.TraceVerify();return out;
+    };
+    const auto traced=lines("rst.MainScreen_");
+    Require(traced.size()==mainScreen, "the trace prefix rst.MainScreen_ did not match every MainScreen_ restoration site");
+    for(const auto& l:traced)Require(l.find("site=rst.hooks/")!=std::string::npos&&l.find(" action=rst.MainScreen_")!=std::string::npos&&l.find("enabled=1")!=std::string::npos,
+        "a traced restoration site lacks its hook name, action or Verify outcome");
+    Require(lines("rst.NoSuchAction").empty(), "a prefix naming no action reported a site");
+}
+
 int main(int argc,char** argv) {
     try {
     TestPadState();
@@ -238,6 +259,7 @@ int main(int argc,char** argv) {
     TestItemAssign();
     TestSites();
     TestCalc();
+    TestTraceNamesRealRegistration();
     TestReadMessageEdits();
     RestorationPortTests::All(argc>1?argv[1]:nullptr);
     if(argc>2)RestorationPortTests::PreparedMessages(argv[2]);

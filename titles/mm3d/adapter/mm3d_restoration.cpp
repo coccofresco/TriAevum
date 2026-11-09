@@ -107,7 +107,7 @@ std::vector<u32> Mm3dRestorationPort::RegistryBoundaries() {
 void Mm3dRestorationPort::Register(Mm3dGuestPatches& patches) {
     patches.AddTargets({SourceTargets.begin(),SourceTargets.end()});
     for(const auto& descriptor:SourceSites) {
-        Mm3dGuestPatchSite site;site.Pc=descriptor.pc;site.Name="rst."+std::string(descriptor.hook);
+        Mm3dGuestPatchSite site;site.Pc=descriptor.pc;site.Name="rst."+std::string(descriptor.hook);site.TraceName="rst."+std::string(descriptor.action);
         site.Guard.assign(descriptor.guards.begin(),descriptor.guards.begin()+descriptor.guard_count);
         site.Handler=[this,descriptor](a32::GuestState& state,a32::MemoryBus& memory)->std::optional<u32> {
             if(descriptor.kind==SiteKind::Patch)return Substitute(descriptor.replacement,descriptor.pc,state,memory);
