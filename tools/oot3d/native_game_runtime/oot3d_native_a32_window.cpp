@@ -161,6 +161,26 @@ void NativeA32WindowSession::Run() {
              Oot3dNativeGame::NativeA32ProcessRunKind::Terminated) {
     if (!RunFrame()) break;
   }
+  // Closed while the guest still waits for the startup preparation: the parts
+  // no worker has started are abandoned, so the exit (which joins the
+  // workers) waits only for the parts in progress, not minutes for the rest.
+  // What finished still reaches the persisted caches.
+  if (preparationScreenStorage &&
+      preparationScreenStorage->CurrentPhase() ==
+          Oot3dNativeGame::NativePreparationScreen::Phase::Programs &&
+      programPreparation != nullptr &&
+      !programPreparation->PreparationStatus().ProgramsReady) {
+    const auto status = programPreparation->PreparationStatus();
+    std::fprintf(stderr, "TRIAEVUM_PREPARATION_CANCELLED prepared=%zu parts=%zu\n",
+                 status.PreparedParts, status.Parts);
+    AbandonBackgroundWorkForDemo();
+  }
+  if (windowResponsiveness)
+    std::fprintf(stderr,
+                 "TRIAEVUM_WINDOW_RESPONSIVENESS phase=session longest_unpumped_ms=%.0f pumps=%llu wait_pumps=%llu\n",
+                 windowResponsiveness->LongestGapSeconds() * 1000.0,
+                 static_cast<unsigned long long>(windowResponsiveness->Pumps()),
+                 static_cast<unsigned long long>(renderStream.Waits().WaitPumps));
   Finish();
 }
 

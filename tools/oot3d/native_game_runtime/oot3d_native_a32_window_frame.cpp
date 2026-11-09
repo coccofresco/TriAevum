@@ -208,7 +208,10 @@ bool NativeA32WindowSession::RunFrame() {
     renderStream.WaitForFramesInFlight(0U);
     framesInFlightWaitSeconds += SecondsSince(inFlightWaitStart);
   }
-  if (!PrepareNextWindowDemoFrame(hostArgs, window, timing, frameTiming)) {
+  const bool windowFrameReady = PrepareNextWindowDemoFrame(hostArgs, window, timing, frameTiming);
+  // PrepareNextWindowDemoFrame pumped the window's events.
+  windowResponsiveness->Pumped(std::chrono::steady_clock::now());
+  if (!windowFrameReady) {
     return true;
   }
   // Main-thread work of this presentation, reported to the performance hint
@@ -540,7 +543,23 @@ bool NativeA32WindowSession::RunFrame() {
       gui->EndDraw();
       inputLatencyTrace.DiscardPending(presentationFrameCount);
       renderStream.Submit([&] { window.EndFrame(); }, true);
-      std::this_thread::sleep_for(std::chrono::milliseconds(15));
+      const auto holdNow = std::chrono::steady_clock::now();
+      if (preparationHeartbeat->Due(holdNow)) {
+        std::fprintf(stderr,
+                     "TRIAEVUM_PREPARATION_PROGRESS prepared=%zu parts=%zu upscaler_ready=%u "
+                     "longest_unpumped_ms=%.0f\n",
+                     preparationStatus.PreparedParts, preparationStatus.Parts,
+                     preparationStatus.UpscalerReady ? 1U : 0U,
+                     windowResponsiveness->LongestGapSeconds() * 1000.0);
+      }
+      // The screen redraws at a low rate (about 20 per second) while the
+      // workers prepare; the window's messages are taken meanwhile.
+      if (pumpWindowEvents) {
+        Oot3dNativeGame::PumpedSleepUntil(rendererFrameStart + std::chrono::milliseconds(50),
+                                          std::chrono::milliseconds(10), pumpWindowEvents);
+      } else {
+        std::this_thread::sleep_for(std::chrono::milliseconds(15));
+      }
       renderStream.Submit([&] { realtimePacer.ResetDeadline(); });
       lastPresentationTime = std::chrono::steady_clock::now();
       lastCompletedFrameTime = lastPresentationTime;
@@ -1068,6 +1087,12 @@ bool NativeA32WindowSession::RunFrame() {
                    preparationScreen.Parts(), preparationScreen.StartupSeconds(),
                    preparationScreen.WaitSeconds(),
                    preparationScreen.FirstFrames(), preparationScreen.FirstFramesSeconds());
+      std::fprintf(stderr,
+                   "TRIAEVUM_WINDOW_RESPONSIVENESS phase=preparation longest_unpumped_ms=%.0f pumps=%llu "
+                   "wait_pumps=%llu\n",
+                   windowResponsiveness->LongestGapSeconds() * 1000.0,
+                   static_cast<unsigned long long>(windowResponsiveness->Pumps()),
+                   static_cast<unsigned long long>(renderStream.Waits().WaitPumps));
     }
   }
   lastCompletedFrameTime = completedFrameTime;

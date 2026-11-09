@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -59,6 +60,14 @@ class NativeRenderCommandStream final {
     // EndsFrame command has not run). Inline: returns at once.
     void WaitForFramesInFlight(size_t frames);
 
+    // Keeps the submitting thread's window responsive while it waits for the
+    // worker (Drain, Run, WaitForFramesInFlight, frame-end back pressure):
+    // a wait longer than `interval` calls `pump` every `interval`, on the
+    // thread that called SetWaitPump only (the window's thread), with the
+    // stream unlocked. The pump must not use the stream. Short waits and
+    // waits on other threads are unchanged; null removes the pump.
+    void SetWaitPump(std::function<void()> pump, std::chrono::milliseconds interval);
+
     // True on the worker thread while it executes a command, and on the
     // submitting thread while an inline command runs.
     [[nodiscard]] bool InCommand() const noexcept;
@@ -83,6 +92,8 @@ class NativeRenderCommandStream final {
         // Run's command, executed on the submitter after the drain.
         uint64_t RunCommands = 0;
         uint64_t RunCommandNanoseconds = 0;
+        // Wait pump calls made inside the waits above.
+        uint64_t WaitPumps = 0;
     };
     [[nodiscard]] WaitStats Waits() const noexcept;
 
@@ -98,6 +109,8 @@ class NativeRenderCommandStream final {
     void StopWorker();
     void WorkerLoop();
     void RethrowPendingFailureLocked(std::unique_lock<std::mutex>& lock);
+    template <typename Done>
+    void WaitLocked(std::unique_lock<std::mutex>& lock, Done done);
 
     Mode mMode;
     size_t mMaxFramesInFlight;
@@ -113,6 +126,9 @@ class NativeRenderCommandStream final {
     uint64_t mExecuted = 0U;
     uint64_t mSubmitted = 0U;
     WaitStats mWaits;
+    std::function<void()> mWaitPump;
+    std::chrono::milliseconds mWaitPumpInterval{50};
+    std::thread::id mWaitPumpThread;
 };
 
 } // namespace Oot3dNativeGame

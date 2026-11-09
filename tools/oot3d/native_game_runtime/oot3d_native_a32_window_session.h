@@ -15,6 +15,7 @@
 #include "fast/renderer3ds/pica_program_preparation.h"
 #include "fast/renderer3ds/slow_step_trace.h"
 #include "oot3d_native_preparation_screen.h"
+#include "oot3d_native_window_responsiveness.h"
 #include "oot3d_game_language_panel.h"
 #include "oot3d_graphics_settings_schedule.h"
 #include "oot3d_scene_environment.h"
@@ -477,6 +478,12 @@ private:
   Fast::Renderer3ds::PicaProgramPreparationBackend *programPreparation{};
   bool alwaysAvailablePrograms{};
   std::optional<Oot3dNativeGame::NativePreparationScreen> preparationScreenStorage;
+  // The window's event pump inside long waits (oot3d_native_window_responsiveness.h):
+  // takes the OS's window messages without consuming SDL's events; empty
+  // where the window thread's stalls cannot hang the window (Android).
+  std::function<void()> pumpWindowEvents;
+  std::optional<Oot3dNativeGame::NativeWindowResponsiveness> windowResponsiveness;
+  std::optional<Oot3dNativeGame::NativePreparationHeartbeat> preparationHeartbeat;
   Fast::Extension::TitleRenderBackend *titleRenderBackend{};
   std::shared_ptr<Ship::Gui> gui{};
   std::optional<Oot3dNativeGame::Oot3dNativeA32UiTextureProvider> nativeUiTextureProviderStorage;

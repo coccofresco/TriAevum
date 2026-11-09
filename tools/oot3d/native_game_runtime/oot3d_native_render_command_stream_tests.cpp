@@ -162,6 +162,78 @@ void TestSynchronousCommandsAreDistinguished() {
     }
 }
 
+// A long wait for the worker (a renderer blocked on a cold pipeline) keeps
+// calling the window pump on the waiting thread, with the stream unlocked;
+// short waits, other threads and an unset pump never call it.
+void TestLongWaitsPumpTheWindow() {
+    using namespace std::chrono_literals;
+    NativeRenderCommandStream stream(Mode::Worker, 1U);
+    std::atomic<int> pumps{0};
+    std::atomic<bool> wrongThread{false};
+    const auto owner = std::this_thread::get_id();
+    stream.SetWaitPump([&] {
+        if (std::this_thread::get_id() != owner) wrongThread = true;
+        ++pumps;
+    }, 20ms);
+    // Drain behind a 300 ms command.
+    stream.Submit([] { std::this_thread::sleep_for(300ms); });
+    stream.Drain();
+    Require(pumps.load() >= 5, "a long Drain did not pump the window");
+    Require(!wrongThread.load(), "the pump ran on another thread");
+    Require(stream.Waits().WaitPumps == static_cast<uint64_t>(pumps.load()), "wait pumps miscounted");
+    // Frame-end back pressure and WaitForFramesInFlight pump too.
+    pumps = 0;
+    stream.Submit([] { std::this_thread::sleep_for(200ms); }, true);
+    stream.Submit([] {}, true);
+    Require(pumps.load() >= 3, "frame-end back pressure did not pump the window");
+    stream.Submit([] { std::this_thread::sleep_for(200ms); }, true);
+    pumps = 0;
+    stream.WaitForFramesInFlight(0U);
+    Require(pumps.load() >= 3, "WaitForFramesInFlight did not pump the window");
+    // Run waits for the stream, then runs on this thread.
+    stream.Submit([] { std::this_thread::sleep_for(200ms); });
+    pumps = 0;
+    bool ran = false;
+    stream.Run([&] { ran = true; });
+    Require(ran && pumps.load() >= 3, "Run's wait did not pump the window");
+    // A short wait does not pump.
+    stream.Drain();
+    pumps = 0;
+    stream.Submit([] {});
+    stream.Drain();
+    Require(pumps.load() == 0, "a short wait pumped the window");
+    // Another thread's wait does not pump.
+    stream.Submit([] { std::this_thread::sleep_for(150ms); });
+    std::thread other([&] { stream.WaitForFramesInFlight(5U); stream.Drain(); });
+    other.join();
+    Require(pumps.load() == 0 && !wrongThread.load(), "another thread's wait pumped the window");
+    // Without a pump, waits are as before.
+    stream.SetWaitPump(nullptr, 20ms);
+    stream.Submit([] { std::this_thread::sleep_for(100ms); });
+    stream.Drain();
+    Require(pumps.load() == 0, "a removed pump was called");
+}
+
+// The pump may submit nothing, but the worker keeps running and a failure
+// still reaches the waiting thread.
+void TestPumpedWaitStillRethrows() {
+    using namespace std::chrono_literals;
+    NativeRenderCommandStream stream(Mode::Worker, 1U);
+    int pumps = 0;
+    stream.SetWaitPump([&] { ++pumps; }, 10ms);
+    stream.Submit([] {
+        std::this_thread::sleep_for(80ms);
+        throw std::runtime_error("cold pipeline failed");
+    });
+    bool rethrown = false;
+    try {
+        stream.Drain();
+    } catch (const std::runtime_error&) {
+        rethrown = true;
+    }
+    Require(rethrown && pumps >= 2, "a pumped wait lost the worker failure");
+}
+
 } // namespace
 
 int main() {
@@ -172,6 +244,8 @@ int main() {
     TestWorkerFailureIsRethrownOnce();
     TestModeSwitchDrainsAndDestructorRunsPending();
     TestSynchronousCommandsAreDistinguished();
+    TestLongWaitsPumpTheWindow();
+    TestPumpedWaitStillRethrows();
     std::cout << "oot3d_native_render_command_stream_tests: ok\n";
     return 0;
 }

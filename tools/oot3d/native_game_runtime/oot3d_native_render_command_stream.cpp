@@ -52,6 +52,30 @@ bool NativeRenderCommandStream::InSynchronousCommand() const noexcept {
     return tInCommand && tSynchronous;
 }
 
+void NativeRenderCommandStream::SetWaitPump(std::function<void()> pump,
+                                            std::chrono::milliseconds interval) {
+    std::lock_guard lock(mMutex);
+    mWaitPump = std::move(pump);
+    mWaitPumpInterval = interval.count() > 0 ? interval : std::chrono::milliseconds(1);
+    mWaitPumpThread = std::this_thread::get_id();
+}
+
+template <typename Done>
+void NativeRenderCommandStream::WaitLocked(std::unique_lock<std::mutex>& lock, Done done) {
+    if (!mWaitPump || std::this_thread::get_id() != mWaitPumpThread) {
+        mProgress.wait(lock, done);
+        return;
+    }
+    while (!mProgress.wait_for(lock, mWaitPumpInterval, done)) {
+        // The pump may take its time (window messages); the worker goes on.
+        const auto pump = mWaitPump;
+        lock.unlock();
+        pump();
+        lock.lock();
+        ++mWaits.WaitPumps;
+    }
+}
+
 uint64_t NativeRenderCommandStream::ExecutedCommands() const noexcept {
     std::lock_guard lock(mMutex);
     return mExecuted;
@@ -83,7 +107,7 @@ void NativeRenderCommandStream::Enqueue(Command command, bool endsFrame,
     RethrowPendingFailureLocked(lock);
     if (endsFrame) {
         const auto waitStart = std::chrono::steady_clock::now();
-        mProgress.wait(lock, [&] {
+        WaitLocked(lock, [&] {
             return mFailure != nullptr || mFramesQueued < mMaxFramesInFlight;
         });
         ++mWaits.FrameEndSubmits;
@@ -115,7 +139,7 @@ void NativeRenderCommandStream::Drain() {
     if (mMode == Mode::Inline || !mWorker.joinable()) return;
     std::unique_lock lock(mMutex);
     const auto waitStart = std::chrono::steady_clock::now();
-    mProgress.wait(lock, [&] {
+    WaitLocked(lock, [&] {
         return mFailure != nullptr || (mQueue.empty() && !mBusy);
     });
     ++mWaits.Drains;
@@ -127,7 +151,7 @@ void NativeRenderCommandStream::WaitForFramesInFlight(size_t frames) {
     if (mMode == Mode::Inline || !mWorker.joinable()) return;
     std::unique_lock lock(mMutex);
     const auto waitStart = std::chrono::steady_clock::now();
-    mProgress.wait(lock, [&] {
+    WaitLocked(lock, [&] {
         return mFailure != nullptr || mFramesQueued <= frames;
     });
     ++mWaits.FramesInFlightWaits;

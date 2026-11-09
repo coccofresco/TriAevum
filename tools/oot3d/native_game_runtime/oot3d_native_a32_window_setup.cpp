@@ -1457,6 +1457,19 @@ void NativeA32WindowSession::Setup() {
   // and the first frames run within budget, the window shows its progress.
   auto &preparationScreen = preparationScreenStorage.emplace(
       std::chrono::steady_clock::now());
+  // The window stays responsive while this thread waits for the renderer
+  // (a cold preparation keeps it waiting for minutes): every wait of the
+  // render stream longer than 50 ms takes the OS's window messages. SDL
+  // queues the events for the frame's own pump; nothing is consumed here.
+  windowResponsiveness.emplace(std::chrono::steady_clock::now());
+  preparationHeartbeat.emplace(std::chrono::steady_clock::now());
+#if !defined(__ANDROID__) && !defined(__SWITCH__)
+  pumpWindowEvents = [this] {
+    SDL_PumpEvents();
+    windowResponsiveness->Pumped(std::chrono::steady_clock::now());
+  };
+  renderStream.SetWaitPump(pumpWindowEvents, std::chrono::milliseconds(50));
+#endif
   api.SetNativePicaGeometryCacheEnabled(
       !launch.DisableOpenGlPicaGeometryCache);
   // A title whose adapter widens the scene projection to the output aspect

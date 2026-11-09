@@ -1,4 +1,5 @@
 #include "oot3d_native_preparation_screen.h"
+#include "oot3d_native_window_responsiveness.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -59,6 +60,31 @@ int main() {
         slow.ObserveFrame(2000.0, now += milliseconds(2000));
     Require(slow.Done() && slow.FirstFramesSeconds() >= NativePreparationScreen::kFirstFramesLimitSeconds,
             "slow first frames held the screen past the limit");
+
+    // The window's responsiveness: the longest gap between two pumps.
+    Oot3dNativeGame::NativeWindowResponsiveness responsiveness(start);
+    responsiveness.Pumped(start + milliseconds(40));
+    responsiveness.Pumped(start + milliseconds(2040));
+    responsiveness.Pumped(start + milliseconds(2090));
+    Require(responsiveness.Pumps() == 3U && responsiveness.LongestGapSeconds() == 2.0,
+            "longest unpumped gap miscounted");
+
+    // The preparation screen's wait between frames pumps every slice.
+    int pumps = 0;
+    const auto sleepStart = std::chrono::steady_clock::now();
+    Oot3dNativeGame::PumpedSleepUntil(sleepStart + milliseconds(60), milliseconds(10), [&] { ++pumps; });
+    Require(std::chrono::steady_clock::now() - sleepStart >= milliseconds(60) && pumps >= 3 && pumps <= 7,
+            "pumped sleep did not pump every slice");
+    pumps = 0;
+    Oot3dNativeGame::PumpedSleepUntil(sleepStart, milliseconds(10), [&] { ++pumps; });
+    Require(pumps == 0, "a past deadline slept");
+
+    // The heartbeat line every five seconds of waiting.
+    Oot3dNativeGame::NativePreparationHeartbeat heartbeat(start);
+    Require(!heartbeat.Due(start + milliseconds(4999)), "heartbeat early");
+    Require(heartbeat.Due(start + milliseconds(5000)), "heartbeat missing");
+    Require(!heartbeat.Due(start + milliseconds(6000)) && heartbeat.Due(start + milliseconds(10000)),
+            "heartbeat not rate limited");
 
     std::cout << "oot3d_native_preparation_screen_tests: ok\n";
     return 0;
