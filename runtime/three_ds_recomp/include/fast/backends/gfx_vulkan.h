@@ -169,6 +169,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         mFrameReproducibleProgramSelection = reproducible;
     }
     void RegisterTitlePassPrograms(std::span<const Renderer::PassShaderArtifact> programs) override;
+    void SetStartupUberModules(std::vector<Renderer3ds::PicaShaderSourceIdentity> modules) override {
+        mStartupUberModules = std::move(modules);
+    }
     [[nodiscard]] Renderer3ds::PicaPreparationStatus PreparationStatus() const override;
     void SetNativeTopScreenExtendsToOutput(bool extends) noexcept override {
         mNativeTopScreenExtendsToOutput = extends;
@@ -1205,6 +1208,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     NativePicaPreparationMode mNativePicaPreparationMode = NativePicaPreparationMode::Synchronous;
     bool mFrameReproducibleProgramSelection = false;
     bool mNativePicaProgramsPrepared = false;
+    // The title's startup uber modules (SetStartupUberModules); empty: all.
+    std::vector<Renderer3ds::PicaShaderSourceIdentity> mStartupUberModules;
     // Startup preparation progress (PrepareNativePicaPrograms parts).
     std::atomic<size_t> mStartupParts{0};
     std::atomic<size_t> mStartupPreparedParts{0};

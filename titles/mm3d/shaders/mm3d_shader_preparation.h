@@ -19,6 +19,8 @@ inline constexpr std::string_view kMm3dPipelineCacheNamespace = "mm3d";
 // MM3D's draws take the native fragment lighting operand and lit shadow
 // receivers, so its startup preparation covers the whole uber fragment family
 // (Fast::Extension::StartupUberFragmentArtifacts(true, true)), not the legacy
-// subset of a title without them.
+// subset of a title without them. When the title lists its startup uber
+// modules (mm3d_startup_uber_modules.h), only those of the family are
+// prepared at startup; the rest stay lazy.
 inline constexpr bool kMm3dNativeFragmentLighting = true;
 } // namespace Oot3dNativeGame

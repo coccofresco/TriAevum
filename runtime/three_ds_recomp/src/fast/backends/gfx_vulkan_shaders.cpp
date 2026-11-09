@@ -3,6 +3,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
 #include "fast/extension/pica_builtin_fragment_families.h"
+#include "fast/extension/pica_startup_uber_modules.h"
 
 namespace Fast {
 
@@ -465,6 +466,11 @@ GfxRenderingAPIVulkan::NativePicaShaderProgram* GfxRenderingAPIVulkan::ResolveUb
                     entry.Fragment = Renderer3ds::FindPicaFragmentArtifact(
                         Extension::UberFragmentArtifacts(), composed.Source, true);
                     entry.NriSource = Extension::IdentifyPicaAotShaderSource(composed.Source);
+                    // Opt-in session record of the uber modules draws request,
+                    // keyed as their pack entries (a title's startup list).
+                    if (!entry.Fragment.empty())
+                        if (auto* recorder = Extension::PicaUberModuleRecorder::FromEnvironment())
+                            recorder->Record(Renderer3ds::IdentifyPicaShaderSource(composed.Source));
                 }
                 artifact = mUberSupersetArtifacts.emplace(artifactKey, entry).first;
             }

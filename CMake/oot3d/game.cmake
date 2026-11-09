@@ -105,6 +105,13 @@ if(TRIAEVUM_TITLE_MM3D)
         else()
             target_sources(${target} PRIVATE "${_source}")
         endif()
+        # The title's startup uber module list (mm3d_startup_uber_modules.h),
+        # embedded when present; absent: the whole family, as before.
+        if(EXISTS "${_dir}/mm3d_startup_uber_modules.json")
+            triaevum_add_spirv_pack(${target} "${_source}" "${_dir}/mm3d_startup_uber_modules.json")
+            target_compile_definitions(${target} PRIVATE TRIAEVUM_MM3D_STARTUP_UBER_MODULES=1
+                "TRIAEVUM_MM3D_STARTUP_UBER_MODULES_FILE=\"${_dir}/mm3d_startup_uber_modules.json\"")
+        endif()
     endfunction()
     # The offline variant replay (regenerate_shader_corpus --variant-records)
     # judges uber availability against the vertex families the runtime has. The
@@ -136,6 +143,28 @@ if(TRIAEVUM_TITLE_MM3D)
     triaevum_add_mm3d_builtin_shader_packs(mm3d_builtin_shader_packs_absent_tests
         "${CMAKE_CURRENT_BINARY_DIR}/mm3d_shader_pack_none")
     target_compile_definitions(mm3d_builtin_shader_packs_absent_tests PRIVATE EXPECT_PACKS=0)
+    # The startup uber module list: format, selection, recorder; embedded from
+    # a fixture list ("fixture") and from the tree as it is ("tree").
+    set(_mm3d_startup_list_fixture "${CMAKE_CURRENT_BINARY_DIR}/mm3d_startup_uber_fixture")
+    file(WRITE "${_mm3d_startup_list_fixture}/mm3d_startup_uber_modules.json"
+        "{\"schema\":\"triaevum.startup_uber_modules.v1\",\"modules\":[\"0123456789abcdef-fedcba9876543210-1a2b\"]}\n")
+    foreach(_variant fixture tree)
+        add_executable(mm3d_startup_uber_modules_${_variant}_tests EXCLUDE_FROM_ALL
+            titles/mm3d/shaders/mm3d_startup_uber_modules_tests.cpp)
+        triaevum_add_spirv_pack(mm3d_startup_uber_modules_${_variant}_tests
+            runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment_binaries.cpp
+            runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment.spvpack)
+        triaevum_add_spirv_pack(mm3d_startup_uber_modules_${_variant}_tests
+            runtime/three_ds_recomp/src/fast/extension/pica_uber_fragment_binaries.cpp
+            runtime/three_ds_recomp/src/fast/extension/pica_native_lighting_uber.spvpack)
+        target_include_directories(mm3d_startup_uber_modules_${_variant}_tests PRIVATE
+            runtime/three_ds_recomp/include titles/mm3d/shaders)
+        target_link_libraries(mm3d_startup_uber_modules_${_variant}_tests PRIVATE nlohmann_json::nlohmann_json)
+        oot3d_target_defaults(mm3d_startup_uber_modules_${_variant}_tests FOLDER Tests)
+    endforeach()
+    triaevum_add_mm3d_builtin_shader_packs(mm3d_startup_uber_modules_fixture_tests "${_mm3d_startup_list_fixture}")
+    target_compile_definitions(mm3d_startup_uber_modules_fixture_tests PRIVATE EXPECT_STARTUP_LIST=1)
+    triaevum_add_mm3d_builtin_shader_packs(mm3d_startup_uber_modules_tree_tests)
     # The game window's icon per title (TitleSession::WindowIcon).
     add_executable(mm3d_window_icon_tests EXCLUDE_FROM_ALL
         titles/mm3d/adapter/mm3d_window_icon_tests.cpp

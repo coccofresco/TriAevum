@@ -3,6 +3,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
 #include "fast/backends/gfx_startup_preparation_abandon.h"
+#include "fast/extension/pica_startup_uber_modules.h"
 
 namespace Fast {
 
@@ -487,11 +488,17 @@ void GfxRenderingAPIVulkan::PrepareNativePicaPrograms(
     const Renderer3ds::PicaStartupProgramDevice device{mDepthFormat, mNativePicaSampleCount,
                                                        mPbrSeamsAvailable};
     using Item = Renderer3ds::PicaStartupProgramPart;
-    const auto supersets = Extension::StartupUberFragmentArtifacts(
+    const auto family = Extension::StartupUberFragmentArtifacts(
         NativePicaFragmentLightingOperand(), NativePicaFragmentLitShadowReceivers());
+    // The title's startup list (Forge's helper selects the same way); without
+    // one, the whole family the title's lighting admits.
+    const auto supersets = Extension::SelectStartupUberModules(family, mStartupUberModules);
+    if (!mStartupUberModules.empty())
+        std::fprintf(stderr, "TRIAEVUM_STARTUP_UBER_MODULES listed=%zu selected=%zu family=%zu\n",
+                     mStartupUberModules.size(), supersets.size(), family.size());
     std::vector<Item> items = Renderer3ds::PicaStartupProgramParts(
         vertices,
-        UsesAlwaysAvailablePrograms() ? supersets
+        UsesAlwaysAvailablePrograms() ? std::span<const Renderer3ds::PicaFragmentArtifact>(supersets)
                                       : std::span<const Renderer3ds::PicaFragmentArtifact>{},
         Renderer3ds::NativeFragmentArtifacts(), device);
     const auto samples = device.Samples;

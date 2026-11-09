@@ -2,6 +2,7 @@
 #include "fast/renderer3ds/pica_startup_programs.h"
 #include "fast/renderer3ds/pica_native_fragment_binaries.h"
 #include "fast/extension/pica_uber_fragment_binaries.h"
+#include "fast/extension/pica_startup_uber_modules.h"
 #include "fast/extension/pica_builtin_fragment_families.h"
 #include "headless_device.h"
 #include "fast/extension/pica_pipeline_preparation.h"
@@ -17,6 +18,7 @@
 #if defined(TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS) && TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS
 #include "../../../titles/mm3d/shaders/mm3d_builtin_shader_packs.h"
 #include "../../../titles/mm3d/shaders/mm3d_shader_preparation.h"
+#include "../../../titles/mm3d/shaders/mm3d_startup_uber_modules.h"
 #define TRIAEVUM_PIPELINE_PREPARE_MM3D 1
 #endif
 #include <NRI.h>
@@ -232,6 +234,9 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
         // family, as the runtime installs it before the renderer starts.
         bool titleFamilyKnown = false;
         bool titleFragmentLighting = false;
+        // The title's startup uber modules (empty: the whole family), the
+        // list its session gives the runtime.
+        std::vector<Fast::Extension::PicaUberModuleKey> titleStartupUberModules;
 #if defined(TRIAEVUM_PIPELINE_PREPARE_MM3D)
         if (nameSpace == Oot3dNativeGame::kMm3dPipelineCacheNamespace) {
             if (!Oot3dNativeGame::InstallTitleBuiltInVertexPack(Oot3dNativeGame::Mm3dBuiltInVertexPack()) ||
@@ -241,6 +246,7 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
             titleVertices.insert(titleVertices.begin(), builtIn.begin(), builtIn.end());
             titleFamilyKnown = true;
             titleFragmentLighting = Oot3dNativeGame::kMm3dNativeFragmentLighting;
+            titleStartupUberModules = Oot3dNativeGame::Mm3dStartupUberModules();
         }
 #endif
         if (startupPrograms && !nameSpace.empty() && !titleFamilyKnown && !titlePrograms)
@@ -301,12 +307,21 @@ int TriAevumPipelinePrepareMain(int argc, char** argv) {
         const bool titleFamily = titlePrograms || titleFamilyKnown;
         // A title built without its packs has no family: its runtime prepares
         // no startup programs either.
+        // A known title's family is selected as its runtime selects it
+        // (SelectStartupUberModules over the family its lighting admits).
+        const auto titleSupersets = titleFamilyKnown
+            ? Fast::Extension::SelectStartupUberModules(
+                  Fast::Extension::StartupUberFragmentArtifacts(titleFragmentLighting, titleFragmentLighting),
+                  titleStartupUberModules)
+            : std::vector<Renderer3ds::PicaFragmentArtifact>{};
+        if (titleFamilyKnown && !titleStartupUberModules.empty())
+            std::cerr << "TRIAEVUM_STARTUP_UBER_MODULES listed=" << titleStartupUberModules.size()
+                      << " selected=" << titleSupersets.size() << std::endl;
         if (startupPrograms && device.PipelineLibraries && !(titleFamily && titleVertices.empty()))
             parts = Renderer3ds::PicaStartupProgramParts(
                 titleFamily ? std::span<const Renderer3ds::PicaVertexArtifact>(titleVertices)
                             : Oot3dNativeGame::TitleVertexArtifacts(),
-                titleFamilyKnown ? Fast::Extension::StartupUberFragmentArtifacts(titleFragmentLighting,
-                                                                               titleFragmentLighting)
+                titleFamilyKnown ? std::span<const Renderer3ds::PicaFragmentArtifact>(titleSupersets)
                 : titlePrograms  ? Fast::Extension::UberFragmentArtifacts()
                                  : Fast::Extension::StartupUberFragmentArtifacts(false, false),
                 Renderer3ds::NativeFragmentArtifacts(), startupDevice);

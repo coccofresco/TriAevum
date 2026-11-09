@@ -5,6 +5,7 @@
 #include "triaevum_title_session.h"
 #include "../shaders/mm3d_builtin_shader_packs.h"
 #include "../shaders/mm3d_shader_preparation.h"
+#include "../shaders/mm3d_startup_uber_modules.h"
 
 #include "a32_runtime.h"
 #include "mm3d_guest_calls.h"
@@ -69,6 +70,9 @@ public:
     return true;
   }
   bool NativeFragmentLighting() const override { return kMm3dNativeFragmentLighting; }
+  std::vector<Fast::Renderer3ds::PicaShaderSourceIdentity> StartupUberModules() const override {
+    return Mm3dStartupUberModules();
+  }
   std::string_view CompanionLightName() const override { return "Tatl"; }
   // dekui's settings (Restoration's options and the damage multiplier
   // among them) travel with "state + settings", as TopScreen's do for OoT3D.

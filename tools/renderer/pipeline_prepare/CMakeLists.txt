@@ -77,6 +77,14 @@ if(EXISTS "${_mm3d_shaders}/mm3d_native_vertex.spvpack" AND EXISTS "${_mm3d_shad
     target_compile_definitions(triaevum_nri_pipeline_prepare PRIVATE TRIAEVUM_MM3D_BUILTIN_SHADER_PACKS=1
         "TRIAEVUM_MM3D_VERTEX_PACK=\"${_mm3d_shaders}/mm3d_native_vertex.spvpack\""
         "TRIAEVUM_MM3D_FRAGMENT_PACK=\"${_mm3d_shaders}/mm3d_native_fragment.spvpack\"")
+    # MM3D's startup uber module list, as the runtime embeds it.
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_mm3d_shaders}")
+    if(EXISTS "${_mm3d_shaders}/mm3d_startup_uber_modules.json")
+        triaevum_add_spirv_pack(triaevum_nri_pipeline_prepare "${_mm3d_shaders}/mm3d_builtin_shader_packs.cpp"
+            "${_mm3d_shaders}/mm3d_startup_uber_modules.json")
+        target_compile_definitions(triaevum_nri_pipeline_prepare PRIVATE TRIAEVUM_MM3D_STARTUP_UBER_MODULES=1
+            "TRIAEVUM_MM3D_STARTUP_UBER_MODULES_FILE=\"${_mm3d_shaders}/mm3d_startup_uber_modules.json\"")
+    endif()
 endif()
 add_executable(triaevum_pipeline_preparation_tests tests.cpp)
 target_link_libraries(triaevum_pipeline_preparation_tests PRIVATE triaevum_pipeline_preparation)

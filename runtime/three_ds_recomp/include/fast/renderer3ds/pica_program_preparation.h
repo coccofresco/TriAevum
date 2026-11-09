@@ -1,9 +1,11 @@
 #pragma once
 #include "pica_vertex_artifact.h"
+#include "pica_shader_source_identity.h"
 #include "fast/renderer/pass_shader_artifact.h"
 
 #include <cstddef>
 #include <span>
+#include <vector>
 
 namespace Fast::Renderer3ds {
 // Work a renderer completes before gameplay so that no first use pays for it:
@@ -39,6 +41,11 @@ class PicaProgramPreparationBackend {
     // Pass programs a title derives from its own programs (shadow casters,
     // surface lighting), built with its vertex family at development time.
     virtual void RegisterTitlePassPrograms(std::span<const Renderer::PassShaderArtifact> programs) { (void)programs; }
+    // The title's startup uber modules (fast/extension/pica_startup_uber_modules.h):
+    // PrepareNativePicaPrograms creates only these of the uber family; the
+    // others stay lazy. Empty (the default): the whole family. Set before
+    // PrepareNativePicaPrograms.
+    virtual void SetStartupUberModules(std::vector<PicaShaderSourceIdentity> modules) { (void)modules; }
     // Thread-safe. Progress of the work above; the host keeps the guest waiting
     // (and shows it) until Ready().
     [[nodiscard]] virtual PicaPreparationStatus PreparationStatus() const { return {}; }

@@ -14,6 +14,7 @@
 #include "oot3d_static_shadow_actor_catalog.h"
 #include "triaevum_title_adapter.h"
 #include "fast/WindowIcon.h"
+#include "fast/renderer3ds/pica_shader_source_identity.h"
 #include "fast/extension/grass_types.h"
 #include "gameplay_rumble.h"
 #include "triaevum_title_presentation.h"
@@ -98,6 +99,11 @@ public:
   // The shared renderer's native fragment lighting operand and lit shadow
   // receivers, which this title's shaders need.
   [[nodiscard]] virtual bool NativeFragmentLighting() const { return false; }
+  // The uber fragment modules the startup preparation creates (title data,
+  // fast/extension/pica_startup_uber_modules.h); empty: the whole family.
+  [[nodiscard]] virtual std::vector<Fast::Renderer3ds::PicaShaderSourceIdentity> StartupUberModules() const {
+    return {};
+  }
   // Display name of point group zero, not a separate settings owner.
   [[nodiscard]] virtual std::string_view CompanionLightName() const { return "Navi"; }
   // Title-owned settings not serialized by the shared state+settings owners.

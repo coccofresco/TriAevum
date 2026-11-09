@@ -1451,6 +1451,8 @@ void NativeA32WindowSession::Setup() {
       (launch.PicaParametricTev || alwaysAvailablePrograms)) {
     const auto family = Oot3dNativeGame::NativePicaVertexProgramFamily(
         titleAdapter != Oot3dNativeGame::TitleAdapter::Oot3dEur);
+    // The title's startup uber modules (none listed: the whole family).
+    if (titleSession) programPreparation->SetStartupUberModules(titleSession->StartupUberModules());
     if (!family.empty()) programPreparation->PrepareNativePicaPrograms(family);
   }
   // Initial preparation: from here until the renderer's startup work is ready

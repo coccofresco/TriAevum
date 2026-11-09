@@ -14,6 +14,9 @@ namespace Oot3dNativeGame {
 // Empty when this build has no MM3D packs.
 std::span<const unsigned char> Mm3dBuiltInVertexPack();
 std::span<const unsigned char> Mm3dBuiltInFragmentPack();
+// The startup uber module list (mm3d_startup_uber_modules.json, embedded when
+// it exists at configure time; see mm3d_startup_uber_modules.h). Empty: none.
+std::span<const unsigned char> Mm3dStartupUberModulesData();
 // Both packs are built in and non-empty: MM3D has prepared shaders.
 [[nodiscard]] inline bool Mm3dBuiltInShaderPacksPresent() {
   return !Mm3dBuiltInVertexPack().empty() && !Mm3dBuiltInFragmentPack().empty();
