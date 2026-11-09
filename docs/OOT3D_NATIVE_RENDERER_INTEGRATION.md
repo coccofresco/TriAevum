@@ -2,7 +2,7 @@
 
 ## Objective
 
-Port and own the renderer developed in `I:\oot3d-native-renderer` while
+Port and own the renderer developed in `<local>/oot3d-native-renderer` while
 progressively removing every dependency of `oot3d_native_game` on the legacy
 game runtime, Fast3D compatibility, and OoT N64 data or rendering semantics.
 Reusable ThreeDsRecomp platform and renderer services remain the supported
@@ -17,13 +17,13 @@ a substitute for a verified migration.
 
 - Parent branch: `renderer/oot3d-native-integration`
 - Parent worktree:
-  `I:\oot3dre_work\oot3d-native-renderer-integration`
+  `<oot3d-work>\oot3d-native-renderer-integration`
 - Renderer integration branch:
   `integration/oot3dre-native-game`
 - Renderer source branch: `oot3d-vulkan-renderer`
-- Renderer source repository: `I:\oot3d-native-renderer`
+- Renderer source repository: `<local>/oot3d-native-renderer`
 - Dedicated build tree:
-  `I:\oot3dre_work\build-native-renderer-integration-v2`
+  `<oot3d-work>\build-native-renderer-integration-v2`
 
 The parent starts at project commit `71a99e502`. The renderer import starts at
 `ffa3a1fa`. Commit `5bce42df` updates the Vulkan diagnostics test to the current
@@ -301,21 +301,21 @@ The current source was rebuilt with Clang 22.1.6 and the coherent PICA external
 archive:
 
 ```text
-I:\oot3dre_work\whole_aot_thinlto_shiftfix\
+<oot3d-work>\whole_aot_thinlto_shiftfix\
   oot3d_native_whole_aot_pica_external_coherent_thinlto.lib
 ```
 
 The isolated consumer is:
 
 ```text
-F:\oot3dre_build\native-renderer-llvm\oot3d_native_game.exe
+<oot3d-build>\native-renderer-llvm\oot3d_native_game.exe
 ```
 
 On the same checkpoint, a fixed-delta 300-frame TopScreen run performs exactly
 300 guest updates and 34,775 draws. It records 5.0217 seconds host-loop time
 (59.74 FPS), 2.6368 seconds guest, 1.2436 seconds PICA submit and 0.9150 seconds
 PICA backend, with zero unsupported exits or memory faults. The evidence is
-`F:\oot3dre_build\native-renderer-llvm\profile_fixed_300f.json`.
+`<oot3d-build>\native-renderer-llvm\profile_fixed_300f.json`.
 
 The remaining gap from the historical 78 FPS is primarily a workload change,
 not an AOT regression. A true 60 Hz simulation experiment on
@@ -368,8 +368,8 @@ The build must run inside the Visual Studio 2022 developer shell. The dedicated
 tree uses the already qualified vcpkg checkout through:
 
 ```text
-I:\oot3dre_work\build-native-renderer-integration-v2\vcpkg
-  -> I:\oot3d-native-renderer\.renderer-dev\build\vcpkg
+<oot3d-work>\build-native-renderer-integration-v2\vcpkg
+  -> <local>/oot3d-native-renderer\.renderer-dev\build\vcpkg
 ```
 
 Configure renderer tests with `THREE_DS_RECOMP_BUILD_TESTS=ON`. Running CMake outside the
@@ -380,13 +380,13 @@ The dedicated build currently reuses the qualified gameplay closure:
 
 ```text
 OOT3D_MASS_AOT_GENERATED_DIR =
-  I:\oot3dre_work\mass_cpp_9fd2f56\artifacts
+  <oot3d-work>\mass_cpp_9fd2f56\artifacts
 OOT3D_MASS_AOT_PREBUILT_LIBRARY =
-  I:\oot3dre_work\mass_cpp_9fd2f56\build-native-corpus3\oot3d-a32-mass-aot.lib
+  <oot3d-work>\mass_cpp_9fd2f56\build-native-corpus3\oot3d-a32-mass-aot.lib
 OOT3D_WHOLE_AOT_GENERATED_DIR =
-  I:\oot3dre_work\whole_aot_optimization\scalar_full
+  <oot3d-work>\whole_aot_optimization\scalar_full
 OOT3D_WHOLE_AOT_PREBUILT_LIBRARY =
-  I:\oot3dre_work\whole_aot_prelinked_shiftfix\oot3d_native_whole_aot_shiftfix.lib
+  <oot3d-work>\whole_aot_prelinked_shiftfix\oot3d_native_whole_aot_shiftfix.lib
 ```
 
 These are temporary parity inputs, not desired final dependencies. They remain
@@ -408,7 +408,7 @@ arrives through `OOT3D_WHOLE_AOT_PREBUILT_LIBRARY`; renderer dependencies also
 retain warnings without treating pinned NRI/FFX Clang diagnostics as errors.
 
 The equivalent corrected run is recorded in
-`I:\oot3dre_work\native_game\native_renderer_perf_thinlto_shiftfix_120_20260723.json`.
+`<oot3d-work>\native_game\native_renderer_perf_thinlto_shiftfix_120_20260723.json`.
 It reaches 31.89 FPS, reduces the guest phase to 1.66 seconds and sampled A32
 dispatch to 1.09 seconds, with zero retained ARM fallbacks and zero
 whole/mass-AOT unsupported exits. This is a real improvement, but not a closed
@@ -416,7 +416,7 @@ performance result: PICA submit takes 1.77 seconds, including 1.36 seconds in
 the backend, so renderer submission is now the primary measured limit.
 
 Delayed framebuffer evidence is
-`I:\oot3dre_work\native_game\native_renderer_thinlto_shiftfix_visual_20260723.bmp`
+`<oot3d-work>\native_game\native_renderer_thinlto_shiftfix_visual_20260723.bmp`
 with SHA-256
 `6AF56D41F65AF61B3C87AD833A9FC8EC0ECB68744B0596B9AD4F0104D74C65D2`.
 The validator reports 1280x720, 4,958 sampled colors, full channel range and a
@@ -445,7 +445,7 @@ Equivalent fixed-delta runs with diagnostics disabled measured:
 - zero-copy default: 44.12 FPS, 0.64 seconds in the PICA backend.
 
 The delayed framebuffer captures are byte-identical. The zero-copy capture is
-`I:\oot3dre_work\native_game\native_renderer_zero_copy_default_visual_20260723.bmp`
+`<oot3d-work>\native_game\native_renderer_zero_copy_default_visual_20260723.bmp`
 with SHA-256
 `305D5EC012BEDED5349EAFF8C5CF796BE116F7721664F04E9283CA1DB9169AD9`.
 The texture consumer now keeps immutable source and transformed snapshots
@@ -462,7 +462,7 @@ from 0.279 to 0.035 seconds. With diagnostics disabled the run reaches 50.03
 FPS, with 0.538 seconds in PICA submit and 0.402 seconds in the backend.
 
 The capture
-`I:\oot3dre_work\native_game\native_renderer_texture_cache_nodiag_visual_20260723.bmp`
+`<oot3d-work>\native_game\native_renderer_texture_cache_nodiag_visual_20260723.bmp`
 remains byte-identical, with SHA-256
 `305D5EC012BEDED5349EAFF8C5CF796BE116F7721664F04E9283CA1DB9169AD9`.
 The submission and Vulkan-plan tests also verify cache reuse followed by
@@ -494,9 +494,9 @@ framebuffer. Both captures have SHA-256
 `305D5EC012BEDED5349EAFF8C5CF796BE116F7721664F04E9283CA1DB9169AD9`.
 The current reports are:
 
-- `I:\oot3dre_work\native_game\native_renderer_perf_typed_mesh_submit_active_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_a32_blocks_typed_mesh_submit_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_typed_mesh_submit_active_visual_20260724.bmp`
+- `<oot3d-work>\native_game\native_renderer_perf_typed_mesh_submit_active_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_a32_blocks_typed_mesh_submit_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_typed_mesh_submit_active_visual_20260724.bmp`
 
 Do not add arbitrary runtime-only observable exits to the current prebuilt
 whole-AOT archive. A focused attempt at
@@ -529,7 +529,7 @@ invented. On the recovered game inventory this folds the former
 The coherent Clang 22 ThinLTO archive is:
 
 ```text
-I:\oot3dre_work\whole_aot_thinlto_shiftfix\
+<oot3d-work>\whole_aot_thinlto_shiftfix\
   oot3d_native_whole_aot_pica_external_coherent_thinlto.lib
 ```
 
@@ -556,9 +556,9 @@ identical with SHA-256
 `305D5EC012BEDED5349EAFF8C5CF796BE116F7721664F04E9283CA1DB9169AD9`.
 Evidence:
 
-- `I:\oot3dre_work\native_game\native_renderer_perf_pica_external_final_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_pica_external_profile_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_pica_external_final_20260724.bmp`
+- `<oot3d-work>\native_game\native_renderer_perf_pica_external_final_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_pica_external_profile_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_pica_external_final_20260724.bmp`
 
 `ActorTrackingStateReset` (`0x0047AF24`) was tested as a second external
 boundary and deliberately rejected. Its host implementation was
@@ -573,9 +573,9 @@ than leaf functions selected only by block-entry count.
 
 Stable-shard baseline evidence:
 
-- `I:\oot3dre_work\native_game\native_renderer_perf_pica_stable_shards_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_perf_pica_stable_shards_final_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_pica_stable_shards_final_20260724.bmp`
+- `<oot3d-work>\native_game\native_renderer_perf_pica_stable_shards_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_perf_pica_stable_shards_final_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_pica_stable_shards_final_20260724.bmp`
 
 ## Whole-AOT external-call profile and matrix fast path
 
@@ -608,9 +608,9 @@ at frame 119 remains byte-identical with SHA-256
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\native_renderer_profile_300f_external_timing_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_profile_300f_fast_mtx_final_20260724.json`
-- `I:\oot3dre_work\native_game\native_renderer_fast_mtx_sequence_20260724_000119.bmp`
+- `<oot3d-work>\native_game\native_renderer_profile_300f_external_timing_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_profile_300f_fast_mtx_final_20260724.json`
+- `<oot3d-work>\native_game\native_renderer_fast_mtx_sequence_20260724_000119.bmp`
 
 ## Native-only UI texture path
 
@@ -637,9 +637,9 @@ the independently advancing 3D background.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\renderer_dependency_audit_ui_fallback_removed_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_ui_fallback_removed_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_ui_fallback_removed_20260724.bmp`
+- `<oot3d-work>\native_game\renderer_dependency_audit_ui_fallback_removed_20260724.json`
+- `<oot3d-work>\native_game\renderer_ui_fallback_removed_20260724.json`
+- `<oot3d-work>\native_game\renderer_ui_fallback_removed_20260724.bmp`
 
 The remaining concrete Fast UI adapter is now a leaf library compiled against
 the renderer-owned UI contract, the Fast rendering interface, and ImGui. It
@@ -654,9 +654,9 @@ RMSE 0.00219482, confined to the independently advancing scene under the UI.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\renderer_dependency_audit_ui_leaf_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_ui_leaf_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_ui_leaf_20260724.bmp`
+- `<oot3d-work>\native_game\renderer_dependency_audit_ui_leaf_20260724.json`
+- `<oot3d-work>\native_game\renderer_ui_leaf_20260724.json`
+- `<oot3d-work>\native_game\renderer_ui_leaf_20260724.bmp`
 
 The native game entry point no longer includes or invokes `Ship::Context`.
 Context teardown is paired with initialization behind the existing demo-host
@@ -672,9 +672,9 @@ against the immediately preceding run is 0.00149382.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\renderer_dependency_audit_entrypoint_context_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_entrypoint_context_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_entrypoint_context_20260724.bmp`
+- `<oot3d-work>\native_game\renderer_dependency_audit_entrypoint_context_20260724.json`
+- `<oot3d-work>\native_game\renderer_entrypoint_context_20260724.json`
+- `<oot3d-work>\native_game\renderer_entrypoint_context_20260724.bmp`
 
 The obsolete `--n64-ui-archive` launch input has also been removed from the
 native game contract and PowerShell launcher. Since the N64 archive texture
@@ -686,8 +686,8 @@ JSON settings.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\renderer_no_n64_archive_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_no_n64_archive_20260724.bmp`
+- `<oot3d-work>\native_game\renderer_no_n64_archive_20260724.json`
+- `<oot3d-work>\native_game\renderer_no_n64_archive_20260724.bmp`
 
 ## Native application host split
 
@@ -718,9 +718,9 @@ needs to move with that work.
 
 Evidence:
 
-- `I:\oot3dre_work\native_game\renderer_dependency_audit_application_host_split_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_application_host_split_20260724.json`
-- `I:\oot3dre_work\native_game\renderer_application_host_split_20260724.bmp`
+- `<oot3d-work>\native_game\renderer_dependency_audit_application_host_split_20260724.json`
+- `<oot3d-work>\native_game\renderer_application_host_split_20260724.json`
+- `<oot3d-work>\native_game\renderer_application_host_split_20260724.bmp`
 
 ## Visual frames when the host falls behind (2026-09-30)
 

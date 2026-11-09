@@ -44,7 +44,7 @@ The URL returned valid JSON of `17,955,171` bytes with SHA-256
 using both PowerShell and Python urllib. HTTP Content-Length also reported
 17,955,171. Therefore the planner refused the catalog. The observed hash was
 not substituted for the declared trusted hash to bypass that failure.
-Local inspection copy: `I:/oot3dre_tools/VisualStudio-bd98dd01.vsman`.
+Local inspection copy: `<tools>/VisualStudio-bd98dd01.vsman`.
 This is evidence of a mismatch along the retrieval path, not proof of its cause.
 
 ## MSI Dependency Resolution
@@ -77,7 +77,7 @@ the official 17.12 LTSC channel. For that channel the declared SHA was
 `524d784d450775f65c0a563d65d4ce5290d3e4eee518ade757b37a105f8bba46`,
 while the received file hashed to
 `2b827c355ee16b892c99d87030ff0d0a46ab6ec3ca20ea6b541996e9f16c8f91`.
-Inspection copy: `I:/oot3dre_tools/VisualStudio-1712-catalog.vsman`.
+Inspection copy: `<tools>/VisualStudio-1712-catalog.vsman`.
 No download identity was weakened or repinned to the mismatching bytes.
 
 ## Remaining Acquisition Work
@@ -95,8 +95,8 @@ activate a toolchain or accept license terms.
 Real local proof: all 365 files (69,790,662 bytes) extracted from the SDK MSI
 above. All 365 SHA-256 values match the installed SDK files. CAB SHA-256:
 `41e2f49e5c0ef12454fc1ee2a8b031f1e271c4d172afd11b71481db83216cdec`.
-Evidence: `I:/oot3dre_work/sdk-cab-proof/extraction.json` and
-`I:/oot3dre_work/sdk-msi-proof/extraction.json`. These are private local
+Evidence: `<oot3d-work>/sdk-cab-proof/extraction.json` and
+`<oot3d-work>/sdk-msi-proof/extraction.json`. These are private local
 verification artifacts, not approved redistributable payloads.
 Native tests create a synthetic CAB with Windows MakeCab and verify extraction,
 bad hashes/sizes, traversal, missing IDs and non-publication on incomplete MSI
@@ -114,7 +114,7 @@ Local format proof used the already-installed package
 `C:/ProgramData/Microsoft/VisualStudio/Packages/Microsoft.VisualCpp.Tools.Common.UtilsPrereq,version=16.11.35704.18/payload.vsix`.
 SHA-256: `9af71e606e22d3e8a777f95f2ac1c101152604341017a794c975468fc1fc21d4`.
 Extracted 32 files, 6,975,026 bytes; receipt at
-`I:/oot3dre_work/sdk-vsix-proof/extraction.json`. This validates extraction of a
+`<oot3d-work>/sdk-vsix-proof/extraction.json`. This validates extraction of a
 real VSIX, not qualification of this old package as the selected Forge CRT.
 The package is not added to any public distribution.
 Suite: 111 tests, including synthetic VSIX extraction and negative cases.
@@ -140,15 +140,15 @@ The real assembly exposed a missing acquisition dependency: Desktop Libs does
 not contain `kernel32.lib`. The plan now requires `Windows SDK for Windows Store
 Apps Libs-x86_en-us.msi` as well. The installed copy under package-cache identity
 `{F8FD4844-9C5B-6AF9-0899-6E2B8574D4A1}v10.1.26100.6901` extracted 352 files,
-164,251,112 bytes into `I:/oot3dre_work/sdk-base-libs-proof`.
+164,251,112 bytes into `<oot3d-work>/sdk-base-libs-proof`.
 
 Both extracted UM library trees, combined with the previous private headers,
-CRT and Clang snapshot, produced `I:/oot3dre_work/triaevum-assembled-sysroot`.
+CRT and Clang snapshot, produced `<oot3d-work>/triaevum-assembled-sysroot`.
 Its inventory identity matches the previous verified snapshot:
 `e7ea207892cee2249ebfe26805695c86fc92ce9a67357ae78d9dc99580ab8c86`.
 The real native ABI probe passed all six checks in 36.30 seconds, producing
 plugin SHA `85d69baa913c642b5bc01d8e73c9d24a23f2b2513741580896b448f70f27d271`.
-Receipt: `I:/oot3dre_work/triaevum-assembled-sysroot-probe`.
+Receipt: `<oot3d-work>/triaevum-assembled-sysroot-probe`.
 Suite: 113 tests. This is a synthetic ABI proof with locally acquired inputs,
 not a complete title build or clean-machine acquisition qualification.
 
@@ -170,7 +170,7 @@ establish trust in a catalog or substitute for reviewing its license terms.
 Downloads already complete and verified remain reusable after failure; failed
 component extraction is not published. Existing output is never overwritten.
 
-Real cached VSIX proof: `I:/oot3dre_work/triaevum-component-acquisition-proof`,
+Real cached VSIX proof: `<oot3d-work>/triaevum-component-acquisition-proof`,
 32 files extracted with the coordinator. This used the local UtilsPrereq
 package documented above and a cache-only fixture descriptor, not a network
 download or qualification of the selected CRT. Suite: 115 tests, all passed
@@ -192,7 +192,7 @@ The coordinator downloaded and extracted both real CRT packages: 324 header
 files (15,039,136 bytes) and 45 library files (214,928,983 bytes), including
 package metadata. Library archive SHA:
 `eb66efac9a8e7ecb70f10eedba9ba21c816a9e69ea3a6e0ea89d8323fc7eea5b`.
-Receipt: `I:/oot3dre_work/triaevum-crt-components-proof/components.json`.
+Receipt: `<oot3d-work>/triaevum-crt-components-proof/components.json`.
 Toolset path: `Contents/VC/Tools/MSVC/14.44.35207`; package servicing versions
 are not directory versions. Suite: 116 tests passed. This is selected-CRT
 acquisition from installed metadata, not resolution of the catalog hash mismatch.
@@ -213,11 +213,11 @@ Multiple `--components` inputs are supported. Complete assembly verifies require
 headers/libraries before publication, and refuses an existing output.
 Real test combined the acquired CRT trees with the previously verified SDK/Clang
 trees (SDK headers still originate from the local snapshot, not remote acquisition).
-Result: `I:/oot3dre_work/triaevum-acquired-crt-sysroot`, 5,891 files, 804,071,496 bytes,
+Result: `<oot3d-work>/triaevum-acquired-crt-sysroot`, 5,891 files, 804,071,496 bytes,
 identity `e30c9dd040e0b325e46d67ac5bc1a544ad6e7e3fded263f26aacea44ca030b19`.
 The native ABI probe passed all six checks in 38.44 seconds and produced the
 same synthetic plugin SHA as before. Receipt:
-`I:/oot3dre_work/triaevum-acquired-crt-probe`. Suite: 118 tests passed.
+`<oot3d-work>/triaevum-acquired-crt-probe`. Suite: 118 tests passed.
 This is not yet a clean-machine or complete-title qualification.
 
 ### Complete CRT/SDK Acquisition from Installed Metadata
@@ -226,11 +226,11 @@ This is not yet a clean-machine or complete-title qualification.
 VS `_package.json` files. It records each source path/hash and labels the result
 `installed_visual_studio_private_bootstrap`; it is a developer verification tool,
 not a replacement for a clean-PC catalog resolver.
-Plan: `I:/oot3dre_work/triaevum-local-sdk-plan.json`, using the two CRT records
+Plan: `<oot3d-work>/triaevum-local-sdk-plan.json`, using the two CRT records
 above and `Win11SDK_10.0.26100,version=10.0.26100.13,productarch=neutral`.
 
 All 11 selected CRT/SDK components were downloaded with pinned hashes and
-extracted successfully into `I:/oot3dre_work/triaevum-full-components`.
+extracted successfully into `<oot3d-work>/triaevum-full-components`.
 No installer ran. ARM64 header packages are excluded from this x64 plan;
 the x86-named shared headers remain required. The initial all-Headers selector
 incorrectly included an empty ARM64 MSI and has been corrected.
@@ -244,12 +244,12 @@ catalog resolver, GUI, complete-title compilation or a machine without VS.
 ### Complete Acquired Sysroot Native Proof
 
 The complete component set assembled successfully into
-`I:/oot3dre_work/triaevum-fully-acquired-sysroot`: 5,888 files, 803,936,290 bytes,
+`<oot3d-work>/triaevum-fully-acquired-sysroot`: 5,888 files, 803,936,290 bytes,
 identity `3ab0946f30d5d528336687428cd0e9cc24ed7d733e88ec56ee28804ca16c160c`.
 All CRT/SDK inputs now come from the verified packages; Clang resource headers
 come from the LLVM distribution. The native probe passed all six checks in
 36.81 seconds with the same synthetic plugin SHA as previous proofs.
-Receipt: `I:/oot3dre_work/triaevum-fully-acquired-probe/receipt.json`.
+Receipt: `<oot3d-work>/triaevum-fully-acquired-probe/receipt.json`.
 
 `prepare_windows_toolchain.py` now coordinates acquisition, verified layout,
 assembly and the native probe before publishing a new private generation.
@@ -266,9 +266,9 @@ clean-machine catalog source still remain open.
 The complete `prepare_windows_toolchain.py` command succeeded with the private
 local-metadata plan, verified download cache and LLVM 22.1.6. It reacquired/verified
 all components, extracted, assembled, compiled and executed the ABI probe, then
-published `I:/oot3dre_work/triaevum-toolchain-generation-proof` with status
+published `<oot3d-work>/triaevum-toolchain-generation-proof` with status
 `native_probe_passed`. Diagnostics are retained at
-`I:/oot3dre_work/triaevum-toolchain-generation-diagnostics`; the generation includes
+`<oot3d-work>/triaevum-toolchain-generation-diagnostics`; the generation includes
 `toolchain.json`, `sysroot/` and original `components/`.
 This supersedes the earlier unqualified-coordinator note, not the clean-PC or
 full-title limitations. The invocation used existing pinned metadata and cache;
@@ -286,10 +286,10 @@ Visual acquisition/consent and automatic generation selection still remain open.
 probe. Its C++ source is bundled, and resource lookup uses the PyInstaller
 distribution root. This prevents a source-only success from masking a missing
 file in the executable release.
-Real frozen build: `I:/oot3dre_work/triaevum-forge-toolchain-proof/TriAevumForge.exe`.
+Real frozen build: `<oot3d-work>/triaevum-forge-toolchain-proof/TriAevumForge.exe`.
 Run from that directory with the completely acquired sysroot: all six checks
 passed in 44.31 seconds, same plugin SHA as previous runs. Evidence:
-`I:/oot3dre_work/triaevum-frozen-toolchain-probe/receipt.json`.
+`<oot3d-work>/triaevum-frozen-toolchain-probe/receipt.json`.
 This proof still supplies private LLVM/support/include/sysroot paths explicitly;
 it does not establish clean-machine acquisition or full-title readiness.
 

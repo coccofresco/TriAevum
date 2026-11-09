@@ -359,7 +359,7 @@ Gear f300 and Map f420. After wiring the new sites, the background should
 widen and Gear should lose the BACK fragment. With Task 2 wiring, compare the
 shortcut icons and each column transition as well. Claude owns game/emulator validation and the
 integration files, as recorded in
-I:/_triaevum_work/singlescreen30/coord/HUD_COORD.md.
+<work>/singlescreen30/coord/HUD_COORD.md.
 
 Dungeon Map shares the full viewport and page projection: Map state
 0x00506CE8 must be nonzero and shared map mode 0x004FDABC must equal 1.
@@ -584,10 +584,10 @@ a renderer special case.
 
 ```powershell
 C:\devkitPro\msys2\usr\bin\cmake.exe --build /i/oot3dre_work/whole-aot-product-consumer --target oot3d_top_screen_items_hint_tests oot3d_native_ui_lifecycle_bridge_tests oot3d_top_screen_mod_profile_tests oot3d_native_a32_input_tests -j 6
-I:\oot3dre_work\whole-aot-product-consumer\oot3d_top_screen_items_hint_tests.exe
-I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_ui_lifecycle_bridge_tests.exe
-I:\oot3dre_work\whole-aot-product-consumer\oot3d_top_screen_mod_profile_tests.exe
-I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_a32_input_tests.exe
+<oot3d-work>\whole-aot-product-consumer\oot3d_top_screen_items_hint_tests.exe
+<oot3d-work>\whole-aot-product-consumer\oot3d_native_ui_lifecycle_bridge_tests.exe
+<oot3d-work>\whole-aot-product-consumer\oot3d_top_screen_mod_profile_tests.exe
+<oot3d-work>\whole-aot-product-consumer\oot3d_native_a32_input_tests.exe
 ```
 
 The product gate is:

@@ -32,7 +32,7 @@ Launch Azahar from PowerShell with MSYS2 Qt DLLs on `PATH`:
 
 ```powershell
 $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
-$env:OOT3D_TRACE_PATH = "E:\ppssppvr\oot3d_decomp\oot3d_decomp_git\traces\oot3d-first-run.jsonl"
+$env:OOT3D_TRACE_PATH = "<ppssppvr>\oot3d_decomp\oot3d_decomp_git\traces\oot3d-first-run.jsonl"
 $env:OOT3D_TRACE_MAX_EVENTS = "200000"
 $env:OOT3D_TRACE_SAMPLE = "1"
 $env:OOT3D_TRACE_ALLOWLIST = "0x00375bcc,0x003731e0,0x003679b4,0x0036ae14,0x002cfca0,0x00372224,0x00250ad0,0x00416608,0x002e2e60,0x0044e2d0,0x002c5ba0"

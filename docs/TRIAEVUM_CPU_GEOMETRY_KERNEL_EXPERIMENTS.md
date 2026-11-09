@@ -34,11 +34,11 @@ host MXCSR and the original non-fused arithmetic, including VNMLS.
 
 Read-only sources:
 
-- `I:/oot3decomp/src/runtime/owner_runtime/z_owner_closeout_long_tail_11.c`,
+- `<oot3d-decomp>/src/runtime/owner_runtime/z_owner_closeout_long_tail_11.c`,
   `0040C744`, corroborated against all 162 original ARM instructions.
-- `I:/oot3decomp/src/genuine/z_genuine_cohort_13.c`, `002BBF74` and `002BFCB4`;
+- `<oot3d-decomp>/src/genuine/z_genuine_cohort_13.c`, `002BBF74` and `002BFCB4`;
   the latter has 48 ARM instructions.
-- `I:/oot3decomp/src/runtime/owner_runtime/z_owner_register_abi_deep_07.c`,
+- `<oot3d-decomp>/src/runtime/owner_runtime/z_owner_register_abi_deep_07.c`,
   material/mesh traversal reviewed for the next ownership boundary.
 - The frozen AOT program and original code from the projection experiment.
 
@@ -115,7 +115,7 @@ draw-order changes were made.
 Compile the probe and its tests separately with clang-cl, `/MT /O2 /EHsc
 /std:c++20 /DNOMINMAX /fp:strict /clang:-ffp-contract=off`, including native-game,
 A32, upstream and the existing nlohmann directories. Link the existing
-`J:/TriAevum-verify-20260910/runtime/triaevum_title_whole_aot_support.lib` with lld,
+`<verify-20260910>/runtime/triaevum_title_whole_aot_support.lib` with lld,
 `/threads:2`, and `/LD` for the candidate only. No full-AOT build is needed.
 
 Test arguments: frozen baseline DLL, original private `code.bin`. For real replay

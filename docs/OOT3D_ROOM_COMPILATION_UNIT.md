@@ -25,7 +25,7 @@ La RCU non converte gli asset N64 e non effettua sostituzioni runtime di percors
 - schema: `tools/oot3d/oot3d_asset_tool/schemas/oot3d_room_compilation_unit_v1.schema.json`;
 - CLI: `oot3d-assets compile-room-unit`;
 - wrapper operativo: `scripts/oot3d/Invoke-Oot3dRoomCompilationUnit.ps1`;
-- output locali: `I:\oot3dre_work\room_compilation_units`.
+- output locali: `<oot3d-work>\room_compilation_units`.
 - catalogo nel core O2R: `oot3d/catalog/oot3d_room_compilation_units.json`;
 - payload runtime nel core O2R: `oot3d/room_units/*.json`;
 - parser runtime condiviso: `tools/oot3d/runtime_common/oot3d_room_compilation_unit.*`;
@@ -102,7 +102,7 @@ La RCU rappresenta quindi questi record come `native_unmaterialized_object_bank_
 
 ## Evidenze Zelda3drecomp
 
-`I:\Zelda3drecomp` e sempre in sola lettura. Il compilatore non apre direttamente il checkout: usa soltanto snapshot copiati in:
+`<legacy-recomp>` e sempre in sola lettura. Il compilatore non apre direttamente il checkout: usa soltanto snapshot copiati in:
 
 ```text
 tools/oot3d/decomp_support/evidence/zelda3drecomp/<snapshot-id>/
@@ -146,7 +146,7 @@ Acquisizione read-only delle evidenze correnti prima della compilazione:
 Compilazione riproducibile con uno snapshot specifico:
 
 ```powershell
-.\scripts\oot3d\Invoke-Oot3dRoomCompilationUnit.ps1 -EvidenceSnapshot I:\oot3dre-vulkan\tools\oot3d\decomp_support\evidence\zelda3drecomp\849140697187b895
+.\scripts\oot3d\Invoke-Oot3dRoomCompilationUnit.ps1 -EvidenceSnapshot <local>/oot3dre-vulkan\tools\oot3d\decomp_support\evidence\zelda3drecomp\849140697187b895
 ```
 
 Lo snapshot di evidenza runtime corrente e `849140697187b895`, importato in sola lettura
@@ -218,7 +218,7 @@ scene_entry:SCENE_ENTRY_KOKIRI_FOREST_FROM_LINKS_HOUSE:KOKIRI_FOREST_INITIAL_CHI
 Output corrente:
 
 ```text
-I:\oot3dre_work\room_compilation_units\scene_entry_SCENE_ENTRY_KOKIRI_FOREST_FROM_LINKS_HOUSE_KOKIRI_FOREST_INITIAL_CHILD_DAY.json
+<oot3d-work>\room_compilation_units\scene_entry_SCENE_ENTRY_KOKIRI_FOREST_FROM_LINKS_HOUSE_KOKIRI_FOREST_INITIAL_CHILD_DAY.json
 ```
 
 Risultato strutturale verificato:
@@ -250,7 +250,7 @@ Due compilazioni consecutive con lo stesso snapshot producono lo stesso SHA-256 
 
 ## Packaging E Consumer Runtime
 
-`Invoke-Oot3dPlayablePack.ps1` valida nuovamente digest canonico, schema e conteggi di chiusura di ogni RCU presente in `I:\oot3dre_work\room_compilation_units`. Solo le unita `composition_complete_*` vengono incluse come payload eseguibili nel core O2R. Le unita incomplete restano nell'array `excluded` del catalogo con motivo e conteggi, ma il relativo JSON non viene montato come unita runtime.
+`Invoke-Oot3dPlayablePack.ps1` valida nuovamente digest canonico, schema e conteggi di chiusura di ogni RCU presente in `<oot3d-work>\room_compilation_units`. Solo le unita `composition_complete_*` vengono incluse come payload eseguibili nel core O2R. Le unita incomplete restano nell'array `excluded` del catalogo con motivo e conteggi, ma il relativo JSON non viene montato come unita runtime.
 
 Il parser C++ condiviso:
 

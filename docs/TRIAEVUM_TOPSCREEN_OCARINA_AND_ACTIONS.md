@@ -71,7 +71,7 @@ this report does not claim new Android or Linux binary qualification.
 
 ## In-Game Results
 
-Private evidence: `J:/TriAevum-verify-20260910/`. Isolated configuration, copies
+Private evidence: `<verify-20260910>/`. Isolated configuration, copies
 of the original completion save, fixed native 30 Hz, interpolation disabled,
 framebuffer captures rather than Windows screenshots. Runs are bounded and
 exit normally. Original save files are not patched or overwritten.

@@ -35,7 +35,7 @@ DIRECT_STATE_SWITCH_C = (
     / "decompiled"
     / "99086_00473ef8_oot3d_player_action_swing_bottle.c"
 )
-CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 
 OUT_JSON = ANALYSIS / "title_intro_opening_player_motion_audit.json"
 OUT_MD = ANALYSIS / "title_intro_opening_player_motion_audit.md"

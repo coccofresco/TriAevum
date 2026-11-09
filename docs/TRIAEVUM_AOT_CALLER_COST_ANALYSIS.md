@@ -128,18 +128,18 @@ budget/resume, final GPR/flags and per-store generation semantics also matter.
 
 Decomp evidence read, not copied as an authoritative native implementation:
 
-- `I:/oot3decomp/src/runtime/owner_runtime/z_owner_closeout_bounded_03.c:305`:
+- `<oot3d-decomp>/src/runtime/owner_runtime/z_owner_closeout_bounded_03.c:305`:
   command packet copy and command-list pointer advancement.
-- `I:/oot3decomp/src/genuine/z_genuine_cohort_18.c:2403`:
+- `<oot3d-decomp>/src/genuine/z_genuine_cohort_18.c:2403`:
   `0030F4D0` callers, visibility selection, matrix/material prep and submission.
-- `I:/oot3decomp/src/runtime/owner_runtime/z_owner_closeout_expanded_02.c:61`:
+- `<oot3d-decomp>/src/runtime/owner_runtime/z_owner_closeout_expanded_02.c:61`:
   ExecuteEffect selects `004A022C/004A0338`, buffers at 0x280-byte intervals.
-- `I:/oot3decomp/src/runtime/owner_runtime/z_owner_runtime_accel_long_tail_14.c`:
+- `<oot3d-decomp>/src/runtime/owner_runtime/z_owner_runtime_accel_long_tail_14.c`:
   integer effect loops. `004A0338` processes 160 samples for each of two channels,
   with circular buffers, fixed-point shifts and feedback. Preserve modulo-32-bit
   arithmetic; signed-overflow C is not an acceptable drop-in implementation.
-- `I:/oot3decomp/src/genuine/z_genuine_cohort_20.c:6539`: `0033B11C` projection.
-- `I:/oot3decomp/src/genuine/z_genuine_cohort_33.c:23017`: `0047AF24` scans at
+- `<oot3d-decomp>/src/genuine/z_genuine_cohort_20.c:6539`: `0033B11C` projection.
+- `<oot3d-decomp>/src/genuine/z_genuine_cohort_33.c:23017`: `0047AF24` scans at
   most 50 records. Its frequent entries did not make it a dominant cost:
   29 direct observations, 1.3% of AOT. Do not select it just for entry frequency.
 
@@ -229,8 +229,8 @@ Root: `%USERPROFILE%/triaevum-aot-causal-analysis/`.
 - `field-stacks/analysis.json`, `field-repeat/analysis{0,1}.json`: caller reports.
 - `phase-profile/0/runtime.json`: nested service/PICA timing and traffic counters.
 - Each run stores its exact `command.json` and private writable configuration.
-- Diagnostic module/map: `I:/TriAevum-aot-lab-debug/plugin/`.
-- Structural program: `I:/TriAevum-aot-lab-evidence/baseline/aot_program.json`.
+- Diagnostic module/map: `<local>/TriAevum-aot-lab-debug/plugin/`.
+- Structural program: `<local>/TriAevum-aot-lab-evidence/baseline/aot_program.json`.
 - Code SHA-256: `16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220`.
 
 Build only `sample_aot_stacks_windows.cpp` with clang-cl, C++20, the existing

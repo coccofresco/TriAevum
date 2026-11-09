@@ -55,7 +55,7 @@ and the platform input backends are unchanged.
 ## Primary Evidence
 
 Same official 2.1.1 EUR payload and hashes as the preceding report, under the
-private `I:/oot3dre_work/topscreen-2.1.1-reference/` directory. Existing Ghidra
+private `<oot3d-work>/topscreen-2.1.1-reference/` directory. Existing Ghidra
 exports were checked against focused ARM/constant-pool disassembly.
 
 | Owner/data | Contract |

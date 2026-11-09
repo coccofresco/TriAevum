@@ -47,7 +47,7 @@ Linux Wayland both passed native 720p, HD 720p, HD 480p and native 360p cases:
 At frame 120, native vs HD 720p differs in 2,591 pixels, entirely inside
 `[571,549]-[708,632]` (the text). Nothing outside the text panel changes. The
 text ROI is pixel-identical between Windows and Linux HD captures. Fixtures and
-captures stay private (`J:/TriAevum-diagnostics/issue44/live4` and Linux
+captures stay private (`<diagnostics>/issue44/live4` and Linux
 `~/triaevum-hd-font-live`). This is a verified generated-text scenario,
 not a claim that every dialogue/language/song has been exhaustively played.
 
@@ -187,7 +187,7 @@ and sized immutable texture publication through submission/replay/NRI. All
 title-specific provenance stays in this adapter; then compare deterministic
 dialogue framebuffers on both platforms before enabling runtime consumption.
 
-Read-only `I:/oot3decomp/ghidra_export/decompiled/`:
+Read-only `<oot3d-decomp>/ghidra_export/decompiled/`:
 
 | Native function | Relevant evidence |
 | --- | --- |

@@ -62,7 +62,7 @@ to conceal a missing sky contribution. Authored dark channels remain dark.
 - Room/time/environment transitions update the reference without camera pumping.
 - Performance claims require steady-state measurements, not capture wall time.
 
-Initial read-only investigation: `I:/_triaevum_work/lighting-rationalization/`.
+Initial read-only investigation: `<work>/lighting-rationalization/`.
 The archived Kokiri traces contain 17 atmospheric draws in the Scene domain;
 world-lighting admission previously tested only that domain. A fixed sky region
 in the archived Native capture has mean linear luminance 0.744; the authored-key
@@ -326,7 +326,7 @@ Turning it Off restores intentional-dark workflows and the saved native
 ambient gain.
 
 Private evidence is retained under
-`I:/_triaevum_work/lighting-rationalization/`: `qualification-report.json`,
+`<work>/lighting-rationalization/`: `qualification-report.json`,
 per-capture receipts/configurations/framebuffers/diagnostics, and the final
 CPU-ambient parity and qualification reports. Temporary analysis sources are
 removed after verification; captures and recovery baselines remain private.

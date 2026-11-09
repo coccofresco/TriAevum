@@ -236,9 +236,9 @@ other desktops are broken when the query is unavailable, and never turns on a
 screen automatically. `run-linux-title.sh` shares this check. For remote tests,
 wake the display first and keep it active; an unlocked login alone is insufficient.
 The post-wake report is privately retained as
-`I:/oot3dre_work/linux-port-proof/forge-steamrt4-display-on.json`.
+`<oot3d-work>/linux-port-proof/forge-steamrt4-display-on.json`.
 
-Private evidence: `I:/oot3dre_work/linux-port-proof/forge/qualification-4/`
+Private evidence: `<oot3d-work>/linux-port-proof/forge/qualification-4/`
 contains `qualification.json`, separate install/reinstall reports, game log,
 runtime report and framebuffer captures. The physical candidate is
 `~/triaevum-forge-proof/TriAevum Linux Candidate 4`. No test process was left

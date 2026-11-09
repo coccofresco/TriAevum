@@ -1,6 +1,6 @@
 param(
     [string]$ToolRoot = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$ArchiveName = "oot3d_link_child_route_proven_ownership_candidates.o2r",
     [string]$Name = "OOT3D Link Child Route-Proven Ownership Candidates",
     [string]$Author = "local",

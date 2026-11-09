@@ -7,26 +7,26 @@ function Add-Scope($Path,$Kind){
  if(Test-Path -LiteralPath $Path -PathType Container){$scopes.Add([pscustomobject]@{Path=[IO.Path]::GetFullPath($Path);Kind=$Kind})}
 }
 # Only historical build products, not the current runtime or its shared donors.
-foreach($d in Get-ChildItem I:/oot3dre_work -Directory){
+foreach($d in Get-ChildItem <oot3d-work> -Directory){
  if($d.Name -match '^triaevum-.*(build|cache|probe|proof|pilot|smoke)' -and $d.Name -ne 'triaevum-full-title-proof') {Add-Scope $d.FullName 'build'}
  if($d.Name -match '^(grass-|outline-|native-outline-|audio-costs-|native-costs-|native-performance-|f2-|freecam-|canonical-costs-)'){Add-Scope $d.FullName 'trace'}
 }
-foreach($p in @('I:/oot3dre-baseline-97c/build-codex','I:/oot3dre-vulkan/build-renderer-gate0','I:/TriAevum-pica-build','I:/oot3dre_work/shader-cache-windows')){Add-Scope $p 'build'}
-foreach($p in @('I:/oot3d-native-renderer/.renderer-dev/build','I:/oot3dre-aot-state/build-codex','I:/oot3dre_worktrees/oot3d_mixed_upstream/build-oot3d-mixed-codex-vs','I:/oot3dre_worktrees/oot3d_mixed_upstream/x64')){Add-Scope $p 'build'}
-foreach($p in @('I:/oot3dre_work/native_game','I:/oot3dre_work/visual-parity','I:/oot3d-native-renderer/.renderer-dev/artifacts')){Add-Scope $p 'trace'}
+foreach($p in @('<local>/oot3dre-baseline-97c/build-codex','<local>/oot3dre-vulkan/build-renderer-gate0','<local>/TriAevum-pica-build','<oot3d-work>/shader-cache-windows')){Add-Scope $p 'build'}
+foreach($p in @('<local>/oot3d-native-renderer/.renderer-dev/build','<local>/oot3dre-aot-state/build-codex','<worktrees>/oot3d_mixed_upstream/build-oot3d-mixed-codex-vs','<worktrees>/oot3d_mixed_upstream/x64')){Add-Scope $p 'build'}
+foreach($p in @('<oot3d-work>/native_game','<oot3d-work>/visual-parity','<local>/oot3d-native-renderer/.renderer-dev/artifacts')){Add-Scope $p 'trace'}
 foreach($d in Get-ChildItem $env:USERPROFILE/AppData/Local/Temp -Directory -Filter 'TriAevum-*'){
  if($d.Name -ne 'triaevum-ui-title-cache'){Add-Scope $d.FullName 'trace'}
 }
-foreach($d in Get-ChildItem I:/TriAevum-source-native-repo -Directory -Filter 'build-*'){Add-Scope $d.FullName 'build'}
-foreach($base in @("$env:USERPROFILE/AppData/Local/Temp","$env:USERPROFILE",'I:/','J:/')){
+foreach($d in Get-ChildItem <local>/TriAevum-source-native-repo -Directory -Filter 'build-*'){Add-Scope $d.FullName 'build'}
+foreach($base in @("$env:USERPROFILE/AppData/Local/Temp","$env:USERPROFILE",'<local>/','<local>/')){
  foreach($d in Get-ChildItem -LiteralPath $base -Directory -Filter 'TriAevum-*'){
   if($d.Name -match 'diagnostics|verify|flow-|pacing-|castle-|shader-|pipeline-|toon-|outline-|temporal-|spacing-|architecture-|fullscreen-|pass-|vertex-|sampler-|texture-|upload-|replay-|tail-|module-|gpl-|fragment-|alias-|bounded-|compat-|effective-|fixed-|impact-|lazy-|normalized-|owned-|retained-|uniform-|tev-'){Add-Scope $d.FullName 'trace'}
  }
 }
 if($HistoricalTitleCacheOnly){$scopes.Clear()}
 # Verified absent from active CMakeCache/build.ninja; the live plugin is on I:.
-Add-Scope 'J:/TriAevum-verify-20260910/title-cache/native-objects' 'build'
-$protected=@('J:\TriAevum-verify-20260910\runtime','I:\TriAevum-public','I:\TriAevum-aot-lab-evidence',"$env:USERPROFILE\triaevum-issues-40-43","$env:USERPROFILE\triaevum-verify-20260911\epona-user")
+Add-Scope '<verify-20260910>/title-cache/native-objects' 'build'
+$protected=@('<verify-20260910>\runtime','<public-work>','<local>/TriAevum-aot-lab-evidence',"$env:USERPROFILE\triaevum-issues-40-43","$env:USERPROFILE\triaevum-verify-20260911\epona-user")
 function Within($Path,$Root){$Path.Equals($Root,[StringComparison]::OrdinalIgnoreCase) -or $Path.StartsWith($Root.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)}
 function Assert-NoLink($Path){
  while($Path){$item=Get-Item -LiteralPath $Path -Force;if($item.Attributes -band [IO.FileAttributes]::ReparsePoint){throw "Linked path: $Path"};$parent=[IO.Directory]::GetParent($Path);$Path=if($parent){$parent.FullName}else{$null}}

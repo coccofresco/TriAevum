@@ -199,13 +199,21 @@ fn python_sys_platform(os: &str) -> &str {
 }
 
 /// The installation's runtime: in the packaged place until Forge moves it.
+/// A Windows installation activated before the product names (0.8.0-beta.1.2
+/// and earlier) runs the root `TriAevum.exe` until Forge places the product
+/// executable; it is that installation's runtime, so it can be inspected,
+/// repaired and updated in place (R-A G6-F2).
 pub fn installed_runtime_path(root: &Path, platform: &ReleasePlatform) -> PathBuf {
     let packaged = crate::paths::join_posix(root, platform.runtime);
     if packaged.is_file() {
-        packaged
-    } else {
-        crate::paths::join_posix(root, platform.installed_runtime)
+        return packaged;
     }
+    let installed = crate::paths::join_posix(root, platform.installed_runtime);
+    let legacy = crate::paths::join_posix(root, LEGACY_WINDOWS_RUNTIME);
+    if *platform == WINDOWS && !installed.is_file() && legacy.is_file() {
+        return legacy;
+    }
+    installed
 }
 
 #[cfg(test)]

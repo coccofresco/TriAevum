@@ -91,14 +91,14 @@ class ScenarioTests(unittest.TestCase):
                                   "Window": {}})
 
     def test_command_carries_timing_inputs_and_captures(self):
-        run = Path("I:/run")
+        run = Path("X:/run")
         command = scenario_command({"arguments": ["--renderer", "nri"]},
-                                   {"timing": "original30", "frames": 10, "shot_start": 5, "checkpoint": "J:/c.sav",
-                                    "timeline": "J:/t.json"}, run)
+                                   {"timing": "original30", "frames": 10, "shot_start": 5, "checkpoint": "X:/c.sav",
+                                    "timeline": "X:/t.json"}, run)
         self.assertEqual(command[:2], ["--renderer", "nri"])
         self.assertIn("native30_no_interpolation", command)
-        self.assertEqual(command[command.index("--load-state") + 1], "J:/c.sav")
-        self.assertEqual(command[command.index("--input-timeline") + 1], "J:/t.json")
+        self.assertEqual(command[command.index("--load-state") + 1], "X:/c.sav")
+        self.assertEqual(command[command.index("--input-timeline") + 1], "X:/t.json")
         self.assertEqual(command[command.index("--screenshot-start-frame") + 1], "5")
         self.assertIn("--screenshot-sequence", command)
         default = scenario_command({}, {"frames": 1, "shot_start": 0}, run)
@@ -106,25 +106,25 @@ class ScenarioTests(unittest.TestCase):
         self.assertNotIn("--load-state", default)
 
     def test_realtime_runs_on_the_wall_clock_with_item_arguments(self):
-        run = Path("I:/run")
+        run = Path("X:/run")
         command = scenario_command({}, {"timing": "realtime", "frames": 1, "shot_start": 0,
                                         "arguments": ["--save-state", "{run}/mid.oot3dsav"]},
-                                   run, Path("I:/shared/savedata"))
+                                   run, Path("X:/shared/savedata"))
         self.assertIn("native30_interpolated", command)
         self.assertNotIn("--fixed-delta-seconds", command)
-        self.assertEqual(command[-2:], ["--save-state", "I:/run/mid.oot3dsav"])
-        self.assertEqual(command[command.index("--save-data") + 1], "I:/shared/savedata")
+        self.assertEqual(command[-2:], ["--save-state", "X:/run/mid.oot3dsav"])
+        self.assertEqual(command[command.index("--save-data") + 1], "X:/shared/savedata")
 
     def test_pass_objects_replace_item_keys_and_inputs_resolve_in_the_repository(self):
         item = {"name": "S", "frames": 10, "timeline": "a.json", "cache_passes": [
-            "cold", {"name": "load", "checkpoint": "", "timeline": "J:/b.json", "frames": 20}]}
+            "cold", {"name": "load", "checkpoint": "", "timeline": "X:/b.json", "frames": 20}]}
         (cold, cold_item), (load, load_item) = scenario_passes(item)
         self.assertEqual((cold, cold_item["frames"], load, load_item["frames"]), ("cold", 10, "load", 20))
-        self.assertEqual(load_item["timeline"], "J:/b.json")
-        resolved = resolve_scenario_paths(dict(cold_item, save_data_seed="seeds/a"), Path("I:/repo"))
-        self.assertEqual(Path(resolved["timeline"]), Path("I:/repo/a.json"))
-        self.assertEqual(Path(resolved["save_data_seed"]), Path("I:/repo/seeds/a"))
-        self.assertEqual(resolve_scenario_paths(load_item, Path("I:/repo"))["timeline"], "J:/b.json")
+        self.assertEqual(load_item["timeline"], "X:/b.json")
+        resolved = resolve_scenario_paths(dict(cold_item, save_data_seed="seeds/a"), Path("X:/repo"))
+        self.assertEqual(Path(resolved["timeline"]), Path("X:/repo/a.json"))
+        self.assertEqual(Path(resolved["save_data_seed"]), Path("X:/repo/seeds/a"))
+        self.assertEqual(resolve_scenario_paths(load_item, Path("X:/repo"))["timeline"], "X:/b.json")
 
     def test_evaluation_turns_every_expectation_into_a_check(self):
         with tempfile.TemporaryDirectory() as temporary:

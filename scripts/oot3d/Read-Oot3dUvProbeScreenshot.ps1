@@ -1,10 +1,10 @@
 param(
     [Parameter(Mandatory = $true)]
     [string[]]$Screenshot,
-    [string]$PaletteCsv = "I:\oot3dre_work\spot04\labeled_uv_overlay\spot04_labeled_uv_palette.csv",
-    [string]$LegendCsv = "I:\oot3dre_work\spot04\labeled_uv_overlay\spot04_labeled_uv_legend.csv",
-    [string]$SceneManifest = "I:\oot3dre_work\spot04\converted_scene\scene_manifest.json",
-    [string]$OutputRoot = "I:\oot3dre_work\spot04\uv_probe_decode",
+    [string]$PaletteCsv = "<oot3d-work>\spot04\labeled_uv_overlay\spot04_labeled_uv_palette.csv",
+    [string]$LegendCsv = "<oot3d-work>\spot04\labeled_uv_overlay\spot04_labeled_uv_legend.csv",
+    [string]$SceneManifest = "<oot3d-work>\spot04\converted_scene\scene_manifest.json",
+    [string]$OutputRoot = "<oot3d-work>\spot04\uv_probe_decode",
     [ValidateRange(0, 3)]
     [int]$Tolerance5 = 1,
     [ValidateRange(1, 16)]

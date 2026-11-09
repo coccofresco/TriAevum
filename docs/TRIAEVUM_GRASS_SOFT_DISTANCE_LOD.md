@@ -91,7 +91,7 @@ Under `runtime/three_ds_recomp`:
 ## Verification
 
 Build only `triaevum_public_runtime` in
-`I:/oot3dre_work/triaevum-direct-module-build`, parallelism 3. No title/AOT rebuild.
+`<oot3d-work>/triaevum-direct-module-build`, parallelism 3. No title/AOT rebuild.
 
 - `tools/triaevum_release/tests/run_grass_outline_tests.ps1`: **324 tests passed**,
   including real Vulkan execution of the shared Grass LOD shader against CPU
@@ -112,9 +112,9 @@ Build only `triaevum_public_runtime` in
   verification, **not performance benchmarks**.
 
 Local evidence, not release payloads:
-`I:/oot3dre_work/grass-soft-lod-20260907-{sparse,dense,spread,intro-final}/`.
+`<oot3d-work>/grass-soft-lod-20260907-{sparse,dense,spread,intro-final}/`.
 Logs: `grass-soft-lod-20260907-{release-build,accepted-tests,accepted-f1}.log`
-in `I:/oot3dre_work/`. The three JSON overrides under
+in `<oot3d-work>/`. The three JSON overrides under
 `tools/triaevum_release/tests/grass_soft_lod_*.json` are reusable with
 `benchmark_gameplay.mjs`; the spread override is applied on the dense configuration.
 

@@ -36,9 +36,9 @@ memory-watch ranges from a frame JSONL dump:
 
 ```powershell
 python .\tools\oot3d\native_demo_host\oot3d_pica_command_list_watchlist.py `
-  --input I:\oot3dre\captures\azahar_pica\oot3d_pica_frame_000000.jsonl `
-  --output I:\oot3dre\captures\azahar_pica\derived\watch_addresses.txt `
-  --summary-out I:\oot3dre\captures\azahar_pica\derived\watch_addresses.summary.json
+  --input <local>/oot3dre\captures\azahar_pica\oot3d_pica_frame_000000.jsonl `
+  --output <local>/oot3dre\captures\azahar_pica\derived\watch_addresses.txt `
+  --summary-out <local>/oot3dre\captures\azahar_pica\derived\watch_addresses.summary.json
 ```
 
 Use the watchlist with the dedicated Azahar Dynarmic writer hook, not the
@@ -46,8 +46,8 @@ generic memory watchpoints:
 
 ```powershell
 $env:OOT3D_PICA_WRITER_TRACE='1'
-$env:OOT3D_PICA_WRITER_TRACE_WATCHLIST='I:\oot3dre\captures\azahar_pica\derived\watch_addresses.txt'
-$env:OOT3D_PICA_WRITER_TRACE_OUTPUT='I:\oot3dre\captures\azahar_pica\derived\oot3d_pica_writer_trace.csv'
+$env:OOT3D_PICA_WRITER_TRACE_WATCHLIST='<local>/oot3dre\captures\azahar_pica\derived\watch_addresses.txt'
+$env:OOT3D_PICA_WRITER_TRACE_OUTPUT='<local>/oot3dre\captures\azahar_pica\derived\oot3d_pica_writer_trace.csv'
 $env:OOT3D_PICA_WRITER_TRACE_MAX_ROWS='50000'
 ```
 

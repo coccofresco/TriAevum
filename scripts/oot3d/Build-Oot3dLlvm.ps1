@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$BuildDirectory = "I:\oot3dre_work\build-llvm-22.1.6",
+    [string]$BuildDirectory = "<oot3d-work>\build-llvm-22.1.6",
     [string]$Target = "oot3d_native_game",
     [ValidateRange(1, 64)]
     [int]$Parallel = 2

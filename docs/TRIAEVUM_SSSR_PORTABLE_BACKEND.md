@@ -92,6 +92,6 @@ used all 23 pass and 106 PICA modules from cache with zero compilations.
 The warm run disabled captures. Neither run is an unlocked performance test
 or exhaustive reflection-quality validation; 30 Hz simulation is retained.
 
-Private evidence: `I:/TriAevum-public/qualification-20260912-win-sssr/` and
+Private evidence: `<public-work>/qualification-20260912-win-sssr/` and
 `qualification-20260912-win-sssr-warm/`. The Windows rebuild/dispatch blocker
 above is closed; other GPUs and debug configurations remain unqualified.

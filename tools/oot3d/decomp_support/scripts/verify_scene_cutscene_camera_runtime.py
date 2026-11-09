@@ -23,7 +23,7 @@ DEFAULT_BLOB_TABLE = ROOT / "analysis" / "scene_cutscene_camera_blob_table.json"
 DEFAULT_CMAD_TABLE = ROOT / "analysis" / "scene_cutscene_camera_cmad_table.json"
 DEFAULT_KEYFRAME_TABLE = ROOT / "analysis" / "scene_cutscene_camera_keyframe_table.json"
 DEFAULT_OUT_MD = ROOT / "analysis" / "scene_cutscene_camera_runtime_verify.md"
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 
 CODE_BIN_VA_BASE = 0x00100000
 DAT_0033CB8C = 0x0033CB8C

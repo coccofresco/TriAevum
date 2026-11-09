@@ -15,7 +15,7 @@ Resource attribution: [All dungeon practice saves, stevste](https://www.speedrun
 and [100% Practice, erinexplosives](https://www.speedrun.com/oot3d/resources/xiknl).
 No permission to redistribute these archives is inferred.
 
-Private root: `J:/TriAevum-verify-20260910/`.
+Private root: `<verify-20260910>/`.
 Extracted roots: `fixtures/practiceAD-original/` and
 `fixtures/practice100-original/`. There are 20 `save*.bin` entries, each
 5,340 bytes: eight in AD and twelve in 100% Practice. This is an entry count,
@@ -98,7 +98,7 @@ For this exact snapshot, player `098F4010` has position at `+28`; use
 snapshot. The clone is `fixtures/windmill-front-position.oot3dsav`.
 The original save, inventory and quest/event progress were not edited.
 
-Reproduction stages, under private root `J:/TriAevum-verify-20260910/`:
+Reproduction stages, under private root `<verify-20260910>/`:
 
 | Output / input | Result |
 | --- | --- |

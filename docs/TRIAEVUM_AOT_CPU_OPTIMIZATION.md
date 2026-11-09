@@ -7,7 +7,7 @@ Branch: `perf/aot-cpu-hotpaths`, created from `d654122` on 2026-09-27.
 The working tree already contained 93 modified tracked files and 17 untracked
 paths. Graphics/UI work outside the CPU dependency set remains unstaged and is
 not part of these commits. The initial tracked diff is preserved privately at
-`I:/_triaevum_work/cpu-dynarmic/branch-baseline.patch`.
+`<work>/cpu-dynarmic/branch-baseline.patch`.
 
 The CPU baseline includes memory-observation ABI 3, native per-page write
 certificates, alias-safe immutable resource snapshots, corrected AOT state
@@ -18,7 +18,7 @@ qualified major speedup. The original `TriAevum.exe` and release catalogue are
 not replaced by this development work.
 
 The matched reference is the existing ABI-3 module
-`I:/_triaevum_work/cpu-dynarmic/v3-control/plugin/triaevum_title_aot.dll`, SHA-256
+`<work>/cpu-dynarmic/v3-control/plugin/triaevum_title_aot.dll`, SHA-256
 `5d3777a22304e2715c4e15502fbb1db23c14ca6b9037a7a289000cef9341d6c4`, with the isolated
 `TriAevum-cpu-pages-v3b.exe` host. Earlier broad register residency, support-only
 ThinLTO and function ordering did not establish a qualified improvement; they
@@ -82,7 +82,7 @@ Small direct-memory helpers and block-local budget checks are useful patterns;
 its interpreter-relative performance and NaN-tolerant verification are not a
 performance/fidelity oracle for this runtime.
 
-Private investigation: `I:/_triaevum_work/cpu-dynarmic/upstream-study/`.
+Private investigation: `<work>/cpu-dynarmic/upstream-study/`.
 `findings.json`, `current-codegen.json`, `probe-results.json` and
 `probe-commands.json` record the source identities, real disassembly and probes.
 The existing intrusive RIP profile has 1,971 samples inside the title module:

@@ -51,7 +51,7 @@ run. No unreleased branch integration.
   differential decode mismatches. Adjacent equal decode keys **86/102**,
   **94/116**, **97/120** are opportunities, not observed runtime hits.
 - **OoT Kokiri**, 400 frames: exit 0; all three frame 100/200/300 hashes match
-  `I:/_triaevum_work/retuned/cap-p13.sha256`.
+  `<work>/retuned/cap-p13.sha256`.
 - Existing foundation **463**, shader-pipeline cache **71**, point shadow **7**
   tests pass, as do composition, MM native lighting, environment, appearance,
   fragment memo and private NRI patch suites.
@@ -75,7 +75,7 @@ pose-once must preserve Gzw skinning and bounds. Owning-branch failures must be
 resolved before adopting those paths.
 
 Local reproducibility/evidence directory:
-`I:/_triaevum_work/mm3d-port/analysis/parity/LIGHTPERF/`.
+`W/analysis/parity/LIGHTPERF/`.
 `RESULTS.md` maps all AUDIT O01–O30/G01–G12 items to evidence or explicit gaps;
 `INVENTORY.md` records provenance and unreleased prerequisites; `PROGRESS.md`
 records commits. Recipes, binary/config/input receipts, counter JSONL, tests,

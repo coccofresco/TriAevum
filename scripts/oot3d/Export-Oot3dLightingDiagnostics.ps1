@@ -1,8 +1,8 @@
 param(
-    [string]$DemoJson = "I:\oot3dre_work\standalone_demo\kokiri_forest\native_host\comparison\kokiri_slot5\demo_slot5.json",
-    [string]$OutputDir = "I:\oot3dre_work\standalone_demo\kokiri_forest\native_host\comparison\kokiri_slot5",
-    [string]$PicaTraceJson = "I:\oot3dre\captures\azahar_pica\kokiri_slot5_20260704_101127\derived\oot3d_pica_frame_000015.native_pica_register_trace.json",
-    [string]$VisualCompareSummary = "I:\oot3dre_work\standalone_demo\kokiri_forest\native_host\comparison\kokiri_slot5\visual_compare_summary.json"
+    [string]$DemoJson = "<oot3d-work>\standalone_demo\kokiri_forest\native_host\comparison\kokiri_slot5\demo_slot5.json",
+    [string]$OutputDir = "<oot3d-work>\standalone_demo\kokiri_forest\native_host\comparison\kokiri_slot5",
+    [string]$PicaTraceJson = "<local>/oot3dre\captures\azahar_pica\kokiri_slot5_20260704_101127\derived\oot3d_pica_frame_000015.native_pica_register_trace.json",
+    [string]$VisualCompareSummary = "<oot3d-work>\standalone_demo\kokiri_forest\native_host\comparison\kokiri_slot5\visual_compare_summary.json"
 )
 
 Set-StrictMode -Version Latest

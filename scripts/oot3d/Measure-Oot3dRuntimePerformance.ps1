@@ -1,17 +1,17 @@
 [CmdletBinding()]
 param(
     [string]$Executable =
-        "F:\oot3dre_build\native-renderer-llvm\oot3d_native_game.exe",
+        "<oot3d-build>\native-renderer-llvm\oot3d_native_game.exe",
     [string]$SourceGraphicsConfig =
-        "I:\oot3dre_work\native_game\captures\overall_perf_20260726\p4_gpu_compaction_benchmark_config.json",
+        "<oot3d-work>\native_game\captures\overall_perf_20260726\p4_gpu_compaction_benchmark_config.json",
     [string]$OutputDirectory =
-        "I:\oot3dre_work\native_game\captures\runtime_performance",
+        "<oot3d-work>\native_game\captures\runtime_performance",
     [string]$LoadState =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata\quick.oot3dsav",
+        "<oot3d-work>\native_game\oot3d_native_savedata\quick.oot3dsav",
     [string]$InputTimeline =
-        "I:\oot3dre_work\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
+        "<oot3d-work>\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [ValidateSet("nri", "vulkan")]
     [string]$Renderer = "vulkan",
     [ValidateRange(1, 100)]

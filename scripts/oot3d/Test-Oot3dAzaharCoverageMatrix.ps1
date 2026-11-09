@@ -4,10 +4,10 @@ param(
     [string]$Mode = "smoke",
     [string]$CatalogPath = (Join-Path $PSScriptRoot "../../tools/oot3d/native_a32_runtime/oot3d_azahar_coverage_scenarios.json"),
     [string]$LauncherPath = (Join-Path $PSScriptRoot "Invoke-Oot3dAzaharCoverageScenario.ps1"),
-    [string]$AzaharExe = "I:\oot3dre_work\azahar-oot3d-coverage-build\bin\Release\azahar.exe",
-    [string]$RomPath = "E:\ppssppvr\oot3d_decomp\oot3d.cci",
+    [string]$AzaharExe = "<oot3d-work>\azahar-oot3d-coverage-build\bin\Release\azahar.exe",
+    [string]$RomPath = "<ppssppvr>\oot3d_decomp\oot3d.cci",
     [string]$SeedSavestatePath = "",
-    [string]$OutputRoot = "I:\oot3dre_work\azahar-coverage-matrices",
+    [string]$OutputRoot = "<oot3d-work>\azahar-coverage-matrices",
     [string]$RunDirectory = "",
     [string]$ScenarioListPath = "",
     [ValidateSet("opengl", "vulkan")]

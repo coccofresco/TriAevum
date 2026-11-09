@@ -51,7 +51,7 @@ by `Play+20AC`: HUD is allowed only if that pointer is absent or its signed
 halfword at `+224E` is zero. Our gate omitted this condition.
 
 Evidence: existing read-only export
-`I:/oot3dre_work/topscreen-2.1.1-reference/ghidra_export/decompiled/00129_005ce554_FUN_005ce554.c`,
+`<oot3d-work>/topscreen-2.1.1-reference/ghidra_export/decompiled/00129_005ce554_FUN_005ce554.c`,
 lines around 280-299. The test setting that field nonzero fails on the old
 implementation and passes after correction; clearing it restores permission.
 The existing no-player fixture still draws. An unreadable player field reports
@@ -85,7 +85,7 @@ unconditional visibility is used to conceal flashing.
   regression, exit 0. Final `hud-review-final-storms`: 1,100 presentations,
   native teaching completion and all five before/after progress checks pass.
 
-Private Windows evidence: `J:/TriAevum-verify-20260910/`.
+Private Windows evidence: `<verify-20260910>/`.
 Private Linux evidence: `~/triaevum-linux-parity-20260911/`.
 Capture runs deliberately stall on synchronous GPU readback; not FPS tests.
 
@@ -156,7 +156,7 @@ must be qualified in these contexts, not assumed from an idle capture.
 
 The first Windows framebuffer regression attempt stopped on disk exhaustion
 on J:, not a rendering assertion. Its log is retained under
-`J:/TriAevum-verify-20260910/hud-context-gates-x2`; incomplete generated images
+`<verify-20260910>/hud-context-gates-x2`; incomplete generated images
 were removed. The replacement run uses
 `%USERPROFILE%/triaevum-verify-20260911/hud-context-gates-x2`.
 That replacement run completed with exit 0, 160 presentations and 40 consecutive

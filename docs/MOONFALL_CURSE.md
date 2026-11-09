@@ -1,7 +1,7 @@
 # TriAevum — Moonfall Curse
 
 TriAevum — Moonfall Curse is the Majora's Mask 3D project of TriAevum
-(repository `I:/TriAevum-MoonfallCurse`, branch `moonfall-curse/main`). The
+(repository `<local>/TriAevum-MoonfallCurse`, branch `moonfall-curse/main`). The
 runtime shows that name for this title (`TitleProductName` in
 `triaevum_title_adapter.h`; the log file name keeps ASCII,
 `TriAevum - Moonfall Curse.log`). Code and documents keep `mm3d` for the
@@ -104,7 +104,7 @@ repository and packages (EUR needs its own `EU_<Language>` equivalents).
 
 ## Pipeline (reproducible, outside the repository)
 
-Work directory `I:/_triaevum_work/mm3d-port` (`W` below).
+The local work directory (not part of this repository) is called `W` below.
 
 1. Extract with Forge's title-neutral extractor (`tools/triaevum_release/ctr_rom.py`):
    ExHeader, decompressed code.bin, RomFS image into `W/extract`.

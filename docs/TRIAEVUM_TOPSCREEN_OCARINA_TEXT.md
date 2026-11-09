@@ -20,8 +20,8 @@ in the preceding report; this module is not a wholesale PR merge.
 ## Owners And Evidence
 
 Read-only evidence: official TopScreen 2.1.1 EUR exports under
-`I:/oot3dre_work/topscreen-2.1.1-reference/ghidra_export/decompiled/`, and
-existing native exports under `I:/oot3decomp/ghidra_export/decompiled/`.
+`<oot3d-work>/topscreen-2.1.1-reference/ghidra_export/decompiled/`, and
+existing native exports under `<oot3d-decomp>/ghidra_export/decompiled/`.
 No new decompilation or external-repository changes were needed.
 
 | Entry/data | Responsibility |

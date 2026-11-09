@@ -11,10 +11,10 @@ autorita.
 Non e una dichiarazione di completezza. Il checkpoint funzionale e:
 
 ```text
-repository   I:\oot3dre_work\oot3d-native-renderer-integration
+repository   <oot3d-work>\oot3d-native-renderer-integration
 branch       renderer/oot3d-native-integration
 checkpoint   30a1b92fa84eaa9271ffdc0d30bd65a5322a6a02
-build tree   I:\oot3dre_work\build-native-renderer-integration-v2
+build tree   <oot3d-work>\build-native-renderer-integration-v2
 ```
 
 Il commit che contiene questo handover e documentale e viene dopo il
@@ -53,7 +53,7 @@ e RNG conservano compatibility island A32 non classificate.
 Il comportamento implementato deriva dal binario OOT3D EUR Rev 0:
 
 ```text
-code.bin  E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin
+code.bin  <ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin
 base      0x00100000
 size      4567040 bytes
 SHA-256   16A6B0AA4C4784680220A6F780F7F8A73CFB205557AA9F9F0E705179E0613220
@@ -70,7 +70,7 @@ Regole da mantenere:
    continuazione e fallback non distruttivo.
 5. Ogni nuovo boundary deve essere un observable exit whole-AOT.
 6. `Native30Interpolated` e una baseline da non modificare.
-7. Non riallineare o leggere nuovamente `I:\oot3decomp` finche l'utente non
+7. Non riallineare o leggere nuovamente `<oot3d-decomp>` finche l'utente non
    lo richiede esplicitamente. Lo snapshot citato nella strategia e storico,
    non una dipendenza live.
 
@@ -406,7 +406,7 @@ Build usata:
 
 ```powershell
 & 'C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
-Set-Location I:\oot3dre_work\build-native-renderer-integration-v2
+Set-Location <oot3d-work>\build-native-renderer-integration-v2
 cmake --build . --target oot3d_gameplay_time_tests oot3d_typed_gameplay_tests oot3d_native_mass_aot_tests --parallel 12
 .\oot3d_gameplay_time_tests.exe
 .\oot3d_typed_gameplay_tests.exe
@@ -434,7 +434,7 @@ effettivamente EnKanban.
 Artifact differenziali gia presenti:
 
 ```text
-I:\oot3dre_work\native_game\frame_rate_audit\
+<oot3d-work>\native_game\frame_rate_audit\
   player_floor_timer_native30.json
   player_floor_timer_enhanced60.json
   player_ledge_timer_native30.json
@@ -451,7 +451,7 @@ Il parametro autoritativo e semantico:
 ```powershell
 .\scripts\oot3d\Invoke-Oot3dNativeGame.ps1 `
   -SkipBuild `
-  -Executable I:\oot3dre_work\build-native-renderer-integration-v2\oot3d_native_game.exe `
+  -Executable <oot3d-work>\build-native-renderer-integration-v2\oot3d_native_game.exe `
   -GameplayTiming enhanced60 `
   -Renderer nri
 ```

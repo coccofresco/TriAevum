@@ -16,7 +16,7 @@ translated bodies and rejects runtime translation in the required-native path.
 This experiment neither edits nor replaces that renderer path or its cache policy.
 
 The CPU still prepares and projects scene data before NRI. The decompiled
-`I:/oot3decomp/src/genuine/z_genuine_cohort_20.c`, function `0033B11C`, describes
+`<oot3d-decomp>/src/genuine/z_genuine_cohort_20.c`, function `0033B11C`, describes
 a complete matrix/point projection. Its 42 original ARM instructions and emitted
 whole-AOT body establish load order, the non-fused VMLA arithmetic, output-Z sign,
 literal operand, final VFP lanes and stores. The external decomp remains read-only.

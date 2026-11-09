@@ -94,8 +94,8 @@ Private reproducibility artifacts:
 `%TEMP%/TriAevum-ui-canvas-ultrawide/leaf-runtime.json`,
 `leaf-framebuffer_000150.bmp`, `four-three-framebuffer_000150.bmp`,
 `items-runtime.json`, `items-framebuffer_000130.bmp` and `_000180.bmp`.
-Checkpoint: `J:/TriAevum-verify-20260910/win-field-x2/checkpoint.oot3dsav`.
-Runtime: `J:/TriAevum-verify-20260910/runtime/TriAevum.exe`.
+Checkpoint: `<verify-20260910>/win-field-x2/checkpoint.oot3dsav`.
+Runtime: `<verify-20260910>/runtime/TriAevum.exe`.
 These are correctness captures, not performance measurements. Windows desktop
 screenshots were not used. Linux was not rerun in this increment.
 
@@ -154,7 +154,7 @@ this is not a claim of complete physical Y2R hardware emulation. The first new
 decoder build reached an additional base-relative dispatch gap, so reaching
 Visions alone is explicitly NOT proof of working playback or exit.
 
-Private decoder diagnostics are under `J:/TriAevum-diagnostics/y2r-codec-relative`;
+Private decoder diagnostics are under `<diagnostics>/y2r-codec-relative`;
 UI captures/checkpoints are under `%TEMP%/TriAevum-ui-canvas-ultrawide`.
 Never package these artifacts. Keep original game saves separate from diagnostic
 states. No issue has been marked resolved solely on unit tests.
@@ -234,7 +234,7 @@ Windows/Linux modules that still lack those entries.
 
 ### Read-only decompilation evidence and next validation boundary
 
-Inspected external snapshot: `I:/oot3decomp`, commit `e0b6c5f7`.
+Inspected external snapshot: `<oot3d-decomp>`, commit `e0b6c5f7`.
 No external sources or metadata were modified.
 
 - `src/middleware/mobiclip.c`: structured portable decoder; bit reader,

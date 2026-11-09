@@ -9,11 +9,11 @@ installation, device setting changes or input injection is required.
 
 Verified on 2026-09-09, Windows USB bridge to the SM-S931B (Android 16):
 
-- ADB: `I:/oot3dre_tools/android/platform-tools/adb.exe`.
-- scrcpy: `I:/oot3dre_tools/android/scrcpy-4.1/scrcpy-win64-v4.1/scrcpy.exe`.
+- ADB: `<tools>/android/platform-tools/adb.exe`.
+- scrcpy: `<tools>/android/scrcpy-4.1/scrcpy-win64-v4.1/scrcpy.exe`.
 - Official scrcpy 4.1 Windows x64 archive SHA-256:
   `5b12172b3264b2889f4583ee64752ce832e29bc8b1089dca81093459697165db`.
-- Private captures: `I:/oot3dre_work/android-captures/`.
+- Private captures: `<oot3d-work>/android-captures/`.
 - Local launchers in that directory: `Capture-Android.ps1`, `Preview-Android.ps1`.
 - Linux remains the Android build host. The Python helper works on either host
   with Python >= 3.11, ADB and scrcpy; no SDK/compiler is needed for capture.
@@ -45,9 +45,9 @@ is an external diagnostic tool, not a runtime or release dependency.
 From the source root, PowerShell:
 
 ```powershell
-$env:ADB = 'I:/oot3dre_tools/android/platform-tools/adb.exe'
-$env:SCRCPY = 'I:/oot3dre_tools/android/scrcpy-4.1/scrcpy-win64-v4.1/scrcpy.exe'
-python tools/android/capture_device.py --output I:/oot3dre_work/android-captures --seconds 15
+$env:ADB = '<tools>/android/platform-tools/adb.exe'
+$env:SCRCPY = '<tools>/android/scrcpy-4.1/scrcpy-win64-v4.1/scrcpy.exe'
+python tools/android/capture_device.py --output <oot3d-work>/android-captures --seconds 15
 ```
 
 Optional switches:

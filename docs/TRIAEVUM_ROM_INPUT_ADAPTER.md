@@ -145,11 +145,11 @@ no literals, path/hash reconstruction, QM slot semantics, hint movie names,
 payload preservation, rollback, publication/reuse, unchanged EUR path,
 precompiled identity and release auditing.
 
-Local private evidence is under `I:/oot3dre_work/usa-rev1-port/`:
+Local private evidence is under `<oot3d-work>/usa-rev1-port/`:
 `forge-install.log`, `payload-conservation.json`, `boot-probe/`,
 `forge-boot-menu-probe/` and `candidate-installation/`. The latter is installed
 with fresh saves and can be tested without changing the published installation.
-The v2 checks are under `I:/_triaevum_work/perf-levers/qualify/usa-hint-movies/`.
+The v2 checks are under `<work>/perf-levers/qualify/usa-hint-movies/`.
 
 ## Before general release support
 

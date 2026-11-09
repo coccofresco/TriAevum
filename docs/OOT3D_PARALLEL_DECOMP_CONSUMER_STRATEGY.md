@@ -8,21 +8,21 @@
 
 ## Objective
 
-Turn semantic progress from `I:\oot3decomp` into reviewable source-owner
+Turn semantic progress from `<oot3d-decomp>` into reviewable source-owner
 integration units without modifying that repository, coupling it to the normal
 runtime build, or importing bulk recovered C as if it were finished source.
 
 The producer and consumer can therefore advance independently:
 
 ```text
-I:\oot3decomp
+<oot3d-decomp>
     committed semantic C/C++ + generated analysis evidence
         |
         v
 revision-pinned owner closure generator
         |
         v
-I:\oot3dre_work\source_integration\<immutable snapshot>
+<oot3d-work>\source_integration\<immutable snapshot>
         |
         v
 explicitly approved owner import into the native runtime
@@ -42,10 +42,10 @@ OOT3D layout, timing or control flow.
 | Closure generator | `tools/oot3d/source_integration/build_owner_closure.py` | Builds direct transitive closures, classifies source maturity, resolves indirect evidence and ranks missing work. |
 | Regression tests | `tools/oot3d/source_integration/test_build_owner_closure.py` | Verifies commit pinning, indirect blockers, hot-profile ranking, immutable reruns and consumer-input identity. |
 | Operator entry point | `scripts/oot3d/Invoke-Oot3dDecompOwnerSync.ps1` | Runs tests and creates a snapshot without writing below the decomp root. |
-| Generated exchange | `I:\oot3dre_work\source_integration` | Stores immutable packages and a `latest.json` pointer outside both repositories. |
+| Generated exchange | `<oot3d-work>\source_integration` | Stores immutable packages and a `latest.json` pointer outside both repositories. |
 | Decomp handoff guide | `docs/OOT3D_CONSUMER_TO_DECOMP_HANDOFF.md` | Defines how producer work absorbs and supersedes consumer-reviewed semantics. |
 
-The normal game build has no live dependency on `I:\oot3decomp`. This is
+The normal game build has no live dependency on `<oot3d-decomp>`. This is
 intentional: an in-progress decomp edit cannot invalidate or lengthen an
 ordinary renderer/runtime build.
 
@@ -227,13 +227,13 @@ target evidence is still required for every promotion.
 The current exact exchange package is:
 
 ```text
-I:\oot3dre_work\source_integration\294123b03806-035e6576800b
+<oot3d-work>\source_integration\294123b03806-035e6576800b
 ```
 
 It uses source and regenerated sidecars from
 `294123b03806643005cc8981a8179a8a52236564`, retained read-only at
-`I:\oot3dre_work\decomp_snapshots\294123b03806`. Both sidecars identify that
-same commit. The moving `I:\oot3decomp` checkout is not package evidence.
+`<oot3d-work>\decomp_snapshots\294123b03806`. Both sidecars identify that
+same commit. The moving `<oot3d-decomp>` checkout is not package evidence.
 
 Relative to the former `d1f8b1d9` analysis, the producer adds 71 reviewed
 target-linked bodies. Fifteen intersect configured owners and reduce the
@@ -269,7 +269,7 @@ source revision. Runtime activation remains a separate hashed acceptance.
 
 ## Guardrails
 
-- Never edit, clean, switch or commit `I:\oot3decomp` from this consumer.
+- Never edit, clean, switch or commit `<oot3d-decomp>` from this consumer.
 - Never consume uncommitted tracked source from the producer.
 - Never auto-link a newly closed owner into the game.
 - Never approve an owner without hashed implementation and verification
@@ -300,7 +300,7 @@ portable source and supersede the overlay.
 
 The pinned consumer package for decomp commit
 `b49f2916989082eb0dcf6be9f0d8ed80ddf3a181` is generated below
-`I:\oot3dre_work\source_integration`. It records 26 producer promotions relative
+`<oot3d-work>\source_integration`. It records 26 producer promotions relative
 to `0850405`.
 
 Two promoted functions are deliberately quarantined:
@@ -354,13 +354,13 @@ The immediate owner effect is deliberately modest:
 - no owner closes and no runtime import is enabled.
 
 The immutable package is generated under
-`I:\oot3dre_work\source_integration\80747d70a8bc-e2aed2bb7576`.
+`<oot3d-work>\source_integration\80747d70a8bc-e2aed2bb7576`.
 
 ## faf4b2c alignment
 
 The pinned producer checkpoint was
 `faf4b2c767afef82cb7912aef150ef317a6f7c68`. The immutable consumer package is
-`I:\oot3dre_work\source_integration\faf4b2c767af-f3c17bbd5cbb`. It reads only
+`<oot3d-work>\source_integration\faf4b2c767af-f3c17bbd5cbb`. It reads only
 committed producer files; later tracked edits in the decomp worktree are
 reported and ignored.
 
@@ -388,7 +388,7 @@ new leaf promotions into a misleading owner-closure claim.
 
 The source package remains pinned to producer checkpoint
 `5379fda60cf06c84e7af65061018a0ecc6c603f8`. Its current immutable package is
-`I:\oot3dre_work\source_integration\5379fda60cf0-92e72b0e5971`.
+`<oot3d-work>\source_integration\5379fda60cf0-92e72b0e5971`.
 
 Relative to `faf4b2c`, the producer side still contributes 20 certified-body
 promotions and leaves 38 bodies in the target-wide cleanup lane. The consumer
@@ -421,7 +421,7 @@ The consumer evidence checkpoint is
 the consumer work is:
 
 ```text
-I:\oot3dre_work\source_integration\297471509d57-95cafee50019
+<oot3d-work>\source_integration\297471509d57-95cafee50019
 ```
 
 The consumer now implements all three dynamic contracts previously recorded
@@ -460,10 +460,10 @@ blockers explicitly, so this progress cannot be mistaken for a full
 ## 2974715 shared record initializer closure
 
 The follow-up exact package is
-`I:\oot3dre_work\source_integration\297471509d57-95cafee50019`. Its source,
+`<oot3d-work>\source_integration\297471509d57-95cafee50019`. Its source,
 callgraph and function-pointer sidecars all belong to producer commit
 `297471509d57f01ae58e08aeaffc45087c2221e4`; a detached copy at
-`I:\oot3dre_work\decomp_snapshots\297471509d57` prevents concurrent producer
+`<oot3d-work>\decomp_snapshots\297471509d57` prevents concurrent producer
 commits from changing provenance during generation.
 
 The live producer advanced independently to
@@ -501,11 +501,11 @@ does not create a second memory-service implementation.
 
 The exact producer checkpoint is
 `d1f8b1d907a7e1b8d823abde58e94e4d900dc5dc`. Its immutable source and
-sidecar snapshot is `I:\oot3dre_work\decomp_snapshots\d1f8b1d907a7`; the
+sidecar snapshot is `<oot3d-work>\decomp_snapshots\d1f8b1d907a7`; the
 generated consumer package is:
 
 ```text
-I:\oot3dre_work\source_integration\d1f8b1d907a7-a363c5991b6e
+<oot3d-work>\source_integration\d1f8b1d907a7-a363c5991b6e
 ```
 
 The live producer subsequently advanced and has local edits, so it remains a
@@ -554,7 +554,7 @@ adding more runtime gates.
 The next exact package is:
 
 ```text
-I:\oot3dre_work\source_integration\d1f8b1d907a7-559a4745a049
+<oot3d-work>\source_integration\d1f8b1d907a7-559a4745a049
 ```
 
 It uses the same immutable producer and sidecar snapshot as the preceding
@@ -598,7 +598,7 @@ and directly transferable to the producer.
 The next exact package is:
 
 ```text
-I:\oot3dre_work\source_integration\d1f8b1d907a7-e13f3a2762ef
+<oot3d-work>\source_integration\d1f8b1d907a7-e13f3a2762ef
 ```
 
 The consumer closes direct child `0x0047955C` as
@@ -637,7 +637,7 @@ better closure leverage than an independently testable gameplay subtree.
 The next exact package is:
 
 ```text
-I:\oot3dre_work\source_integration\d1f8b1d907a7-9dbe8f7cf190
+<oot3d-work>\source_integration\d1f8b1d907a7-9dbe8f7cf190
 ```
 
 The consumer closes direct Actor leaf `0x0047AF24` as the provisional
@@ -674,7 +674,7 @@ unless they become the smallest complete vertical closure.
 The current exact package is:
 
 ```text
-I:\oot3dre_work\source_integration\d108e7a0f2a8-4a77de5d1200
+<oot3d-work>\source_integration\d108e7a0f2a8-4a77de5d1200
 ```
 
 Counting only closed owners understates this tranche. Relative to the
@@ -721,7 +721,7 @@ guest-memory/callback adapter against the pinned candidate.
 The current exact package is:
 
 ```text
-I:\oot3dre_work\source_integration\e2e28e2d4cf4-4a77de5d1200
+<oot3d-work>\source_integration\e2e28e2d4cf4-4a77de5d1200
 ```
 
 The producer promotes 101 target-linked identities in one auditable
@@ -758,7 +758,7 @@ parallel while the producer closes Renderer and the cross-owner residual.
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\d3817bc96da3-4a77de5d1200
+<oot3d-work>\source_integration\d3817bc96da3-4a77de5d1200
 ```
 
 The producer processes 101 complete target bodies and records 99 new reviewed
@@ -794,7 +794,7 @@ leaves. Current effective closure is Player 1,032/1,090, Player-common
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\4b0b39f9e705-4a77de5d1200
+<oot3d-work>\source_integration\4b0b39f9e705-4a77de5d1200
 ```
 
 The producer promotes 100 complete target bodies: 95 bulk-only and five
@@ -821,7 +821,7 @@ direct members and `004BC22C` is the one shared indirect target.
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\6a1197f3a520-7286a857de90
+<oot3d-work>\source_integration\6a1197f3a520-7286a857de90
 ```
 
 The producer promotes 100 bounded target bodies across 26 maintained modules.
@@ -853,7 +853,7 @@ Player/Camera/cutscene dependencies ahead of isolated leaves.
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\6949fa01accc-7286a857de90
+<oot3d-work>\source_integration\6949fa01accc-7286a857de90
 ```
 
 The producer promotes 100 complete bodies, six of which are direct configured
@@ -876,7 +876,7 @@ two certified bodies, shared hot dependencies and the indirect target.
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\92c4a669d25a-7286a857de90
+<oot3d-work>\source_integration\92c4a669d25a-7286a857de90
 ```
 
 The producer promotes exactly 100 complete target bodies across 18 maintained
@@ -904,7 +904,7 @@ work independently.
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\9ba85aeae92f-7286a857de90
+<oot3d-work>\source_integration\9ba85aeae92f-7286a857de90
 ```
 
 The producer promotes exactly 100 complete target bodies across 17 maintained
@@ -926,7 +926,7 @@ BgCheck, Camera and cutscene dependencies.
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\6e8119dbf710-7286a857de90
+<oot3d-work>\source_integration\6e8119dbf710-7286a857de90
 ```
 
 The producer promotes 101 complete target identities across 19 maintained
@@ -950,7 +950,7 @@ dependencies.
 The current immutable package is:
 
 ```text
-I:\oot3dre_work\source_integration\b2263fafb2dd-7286a857de90
+<oot3d-work>\source_integration\b2263fafb2dd-7286a857de90
 ```
 
 The producer promotes exactly 100 complete target bodies across 16 maintained
@@ -1062,7 +1062,7 @@ fixture thunk is linked into the game. A 60-frame
 - zero bridge failures, whole-AOT memory faults or unsupported exits.
 
 The evidence is
-`I:\oot3dre_work\native_game\actor_update_all_source_smoke.json`, SHA-256
+`<oot3d-work>\native_game\actor_update_all_source_smoke.json`, SHA-256
 `d7052debf18b38c953b34c5c56ae811a82e59589cd8ce86ee41d9fd4ff102242`.
 The same build without the source-owner switch reaches the pre-existing
 unsupported indirect A32 callback at `0x004617A4` because this MSVC build does
@@ -1093,7 +1093,7 @@ configured source graph for all eight owners. The immutable consumer package
 is:
 
 ```text
-I:\oot3dre_work\source_integration\d5c292708f7f-3819f4804b32
+<oot3d-work>\source_integration\d5c292708f7f-3819f4804b32
 ```
 
 Its aggregate semantic closure is 3,676/3,676 weighted memberships and
@@ -1170,7 +1170,7 @@ failure to prove that this path cannot become a host access violation.
 A second Native30 run from
 `navi_kokiri_load_10420.oot3dsav` completed 120 presentation frames and 119
 `Actor_UpdateAll` owner calls with zero bridge failures. Its report is
-`I:\oot3dre_work\native_game\actor_init_context_source_smoke_10420.json`,
+`<oot3d-work>\native_game\actor_init_context_source_smoke_10420.json`,
 SHA-256
 `07c5af58e937e3b537a353c28942c85d5b83f09474320bbefb16791e977430ba`.
 It recorded zero `Actor_InitContext` calls because that checkpoint is already
@@ -1227,7 +1227,7 @@ The following tests pass:
 The retained Native30 process report is:
 
 ```text
-I:\oot3dre_work\native_game\actor_init_context_source_smoke_10380_objhana.json
+<oot3d-work>\native_game\actor_init_context_source_smoke_10380_objhana.json
 SHA-256 44dcac6bea9a601cc0f0bde8b412bcea44181d0b9f3f5cf23b25d932f63ac8ef
 ```
 
@@ -1270,12 +1270,12 @@ of 19,715,893 ticks (73.536 ms), and exact clock/deadline alignment at exit.
 Evidence:
 
 ```text
-I:\oot3dre_work\native_game\actor_init_context_source_smoke_frame12000_accepted.json
+<oot3d-work>\native_game\actor_init_context_source_smoke_frame12000_accepted.json
 SHA-256 bab3cbe1e70352747c4ac5a472dbae6f3efab3f0737ddf76cdd101b35d2e886a
 ```
 
 The corresponding content-addressed owner package is
-`I:\oot3dre_work\source_integration\d5c292708f7f-4adc6afbb839`.
+`<oot3d-work>\source_integration\d5c292708f7f-4adc6afbb839`.
 It keeps producer commit `d5c2927` and all eight closed source graphs
 unchanged while reporting three hashed runtime-import acceptance records.
 
@@ -1336,10 +1336,10 @@ an implementation uses even when final guest bytes are identical.
 Evidence:
 
 ```text
-I:\oot3dre_work\native_game\cutscene_update_frame_source_smoke_link_dream.json
+<oot3d-work>\native_game\cutscene_update_frame_source_smoke_link_dream.json
 SHA-256 e59ca5d4ee2c40ce6a7c482021a69c03c7560632177843f2f02a8eb24a810f75
 
-I:\oot3dre_work\native_game\cutscene_update_frame_a32_baseline_link_dream.json
+<oot3d-work>\native_game\cutscene_update_frame_a32_baseline_link_dream.json
 SHA-256 10a81e87b63a156251008538d385691aeca7f84cb133390a3f1d66d3a703f322
 route: current typed Cutscene_UpdateFrame baseline
 ```
@@ -1351,7 +1351,7 @@ remains the next independently promoted owner; it has not been folded into
 this 292-byte import.
 
 The regenerated immutable package is
-`I:\oot3dre_work\source_integration\d5c292708f7f-ca8c22db1095`: all eight
+`<oot3d-work>\source_integration\d5c292708f7f-ca8c22db1095`: all eight
 producer graphs remain closed, four owners are runtime-accepted and the
 worklist remains empty.
 
@@ -1399,10 +1399,10 @@ Enhanced60 keeps its typed cutscene timing path. The retained acceptance
 reports are:
 
 ```text
-I:\oot3dre_work\native_game\cutscene_process_commands_a32_baseline_link_dream_accepted.json
+<oot3d-work>\native_game\cutscene_process_commands_a32_baseline_link_dream_accepted.json
 SHA-256 9004795e6a67e602de973736aaba89b83a4d74cf47abfb9c7a08168df40e4372
 
-I:\oot3dre_work\native_game\cutscene_process_commands_source_smoke_link_dream_accepted.json
+<oot3d-work>\native_game\cutscene_process_commands_source_smoke_link_dream_accepted.json
 SHA-256 ddfeb034745612f83e3d22bafa33d75efcb44896b3dbce46313ba2a5b50419d9
 ```
 
@@ -1453,10 +1453,10 @@ TopScreen/free-camera ownership still has higher dispatch priority, and
 Enhanced60 retains its typed camera timing path. Final deterministic evidence:
 
 ```text
-I:\oot3dre_work\native_game\camera_update_a32_baseline_link_dream_accepted.json
+<oot3d-work>\native_game\camera_update_a32_baseline_link_dream_accepted.json
 SHA-256 7da50afaed77e8c4c54012c9742b04332fc3c1f5d10661f88dcb91a605c2dbbd
 
-I:\oot3dre_work\native_game\camera_update_source_link_dream_accepted.json
+<oot3d-work>\native_game\camera_update_source_link_dream_accepted.json
 SHA-256 4c26d89c47b3dca8952f70976c7b216eddc9d56861c50533791ba373f53994e3
 ```
 
@@ -1504,10 +1504,10 @@ Enhanced60 keeps the existing typed temporal owner. Final deterministic
 evidence:
 
 ```text
-I:\oot3dre_work\native_game\player_update_a32_baseline_link_dream_accepted.json
+<oot3d-work>\native_game\player_update_a32_baseline_link_dream_accepted.json
 SHA-256 6cb820acbf2ab58f1d4fe64a22d2a36cf85a05ac1f593d61925c48aeb386c208
 
-I:\oot3dre_work\native_game\player_update_source_link_dream_accepted.json
+<oot3d-work>\native_game\player_update_source_link_dream_accepted.json
 SHA-256 df52b3030e99fea98654ff4293895d0a10251bdb17995de750d47bfe97e5dc61
 ```
 
@@ -1601,7 +1601,7 @@ identical at 205 frames and PCM FNV-1a
 Retained profile evidence:
 
 ```text
-I:\oot3dre_work\native_game\source_gameplay_profile_link_dream_accepted.json
+<oot3d-work>\native_game\source_gameplay_profile_link_dream_accepted.json
 SHA-256 ce16eabbd911aa4a62a8c2d74a5af9c2d539bb40f9a8d9fbbc63f548ab55a5e5
 ```
 

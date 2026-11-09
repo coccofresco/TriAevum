@@ -73,7 +73,7 @@ sequence IDs, not host frame numbers or wall time, to establish coverage.
   translation, model-scale invariance, singular views, origin crossing, isolated
   actor motion, cold admission, black masks, cache reuse and source invalidation.
 
-Private evidence is under `I:/oot3dre_work/grass-cuts-20260907-*`. At the exact
+Private evidence is under `<oot3d-work>/grass-cuts-20260907-*`. At the exact
 previously bad transition `1395 -> 1396`, `composed` observes 31 discontinuous
 rigid draws out of 48 despite 98.75% geometry coverage. Its framebuffer at host
 2519 is the correct river/tree view with 124,056 grass blades, not the old tilted

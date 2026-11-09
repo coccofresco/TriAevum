@@ -17,7 +17,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[4]
 DECOMPILED = ROOT / "tools" / "oot3d" / "decomp_support" / "ghidra_export" / "decompiled"
 ANALYSIS = ROOT / "tools" / "oot3d" / "decomp_support" / "analysis"
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_DISASSEMBLY = (
     ROOT
     / "tools"

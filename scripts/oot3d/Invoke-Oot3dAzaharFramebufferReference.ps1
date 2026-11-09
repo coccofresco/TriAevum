@@ -1,8 +1,8 @@
 param(
-    [string]$OutputRoot = "I:\oot3dre_work\azahar",
+    [string]$OutputRoot = "<oot3d-work>\azahar",
     [string]$CaptureName = "",
-    [string]$AzaharExe = "E:\azahar pcvr\build-pcvr-qt\bin\Release\azahar.exe",
-    [string]$RomPath = "E:\ppssppvr\oot3d_decomp\oot3d.cci",
+    [string]$AzaharExe = "<azahar-pcvr>\build-pcvr-qt\bin\Release\azahar.exe",
+    [string]$RomPath = "<ppssppvr>\oot3d_decomp\oot3d.cci",
     [int]$Slot = 6,
     [ValidateSet("opengl", "vulkan")]
     [string[]]$Backends = @("opengl", "vulkan"),

@@ -70,15 +70,15 @@ profiling and GPU-validation runs are explicitly labeled non-benchmark evidence.
 
 ## Reproduction and rejected experiment
 
-Runtime: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
+Runtime: `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
 Before binary: same directory, `TriAevum.before-canonical-costs.exe`.
-Matching before PDB/binary: `I:/oot3dre_work/canonical-costs-20260907-before/`.
-Evidence and generated comparison: `J:/TriAevum-diagnostics/canonical-costs-20260907/`.
+Matching before PDB/binary: `<oot3d-work>/canonical-costs-20260907-before/`.
+Evidence and generated comparison: `<diagnostics>/canonical-costs-20260907/`.
 `a4/e1/a5/e2` are the final measurements; `visual-*`, `trace-*` and
 `enhanced-intro` must not be used as performance runs.
 
 Use `tools/triaevum_release/tests/benchmark_gameplay.mjs` with the current release
-launch profile, `hudtest`, `overrides=J:/TriAevum-diagnostics/canonical-costs-20260907/native-640.json`,
+launch profile, `hudtest`, `overrides=<diagnostics>/canonical-costs-20260907/native-640.json`,
 `frames=1200 warmup=120 interpolation=false`, and a fresh output directory.
 Each invocation records the executable and title-plugin hashes and its options.
 

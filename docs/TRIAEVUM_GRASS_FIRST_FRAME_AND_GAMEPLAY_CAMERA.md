@@ -118,7 +118,7 @@ modified camera/actions through the existing TopScreen config owner.
 
 ## Verification
 
-Developer exe: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`, used
+Developer exe: `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`, used
 with the installed launch profile. Do not copy an unpaired development binary
 over a catalogued release. User saves/configs were not overwritten.
 

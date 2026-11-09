@@ -150,7 +150,7 @@ each package to runtime hash, title source manifest and title binary hash; an
 unchanged ABI or a successful intro is insufficient. Preserve native/x2 timing
 separation and isolate all saves/configs used by probes.
 
-Private evidence: Windows `J:/TriAevum-verify-20260910/display-x2-221117/` and
+Private evidence: Windows `<verify-20260910>/display-x2-221117/` and
 the current runtime/widget outputs; Linux `~/triaevum-post-1c-audit-backup/`,
 `~/triaevum-align-d3ffc1f-backup/release-audit-tests.*`, and Flatpak probes
 `aligned-d3ffc1f-audit-gameplay` / `post-1c-launcher-audit`. No private assets,
@@ -163,10 +163,10 @@ removed the following obsolete artifacts after explicit path/reparse checks:
 
 | Removed path | Bytes | Retained evidence |
 | --- | ---: | --- |
-| `J:/TriAevum-diagnostics/release-alpha1-offline-20260907/package` | 360892325 | All 42 files SHA-256 identical to retained `proof/installation` copies. |
-| `J:/TriAevum-diagnostics/release-alpha1-20260907/installation/data/sources` | 483829760 | All three extracted files SHA-256 identical to retained offline `proof/installation/data/sources`. |
-| `I:/TriAevumFinalSourceValidation-build-1e7a9a4` | 2977016 | Obsolete generated CMake metadata and two stb dependency copies; active build remains on J. |
-| `I:/TriAevumForgeBuild/work` | 24365414 | Old PyInstaller intermediate files; spec retained. |
+| `<diagnostics>/release-alpha1-offline-20260907/package` | 360892325 | All 42 files SHA-256 identical to retained `proof/installation` copies. |
+| `<diagnostics>/release-alpha1-20260907/installation/data/sources` | 483829760 | All three extracted files SHA-256 identical to retained offline `proof/installation/data/sources`. |
+| `<local>/TriAevumFinalSourceValidation-build-1e7a9a4` | 2977016 | Obsolete generated CMake metadata and two stb dependency copies; active build remains on J. |
+| `<local>/TriAevumForgeBuild/work` | 24365414 | Old PyInstaller intermediate files; spec retained. |
 
 Total removed: **872064515 bytes**. No original ROM, user save, active source
 repository or active incremental object cache was removed. The first broad
@@ -189,7 +189,7 @@ the two ammunition counters remain at their respective commands, the minimap
 marker is on the right map, six carrots form one contiguous row and Grass is
 present. No fixture memory edits or per-scene renderer fixes were introduced.
 
-Runner: `I:/TriAevum-public/probe-mounted-parity.py` (private, also copied to
+Runner: `<public-work>/probe-mounted-parity.py` (private, also copied to
 the user's Linux host). Windows output: `mounted-parity-20260912/game-ready`;
 Linux: `~/triaevum-mounted-parity-20260912/game-ready`. A first private
 Windows runner attempt failed before boot because its relative manifest was

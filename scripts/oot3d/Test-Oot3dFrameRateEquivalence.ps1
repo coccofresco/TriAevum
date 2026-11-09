@@ -1,9 +1,9 @@
 [CmdletBinding()]
 param(
-    [string]$Executable = "I:\oot3dre_work\build-mass-cpp-9fd2f56\oot3d_native_game.exe",
-    [string]$A32ProcessManifest = "I:\oot3dre_work\build-mass-cpp-9fd2f56\oot3d_native_process_manifest.json",
-    [string]$Checkpoint = "I:\oot3dre_work\native_game\checkpoints\timing_gameplay_candidate_13000.oot3dsav",
-    [string]$OutputDirectory = "I:\oot3dre_work\native_game\frame_rate_equivalence",
+    [string]$Executable = "<oot3d-work>\build-mass-cpp-9fd2f56\oot3d_native_game.exe",
+    [string]$A32ProcessManifest = "<oot3d-work>\build-mass-cpp-9fd2f56\oot3d_native_process_manifest.json",
+    [string]$Checkpoint = "<oot3d-work>\native_game\checkpoints\timing_gameplay_candidate_13000.oot3dsav",
+    [string]$OutputDirectory = "<oot3d-work>\native_game\frame_rate_equivalence",
     [ValidateRange(3, 10001)]
     [int]$PresentationGuestRefreshes = 61,
     [ValidateRange(2, 10000)]

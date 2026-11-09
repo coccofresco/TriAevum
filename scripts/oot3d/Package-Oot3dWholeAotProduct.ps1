@@ -1,17 +1,17 @@
 [CmdletBinding()]
 param(
     [string]$ProductExecutable =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe",
     [string]$ProductBuildDirectory =
-        "I:\oot3dre_work\whole-aot-product-consumer",
+        "<oot3d-work>\whole-aot-product-consumer",
     [string]$ProcessManifest =
-        "I:\oot3dre_work\native_game\oot3d_native_process_manifest.json",
+        "<oot3d-work>\native_game\oot3d_native_process_manifest.json",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$OutputRoot =
-        "I:\oot3dre_work\whole-aot-product-packages",
+        "<oot3d-work>\whole-aot-product-packages",
     [string]$CacheRoot =
-        "I:\oot3dre_work\oot3d-whole-aot-product-cache",
+        "<oot3d-work>\oot3d-whole-aot-product-cache",
     [string]$PicaAotShaderPack = "",
     [string]$PackageName = "",
     [switch]$Force

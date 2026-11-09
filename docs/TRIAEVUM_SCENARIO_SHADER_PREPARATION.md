@@ -98,7 +98,7 @@ The separate 110-setup temporal campaign is also complete; its sampling and
 combined native-import results are reported below.
 
 Representative evidence and analysis are in
-`I:/oot3dre_work/shader-seed-expansion/representatives/`,
+`<oot3d-work>/shader-seed-expansion/representatives/`,
 `representatives-inventory.json`, `representatives-analysis.json` and
 `representatives-compile.json` in the parent directory. Larger temporal capture
 outputs use `%USERPROFILE%/AppData/Local/TriAevumDeveloperEvidence/shader-seed-expansion/`
@@ -371,7 +371,7 @@ The 11 remaining misses are NRI fragment programs the renderer composes with
 the user's effects (surface lighting, PBR): they depend on graphics settings,
 not on captured state, and compile in the background (hybrid preparation), as
 with the freshly built September pack (54 hits / 32 misses on its first replay).
-Private output: `I:/oot3dre_work/shader-corpus-20261007/` (`regeneration.json`,
+Private output: `<oot3d-work>/shader-corpus-20261007/` (`regeneration.json`,
 `expanded-union.o3ps` SHA-256 `55b954304f7b13fe621f1843b43faeff79a5e939d27c3a646d8762eeb9c927ae`,
 `captures-0-pipelines.json`). Regenerate again with the release runtime.
 
@@ -402,14 +402,14 @@ Private output: `I:/oot3dre_work/shader-corpus-20261007/` (`regeneration.json`,
 - Capture/inventory adapter: `tools/oot3d/native_pica_frontend/`.
 - Recovery/catalog tools: `tools/oot3d/native_a32_runtime/`.
 - Scenario runners: `scripts/oot3d/*AzaharCoverage*.ps1`.
-- Private results: `I:/oot3dre_work/shader-seed-recovery/` (`combined/`,
+- Private results: `<oot3d-work>/shader-seed-recovery/` (`combined/`,
   `combined-inventory.json`, `scenario-union-compile.json`, `scenario-union.o3ps`).
-- Historical matrices: `I:/oot3dre_work/azahar-coverage-matrices/`,
+- Historical matrices: `<oot3d-work>/azahar-coverage-matrices/`,
   `smoke_full_20260825_2300` and `scene_representative_sample_5_20260825`.
 - Linux importer/tests: `~/triaevum-android-build/capture-importer`
   and `capture-tests`; compiler:
   `~/triaevum-linux-build/oot3d_native_pica_aot_compiler`.
-- Instrumented Azahar: `I:/oot3dre_work/azahar-oot3d-coverage`, branch
+- Instrumented Azahar: `<oot3d-work>/azahar-oot3d-coverage`, branch
   `oot3d-coverage-injection`, commit `23d77c2d4`, based on `1833641d5`.
   The reproducible source-only delta is
   `tools/oot3d/native_pica_frontend/instrumentation/azahar-shader-seed.patch`.
@@ -419,7 +419,7 @@ Private output: `I:/oot3dre_work/shader-corpus-20261007/` (`regeneration.json`,
 The Windows diagnostic build used MSBuild's `video_core.vcxproj`, then
 `citra_meta.vcxproj`, both Release/x64, `BuildProjectReferences=false`,
 `CL_MPCount=2`, `/m:2`; final link also `PostBuildEventUseInBuild=false`.
-Build root: `I:/oot3dre_work/azahar-oot3d-coverage-build`. `citra_qt` is a
+Build root: `<oot3d-work>/azahar-oot3d-coverage-build`. `citra_qt` is a
 library here, not the final executable. No Qt, whole-AOT or title rebuild is
 needed to iterate on this capture mode.
 

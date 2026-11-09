@@ -458,8 +458,8 @@ def actor_entry(
 def kokiri_manifest_test_audit() -> dict[str, object]:
     return {
         "format": "oot3d_kokiri_runtime_route_audit_v4",
-        "romfs_root": "E:/romfs",
-        "scene_root": "E:/romfs/scene",
+        "romfs_root": "X:/romfs",
+        "scene_root": "X:/romfs/scene",
         "route_stems": ["link", "spot04"],
         "required_scene_files": ["link_info.zsi", "spot04_info.zsi"],
         "missing_required_file_count": 0,
@@ -4736,7 +4736,7 @@ class CubeConversionTests(unittest.TestCase):
     def test_scene_raw_stage_pair_skips_ambiguous_material_index_refs(self) -> None:
         model = replace(
             CmbModel.from_path(CUBE_CMB),
-            source="E:/romfs/scene/test_scene_0_info.zsi!cmb[0]@0x60",
+            source="X:/romfs/scene/test_scene_0_info.zsi!cmb[0]@0x60",
         )
         parsed_primary = model.textures[0]
         raw_primary = replace(parsed_primary, index=1, name="cube_raw_primary")
@@ -4834,7 +4834,7 @@ class CubeConversionTests(unittest.TestCase):
     def test_scene_single_mapper_secondary_skips_ambiguous_material_index_ref(self) -> None:
         model = replace(
             CmbModel.from_path(CUBE_CMB),
-            source="E:/romfs/scene/test_scene_0_info.zsi!cmb[0]@0x60",
+            source="X:/romfs/scene/test_scene_0_info.zsi!cmb[0]@0x60",
         )
         parsed_primary = model.textures[0]
         raw_secondary = replace(parsed_primary, index=1, name="cube_raw_secondary")
@@ -5098,7 +5098,7 @@ class CubeConversionTests(unittest.TestCase):
     def test_static_scene_keeps_mapper_for_single_raw_stage_material_index(self) -> None:
         model = replace(
             CmbModel.from_path(CUBE_CMB),
-            source="E:/romfs/scene/test_scene_0_info.zsi!cmb[0]@0x60",
+            source="X:/romfs/scene/test_scene_0_info.zsi!cmb[0]@0x60",
         )
         parsed_primary = model.textures[0]
         raw_primary = replace(parsed_primary, index=1, name="cube_raw_primary")

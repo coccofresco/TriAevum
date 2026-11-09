@@ -160,7 +160,7 @@ Private evidence: `~/triaevum-pipeline-live-proof/` directories
 `pr11-shared-spirv-cache`. Unit builds: `~/triaevum-shader-cache-tests`,
 `~/triaevum-shader-cache-gcc-tests`,
 `~/triaevum-shader-cache-android-tests`, and
-`I:/oot3dre_work/shader-cache-windows`.
+`<oot3d-work>/shader-cache-windows`.
 
 The former automatic next-launch-prewarm proposal is superseded by the
 [Forge-first handoff](TRIAEVUM_FORGE_SHADER_HANDOFF.md): prepare known work in

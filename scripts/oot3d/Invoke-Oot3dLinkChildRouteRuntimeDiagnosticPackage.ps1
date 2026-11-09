@@ -1,6 +1,6 @@
 param(
     [string]$ToolRoot = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$CharacterProfileO2r = "",
     [string]$ArchiveName = "oot3d_link_child_route_runtime_diagnostic_candidates.o2r",
     [string]$Name = "OOT3D Link Child Route Runtime Diagnostic Candidates",

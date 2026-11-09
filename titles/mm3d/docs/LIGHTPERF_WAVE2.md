@@ -1,7 +1,7 @@
 # LIGHTPERF wave 2: partial qualification
 
 Baseline `3fb5b0c2`, branch `mm3d/parity-lightperf`. Evidence:
-`I:/_triaevum_work/mm3d-port/analysis/parity/LIGHTPERF/wave2/`.
+`W/analysis/parity/LIGHTPERF/wave2/`.
 Gap numbers below are **LM/GAPS**, not the first wave's GRASS optimization IDs.
 
 ## G09 — native-fragment normal guide selection

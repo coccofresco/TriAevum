@@ -70,7 +70,7 @@ do not assume a different executable or a mapping warning means a missing DLL.
   with 463 game updates / 960 presentations and framebuffer title captures.
   This is an integration smoke test, not a controller gameplay or FPS benchmark.
 
-Private evidence: `I:/oot3dre_work/triaevum-controller-check/boot`.
+Private evidence: `<oot3d-work>/triaevum-controller-check/boot`.
 Candidate binary SHA-256:
 `29141ce1775e108a8585c5733dfe1ae59f61534edc1539bf045d9f7978919d40`.
 It was built incrementally using the existing runtime cache and the edited
@@ -86,7 +86,7 @@ GitHub release has not been replaced by this audit.
 Configure `runtime/three_ds_recomp/tests/controller` as an independent CMake
 project with SDL2 >= 2.24 and spdlog packages, then build and run CTest.
 On this machine the static prefix is `C:/vcpkg/installed/x64-windows-static`
-and the test build is `I:/oot3dre_work/triaevum-controller-tests`.
+and the test build is `<oot3d-work>/triaevum-controller-tests`.
 The standalone CMake target handles the SDL2/Clang 22 intrinsic-header conflict.
 The existing runtime build used the equivalent `/FIintrin.h` compiler option.
 Use the existing MSVC 14.44.35207 includes/libraries, Windows SDK 10.0.19041.0

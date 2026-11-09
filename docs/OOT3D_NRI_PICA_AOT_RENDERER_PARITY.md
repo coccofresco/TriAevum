@@ -86,7 +86,7 @@ at every one of the 22 framebuffer checkpoints.
 
 The final gate output is stored outside Git at:
 
-`I:\oot3dre_work\visual-parity\golden-aot-strict-20260824-06`
+`<oot3d-work>\visual-parity\golden-aot-strict-20260824-06`
 
 The no-op native-game build completes in about five seconds on the current
 machine; regenerating the 194-module pack adds about three seconds only when
@@ -99,7 +99,7 @@ boot/title comparison is byte-identical at all 10 captured checkpoints. The
 older product golden hashes after frame zero predate recent justified PICA
 lighting corrections; they are not silently promoted by this tranche.
 Reproducible inventories, manifests, runtime reports and framebuffer captures
-are under `I:/oot3dre_work/visual-parity/pica-shadow2d-native-20260826/`.
+are under `<oot3d-work>/visual-parity/pica-shadow2d-native-20260826/`.
 
 Fragment-feature schema 2 and visual replay `PVR8` were qualified on
 2026-08-26 without changing descriptor schema 3 or generated shader identity.
@@ -109,7 +109,7 @@ lights. Its dynamic and strict framebuffer captures are byte-identical; the
 expanded default pack resolves 90/90 modules with zero misses. The complete
 901-frame boot/title surface remains byte-identical to its prior dynamic run
 at all 10 checkpoints and resolves 96/96 modules. Evidence is under
-`I:/oot3dre_work/visual-parity/pica-fragment-lighting-scene-20260826/`.
+`<oot3d-work>/visual-parity/pica-fragment-lighting-scene-20260826/`.
 
 The first typed pipeline-manifest gate was qualified on 2026-08-26. A
 60-frame Authentic Kokiri capture produced and merged 39 canonical pipeline
@@ -119,7 +119,7 @@ completed. Lazy and prewarmed framebuffer captures are byte-identical at
 SHA-256
 `bae563168bce554f84401ba2012cabe4a3531de5f22efb6a1e4bcccd58434c53`.
 Evidence is under
-`I:/oot3dre_work/visual-parity/pica-pipeline-prewarm-20260826/`.
+`<oot3d-work>/visual-parity/pica-pipeline-prewarm-20260826/`.
 
 Manifest schema 2 was then qualified across Kokiri, complete boot/title and
 seven renderer profiles. The deterministic merge contains 232 unique pipeline
@@ -129,18 +129,18 @@ Authentic, 36 each for TAA, CACAO+TAA and SSSR+TAA, 54 for directional
 shadows, and 109 logical Toon descriptors; Toon creates 91 Vulkan objects and
 reuses 18 equivalent ones. Every paired 60-frame Kokiri lazy/prewarm capture
 is byte-identical at the SHA-256 above and records zero skips. Evidence is
-under `I:/oot3dre_work/visual-parity/pica-pipeline-corpus-20260826/schema2/`.
+under `<oot3d-work>/visual-parity/pica-pipeline-corpus-20260826/schema2/`.
 
 ## Build and validation
 
 ```powershell
 .\scripts\oot3d\Build-Oot3dLlvm.ps1 `
-  -BuildDirectory I:\oot3dre_work\whole-aot-product-consumer `
+  -BuildDirectory <oot3d-work>\whole-aot-product-consumer `
   -Target oot3d_native_game -Parallel 4
 
 .\scripts\oot3d\Test-Oot3dWholeAotGolden.ps1 `
   -ProductExecutable `
-    I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe `
+    <oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe `
   -Repetitions 1
 ```
 

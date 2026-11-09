@@ -29,7 +29,7 @@ DEFAULT_PLAYER_EVENT_HELPER_DECOMPILE = (
     / "decompiled"
     / "99154_00491384_FUN_00491384.c"
 )
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_OUT_JSON = ROOT / "analysis" / "scene_cutscene_direct_player_event_table.json"
 DEFAULT_OUT_CSV = ROOT / "analysis" / "scene_cutscene_direct_player_event_table.csv"
 DEFAULT_OUT_MD = ROOT / "analysis" / "scene_cutscene_direct_player_event_table.md"

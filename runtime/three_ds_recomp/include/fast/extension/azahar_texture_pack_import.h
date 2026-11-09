@@ -8,7 +8,7 @@
 
 // Custom texture pack import for F1's Materials > Texture packs (UX plan
 // WP-07). The rules are shared with Forge's import (Enhancements page) and
-// must stay identical: I:/_triaevum_work/ux-wp07/TEXTURE_IMPORT_RULES.md.
+// must stay identical: <work>/ux-wp07/TEXTURE_IMPORT_RULES.md.
 // Everything here blocks on the file system or a dialog: call it from a
 // worker thread, never from frame code.
 namespace Fast::Extension {

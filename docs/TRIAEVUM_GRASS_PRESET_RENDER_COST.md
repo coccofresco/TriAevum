@@ -127,10 +127,10 @@ timings and workload counts, avoiding another investigation based only on FPS.
 ## Reproduction and local evidence
 
 Runtime target: `triaevum_public_runtime` in
-`I:/oot3dre_work/triaevum-direct-module-build`, `--parallel 3`; no title/AOT rebuild.
+`<oot3d-work>/triaevum-direct-module-build`, `--parallel 3`; no title/AOT rebuild.
 The final incremental code builds took roughly 7-9 seconds.
 
-Evidence prefix: `I:/oot3dre_work/grass-preset-opt-20260907-`.
+Evidence prefix: `<oot3d-work>/grass-preset-opt-20260907-`.
 Directories `before-kokiri`, `off-kokiri`, `after-kokiri`, `accepted-kokiri`, `before-intro`,
 `fused-intro` contain immutable invocation/config snapshots and timing reports.
 `selection-profile` contains the separated CPU findings. `before-capture` and
@@ -241,7 +241,7 @@ walks forward/right/left during frames 180-599 and is identical for both variant
 Run each pair sequentially, preferably interleaved over at least three repeats:
 
 ```powershell
-$run = 'I:/_triaevum_work/contact-shadows/coord/round37-benchmark.ps1'
+$run = '<work>/contact-shadows/coord/round37-benchmark.ps1'
 & $run -Kind profile -Variant reference -Motion static
 & $run -Kind profile -Variant cached -Motion static
 & $run -Kind profile -Variant reference -Motion moving
@@ -263,7 +263,7 @@ To summarize a returned output directory:
 
 ```powershell
 & 'C:/ProgramData/miniconda3/python.exe' `
-  'I:/_triaevum_work/contact-shadows/coord/round37-profile-summary.py' `
+  '<work>/contact-shadows/coord/round37-profile-summary.py' `
   '<returned-output-directory>/stderr.log' 180
 ```
 

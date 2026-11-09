@@ -1,8 +1,8 @@
 param(
     [string]$ToolRoot = "",
-    [string]$RomFs = "E:\ppssppvr\oot3d_decomp\work\extract\romfs",
+    [string]$RomFs = "<ppssppvr>\oot3d_decomp\work\extract\romfs",
     [string]$KankyoRoot = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$ResourcePrefix = "environments/oot3d/kankyo",
     [string]$ArchiveName = "oot3d_kankyo_environment_candidates.o2r",
     [string]$Name = "OOT3D Kankyo Environment Candidates",

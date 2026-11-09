@@ -60,6 +60,6 @@ TopScreen extraction remains in its title-specific owner and never imports the
 mod's executable patch. Tests cover transient recovery and integrity failures.
 
 Private evidence (not for publication):
-`I:/oot3dre_work/linux-port-proof/issue5-runtime.json`, `issue5-frame720.bmp`;
+`<oot3d-work>/linux-port-proof/issue5-runtime.json`, `issue5-frame720.bmp`;
 Linux `~/triaevum-forge-proof/issue5-gui.json` and
 `~/triaevum-steamrt4-play/issue5-captures/`.

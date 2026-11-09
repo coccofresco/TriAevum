@@ -45,9 +45,9 @@ triangle kernel: it measures callback-free group lowering alone.
 - Keep generated title sources, objects, DLLs and evidence outside the public
   repository. `build.json` records input hashes, commands and rebuilt sources.
 
-The archive in `I:/TriAevum-aot-lab-debug/native-objects/archives/` is **not** keyed
-by the manifest in `I:/TriAevum-aot-lab-evidence/baseline/`. Its actual source
-manifest is under `I:/TriAevum-aot-lab-cache/generated/`
+The archive in `<local>/TriAevum-aot-lab-debug/native-objects/archives/` is **not** keyed
+by the manifest in `<local>/TriAevum-aot-lab-evidence/baseline/`. Its actual source
+manifest is under `<local>/TriAevum-aot-lab-cache/generated/`
 `fd5c3e92b5c1fb9ef04863b1c3248fc0c4a0416c6aab5d6c058f156846b4ba59/`.
 The latter path is recoverable from the LLVM object's `source_filename`.
 Program/code equality alone does not establish generated-source equality.

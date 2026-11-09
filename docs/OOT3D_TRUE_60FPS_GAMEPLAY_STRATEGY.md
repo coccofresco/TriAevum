@@ -81,7 +81,7 @@ dall'interpolazione.
 
 ### Decompilazione C/C++
 
-Stato letto in sola lettura da `I:\oot3decomp`:
+Stato letto in sola lettura da `<oot3d-decomp>`:
 
 - branch `main`;
 - ultimo commit osservato `84df7e1`;
@@ -222,7 +222,7 @@ Il primo sottografo chiuso e il timer del tipo di pavimento. L'evidenza
 binaria usata e:
 
 ```text
-code.bin: E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin
+code.bin: <ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin
 image base: 0x00100000
 size: 4567040 byte
 SHA-256: 16A6B0AA4C4784680220A6F780F7F8A73CFB205557AA9F9F0E705179E0613220
@@ -267,7 +267,7 @@ riconciliazioni, senza mismatch, return non abbinati o errori di memoria. Gli
 artifact sono:
 
 ```text
-I:\oot3dre_work\native_game\frame_rate_audit\
+<oot3d-work>\native_game\frame_rate_audit\
   player_floor_timer_native30.json
   player_floor_timer_enhanced60.json
 ```
@@ -333,7 +333,7 @@ stesso stato Player finale e nessun mismatch, ma quel checkpoint idle non
 attraversa naturalmente un ledge:
 
 ```text
-I:\oot3dre_work\native_game\frame_rate_audit\
+<oot3d-work>\native_game\frame_rate_audit\
   player_ledge_timer_native30.json
   player_ledge_timer_enhanced60.json
 ```
@@ -1690,8 +1690,8 @@ l'owner possieda direttamente:
 - accesso a renderer, audio e input tramite servizi tipizzati;
 - serializzazione e telemetria.
 
-Il codice committato in `I:\oot3decomp` va importato per copia con manifest di
-provenienza. `I:\oot3decomp` resta sola lettura e non viene incluso direttamente
+Il codice committato in `<oot3d-decomp>` va importato per copia con manifest di
+provenienza. `<oot3d-decomp>` resta sola lettura e non viene incluso direttamente
 nella build.
 
 ### Owner graph prioritari
@@ -2302,23 +2302,23 @@ native_game/frame_rate_equivalence/
 Decompilazione:
 
 ```text
-I:\oot3decomp\docs\RECONSTRUCTION_STATUS.md
-I:\oot3decomp\docs\DECOMPILATION_STRATEGY.md
-I:\oot3decomp\analysis\functions_enriched.json
-I:\oot3decomp\analysis\callgraph.json
-I:\oot3decomp\src\code\z_skel_anime.c
-I:\oot3decomp\src\code\z_skel_anime_api.c
-I:\oot3decomp\src\code\z_actor_core.c
-I:\oot3decomp\src\overlays\actors\ovl_player_actor\z_player_collision.c
-I:\oot3decomp\ghidra_export\decompiled\
+<oot3d-decomp>\docs\RECONSTRUCTION_STATUS.md
+<oot3d-decomp>\docs\DECOMPILATION_STRATEGY.md
+<oot3d-decomp>\analysis\functions_enriched.json
+<oot3d-decomp>\analysis\callgraph.json
+<oot3d-decomp>\src\code\z_skel_anime.c
+<oot3d-decomp>\src\code\z_skel_anime_api.c
+<oot3d-decomp>\src\code\z_actor_core.c
+<oot3d-decomp>\src\overlays\actors\ovl_player_actor\z_player_collision.c
+<oot3d-decomp>\ghidra_export\decompiled\
   02370_00250ad0_oot3d_player_action_turn_in_place.c
-I:\oot3decomp\ghidra_export\decompiled\
+<oot3d-decomp>\ghidra_export\decompiled\
   03447_002c5ba0_Cutscene_ProcessCommands.c
-I:\oot3decomp\ghidra_export\decompiled\
+<oot3d-decomp>\ghidra_export\decompiled\
   03629_002d84c4_Camera_Update.c
-I:\oot3decomp\ghidra_export\decompiled\
+<oot3d-decomp>\ghidra_export\decompiled\
   04768_00321f50_FUN_00321f50.c
-I:\oot3decomp\ghidra_export\decompiled\
+<oot3d-decomp>\ghidra_export\decompiled\
   07589_00417014_GameState_Update.c
 ```
 

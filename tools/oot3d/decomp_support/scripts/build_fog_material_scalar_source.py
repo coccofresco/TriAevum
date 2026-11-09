@@ -16,7 +16,7 @@ from typing import Any
 
 
 ROOT = Path("tools/oot3d/decomp_support")
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_OUT_JSON = ROOT / "analysis" / "fog_material_scalar_source.json"
 DEFAULT_OUT_MD = ROOT / "analysis" / "fog_material_scalar_source.md"
 DEFAULT_OUT_HEADER = ROOT / "include" / "oot3d" / "fog_material_scalar.h"

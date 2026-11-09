@@ -191,7 +191,7 @@ preparation tests pass, including real importer + compiler execution; the wider
 Forge suite was not run successfully under system Python (missing existing
 Capstone development dependency). No game/GPU visual qualification is claimed.
 
-Private evidence is under `I:/oot3dre_work/citra-cache-review/`; Linux tools and
+Private evidence is under `<oot3d-work>/citra-cache-review/`; Linux tools and
 corpus artifacts are under `~/triaevum-android-build/`. The existing
 Linux frontend library's shader generation/draw-state source hashes were
 checked against this checkout before reuse; changed generator units were

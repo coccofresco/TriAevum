@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [string]$CacheRoot = "I:\oot3dre_work\oot3d-whole-aot-product-cache",
-    [string]$LlvmRoot = "I:\oot3dre_tools\llvm-22.1.6",
+    [string]$CacheRoot = "<oot3d-work>\oot3d-whole-aot-product-cache",
+    [string]$LlvmRoot = $env:OOT3D_LLVM_ROOT,
     [string]$VcpkgRoot = "C:\vcpkg",
     [ValidateRange(1, 8)]
     [int]$Parallel = 4,

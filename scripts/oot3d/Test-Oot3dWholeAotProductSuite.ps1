@@ -1,21 +1,21 @@
 [CmdletBinding()]
 param(
     [string]$OracleExecutable =
-        "I:\oot3dre_work\native_game\captures\overall_perf_20260726\binaries\baseline_61593d357_82caab12\oot3d_native_game.exe",
+        "<oot3d-work>\native_game\captures\overall_perf_20260726\binaries\baseline_61593d357_82caab12\oot3d_native_game.exe",
     [string]$ProductExecutable =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe",
     [string]$OutputDirectory =
-        "I:\oot3dre_work\whole-aot-product-run\equivalence-suite",
+        "<oot3d-work>\whole-aot-product-run\equivalence-suite",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [string]$KokiriCutsceneState =
-        "I:\oot3dre_work\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav",
+        "<oot3d-work>\native_game\checkpoints\navi_kokiri_main_forest.oot3dsav",
     [string]$KokiriGameplayState =
-        "I:\oot3dre_work\native_game\checkpoints\hudtest_after120.oot3dsav",
+        "<oot3d-work>\native_game\checkpoints\hudtest_after120.oot3dsav",
     [string]$GameplayInputTimeline =
-        "I:\oot3dre_work\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
+        "<oot3d-work>\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
     [switch]$ReuseExisting
 )
 

@@ -399,8 +399,8 @@ def summarize(emulator: dict[str, Any], demo: dict[str, Any], emulator_path: Pat
                 "OOT3D assets, code.bin-derived tables, and decompiled native behavior."
             ),
             "pica_reference": [
-                "E:/azahar pcvr/src/video_core/renderer_software/sw_rasterizer.cpp::WriteFog",
-                "E:/azahar pcvr/src/video_core/shader/generator/glsl_fs_shader_gen.cpp::WriteFog",
+                "<azahar-pcvr>/src/video_core/renderer_software/sw_rasterizer.cpp::WriteFog",
+                "<azahar-pcvr>/src/video_core/shader/generator/glsl_fs_shader_gen.cpp::WriteFog",
             ],
         },
         "inputs": {

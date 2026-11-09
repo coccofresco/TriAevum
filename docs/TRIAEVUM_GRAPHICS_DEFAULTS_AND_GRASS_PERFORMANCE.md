@@ -61,13 +61,13 @@ For this maintainer's installation only, the requested groups and saved grass
 preset were also updated in the installed config and last interactive config.
 Their unrelated settings were retained, including TAA/SSSR in the latter.
 Private backups and the immutable measurement config are under
-`I:/oot3dre_work/grass-performance-20260906/`.
+`<oot3d-work>/grass-performance-20260906/`.
 
 ## Reproduced slowdown
 
-Checkpoint: `I:/oot3dre_work/native_game/checkpoints/hudtest.oot3dsav`.
-Executable: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
-Profile: `I:/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json`.
+Checkpoint: `<oot3d-work>/native_game/checkpoints/hudtest.oot3dsav`.
+Executable: `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
+Profile: `<local>/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json`.
 Same private config: 2560x1440, scale 1, Toon/outline, dense grass, TAA, CACAO,
 FidelityFX SSSR, audio and TopScreen. Benchmarks use wall-clock gameplay,
 uncapped presentation, VSync off, 60 warmup frames excluded, 25-second bounded

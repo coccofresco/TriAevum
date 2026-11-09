@@ -120,7 +120,7 @@ checkpoint matching the selected native/interpolated timing mode. Enable
 `OOT3D_VULKAN_VALIDATION=1` for resource validation. Capture from the renderer,
 not the desktop. Use an explicit frame count and wall-time safety bound.
 The local harness and evidence are under
-`J:/TriAevum-verify-20260910/probe-display.ps1` and `display-*` directories.
+`<verify-20260910>/probe-display.ps1` and `display-*` directories.
 
 Final Windows/NRI run: `display-x2-180347`, 360 presented frames, interpolated
 2x, the user's Toon/Grass settings, fractional scales 1.01 and 0.73, windowed

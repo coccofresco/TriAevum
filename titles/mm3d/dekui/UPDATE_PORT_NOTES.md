@@ -3,7 +3,7 @@
 This is a partial, tested port. The remaining class (a) work is stopped at the
 unproved PromptText language-archive translation, following Claude's explicit
 instruction in `W/coord/DEKUI_COORD.md` to stop and ask about uncertain sites.
-`W` is `I:/_triaevum_work/mm3d-port`. No live acceptance is claimed.
+`W` is the local work directory (not in this repository). No live acceptance is claimed.
 
 ## Implemented slices
 
@@ -271,7 +271,7 @@ per-file class (b)/(c) ledger is in `W/analysis/dekui/UPDATE_6e36dfb4.md`.
 
 ## Standalone validation
 
-`I:/Python/python.exe -B W/analysis/dekui/test_update_port.py settings|core|update|language|hud|dungeon`
+`python -B W/analysis/dekui/test_update_port.py settings|core|update|language|hud|dungeon`
 runs one component; append `--clang-cl` for the application's clang-cl 22.1.6.
 Each invocation acquires the shared exclusive mkdir build lock and releases
 only its own lock. Outputs stay in `W/analysis/dekui/settings_build_update`;

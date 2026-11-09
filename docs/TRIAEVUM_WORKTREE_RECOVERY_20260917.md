@@ -2,13 +2,13 @@
 
 ## Protected working set
 
-- Repository: `I:/TriAevum-public/source-repository-clean`.
-- Active host build: `J:/TriAevum-verify-20260910/runtime`.
-- Runtime outputs: `I:/TriAevum-public/ui-dependencies`.
-- Compiler: `I:/oot3dre_tools/llvm-22.1.6`.
-- Shared dependencies: `I:/oot3dre_work/whole-aot-product-consumer/_deps`.
-- Working title module and provenance: `I:/TriAevum-aot-lab-evidence/baseline`.
-- ROM-derived runtime data: `I:/oot3dre_work/triaevum-full-title-proof`.
+- Repository: `<public-work>/source-repository-clean`.
+- Active host build: `<verify-20260910>/runtime`.
+- Runtime outputs: `<public-work>/ui-dependencies`.
+- Compiler: `<tools>/llvm-22.1.6`.
+- Shared dependencies: `<oot3d-work>/whole-aot-product-consumer/_deps`.
+- Working title module and provenance: `<local>/TriAevum-aot-lab-evidence/baseline`.
+- ROM-derived runtime data: `<oot3d-work>/triaevum-full-title-proof`.
 - Issue reproduction, including the user's checkpoint:
   `%USERPROFILE%/triaevum-issues-40-43`.
 - Mounted checkpoint: `%USERPROFILE%/triaevum-verify-20260911/epona-user`.
@@ -23,15 +23,15 @@ execution. No space recovery is claimed. At inventory time I: had only about
 The following explicit directories contain regenerable diagnostic object caches,
 not source, saves or the active runtime. Their plugin DLL/map siblings are kept:
 
-- `I:/TriAevum-aot-lab-debug/native-objects` (the whole debug directory is 1.64 GiB;
+- `<local>/TriAevum-aot-lab-debug/native-objects` (the whole debug directory is 1.64 GiB;
   its obsolete archive alone is 644,214,700 bytes).
-- `I:/TriAevum-aot-lab-o3/native-objects`.
+- `<local>/TriAevum-aot-lab-o3/native-objects`.
 
 Older `*.bmp` captures under `%USERPROFILE%/triaevum-verify-20260911`
 total 204 files / approximately 0.52 GiB. Do not delete that entire directory:
 it also contains useful saves, presets and diagnostic reports. Keep reference
 captures supporting still-open issues. Older test captures under
-`J:/TriAevum-verify-20260910` are also candidates; the active runtime, inputs,
+`<verify-20260910>` are also candidates; the active runtime, inputs,
 checkpoints and shader preparation data are not.
 
 ## Recovery policy

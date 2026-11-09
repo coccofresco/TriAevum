@@ -22,5 +22,5 @@ Primary contents:
 The original source workspace remains at:
 
 ```text
-E:\ppssppvr\oot3d_decomp\oot3d_decomp_git
+<ppssppvr>\oot3d_decomp\oot3d_decomp_git
 ```

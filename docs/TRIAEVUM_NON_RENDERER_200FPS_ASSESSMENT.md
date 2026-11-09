@@ -24,9 +24,9 @@ Two distinct targets must not be confused:
 
 ## Existing evidence
 
-Parallel report: `I:/TriAevum-aot-lab/docs/TRIAEVUM_AOT_OPTIMIZATION_RESULTS.md`.
-Raw profiling: `I:/TriAevum-aot-lab-runs/runtime-profile/runtime.json`.
-Clean timing example: `I:/TriAevum-aot-lab-runs/host-ab2/0-shipped/runtime.json`.
+Parallel report: `<local>/TriAevum-aot-lab/docs/TRIAEVUM_AOT_OPTIMIZATION_RESULTS.md`.
+Raw profiling: `<local>/TriAevum-aot-lab-runs/runtime-profile/runtime.json`.
+Clean timing example: `<local>/TriAevum-aot-lab-runs/host-ab2/0-shipped/runtime.json`.
 
 The clean example measures 720 updates after 180 warmup frames, with fixed
 native delta, no interpolation, no VSync, no SDL limiter and pacing disabled.
@@ -149,7 +149,7 @@ frequency or report a hardware-cache bottleneck as established fact.
 
 ## Measured amended scope (2026-09-16)
 
-New private results: `I:/TriAevum-public/prebackend-20260916/measurements.json`.
+New private results: `<public-work>/prebackend-20260916/measurements.json`.
 Three runs, unchanged baseline title plugin, 900 native updates each, 180 warmup,
 720 measured, no screenshots, interpolation, vsync or pacing; audio preserved.
 All three memory-content fingerprints are `15598764887955759453`.
@@ -181,7 +181,7 @@ Nested guest resumes deducted from submission were about 0.74-0.79 ms/update.
 
 ## Concrete bottleneck candidates from code and diagnostic run
 
-`I:/TriAevum-public/prebackend-profile-20260916/0/runtime.json` is an additional
+`<public-work>/prebackend-profile-20260916/0/runtime.json` is an additional
 instrumented run. Its detailed counters cover all 900 updates, not the 720-frame
 benchmark window, and must not be added to the table as disjoint phases.
 

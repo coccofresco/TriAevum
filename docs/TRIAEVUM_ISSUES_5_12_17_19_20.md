@@ -2,7 +2,7 @@
 
 2026-09-10. Scope: shared services, input and Forge; no renderer workarounds,
 save-format changes or bundled game data. Private evidence is under
-`I:/oot3dre_work/issue-fixes-20260910/` and Linux
+`<oot3d-work>/issue-fixes-20260910/` and Linux
 `~/triaevum-pipeline-live-proof/issues-20260910-*`.
 
 ## #19: Erase Never Completes
@@ -174,7 +174,7 @@ on **Windows 11 Pro for Workstations 10.0.26200**, RTX 3060, driver
 inference from the Linux results. Build source: `c7f96869a9bf07c4dada763b067102d94f24d9bd`.
 No additional product-code repair was needed for the five reported issue paths.
 
-Private evidence root: `J:/TriAevum-verify-20260910/`. It contains:
+Private evidence root: `<verify-20260910>/`. It contains:
 
 - `runtime/`: fresh current-source Windows build, not a legacy worktree binary;
   CMake's `triaevum-runtime-targets-Release.json` records its source identity.
@@ -197,7 +197,7 @@ Private evidence root: `J:/TriAevum-verify-20260910/`. It contains:
 | #20, native 30 FPS | All three SDK gains are `1.0041044776119403`; zero gyro leaves aim unchanged, positive and negative X produce opposite pitch, Y changes horizontal aim. Framebuffers and SDK state both change. |
 | Default interpolated 2x | A separate cold-boot/checkpoint chain repeats assignment, transition, bow/longshot use and gyro aiming with the installed default graphics configuration. Simulation stays **30 Hz**, presentation is **60 Hz**, and real interpolated frame lists are submitted. Item-use probe: 560 presentations, 280 completed native visual frames, 278 interpolated frame lists, arrow **50 -> 49**. |
 | #19 | Native Erase menu and confirmations finish with **File deleted**. `DeleteFile:wchar:/save03.bin` is handled; only that copied file disappears. `save00.bin` and `system.dat` retain their original SHA-256 hashes. |
-| #12, installation | Real frozen Forge GUI imports `I:/Zelda3drecomp/oot3d.cci`, prepares TopScreen and enables Play in **23.58 seconds**. No compiler is invoked by the installation. |
+| #12, installation | Real frozen Forge GUI imports `<legacy-recomp>/oot3d.cci`, prepares TopScreen and enables Play in **23.58 seconds**. No compiler is invoked by the installation. |
 | #12, launch | `TriAevumForge.exe --play` launches its installed runtime with `PATH=C:/Windows/System32;C:/Windows`. The title renders with TopScreen/2x enabled; a normal window-close message after a 25-second play interval returns **0** from both game and Forge, without forced termination. |
 
 All 19 gameplay probes reached their requested frame counts with exit 0 and

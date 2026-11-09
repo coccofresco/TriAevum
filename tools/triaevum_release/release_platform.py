@@ -96,9 +96,18 @@ def launch_profile_name(value: ReleasePlatform) -> str:
 
 
 def installed_runtime_path(root: Path, value: ReleasePlatform) -> Path:
-    """The runtime of an installation: where a (new) package put it until Forge places it."""
+    """The runtime of an installation: where a (new) package put it until Forge places it.
+
+    A Windows installation made before the product names (0.8.0-beta.1.2 and
+    earlier) runs its root TriAevum.exe until then (R-A G6-F2).
+    """
     packaged = root / value.runtime
-    return packaged if packaged.is_file() else root / value.installed_runtime
+    if packaged.is_file():
+        return packaged
+    installed, legacy = root / value.installed_runtime, root / LEGACY_WINDOWS_RUNTIME
+    if value.target == WINDOWS.target and not installed.is_file() and legacy.is_file():
+        return legacy
+    return installed
 
 
 def _remove_shadowing_library(path: Path) -> None:

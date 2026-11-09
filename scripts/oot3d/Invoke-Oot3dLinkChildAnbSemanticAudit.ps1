@@ -1,6 +1,6 @@
 param(
     [string]$ToolRoot = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$AnbExport = "",
     [string]$CharacterManifest = "",
     [string]$TrackRoot = "",

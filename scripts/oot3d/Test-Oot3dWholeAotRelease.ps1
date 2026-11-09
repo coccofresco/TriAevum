@@ -1,22 +1,22 @@
 [CmdletBinding()]
 param(
     [string]$BuildDirectory =
-        "I:\oot3dre_work\whole-aot-product-consumer",
+        "<oot3d-work>\whole-aot-product-consumer",
     [string]$ProductExecutable = "",
     [string]$CacheRoot =
-        "I:\oot3dre_work\oot3d-whole-aot-product-cache",
+        "<oot3d-work>\oot3d-whole-aot-product-cache",
     [string]$OutputRoot =
-        "I:\oot3dre_work\whole-aot-product-run\release-gates",
+        "<oot3d-work>\whole-aot-product-run\release-gates",
     [string]$PackageOutputRoot =
-        "I:\oot3dre_work\whole-aot-product-packages",
+        "<oot3d-work>\whole-aot-product-packages",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [string]$GameplayState =
-        "I:\oot3dre_work\native_game\checkpoints\hudtest_after120.oot3dsav",
+        "<oot3d-work>\native_game\checkpoints\hudtest_after120.oot3dsav",
     [string]$GameplayInputTimeline =
-        "I:\oot3dre_work\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
+        "<oot3d-work>\native_game\captures\grass_camera_perf_20260726\move_diagonal_absolute.json",
     [ValidateRange(1, 20)]
     [int]$GoldenRepetitions = 2,
     [ValidateRange(1, 20)]

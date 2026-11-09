@@ -4,7 +4,7 @@
   "source_policy": "Every scenario enters through the original OOT3D transition helpers. The host selects only code.bin entrance indices and decomp-proven native state dimensions; it never constructs scenes, rooms, actors, cameras, lights, materials, or draw commands.",
   "provenance": {
     "decomp": {
-      "root": "I:/oot3decomp",
+      "root": "<oot3d-decomp>",
       "commit": "e0b6c5f7d19488cf8a9333288901d8bd22ce5a83",
       "branch": "main",
       "dirty": true,
@@ -12,38 +12,38 @@
     },
     "inputs": [
       {
-        "path": "I:/oot3decomp/work/extract/exefs/code.bin",
+        "path": "<oot3d-decomp>/work/extract/exefs/code.bin",
         "bytes": 4567040,
         "sha256": "16a6b0aa4c4784680220a6f780f7f8a73cfb205557aa9f9f0e705179e0613220"
       },
       {
-        "path": "I:/oot3decomp/src/code/z_scene_source_table.c",
+        "path": "<oot3d-decomp>/src/code/z_scene_source_table.c",
         "bytes": 56059,
         "sha256": "9d24b00dc9a4a6eace745de43d92f6e62e173314603a98bd68ac173603b572c0"
       },
       {
-        "path": "I:/oot3decomp/src/code/z_scene_setup_source_table.c",
+        "path": "<oot3d-decomp>/src/code/z_scene_setup_source_table.c",
         "bytes": 142880,
         "sha256": "bfbc8ba546419fe35e572a70455332a22fc7138787028853b9959c0d5d3ccf1b"
       },
       {
-        "path": "I:/oot3decomp/src/code/z_scene_actor_source_table.c",
+        "path": "<oot3d-decomp>/src/code/z_scene_actor_source_table.c",
         "bytes": 3875738,
         "sha256": "7f9b2192480f0c2743d4feaaaba5f1c98f16723443d0d90d98eb151f0223e3d2"
       },
       {
-        "path": "I:/oot3decomp/src/code/z_scene_light_source_table.c",
+        "path": "<oot3d-decomp>/src/code/z_scene_light_source_table.c",
         "bytes": 972118,
         "sha256": "273e7076855671ef5c81be73aad8ee8a6cba1db4a68c93b06bb0e9cb66c2daa3"
       },
       {
-        "path": "I:/oot3decomp/src/code/z_scene_cutscene_source_table.c",
+        "path": "<oot3d-decomp>/src/code/z_scene_cutscene_source_table.c",
         "bytes": 204499,
         "sha256": "1036ff345e90329aec735c0253af07a477fe0700f1a0bb9026ed4b6de03aebec"
       }
     ],
     "reference_catalog": {
-      "path": "I:/oot3dre_work/whole-aot-product/tools/oot3d/native_a32_runtime/oot3d_structural_scenarios.json",
+      "path": "<oot3d-work>/whole-aot-product/tools/oot3d/native_a32_runtime/oot3d_structural_scenarios.json",
       "bytes": 97981,
       "sha256": "f8d308587c4cc17b635438ff319d23bc20a1ddd21f4b6ebac35c71e7a03aef09"
     }

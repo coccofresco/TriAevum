@@ -5,7 +5,7 @@ release catalogue, installed modules and Forge are unchanged.
 
 ## Measurement protocol
 
-- Field checkpoint `J:/TriAevum-verify-20260910/win-field`, neutral input,
+- Field checkpoint `<verify-20260910>/win-field`, neutral input,
   `native30_no_interpolation`, `--throughput-benchmark`, 900 updates per run,
   last 720 measured, alternating ABBA pairs (`measure_prebackend.py`,
   `summarize_aot_abba.py`).
@@ -63,7 +63,7 @@ maintainer accepted this size. The release builder now takes the profile
 ### PGO training set
 
 `practice-windmill`, `practice-meadow`, `temple-sword`, `ocarina-final-abi`,
-`win-coldboot`, `practice-tomb-forward` (all `J:/TriAevum-verify-20260910`)
+`win-coldboot`, `practice-tomb-forward` (all `<verify-20260910>`)
 and Sheik raw copy with `native_cutscene_dialogue_advance.json`, 900 updates
 each. `win-items` was excluded: the checkpoint no longer restores on this host
 ("display transfer source has no Vulkan render target"). The measured Field
@@ -122,7 +122,7 @@ measure_prebackend.py --invocation <template> --executable <host> --baseline-plu
   --comparison-plugin <candidate> --runs 8 --frames 900 --no-present
 ```
 
-Private evidence: `I:/_triaevum_work/perf-levers/` (runs, profiles, modules).
+Private evidence: `<work>/perf-levers/` (runs, profiles, modules).
 Its `DISPOSABLES.md` lists every artifact and its removal condition.
 
 ## Parallel presentation (product mode)

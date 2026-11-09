@@ -204,10 +204,10 @@ reduction or delayed missing-grass workaround has been shipped as a fix.
 
 ## Developer Reproduction
 
-- Authoritative checkout: `I:/TriAevum-public/source-repository-clean`.
+- Authoritative checkout: `<public-work>/source-repository-clean`.
 - Linux source mirror: `~/triaevum-linux`; SDK/build paths and
   commands: [Steam Runtime build](TRIAEVUM_STEAM_RUNTIME_BUILD.md).
-- Private helpers: `I:/oot3dre_work/linux-port-proof/` and
+- Private helpers: `<oot3d-work>/linux-port-proof/` and
   `~/triaevum-flatpak-proof/`: `run-flatpak-frame-probe.py`,
   `analyze-scanout.py`, `x11-escape-smoke.py`, `refresh-proof-runtime.py`.
 - Private evidence: `~/.var/app/io.github.coccofresco.TriAevum/data/probes/`.

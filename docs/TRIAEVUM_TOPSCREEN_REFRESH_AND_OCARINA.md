@@ -95,7 +95,7 @@ The checker deliberately does not certify visuals or item effects. Private
 evidence lives under `~/triaevum-pipeline-live-proof/`:
 `native-save-items-{even,odd}` (before), `native-save-cadence-final-{even,odd}`,
 and `native-save-cadence-use-v2`. Fixture descriptions/timelines and the ocarina
-checkpoint are mirrored in `I:/oot3dre_work/pr13-native-save-fixtures/`.
+checkpoint are mirrored in `<oot3d-work>/pr13-native-save-fixtures/`.
 No save, mod payload or framebuffer is included in the public source.
 
 ## Official Mod Evidence
@@ -103,7 +103,7 @@ No save, mod payload or framebuffer is included in the public source.
 Reference: TopScreen 2.1.1 EUR, archive SHA-256
 `e0c143c872ccf4ad72033caab768753b147a4033d260a701204a63ee6bc16df4`, IPS SHA-256
 `c834030be2fbbfd93db26180333f112e1abcfd85050b09252a8449f06bf90400`.
-Local root: `I:/oot3dre_work/topscreen-2.1.1-reference/`.
+Local root: `<oot3d-work>/topscreen-2.1.1-reference/`.
 Use `topscreen_v2_1_1_raw_analysis.json`, `ghidra_export/decompiled/`, and focused
 ARM disassembly of `topscreen_v2_1_1_payload.bin` (base `0x005C7000`). Existing
 exports plus targeted Capstone disassembly were sufficient; no full-game

@@ -32,7 +32,7 @@ or qualified**. No exploit saves or executable utilities were used.
 
 ## Private Locations
 
-- Windows: `I:/oot3dre_work/pr13-native-save-fixtures/`.
+- Windows: `<oot3d-work>/pr13-native-save-fixtures/`.
 - Untouched extracted originals: `complete/` under that directory.
 - `provenance.json`: source, author credit, archive/file hashes and qualifications.
 - `adult-temple-inventory.oot3dsav`: runtime checkpoint created after the original

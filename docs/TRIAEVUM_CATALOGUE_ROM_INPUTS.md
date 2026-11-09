@@ -93,9 +93,9 @@ original also reached the TopScreen file-selection menu (frame 1800).
 Times are installer-reported on this PC, excluding extraction from 7z and
 network download: the official TopScreen archive was already available locally.
 They are not cross-machine guarantees. Candidate location:
-`I:/oot3dre_work/catalog-rom-inputs/candidate-package`.
+`<oot3d-work>/catalog-rom-inputs/candidate-package`.
 
-Private evidence lives under `I:/oot3dre_work/catalog-rom-inputs/`:
+Private evidence lives under `<oot3d-work>/catalog-rom-inputs/`:
 `audit.json`, `exheader-comparison.json`, `package-overlay/` and `proof/`.
 Unit tests exercise exact recognition, rejection, unchanged legacy/USA behavior,
 shared title/source bindings and idempotency. Frozen Forge and real NRI boot

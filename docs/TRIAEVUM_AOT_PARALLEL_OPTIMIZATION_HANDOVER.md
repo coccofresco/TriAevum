@@ -2,7 +2,7 @@
 
 Data: 2026-09-15. Documento operativo per un agente indipendente.
 Baseline sorgente: `0b30a6ef99706bd96f3dd090fa5ac8b33bef3cd1`, branch
-`port/linux-nri`, repository `I:/TriAevum-public/source-repository-clean`.
+`port/linux-nri`, repository `<public-work>/source-repository-clean`.
 
 ## Obiettivo e separazione
 
@@ -65,7 +65,7 @@ Commit da preservare:
 Creare un worktree e un branch propri, senza cambiare branch nel checkout principale:
 
 ```powershell
-git -C I:/TriAevum-public/source-repository-clean worktree add -b perf/aot-independent I:/TriAevum-aot-lab 0b30a6ef99706bd96f3dd090fa5ac8b33bef3cd1
+git -C <public-work>/source-repository-clean worktree add -b perf/aot-independent <local>/TriAevum-aot-lab 0b30a6ef99706bd96f3dd090fa5ac8b33bef3cd1
 ```
 
 Il comando e' una procedura, NON e' stato eseguito da questo handover. Se il nome
@@ -86,7 +86,7 @@ le cache, i checkpoint o le build dell'altro agente.
   installazioni Windows/Linux e non lanciare test su Linux durante quelli altrui.
 - Non fare push, release, merge o cherry-pick nel branch principale. Consegnare
   una sequenza di commit. La reintegrazione compete all'agente principale.
-- Le decomp esterne, incluso `I:/oot3decomp`, restano evidenze in sola lettura.
+- Le decomp esterne, incluso `<oot3d-decomp>`, restano evidenze in sola lettura.
   Questo lavoro non autorizza sincronizzazione, nuova decomp o loro modifica.
 
 ## Mappa del codice
@@ -137,13 +137,13 @@ Windows, da usare come riferimenti in sola lettura:
 
 ```text
 Python: %USERPROFILE%/AppData/Local/Programs/Python/Python313/python.exe
-LLVM: I:/oot3dre_tools/llvm-22.1.6/bin/clang++.exe
-Archiver: I:/oot3dre_tools/llvm-22.1.6/bin/llvm-ar.exe
+LLVM: <tools>/llvm-22.1.6/bin/clang++.exe
+Archiver: <tools>/llvm-22.1.6/bin/llvm-ar.exe
 Ninja: %USERPROFILE%/.local/bin/ninja.exe
 Headers JSON: C:/vcpkg/installed/x64-windows-static/include
-Runtime: J:/TriAevum-verify-20260910/runtime/TriAevum.exe
-Support: J:/TriAevum-verify-20260910/runtime/triaevum_title_whole_aot_support.lib
-code.bin: E:/ppssppvr/oot3d_decomp/work/extract/exefs/code.bin
+Runtime: <verify-20260910>/runtime/TriAevum.exe
+Support: <verify-20260910>/runtime/triaevum_title_whole_aot_support.lib
+code.bin: <ppssppvr>/oot3d_decomp/work/extract/exefs/code.bin
 ```
 
 DLL baseline e manifest adiacente `whole-aot-plugin.json`:
@@ -219,7 +219,7 @@ Suite rapida, dalla radice del worktree (configurare `CXX` al compilatore dispon
 per evitare che i test eseguibili vengano saltati silenziosamente):
 
 ```powershell
-$env:CXX = 'I:/oot3dre_tools/llvm-22.1.6/bin/clang++.exe'
+$env:CXX = '<tools>/llvm-22.1.6/bin/clang++.exe'
 & '%USERPROFILE%/AppData/Local/Programs/Python/Python313/python.exe' -m unittest discover -s tools/oot3d/native_a32_runtime -p 'test_whole_aot*.py'
 & '%USERPROFILE%/AppData/Local/Programs/Python/Python313/python.exe' -m unittest discover -s tools/oot3d/native_a32_runtime -p 'test_audit_whole_aot_product.py'
 ```

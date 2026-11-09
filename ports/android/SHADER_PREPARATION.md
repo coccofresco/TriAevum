@@ -105,13 +105,13 @@ Use `capture_device.py` only for separate bounded visual checks; do not revoke
 ADB authorization or restart its server to repair an app failure.
 
 Private receipts/APKs/profiles are under
-`I:/oot3dre_work/android-shader-preparation/`. Linux runtime build:
-`/home/xander/triaevum-android-build/runtime`; title:
-`/home/xander/triaevum-android-build/title-o1`. The build mirror is
-`/home/xander/triaevum-android-source`; its old Git HEAD is not the deployed
+`<oot3d-work>/android-shader-preparation/`. Linux runtime build:
+`/home/<user>/triaevum-android-build/runtime`; title:
+`/home/<user>/triaevum-android-build/title-o1`. The build mirror is
+`/home/<user>/triaevum-android-source`; its old Git HEAD is not the deployed
 source version. Before synchronization, changed files were compared against the
 public source and overwritten versions backed up to
-`/home/xander/triaevum-android-build/pre-a714-source/`. Do not use the mirror's
+`/home/<user>/triaevum-android-build/pre-a714-source/`. Do not use the mirror's
 HEAD alone as a reproducibility identifier.
 
 ## Remaining Work

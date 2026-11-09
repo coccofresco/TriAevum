@@ -113,7 +113,7 @@ Private evidence: `~/triaevum-pipeline-live-proof/` directories
 `pr-compat-native-title`, `pr-review-cache`, `pr-review-cache-report.json`,
 `pr11-effects` and `pr11-effects-prewarm`. The latter two contain inventory,
 compilation/preparation reports, launch counters and framebuffer captures.
-Windows helper/test build: `I:/oot3dre_work/nri-pipeline-preparation-windows`.
+Windows helper/test build: `<oot3d-work>/nri-pipeline-preparation-windows`.
 No ROM, captures, shader packs or driver caches are committed or distributed.
 
 Limits: no real Retina display test, Windows gameplay rebuild, Android device

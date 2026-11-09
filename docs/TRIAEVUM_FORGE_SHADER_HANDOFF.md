@@ -273,7 +273,7 @@ do not use audit timing as a cache performance benchmark.
 
 Private Linux evidence: `~/triaevum-pipeline-live-proof/` under
 `forge-handoff-native`, `forge-handoff-effects`, `forge-handoff-missing-variants`.
-Windows evidence: `I:/oot3dre_work/forge-handoff-windows/`.
+Windows evidence: `<oot3d-work>/forge-handoff-windows/`.
 
 ## Remaining Scope
 

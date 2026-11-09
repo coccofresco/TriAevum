@@ -4,14 +4,14 @@
 
 Prova locale del 5 settembre 2026, non certificazione Windows pulito o release
 pubblica completa. ROM originale letta soltanto; nessuna modifica a Zelda3drecomp.
-Installazione privata: `I:/oot3dre_work/triaevum-full-title-proof`.
+Installazione privata: `<oot3d-work>/triaevum-full-title-proof`.
 Runtime/Forge copiati dal candidate r7 immutabile. Nessuna vecchia DLL del titolo
 o cache di compilazione importata nella nuova installazione.
 
-- ROM: `I:/Zelda3drecomp/oot3d.cci`, 483672064 byte.
+- ROM: `<legacy-recomp>/oot3d.cci`, 483672064 byte.
 - SHA256 ROM: `d4670c962a6dd5c9cb953de63e6316b1b03214d78ce3fd52b75cca6bcfe6aef2`.
 - Forge: `712a2bf0b704c3c368ca1bac50be28bfa6a0025ce3a0e81a3af69e8274d8fcd8`.
-- Toolchain privata gia' acquisita: `I:/oot3dre_work/triaevum-fully-acquired-sysroot`.
+- Toolchain privata gia' acquisita: `<oot3d-work>/triaevum-fully-acquired-sysroot`.
 - Sysroot: `3ab0946f30d5d528336687428cd0e9cc24ed7d733e88ec56ee28804ca16c160c`.
 
 L'estrazione e' stata eseguita con `ctr_rom.extract_decrypted_rom` e

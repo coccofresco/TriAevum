@@ -121,6 +121,11 @@ impl Site {
     }
 
     fn with_version(version: &str) -> Self {
+        Self::with_versions("0.8.0", version)
+    }
+
+    /// An installed `installed` package and a downloaded `version` ZIP.
+    fn with_versions(installed: &str, version: &str) -> Self {
         let fixture = Fixture::new();
         let (private_key, key) = generate_test_key();
         let mut files = roles();
@@ -128,7 +133,7 @@ impl Site {
             write(&fixture.package.join(path), &bytes);
             files.push((path.into(), role));
         }
-        let old_files = publish(&fixture.package, "0.8.0", &files, &private_key);
+        let old_files = publish(&fixture.package, installed, &files, &private_key);
         fixture.install(&FakeRuntime::default(), &mut Vec::new()).unwrap();
         customize_settings(&fixture.data());
         let kept = sentinels(&fixture);
@@ -789,6 +794,99 @@ fn updating_from_an_extracted_folder_and_a_legacy_root_profile() {
     assert_eq!(std::fs::read(&legacy).unwrap(), b"{\"legacy\": true}", "the legacy root profile is kept");
     std::fs::remove_file(&legacy).unwrap();
     assert_eq!(recover_and_validate(&site), Tuple::New);
+}
+
+/// R-A G6-F2: an Echoes of Time 0.8.0-beta.1.2 installation (root
+/// TriAevum.exe, TriAevum.launch.json) updated in place to 0.8.0-beta.2 runs
+/// the product executable, keeps saves and settings byte for byte, and keeps
+/// no stale legacy game executable.
+#[cfg(windows)]
+#[test]
+fn a_beta_1_2_installation_updates_in_place_to_the_product_executable() {
+    use forge_catalog::platform::{LEGACY_LAUNCH_PROFILE, LEGACY_WINDOWS_RUNTIME};
+    let site = Site::with_versions("0.8.0-beta.1.2", "0.8.0-beta.2");
+    let activation = site.activation().to_path_buf();
+    // The beta.1.2 layout: the game under its pre-product name and the
+    // launch profile named after it.
+    let product = activation.join(host().installed_runtime);
+    let legacy_runtime = activation.join(LEGACY_WINDOWS_RUNTIME);
+    assert_ne!(product, legacy_runtime);
+    std::fs::rename(&product, &legacy_runtime).unwrap();
+    let profile = site.fixture.launch_profile();
+    let legacy_profile = profile.with_file_name(LEGACY_LAUNCH_PROFILE);
+    std::fs::rename(&profile, &legacy_profile).unwrap();
+    // Forge's own records of that installation name the old files.
+    let product_profile = forge_catalog::platform::launch_profile_name(host().installed_runtime);
+    for folder in [update_fixture::title_directory(&site.fixture), site.fixture.data()] {
+        for entry in walk_json(&folder) {
+            let text = std::fs::read_to_string(&entry).unwrap();
+            let legacy = text
+                .replace(&product_profile, LEGACY_LAUNCH_PROFILE)
+                .replace(host().installed_runtime, LEGACY_WINDOWS_RUNTIME);
+            if legacy != text {
+                std::fs::write(&entry, legacy).unwrap();
+            }
+        }
+    }
+    assert!(!product.exists() && legacy_runtime.is_file() && legacy_profile.is_file());
+    // The beta.1.2 installation is a valid update target.
+    match plan(&site.archive_request(), &site.options()) {
+        Ok(Planned::Ready(_)) => {}
+        Ok(Planned::Done(value)) => panic!("beta.1.2 layout not updatable: {value}"),
+        Err(error) => panic!(
+            "beta.1.2 layout refused: {} ({}); state {:?}",
+            error.message,
+            explain(&error).id,
+            inspect(&InspectRequest::package(&activation))
+        ),
+    }
+
+    let outcome = run_update(&site, &Run::default());
+    assert!(outcome.helper_started);
+    let result = result(&site);
+    assert_eq!(result["status"], "updated", "{result:?}");
+    assert_eq!(result["previous_version"], "0.8.0-beta.1.2");
+    assert_eq!(result["version"], "0.8.0-beta.2");
+    assert_eq!(std::fs::read(&product).unwrap(), NEW_RUNTIME, "the product executable runs the new runtime");
+    assert!(!legacy_runtime.exists(), "the legacy TriAevum.exe is removed");
+    assert!(
+        profile.is_file() || legacy_profile.is_file(),
+        "a launch profile survives the update: {} or {}",
+        profile.display(),
+        legacy_profile.display()
+    );
+    // Saves, user files and settings are kept; the installation is Ready.
+    assert_eq!(recover_and_validate(&site), Tuple::New);
+}
+
+/// Every JSON file under `folder`.
+#[cfg(windows)]
+fn walk_json(folder: &Path) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    let mut pending = vec![folder.to_path_buf()];
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(&directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "json") {
+                found.push(path);
+            }
+        }
+    }
+    found
+}
+
+/// Negative: going back from beta.2 to beta.1.2 is a downgrade by version
+/// precedence and needs confirmation.
+#[test]
+fn beta_1_2_offered_to_a_beta_2_installation_is_a_downgrade() {
+    let site = Site::with_versions("0.8.0-beta.2", "0.8.0-beta.1.2");
+    assert_eq!(
+        plan(&site.archive_request(), &site.options()).unwrap_display(),
+        json!({"status": "confirmation_required", "reason": "downgrade",
+               "installed_version": "0.8.0-beta.2", "present_version": "0.8.0-beta.1.2"})
+    );
 }
 
 #[test]

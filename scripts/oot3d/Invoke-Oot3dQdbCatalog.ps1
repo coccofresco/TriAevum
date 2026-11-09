@@ -1,7 +1,7 @@
 param(
     [string]$ToolRoot = "",
-    [string]$RomfsRoot = "E:\ppssppvr\oot3d_decomp\work\extract\romfs",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$RomfsRoot = "<ppssppvr>\oot3d_decomp\work\extract\romfs",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$OutputRoot = "",
     [switch]$Verify
 )

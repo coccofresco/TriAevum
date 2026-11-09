@@ -45,9 +45,9 @@ an already activated user's launch profile or config.
 
 ## Windows evidence
 
-Private output: `I:/TriAevum-public/retained-corpus-20260912/`.
+Private output: `<public-work>/retained-corpus-20260912/`.
 Original diagnostic catalog is preserved there as `original-catalog.json`.
-The EUR baseline recipe in `J:/TriAevum-verify-20260910/package` now binds the
+The EUR baseline recipe in `<verify-20260910>/package` now binds the
 retained pack and pipeline recipes; other recipes are unchanged.
 
 - Locally retained pack: **887 modules**, SHA256

@@ -1,7 +1,7 @@
 param(
     [string]$ToolRoot = "",
-    [string]$RomFs = "E:\ppssppvr\oot3d_decomp\work\extract\romfs",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$RomFs = "<ppssppvr>\oot3d_decomp\work\extract\romfs",
+    [string]$WorkRoot = "<oot3d-work>",
     [int]$SampleLimit = 100,
     [switch]$NoRecords,
     [switch]$Verify

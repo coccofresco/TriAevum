@@ -7,7 +7,7 @@ commit `c9138cb`. It does not replace the historical measurements in the owning
 architecture documents, promote the AOT experiment, or claim a new performance
 win. Runtime verification used an isolated Windows/NRI build, an RTX 3060,
 1280×720 output, private Kokiri checkpoints and the compatible private title
-module from `I:/_triaevum_work/deferred-copy/`.
+module from `<work>/deferred-copy/`.
 
 The installed game, user profiles/packs and running user sessions were not
 replaced. No ROM-derived assets, checkpoints, captures, SDKs or title binaries
@@ -114,7 +114,7 @@ No new FPS claim is inferred from short capture or validation runs.
 ## Evidence and reproduction boundaries
 
 Private evidence root:
-`I:/_triaevum_work/remaining-progress-qualification/`.
+`<work>/remaining-progress-qualification/`.
 
 - `source-selection.json`, build products, suite logs and `test-receipts.json`.
 - Per-case `invocation.json`, `runtime.json`, `gpu.json`, console logs and

@@ -9,19 +9,19 @@ function Add-Scope([string]$Path, [string[]]$Extensions, [string]$Reason) {
 }
 $objects = @('.obj', '.o', '.pch', '.ilk')
 foreach ($path in @(
-    'I:\TriAevum-aot-lab-debug\native-objects',
-    'I:\TriAevum-aot-lab-o3\native-objects',
+    '<local>/TriAevum-aot-lab-debug\native-objects',
+    '<local>/TriAevum-aot-lab-o3\native-objects',
     "$env:USERPROFILE\AppData\Local\Temp\triaevum-ui-title-cache\native-objects"
 )) { Add-Scope $path ($objects + '.lib') 'Regenerable diagnostic AOT objects; keep generated source and plugin DLLs' }
 foreach ($path in @(
-    'I:\TriAevum-pica-build\CMakeFiles',
-    'I:\oot3dre-baseline-97c\build-codex',
-    'I:\oot3dre-vulkan\build-renderer-gate0',
-    'I:\oot3dre_work\triaevum-direct-module-build\CMakeFiles',
-    'I:\oot3dre_work\triaevum-game-module-build\CMakeFiles',
-    'I:\oot3dre_work\triaevum-game-module-build-release\CMakeFiles',
-    'I:\oot3dre_work\triaevum-module-build-release\CMakeFiles',
-    'I:\oot3dre_work\shader-cache-windows\CMakeFiles'
+    '<local>/TriAevum-pica-build\CMakeFiles',
+    '<local>/oot3dre-baseline-97c\build-codex',
+    '<local>/oot3dre-vulkan\build-renderer-gate0',
+    '<oot3d-work>\triaevum-direct-module-build\CMakeFiles',
+    '<oot3d-work>\triaevum-game-module-build\CMakeFiles',
+    '<oot3d-work>\triaevum-game-module-build-release\CMakeFiles',
+    '<oot3d-work>\triaevum-module-build-release\CMakeFiles',
+    '<oot3d-work>\shader-cache-windows\CMakeFiles'
 )) { Add-Scope $path $objects 'Inactive build intermediates; keep dependencies, executables and source' }
 $temp = "$env:USERPROFILE\AppData\Local\Temp"
 foreach ($dir in Get-ChildItem -LiteralPath $temp -Directory -Filter 'TriAevum-*') {
@@ -30,7 +30,7 @@ foreach ($dir in Get-ChildItem -LiteralPath $temp -Directory -Filter 'TriAevum-*
     if ($IncludeOldCaptures) { Add-Scope $dir.FullName @('.bmp') 'Old temporary framebuffer captures (not saves)' }
 }
 if ($IncludeOldCaptures) {
-    foreach ($dir in Get-ChildItem -LiteralPath 'I:\oot3dre_work' -Directory) {
+    foreach ($dir in Get-ChildItem -LiteralPath '<oot3d-work>' -Directory) {
         if ($dir.Name -match '^(grass-|audio-costs-|f2-|freecam-|canonical-costs-|native-outline-)' -and
             -not ($dir.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
             Add-Scope $dir.FullName @('.bmp') 'Historical renderer test captures; keep numerical reports and inputs'
@@ -38,16 +38,16 @@ if ($IncludeOldCaptures) {
     }
     foreach ($path in @(
         "$env:USERPROFILE\triaevum-verify-20260911",
-        'J:\TriAevum-verify-20260910',
-        'J:\TriAevum-diagnostics',
-        'I:\TriAevum-diagnostics'
+        '<verify-20260910>',
+        '<diagnostics>',
+        '<diagnostics>'
     )) { Add-Scope $path @('.bmp') 'Historical captures; preserve reports, configuration and checkpoints' }
 }
 $protected = @(
-    'J:\TriAevum-verify-20260910\runtime',
+    '<verify-20260910>\runtime',
     "$env:USERPROFILE\triaevum-verify-20260911\epona-user"
 )
-$baseline = Get-Content -LiteralPath 'I:\TriAevum-aot-lab-evidence\baseline\whole-aot-plugin.json' -Raw | ConvertFrom-Json
+$baseline = Get-Content -LiteralPath '<local>/TriAevum-aot-lab-evidence\baseline\whole-aot-plugin.json' -Raw | ConvertFrom-Json
 $objectRoot = "$env:USERPROFILE\AppData\Local\Temp\triaevum-ui-title-cache\native-objects"
 $archive = Join-Path $objectRoot ('archives\' + $baseline.archive_cache_key)
 $record = Get-Content -LiteralPath ($archive + '.build.json') -Raw | ConvertFrom-Json

@@ -82,7 +82,7 @@ change detection and interpolation, including prepared/view samples.
   removed at the inspected title view (frame 2520). These captures are not a
   claim of pixel-exact parity across every scene or a new Azahar comparison run.
 
-Private evidence under `I:/oot3dre_work/`:
+Private evidence under `<oot3d-work>/`:
 
 - `grass-actors-dust-native-baseline-20260907`: toon/AO/grass disabled control.
 - `grass-actors-dust-integrated-20260907`: actor bridge, before atlas correction.

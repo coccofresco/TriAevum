@@ -93,7 +93,7 @@ uncapped FPS benchmark**. `grassTransitions=true` additionally captures the
 framebuffer on status changes, avoiding continuous readbacks that disturb pacing.
 Sidecars identify host/renderer frames and interpolation samples.
 
-Raw local evidence: `I:/oot3dre_work/grass-intro-20260907/` (private, not packaged).
+Raw local evidence: `<oot3d-work>/grass-intro-20260907/` (private, not packaged).
 Baseline: 1,611 drawing frames / 4,815 source-published frames; no Grass during
 the 3,125 source frames with mixed opaque composition. After the composition and
 budget fixes: 4,781 / 4,824; the remaining short culls motivated exact-camera
@@ -176,7 +176,7 @@ native composition, lighting, fog, UI, camera control or the user's saved preset
 
 ### Verification and Cost
 
-Private evidence: `I:/oot3dre_work/grass-frustum-budget-20260907/`.
+Private evidence: `<oot3d-work>/grass-frustum-budget-20260907/`.
 `focused` is the first implementation; `cohort` is the final coordinated version.
 The full suite passes **297 tests**, including budgets/capacity saturation,
 extreme weights, view clipping, near/far priority, stable retained samples, black
@@ -231,8 +231,8 @@ near-pixel overdraw before increasing global density or adding more controls.
 ## Static Room Cache and Extended Visibility (2026-09-07)
 
 Renderer implementation: `dbab79e8` on `fix/cacao-effect-guide-contracts`.
-Playable development binary: `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`,
-with `I:/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json` arguments. The installed
+Playable development binary: `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`,
+with `<local>/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json` arguments. The installed
 release executable and private title module are unchanged.
 
 This supersedes the view-focused scheduler in renderer `f1fee1e8` / project
@@ -293,7 +293,7 @@ F1 / Grass / Performance is the only control owner:
 
 ### Verification Protocol
 
-Private evidence: `I:/oot3dre_work/grass-static-cache-20260907/`.
+Private evidence: `<oot3d-work>/grass-static-cache-20260907/`.
 `static-5k` is the rejected sparse prototype, `compact-20k` adds compact storage,
 and `indexed-20k` additionally prunes LOD-empty spatial branches.
 
@@ -433,4 +433,4 @@ independence (`oot3d_grass_world_placement_cache_tests`); the GPU selector
 against the CPU rule on a six-cluster fixture within and over budget
 (`grass_motion_gpu_tests`); the audit line. Lab: the Kokiri ledge free camera
 at eight yaws with budget 75,000 before and after (sheets in
-`I:/_triaevum_work/issue98/grassvideo/`).
+`<work>/issue98/grassvideo/`).

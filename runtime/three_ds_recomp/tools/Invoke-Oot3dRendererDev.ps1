@@ -28,7 +28,7 @@ param(
     [string]$ProjectRoot = "",
     [string]$BuildDirectory = "",
     [string]$Checkpoint =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata\quick.oot3dsav",
+        "<oot3d-work>\native_game\oot3d_native_savedata\quick.oot3dsav",
     [string]$VcpkgRoot = ""
 )
 

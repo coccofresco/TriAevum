@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE_BASE = 0x00100000
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 OUT_HEADER = ROOT / "include" / "oot3d" / "title_intro_player_resource_visibility.h"
 OUT_SOURCE = ROOT / "src" / "code" / "z_title_intro_player_resource_visibility.c"
 OUT_JSON = ROOT / "analysis" / "title_intro_player_resource_visibility.json"

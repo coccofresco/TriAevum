@@ -440,6 +440,14 @@ mod tests {
         assert_eq!(order("0.8.0-beta", "0.8.0-beta.1"), Ordering::Less);
         assert_eq!(order("0.8.0-1", "0.8.0-alpha"), Ordering::Less);
         assert_eq!(order("v1.0.0+build.7", "1.0.0"), Ordering::Equal);
+        // The release program's versions: Echoes of Time beta.2 updates beta.1.2,
+        // and Moonfall Curse starts at alpha 1.
+        assert_eq!(order("0.8.0-beta.1.2", "0.8.0-beta.2"), Ordering::Less);
+        assert_eq!(order("0.8.0-beta.2", "0.8.0-beta.1.2"), Ordering::Greater);
+        assert_eq!(order("0.8.0-beta.2", "0.8.0-beta.2"), Ordering::Equal);
+        assert_eq!(order("0.1.0-alpha.1", "0.1.0-alpha.2"), Ordering::Less);
+        assert_eq!(order("0.1.0-alpha.1", "0.1.0-beta.1"), Ordering::Less);
+        assert_eq!(order("0.1.0-alpha.1", "0.1.0"), Ordering::Less);
         assert_eq!(compare_versions("unknown", "0.8.0"), None);
         assert_eq!(compare_versions("0.8.0-", "0.8.0"), None);
     }

@@ -23,7 +23,7 @@ DEFAULT_CUTSCENE_PROCESS_DECOMPILE = (
     / "99068_002c5ba0_Cutscene_ProcessCommands.c"
 )
 DEFAULT_MISC_HELPER_EXPORT_DIR = ROOT / "analysis" / "cutscene_misc_target_helpers_ghidra_export"
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_OUT_JSON = ROOT / "analysis" / "scene_cutscene_misc_action_table.json"
 DEFAULT_OUT_CSV = ROOT / "analysis" / "scene_cutscene_misc_action_table.csv"
 DEFAULT_OUT_MD = ROOT / "analysis" / "scene_cutscene_misc_action_table.md"

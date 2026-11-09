@@ -32,8 +32,8 @@ from oot3d_asset_tool.zar import ZarArchive
 from oot3d_asset_tool.zsi_cutscene_audit import parse_oot3d_native_cutscene_block
 
 
-DEFAULT_ROMFS_ROOT = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\romfs")
-DEFAULT_CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+DEFAULT_ROMFS_ROOT = Path(r"<ppssppvr>\oot3d_decomp\work\extract\romfs")
+DEFAULT_CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 DEFAULT_SYMBOLS = ROOT / "symbols" / "manual_symbols.csv"
 DEFAULT_OUT_JSON = ROOT / "analysis" / "title_intro_source_table.json"
 DEFAULT_OUT_MD = ROOT / "analysis" / "title_intro_source_table.md"

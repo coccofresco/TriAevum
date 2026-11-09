@@ -14,7 +14,7 @@ the retained runtime source receipt before launch, refuses an existing output
 attempt, uses four preparation workers, disables crash dialogs, and checks the
 owner's I: 8 GiB floor before taking the lock and again before launch.
 
-The launcher acquires `I:/_triaevum_work/gpu-run.lock` with mkdir and a unique
+The launcher acquires `<work>/gpu-run.lock` with mkdir and a unique
 owner token, waits boundedly, and releases only its own token. It never reclaims
 stale or foreign locks. Signal handling unwinds the Forge subprocess owner,
 which kills/reaps its helper before the lock is released. The six launcher
@@ -35,7 +35,7 @@ on the Forge user path; publisher compilation remains separate.
    1,757,446,144 bytes. Cache payload 92,848,619 bytes. Validation was **not
    requested**; the zero error counter is not Khronos validation qualification.
 2. **Required cache-consumer smoke:** one 180-frame Stock Pot Inn MM3D run
-   through `run_safe.sh`, exit 0 / 18 seconds. Actual renderer accepted exactly
+   through the private lab run harness (not shipped), exit 0 / 18 seconds. Actual renderer accepted exactly
    **92,848,619 cache bytes**, loaded 23 title programs and 145 room emitters,
    prepared 165 startup parts with zero failures. Strict portable resolution:
    72 hits / zero misses. Specialized 25,001 + uber 379 draws, zero completed

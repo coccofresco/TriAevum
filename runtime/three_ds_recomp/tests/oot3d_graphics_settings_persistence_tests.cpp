@@ -36,7 +36,7 @@ Fast::Extension::GraphicsSettings CompleteSettings() {
     settings.TexturePacks.Azahar.LoadDirectory =
         "D:/texture-packs/oot3d";
     settings.TexturePacks.Azahar.DumpDirectory =
-        "E:/texture-dumps/oot3d";
+        "X:/texture-dumps/oot3d";
     settings.Effects.SurfaceLighting = SurfaceLightingMode::PerPixelPbr;
 
     auto& grass = settings.Grass;

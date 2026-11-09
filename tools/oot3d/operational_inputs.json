@@ -7,23 +7,23 @@
     "translated_code_and_scenarios": "Translated title code lives in ${aotProductCache} (generated) and in tools/oot3d/decomp_support (readable). Savestates live in ${nativeGameCheckpoints} and ${diagnosticsRoot}; native transitions are driven through ${structuralScenarios} instead of one savestate per scene. Narrative map: docs\\\\OOT3D_WORKSPACE_PATHS.md."
   },
   "variables": {
-    "repoRoot": "I:\\oot3dre",
-    "zelda3dRecompRoot": "I:\\Zelda3drecomp",
+    "repoRoot": "<local>/oot3dre",
+    "zelda3dRecompRoot": "<legacy-recomp>",
     "zelda3dRecompEvidence": "${repoRoot}\\tools\\oot3d\\decomp_support\\evidence\\zelda3drecomp\\849140697187b895",
-    "workRoot": "I:\\oot3dre_work",
-    "oot3dExtractRoot": "E:\\ppssppvr\\oot3d_decomp\\work\\extract",
-    "oot3dDecompGit": "E:\\ppssppvr\\oot3d_decomp\\oot3d_decomp_git",
-    "azaharRoot": "E:\\azahar pcvr",
-    "pcvrReTools": "E:\\azahar pcvr\\tools\\pcvr-re-tools",
+    "workRoot": "<oot3d-work>",
+    "oot3dExtractRoot": "<ppssppvr>\\oot3d_decomp\\work\\extract",
+    "oot3dDecompGit": "<ppssppvr>\\oot3d_decomp\\oot3d_decomp_git",
+    "azaharRoot": "<azahar-pcvr>",
+    "pcvrReTools": "<azahar-pcvr>\\tools\\pcvr-re-tools",
     "cmakeExe": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe",
     "vsDevCmd": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\VsDevCmd.bat",
     "vsDevShell": "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\Tools\\Launch-VsDevShell.ps1",
     "fastBuildScript": "${repoRoot}\\tools\\oot3d\\build_fast_dev.ps1",
     "buildRoot": "${repoRoot}\\build-codex",
     "buildPhysicalRoot": "%USERPROFILE%\\AppData\\Local\\oot3dre-build\\build-codex",
-    "llvmRoot": "I:\\oot3dre_tools\\llvm-22.1.6",
-    "llvmArchive": "I:\\oot3dre_tools\\downloads\\clang+llvm-22.1.6-x86_64-pc-windows-msvc.tar.xz",
-    "llvmBuildRoot": "I:\\oot3dre_work\\build-llvm-22.1.6",
+    "llvmRoot": "<tools>\\llvm-22.1.6",
+    "llvmArchive": "<tools>\\downloads\\clang+llvm-22.1.6-x86_64-pc-windows-msvc.tar.xz",
+    "llvmBuildRoot": "<oot3d-work>\\build-llvm-22.1.6",
     "llvmToolchain": "${repoRoot}\\cmake\\Oot3dLlvmClToolchain.cmake",
     "llvmSmokeScript": "${repoRoot}\\scripts\\oot3d\\Test-Oot3dLlvmToolchain.ps1",
     "llvmConfigureScript": "${repoRoot}\\scripts\\oot3d\\Configure-Oot3dLlvmBuild.ps1",
@@ -31,17 +31,17 @@
     "wholeAotOptimizationAnalysis": "${repoRoot}\\tools\\oot3d\\native_a32_runtime\\analyze_whole_aot_optimization_ir.py",
     "llvmAotPilot": "${repoRoot}\\tools\\oot3d\\native_a32_runtime\\run_llvm_aot_pilot.py",
     "llvmAotPilotBuildRoot": "${workRoot}\\build-llvm-aot-pilot",
-    "publicCleanRepo": "I:\\TriAevum-public\\source-repository-clean",
-    "verifyBuildRoot": "J:\\TriAevum-verify-20260910\\runtime",
-    "verifyBinaryRoot": "I:\\TriAevum-public\\ui-dependencies\\bin",
-    "verifyInstallRoot": "I:\\TriAevum-public\\releases\\v0.6.0-alpha.3b\\qualification-windows",
+    "publicCleanRepo": "<public-work>\\source-repository-clean",
+    "verifyBuildRoot": "<verify-20260910>\\runtime",
+    "verifyBinaryRoot": "<public-work>\\ui-dependencies\\bin",
+    "verifyInstallRoot": "<public-work>\\releases\\v0.6.0-alpha.3b\\qualification-windows",
     "aotProductCache": "${workRoot}\\oot3d-whole-aot-product-cache",
     "structuralScenarios": "${workRoot}\\structural-scenarios",
     "nativeGameCheckpoints": "${workRoot}\\native_game\\checkpoints",
-    "diagnosticsRoot": "J:\\TriAevum-diagnostics",
-    "releaseSourceRoot": "I:\\TriAevum-public\\releases\\v0.6.0-alpha.3\\title-build-source",
-    "historyBundle": "I:\\TriAevum-public\\history-cleanup.git",
-    "nativeRendererRepo": "I:\\oot3d-native-renderer"
+    "diagnosticsRoot": "<diagnostics>",
+    "releaseSourceRoot": "<public-work>\\releases\\v0.6.0-alpha.3\\title-build-source",
+    "historyBundle": "<public-work>\\history-cleanup.git",
+    "nativeRendererRepo": "<local>/oot3d-native-renderer"
   },
   "entries": [
     {
@@ -259,14 +259,14 @@
     {
       "id": "oot3d_ghidra_project_dir",
       "kind": "directory",
-      "path": "E:\\ppssppvr\\oot3d_decomp\\work\\ghidra_project",
+      "path": "<ppssppvr>\\oot3d_decomp\\work\\ghidra_project",
       "required": true,
       "purpose": "Local Ghidra project directory containing project oot3d_code."
     },
     {
       "id": "oot3d_ghidra_project_file",
       "kind": "file",
-      "path": "E:\\ppssppvr\\oot3d_decomp\\work\\ghidra_project\\oot3d_code.gpr",
+      "path": "<ppssppvr>\\oot3d_decomp\\work\\ghidra_project\\oot3d_code.gpr",
       "required": true,
       "purpose": "Ghidra project file for OOT3D code.bin."
     },
@@ -982,7 +982,7 @@
       "kind": "directory",
       "path": "${nativeRendererRepo}",
       "required": false,
-      "purpose": "Separate renderer checkout with its own history (branch integration-source, remote I:/oot3dre-vulkan/libultraship) and a scratch build under .renderer-dev/build. Not this repository and not the development workspace."
+      "purpose": "Separate renderer checkout with its own history (branch integration-source, remote <local>/oot3dre-vulkan/libultraship) and a scratch build under .renderer-dev/build. Not this repository and not the development workspace."
     },
     {
       "id": "legacy_a32_generated_stub",
@@ -1004,7 +1004,7 @@
     {
       "id": "analyze_whole_aot_optimization_ir",
       "working_directory": "${repoRoot}",
-      "command": "python tools\\oot3d\\native_a32_runtime\\analyze_whole_aot_optimization_ir.py --program build-codex\\oot3d_whole_aot\\aot_program.json --selection tools\\oot3d\\native_a32_runtime\\whole_aot_functions.json --code E:\\ppssppvr\\oot3d_decomp\\work\\extract\\exefs\\code.bin --output I:\\oot3dre_work\\whole_aot_optimization\\analysis.json"
+      "command": "python tools\\oot3d\\native_a32_runtime\\analyze_whole_aot_optimization_ir.py --program build-codex\\oot3d_whole_aot\\aot_program.json --selection tools\\oot3d\\native_a32_runtime\\whole_aot_functions.json --code <ppssppvr>\\oot3d_decomp\\work\\extract\\exefs\\code.bin --output <oot3d-work>\\whole_aot_optimization\\analysis.json"
     },
     {
       "id": "run_llvm_aot_pilot_mesh_submit",
@@ -1049,7 +1049,7 @@
     {
       "id": "ghidra_selected_export_template",
       "working_directory": "${repoRoot}\\tools\\oot3d\\decomp_support",
-      "command": "& '${pcvrReTools}\\ghidra\\support\\analyzeHeadless.bat' 'E:\\ppssppvr\\oot3d_decomp\\work\\ghidra_project' oot3d_code -process code.bin -noanalysis -scriptPath '${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_scripts' -postScript ExportOot3dSelected.java '${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_export' '<entries-file>' false false"
+      "command": "& '${pcvrReTools}\\ghidra\\support\\analyzeHeadless.bat' '<ppssppvr>\\oot3d_decomp\\work\\ghidra_project' oot3d_code -process code.bin -noanalysis -scriptPath '${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_scripts' -postScript ExportOot3dSelected.java '${repoRoot}\\tools\\oot3d\\decomp_support\\ghidra_export' '<entries-file>' false false"
     },
     {
       "id": "native_game_kokiri_forest_live",
@@ -1064,17 +1064,17 @@
     {
       "id": "verify_revelation_raw_copy_window",
       "working_directory": "${repoRoot}",
-      "command": "python tools\\triaevum_release\\probe_renderer.py '${verifyInstallRoot}' '${verifyBinaryRoot}\\TriAevum.exe' I:\\_triaevum_work\\attr3 --native-fidelity --frames 3500 --seconds 400 --no-captures --extended-diagnostics --load-state '${diagnosticsRoot}\\issues45-46\\sheik-native-trigger\\checkpoint.oot3dsav' --input-timeline tools\\oot3d\\native_game_runtime\\input_timelines\\native_cutscene_dialogue_advance.json"
+      "command": "python tools\\triaevum_release\\probe_renderer.py '${verifyInstallRoot}' '${verifyBinaryRoot}\\TriAevum.exe' <work>\\attr3 --native-fidelity --frames 3500 --seconds 400 --no-captures --extended-diagnostics --load-state '${diagnosticsRoot}\\issues45-46\\sheik-native-trigger\\checkpoint.oot3dsav' --input-timeline tools\\oot3d\\native_game_runtime\\input_timelines\\native_cutscene_dialogue_advance.json"
     },
     {
       "id": "iterate_revelation_raw_copy_fast",
       "working_directory": "${repoRoot}",
-      "command": "python tools\\triaevum_release\\probe_renderer.py '${verifyInstallRoot}' '${verifyBinaryRoot}\\TriAevum.exe' I:\\_triaevum_work\\near1 --native-fidelity --frames 400 --seconds 120 --no-captures --extended-diagnostics --load-state '${diagnosticsRoot}\\issues45-46\\sheik-near-copy\\checkpoint.oot3dsav' --input-timeline tools\\oot3d\\native_game_runtime\\input_timelines\\native_cutscene_dialogue_advance.json"
+      "command": "python tools\\triaevum_release\\probe_renderer.py '${verifyInstallRoot}' '${verifyBinaryRoot}\\TriAevum.exe' <work>\\near1 --native-fidelity --frames 400 --seconds 120 --no-captures --extended-diagnostics --load-state '${diagnosticsRoot}\\issues45-46\\sheik-near-copy\\checkpoint.oot3dsav' --input-timeline tools\\oot3d\\native_game_runtime\\input_timelines\\native_cutscene_dialogue_advance.json"
     },
     {
       "id": "verify_structural_scenario_run",
       "working_directory": "${repoRoot}",
-      "command": "python tools\\triaevum_release\\probe_renderer.py '${verifyInstallRoot}' '${verifyBinaryRoot}\\TriAevum.exe' I:\\_triaevum_work\\scenario --native-fidelity --frames 600 --seconds 200 --capture-interval 60 --load-state '${nativeGameCheckpoints}\\hud_minimap_visible_20260721.oot3dsav' --scenario-catalog '${repoRoot}\\tools\\oot3d\\native_a32_runtime\\oot3d_structural_scenarios.json' --scenario link_info_entry_00bb"
+      "command": "python tools\\triaevum_release\\probe_renderer.py '${verifyInstallRoot}' '${verifyBinaryRoot}\\TriAevum.exe' <work>\\scenario --native-fidelity --frames 600 --seconds 200 --capture-interval 60 --load-state '${nativeGameCheckpoints}\\hud_minimap_visible_20260721.oot3dsav' --scenario-catalog '${repoRoot}\\tools\\oot3d\\native_a32_runtime\\oot3d_structural_scenarios.json' --scenario link_info_entry_00bb"
     }
   ],
   "known_absences": [

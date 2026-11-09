@@ -17,7 +17,7 @@ from typing import Any
 
 
 DEFAULT_SCENE_LIGHT_TABLE = Path("tools/oot3d/decomp_support/analysis/scene_light_source_table.json")
-DEFAULT_CODE_BIN = Path("E:/ppssppvr/oot3d_decomp/work/extract/exefs/code.bin")
+DEFAULT_CODE_BIN = Path("<ppssppvr>/oot3d_decomp/work/extract/exefs/code.bin")
 DEFAULT_DEMO_STATS = Path("build-codex/title_intro_frame600_kankyo_fog_backend_stats.json")
 DEFAULT_EMULATOR_SUMMARY = Path(
     "captures/azahar_pica/title_intro_slot6_kankyo_focused_20260707_082324/"

@@ -42,6 +42,14 @@ class GateTests(unittest.TestCase):
                 self.assertEqual(self.lock.read_text(), "foreign file")
                 self.lock.unlink()
 
+    def test_gpu_lock_path_comes_from_environment_not_a_host_path(self):
+        self.assertEqual(gate.default_gpu_lock({"TRIAEVUM_GPU_LOCK": str(self.lock)}), self.lock)
+        self.assertEqual(gate.default_gpu_lock({"TRIAEVUM_WORK_DIR": str(self.root)}),
+                         self.root / "gpu-run.lock")
+        # Negative: nothing configured -> no built-in default (the CLI then refuses).
+        self.assertIsNone(gate.default_gpu_lock({}))
+        self.assertNotIn("_triaevum" + "_work", Path(gate.__file__).read_text(encoding="utf-8"))
+
     def test_replaced_token_never_removed(self):
         with gate.owned_gpu_lock(self.lock, wait_seconds=0):
             (self.lock / "owner").write_text("foreign owner")

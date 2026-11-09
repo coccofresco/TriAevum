@@ -8,22 +8,22 @@ approval: no package is published by this document.
 
 ## 1. Method and identities
 
-- Source: `I:/TriAevum-public/source-repository-clean`, branch `port/linux-nri`,
+- Source: `<public-work>/source-repository-clean`, branch `port/linux-nri`,
   HEAD `a9b4477` (withdrawal commit). Range start `e419028` (alpha.2c
   publication record).
-- Build tree: `J:/TriAevum-verify-20260910/runtime`, configured against this
+- Build tree: `<verify-20260910>/runtime`, configured against this
   checkout (`CMAKE_HOME_DIRECTORY` = this repository), Ninja + clang-cl 22.1.6,
   Vulkan SDK 1.4.350.0, vcpkg `x64-windows-static`, whole-AOT product mode.
-  Test executables land in `I:/TriAevum-public/ui-dependencies/bin`.
+  Test executables land in `<public-work>/ui-dependencies/bin`.
 - Product runtime built from this checkout:
-  `I:/TriAevum-public/ui-dependencies/bin/TriAevum.exe`, SHA-256
+  `<public-work>/ui-dependencies/bin/TriAevum.exe`, SHA-256
   `804f39bf75d5ceafccce265492ad86a27ce4c883bb8f92c4e28a1219ea952c10`.
 - Pre-fix comparison binary: the frozen alpha.3b package runtime
-  `I:/TriAevum-public/releases/v0.6.0-alpha.3b/qualification-windows/TriAevum.exe`,
+  `<public-work>/releases/v0.6.0-alpha.3b/qualification-windows/TriAevum.exe`,
   SHA-256 `0f76c822145dea1aea11d256a938f107a28e0b5ae509cd7644e473b9e3b698b2`.
 - Private playable installation used for the live checks:
-  `I:/TriAevum-public/releases/v0.6.0-alpha.3b/qualification-windows` and the
-  private checkpoint evidence under `J:/TriAevum-diagnostics/issues45-46/`.
+  `<public-work>/releases/v0.6.0-alpha.3b/qualification-windows` and the
+  private checkpoint evidence under `<diagnostics>/issues45-46/`.
   Both are read-only inputs; the probe copies configuration and save data into
   private output directories and never writes the installation.
 - `docs/TRIAEVUM_POST_ALPHA2C_REGRESSION_REVIEW.md` already records an
@@ -222,7 +222,7 @@ not carry; `oot3d_native_game_runtime_tests` needs `oot3d_native_runtime_host.li
 ## 4. Checks executed in this session
 
 All C++ suites below were built from this checkout in the tree named in
-section 1 and run from `I:/TriAevum-public/ui-dependencies/bin`.
+section 1 and run from `<public-work>/ui-dependencies/bin`.
 
 | Check | Result |
 | --- | --- |

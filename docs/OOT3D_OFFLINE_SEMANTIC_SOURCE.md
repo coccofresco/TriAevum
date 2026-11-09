@@ -98,6 +98,6 @@ Ship continues to own the gameplay loop, save progression, HUD, menus, and share
 The generated catalog and package are written under:
 
 ```text
-I:\oot3dre_work\playable_catalog\oot3d_semantic_route_catalog.json
-I:\oot3dre_work\playable_pack\oot3d-core.o2r
+<oot3d-work>\playable_catalog\oot3d_semantic_route_catalog.json
+<oot3d-work>\playable_pack\oot3d-core.o2r
 ```

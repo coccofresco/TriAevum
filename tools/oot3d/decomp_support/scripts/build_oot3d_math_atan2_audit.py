@@ -20,7 +20,7 @@ GET_ATAN2_C = EXPORT / "decompiled" / "99000_002bc718_Math_GetAtan2Tbl.c"
 ATAN2_EXPORT = ANALYSIS / "title_intro_player_action_motion_consumer_ghidra_export"
 ATAN2_DISASSEMBLY = ATAN2_EXPORT / "disassembly_selected.txt"
 ATAN2_C = ATAN2_EXPORT / "decompiled" / "99002_003758b0_Math_Atan2S.c"
-CODE_BIN = Path(r"E:\ppssppvr\oot3d_decomp\work\extract\exefs\code.bin")
+CODE_BIN = Path(r"<ppssppvr>\oot3d_decomp\work\extract\exefs\code.bin")
 
 OUT_JSON = ANALYSIS / "oot3d_math_atan2_audit.json"
 OUT_MD = ANALYSIS / "oot3d_math_atan2_audit.md"

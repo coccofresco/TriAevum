@@ -243,7 +243,7 @@ Private live evidence is under `~/triaevum-pipeline-live-proof/`:
 `prepare-desktop.json`. The intermediate `prepared/` run intentionally remains
 as negative evidence: identical images but **zero** accepted cache bytes.
 Windows helper evidence/build is in
-`I:/oot3dre_work/nri-pipeline-preparation-windows/`. No captures, packs, driver
+`<oot3d-work>/nri-pipeline-preparation-windows/`. No captures, packs, driver
 caches or executable backups belong in the public source archive.
 
 Private evidence:

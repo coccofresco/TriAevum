@@ -1,10 +1,10 @@
 param(
     [string]$ToolRoot = "",
-    [string]$RomFs = "E:\ppssppvr\oot3d_decomp\work\extract\romfs",
+    [string]$RomFs = "<ppssppvr>\oot3d_decomp\work\extract\romfs",
     [string]$PrimaryArchive = "",
     [string]$DuplicateArchive = "",
     [string]$CsabBindingManifest = "",
-    [string]$WorkRoot = "I:\oot3dre_work",
+    [string]$WorkRoot = "<oot3d-work>",
     [string]$Output = "",
     [int]$SampleLimit = 20,
     [switch]$Verify

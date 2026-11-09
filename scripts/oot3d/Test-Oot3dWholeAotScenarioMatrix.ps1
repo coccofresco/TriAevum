@@ -1,16 +1,16 @@
 [CmdletBinding()]
 param(
     [string]$ProductExecutable =
-        "I:\oot3dre_work\whole-aot-product-consumer\oot3d_native_game.exe",
+        "<oot3d-work>\whole-aot-product-consumer\oot3d_native_game.exe",
     [string]$ScenarioCatalog = "",
-    [string]$ArtifactRoot = "I:\oot3dre_work\native_game",
+    [string]$ArtifactRoot = "<oot3d-work>\native_game",
     [string]$GraphicsConfig =
-        "I:\oot3dre_work\native_game\oot3d_native_game.json",
+        "<oot3d-work>\native_game\oot3d_native_game.json",
     [string]$SaveDataDirectory =
-        "I:\oot3dre_work\native_game\oot3d_native_savedata",
+        "<oot3d-work>\native_game\oot3d_native_savedata",
     [string]$GuestMap = "",
     [string]$OutputRoot =
-        "I:\oot3dre_work\whole-aot-product-run\scenario-matrices",
+        "<oot3d-work>\whole-aot-product-run\scenario-matrices",
     [string[]]$Scenario = @(),
     [ValidateRange(0, 1000)]
     [int]$ChunksOverride = 0,
@@ -184,7 +184,7 @@ if($ValidateOnly.IsPresent) {
 
 if([string]::IsNullOrWhiteSpace($GuestMap)) {
     $latestReleasePath =
-        "I:\oot3dre_work\whole-aot-product-run\release-gates\latest.json"
+        "<oot3d-work>\whole-aot-product-run\release-gates\latest.json"
     if(-not (Test-Path -LiteralPath $latestReleasePath -PathType Leaf)) {
         throw "No release report is available to resolve the whole-AOT guest map"
     }

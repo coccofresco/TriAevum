@@ -88,7 +88,7 @@ The title and the version choice still use the relocation above.
 Fast ROM-free regression test (about three seconds including compilation):
 
 ```powershell
-./tools/triaevum_release/tests/run_frontend_composition_tests.ps1 -Build I:/oot3dre_work/triaevum-direct-module-build -Compiler I:/oot3dre_tools/llvm-22.1.6/bin/clang++.exe
+./tools/triaevum_release/tests/run_frontend_composition_tests.ps1 -Build <oot3d-work>/triaevum-direct-module-build -Compiler <tools>/llvm-22.1.6/bin/clang++.exe
 ```
 
 It covers both native viewport widths, inactive/disabled/unknown commands,
@@ -98,7 +98,7 @@ unrelated transfers, idempotence and empty frames.
 Bounded boot-to-file-select capture with isolated configuration and save data:
 
 ```powershell
-python -m tools.triaevum_release.validate_frontend_run --runtime I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe --profile I:/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json --config I:/TriAevum-0.6.0-candidate-r1/data/config/TriAevum.json --output I:/oot3dre_work/frontend-sky-diagnostics/new-run --seconds 60
+python -m tools.triaevum_release.validate_frontend_run --runtime <oot3d-work>/triaevum-direct-module-build/TriAevum.exe --profile <local>/TriAevum-0.6.0-candidate-r1/TriAevum.launch.json --config <local>/TriAevum-0.6.0-candidate-r1/data/config/TriAevum.json --output <oot3d-work>/frontend-sky-diagnostics/new-run --seconds 60
 ```
 
 Add `--trace` for native PICA JSONL evidence. Validation and full traces are
@@ -107,7 +107,7 @@ file-select activity, no bottom promotion/overlay and no Vulkan/NRI errors;
 framebuffer images must also be inspected. Presentation frame numbers are not
 guaranteed to align across cold starts; compare the same native menu state.
 
-2026-09-06 evidence remains private under `I:/oot3dre_work/frontend-sky-diagnostics/`:
+2026-09-06 evidence remains private under `<oot3d-work>/frontend-sky-diagnostics/`:
 `before/framebuffer_000180.bmp` reproduces the black background;
 `after/pica.jsonl` proves the shared target with the sky clear retained and only
 the menu backdrop/clear suppressed (293 diagnostic frames, zero Vulkan/NRI errors);
@@ -115,8 +115,8 @@ the menu backdrop/clear suppressed (293 diagnostic frames, zero Vulkan/NRI error
 the native blue sky. These are frontend-specific results, not a claim of
 game-wide visual parity or testing every other menu.
 
-The rebuilt executable is `I:/oot3dre_work/triaevum-direct-module-build/TriAevum.exe`.
-The development launcher `I:/oot3dre_work/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
+The rebuilt executable is `<oot3d-work>/triaevum-direct-module-build/TriAevum.exe`.
+The development launcher `<oot3d-work>/cacao-release-diagnostics/Avvia-TriAevum-corretto.cmd`
 uses it with the installed user's profile. The catalogued installed release
 executable is not silently overwritten; release packaging must refresh its
 matching catalogue and source receipts.

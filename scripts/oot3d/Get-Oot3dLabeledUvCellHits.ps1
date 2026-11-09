@@ -1,9 +1,9 @@
 param(
     [string[]]$TextureDebugId = @(),
     [string[]]$Cell = @("C32", "C31", "C3A"),
-    [string]$LegendCsv = "I:\oot3dre_work\spot04\labeled_uv_overlay\spot04_labeled_uv_legend.csv",
-    [string]$SceneManifest = "I:\oot3dre_work\spot04\converted_scene\scene_manifest.json",
-    [string]$OutputRoot = "I:\oot3dre_work\spot04\labeled_uv_overlay\cell_hits",
+    [string]$LegendCsv = "<oot3d-work>\spot04\labeled_uv_overlay\spot04_labeled_uv_legend.csv",
+    [string]$SceneManifest = "<oot3d-work>\spot04\converted_scene\scene_manifest.json",
+    [string]$OutputRoot = "<oot3d-work>\spot04\labeled_uv_overlay\cell_hits",
     [switch]$IncludeAllTriangles
 )
 

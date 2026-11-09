@@ -593,8 +593,8 @@ for it, and its tests share no code with them.
 ## Reproducible report (M1)
 
 ```text
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_reference_tests
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
+<work>\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_reference_tests
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
 ```
 
 clang-cl 22.1.6 Release, Windows 11, 2026-10-01: 7/7 tests pass in under 1 s.
@@ -639,10 +639,10 @@ Values from the `DGI_REPORT` lines:
 ## Reproducible report (M2)
 
 ```text
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_reference_tests
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd -j 4 diffuse_gi_gpu_tests
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_gpu_tests.exe
+<work>\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_reference_tests
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
+<work>\perf-levers\build-gpu-tests.cmd -j 4 diffuse_gi_gpu_tests
+<work>\perf-levers\gpu-tests-build\diffuse_gi_gpu_tests.exe
 ```
 
 clang-cl 22.1.6 Release, Windows 11, 2026-10-03. CPU: 23/23 tests pass
@@ -1264,12 +1264,12 @@ the HDR and distance tests (section 9); untested in M3.
 ### Reproducible report (M3)
 
 ```text
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_temporal_tests renderer_diffuse_gi_reference_tests
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_temporal_tests.exe
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd diffuse_gi_gpu_tests.exe diffuse_gi_temporal_gpu_tests.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_temporal_gpu_tests.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_gpu_tests.exe
+<work>\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_temporal_tests renderer_diffuse_gi_reference_tests
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_temporal_tests.exe
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
+<work>\perf-levers\build-gpu-tests.cmd diffuse_gi_gpu_tests.exe diffuse_gi_temporal_gpu_tests.exe
+<work>\perf-levers\gpu-tests-build\diffuse_gi_temporal_gpu_tests.exe
+<work>\perf-levers\gpu-tests-build\diffuse_gi_gpu_tests.exe
 ```
 
 clang 22.1.6 Release, Windows 11, 2026-10-03: M3 14/14 in 96 s; M1/M2/[B2]
@@ -1633,15 +1633,15 @@ view; FP16 for the plane and mean would need the M3 HDR/distance tests first.
 ### Reproducible report (M4)
 
 ```text
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_m4_tests renderer_diffuse_gi_reference_tests renderer_diffuse_gi_temporal_tests
+<work>\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_m4_tests renderer_diffuse_gi_reference_tests renderer_diffuse_gi_temporal_tests
 set DGI_M4_ASSET_DIR=<directory for the noise asset>
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_m4_tests.exe
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_temporal_tests.exe
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd diffuse_gi_gpu_tests.exe diffuse_gi_temporal_gpu_tests.exe diffuse_gi_m4_gpu_tests.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_m4_gpu_tests.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_gpu_tests.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_temporal_gpu_tests.exe
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_m4_tests.exe
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_reference_tests.exe
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_temporal_tests.exe
+<work>\perf-levers\build-gpu-tests.cmd diffuse_gi_gpu_tests.exe diffuse_gi_temporal_gpu_tests.exe diffuse_gi_m4_gpu_tests.exe
+<work>\perf-levers\gpu-tests-build\diffuse_gi_m4_gpu_tests.exe
+<work>\perf-levers\gpu-tests-build\diffuse_gi_gpu_tests.exe
+<work>\perf-levers\gpu-tests-build\diffuse_gi_temporal_gpu_tests.exe
 ```
 
 clang 22.1.6 Release, Windows 11, 2026-10-03: M4 21/21 in 94 s; M1/M2/[B2]
@@ -1822,10 +1822,10 @@ the buffers and the history (a transport change resets through its key).
 ### Pack regeneration and check
 
 ```text
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\build_pass_artifacts.exe I:\TriAevum-perf-levers\runtime\three_ds_recomp\src\fast\renderer\builtin_pass.spvpack
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\build_pass_artifacts.exe --check
+<work>\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe
+<work>\perf-levers\gpu-tests-build\build_pass_artifacts.exe <local>/TriAevum-perf-levers\runtime\three_ds_recomp\src\fast\renderer\builtin_pass.spvpack
+<work>\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe
+<work>\perf-levers\gpu-tests-build\build_pass_artifacts.exe --check
 ```
 
 The generator compiles the catalogue (Vulkan 1.2, performance, as for every
@@ -2023,12 +2023,12 @@ files, `graphics_capabilities.h`, `pica_scanout_effects.cpp`,
 ### Reproducible report (M5 Stage A)
 
 ```text
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_pass_tests renderer_diffuse_gi_reference_tests renderer_diffuse_gi_temporal_tests renderer_diffuse_gi_m4_tests renderer_spirv_pack_tests
-I:\_triaevum_work\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_pass_tests.exe
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe diffuse_gi_pass_gpu_tests.exe diffuse_gi_gpu_tests.exe diffuse_gi_temporal_gpu_tests.exe diffuse_gi_m4_gpu_tests.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\build_pass_artifacts.exe --check
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_pass_gpu_tests.exe
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 oot3d_native_game triaevum_title_aot_stub
+<work>\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_pass_tests renderer_diffuse_gi_reference_tests renderer_diffuse_gi_temporal_tests renderer_diffuse_gi_m4_tests renderer_spirv_pack_tests
+<work>\perf-levers\host-build\three_ds_recomp_runtime\tests\renderer_diffuse_gi_pass_tests.exe
+<work>\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe diffuse_gi_pass_gpu_tests.exe diffuse_gi_gpu_tests.exe diffuse_gi_temporal_gpu_tests.exe diffuse_gi_m4_gpu_tests.exe
+<work>\perf-levers\gpu-tests-build\build_pass_artifacts.exe --check
+<work>\perf-levers\gpu-tests-build\diffuse_gi_pass_gpu_tests.exe
+<work>\perf-levers\build-host.cmd -j 4 oot3d_native_game triaevum_title_aot_stub
 ```
 
 clang 22.1.6 Release, Windows 11, 2026-10-04. The numbers above are the
@@ -2254,14 +2254,14 @@ were not studied; incidental exposures are listed in the Stage B report.
 ### Reproducible report (M5 Stage B)
 
 ```text
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_pass_tests oot3d_screen_space_gi_tests oot3d_effect_graph_tests oot3d_graphics_foundation_tests renderer_spirv_pack_tests
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\build_pass_artifacts.exe I:\TriAevum-perf-levers\runtime\three_ds_recomp\src\fast\renderer\builtin_pass.spvpack
-I:\_triaevum_work\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe diffuse_gi_pass_gpu_tests.exe
-I:\_triaevum_work\perf-levers\gpu-tests-build\build_pass_artifacts.exe --check
-I:\_triaevum_work\perf-levers\gpu-tests-build\diffuse_gi_pass_gpu_tests.exe
-I:\_triaevum_work\perf-levers\build-host.cmd -j 4 oot3d_native_game triaevum_title_aot_stub triaevum_f1_settings_smoke
-I:\_triaevum_work\perf-levers\host-build\tools\triaevum_release\tests\triaevum_f1_settings_smoke.exe
+<work>\perf-levers\build-host.cmd -j 4 renderer_diffuse_gi_pass_tests oot3d_screen_space_gi_tests oot3d_effect_graph_tests oot3d_graphics_foundation_tests renderer_spirv_pack_tests
+<work>\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe
+<work>\perf-levers\gpu-tests-build\build_pass_artifacts.exe <local>/TriAevum-perf-levers\runtime\three_ds_recomp\src\fast\renderer\builtin_pass.spvpack
+<work>\perf-levers\build-gpu-tests.cmd build_pass_artifacts.exe diffuse_gi_pass_gpu_tests.exe
+<work>\perf-levers\gpu-tests-build\build_pass_artifacts.exe --check
+<work>\perf-levers\gpu-tests-build\diffuse_gi_pass_gpu_tests.exe
+<work>\perf-levers\build-host.cmd -j 4 oot3d_native_game triaevum_title_aot_stub triaevum_f1_settings_smoke
+<work>\perf-levers\host-build\tools\triaevum_release\tests\triaevum_f1_settings_smoke.exe
 capture.py TriAevum-gi-ref.exe / TriAevum-ssgi.exe (GI Off; cfg-ssgi.json --validation; cfg-brix.json; --timing with --graphics-settings-schedule)
 ```
 

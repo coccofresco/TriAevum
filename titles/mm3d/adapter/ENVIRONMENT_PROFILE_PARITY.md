@@ -20,7 +20,7 @@ The native TEV vertex-colour/AO stage and coverage replay remain separate.
 
 ## Evidence (not checked into Git)
 
-`W = I:/_triaevum_work/mm3d-port`, evidence `W/analysis/parity/GP/`:
+`W` = the local work directory (not in this repository), evidence `W/analysis/parity/GP/`:
 
 - `captures/INDEX.md`: six native-faithful/profile pairs, AO-corner reuse,
   mean RGB/luma changes, individual process outcomes.
@@ -51,7 +51,7 @@ executable afterwards; no large developer executable snapshot is retained.
   `1570a743a7c53865cef86e953072acc416d9efa80371665aa2900a38d38a6061`.
 - **O2/OoT3D build not run**, as requested; coordinator must gate after merging.
 
-Exactly **13 game launches**, all through private `run_safe.sh`: twelve distinct
+Exactly **13 game launches**, all through the private lab run harness (not shipped): twelve distinct
 paired capture cases plus one final interpolated smoke; no retries. The twelve
 cases already had receipts on session resume, so no game was launched on resume.
 Eleven capture processes exited ok. `night_native` saved its valid frame 270,

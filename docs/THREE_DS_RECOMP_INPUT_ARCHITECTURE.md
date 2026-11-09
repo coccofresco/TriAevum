@@ -53,10 +53,10 @@ to the title.
 The standard button mask and Extra HID split follow the local Azahar service
 implementation:
 
-- `E:/azahar pcvr/src/core/hle/service/ir/extra_hid.h`
-- `E:/azahar pcvr/src/core/hle/service/ir/extra_hid.cpp`
-- `E:/azahar pcvr/src/core/hle/service/ir/ir_rst.h`
-- `E:/azahar pcvr/src/core/hle/service/ir/ir_rst.cpp`
+- `<azahar-pcvr>/src/core/hle/service/ir/extra_hid.h`
+- `<azahar-pcvr>/src/core/hle/service/ir/extra_hid.cpp`
+- `<azahar-pcvr>/src/core/hle/service/ir/ir_rst.h`
+- `<azahar-pcvr>/src/core/hle/service/ir/ir_rst.cpp`
 
 Standard HID occupies bits 0-13. Extra HID carries ZL/ZR and the secondary
 stick for Circle Pad Pro/New 3DS. The canonical frame represents each once;
