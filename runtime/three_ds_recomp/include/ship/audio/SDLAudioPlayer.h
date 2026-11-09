@@ -12,6 +12,27 @@ namespace Ship {
  *
  * This backend is available on all platforms that Ship supports.
  */
+/**
+ * @brief Device buffer (SDL_AudioSpec::samples) requested for a queued output.
+ *
+ * The game queues audio itself (SDL_QueueAudio), so the device period only sets
+ * how often the backend thread must wake. Requesting one game audio frame
+ * (160 samples at 32728 Hz, about 5 ms) made PipeWire and PulseAudio run a
+ * ~5 ms quantum that a loaded handheld (Steam Deck, #133) cannot keep fed. The
+ * request is the next power of two covering at least 20 ms, within 256..4096.
+ */
+uint16_t SdlAudioDeviceBufferSamples(int32_t sampleRate, int32_t sampleLength);
+
+/** @brief What the audio device negotiation asked for and obtained. */
+struct SdlAudioNegotiation {
+    int32_t RequestedChannels = 0;
+    uint16_t RequestedSamples = 0;
+    int32_t ObtainedFrequency = 0;
+    int32_t ObtainedChannels = 0;
+    uint16_t ObtainedSamples = 0;
+    bool FellBackToStereo = false;
+};
+
 class SDLAudioPlayer final : public AudioPlayer {
   public:
     /**
@@ -28,6 +49,11 @@ class SDLAudioPlayer final : public AudioPlayer {
      * Used by the audio subsystem to decide how many frames to produce per game tick.
      */
     int Buffered() override;
+
+    /** @brief The negotiated device format (zero before a successful Init()). */
+    const SdlAudioNegotiation& Negotiation() const {
+        return mNegotiation;
+    }
 
   protected:
     /**
@@ -52,5 +78,6 @@ class SDLAudioPlayer final : public AudioPlayer {
   private:
     SDL_AudioDeviceID mDevice = 0; ///< Handle to the opened SDL audio device.
     int32_t mNumChannels = 2;      ///< Number of output channels (2 for stereo, 6 for 5.1).
+    SdlAudioNegotiation mNegotiation; ///< The last Init()'s device negotiation.
 };
 } // namespace Ship
