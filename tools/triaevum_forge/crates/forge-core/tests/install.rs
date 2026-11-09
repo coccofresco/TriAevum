@@ -108,7 +108,16 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     // A plain package is its own activation: its data is a runtime_dir path.
     assert_eq!(arguments[10 - shift / 2..12 - shift / 2], ["--config", "${runtime_dir}/data/config/TriAevum.json"]);
     assert_eq!(arguments[24 - shift..26 - shift], ["--height", "720"]);
-    let tail: Vec<&str> = arguments[26 - shift..].iter().step_by(2).copied().collect();
+    // A title's desktop admission policy is the last option; none for OoT3D.
+    let admission = forge_catalog::title::ACTIVE.desktop_input_admission;
+    let end = if admission.is_empty() {
+        assert!(!arguments.contains(&"--input-admission"), "{arguments:?}");
+        arguments.len()
+    } else {
+        assert_eq!(arguments[arguments.len() - 2..], ["--input-admission", admission]);
+        arguments.len() - 2
+    };
+    let tail: Vec<&str> = arguments[26 - shift..end].iter().step_by(2).copied().collect();
     assert_eq!(tail, ["--water-texture-catalog", "--scene-light-catalog", "--renderer-cache-directory"]);
     assert!(profile["path_scopes"].as_object().unwrap().values().all(|scope| scope == "relative"));
 

@@ -1,8 +1,9 @@
 {
-  "_about": "MM3D product facts (owner decision 2026-11-08, BRANDING answer 1): the installed game executable takes the product name. The build output stays TriAevum.exe (runtime/TriAevum.exe in the package); the MM3D Forge (feature title-mm3d) renames it at install (forge-catalog platform.rs WINDOWS_PRODUCT_EXECUTABLE). Guard words: Moonfall Curse, Majora's Mask 3D. Linux (owner decision 2026-11-08, Linux names): linux_executable is the installed game binary name; the Linux package keeps the build output TriAevum at its root and Forge renames it at install (forge-catalog platform.rs LINUX_PRODUCT_EXECUTABLE). pipeline_cache_namespace names the title's renderer pipeline cache files (nri_pipeline_cache.mm3d.bin): the runtime's title session (titles/mm3d/shaders/mm3d_shader_preparation.h) and the Forge's device pipeline preparation (forge-catalog title.rs) use this one value; the empty namespace is the original file names.",
+  "_about": "MM3D product facts (owner decision 2026-11-08, BRANDING answer 1): the installed game executable takes the product name. The build output stays TriAevum.exe (runtime/TriAevum.exe in the package); the MM3D Forge (feature title-mm3d) renames it at install (forge-catalog platform.rs WINDOWS_PRODUCT_EXECUTABLE). Guard words: Moonfall Curse, Majora's Mask 3D. Linux (owner decision 2026-11-08, Linux names): linux_executable is the installed game binary name; the Linux package keeps the build output TriAevum at its root and Forge renames it at install (forge-catalog platform.rs LINUX_PRODUCT_EXECUTABLE). pipeline_cache_namespace names the title's renderer pipeline cache files (nri_pipeline_cache.mm3d.bin): the runtime's title session (titles/mm3d/shaders/mm3d_shader_preparation.h) and the Forge's device pipeline preparation (forge-catalog title.rs) use this one value; the empty namespace is the original file names. desktop_input_admission is the desktop launch profile --input-admission (Forge publish.rs; OoT3D has none, admission on): auto, because the MM3D 30 Hz update frame does not fit one 90 Hz period with admission on.",
   "title": "mm3d",
   "product_name": "Moonfall Curse",
   "windows_executable": "Moonfall_Curse.exe",
   "linux_executable": "Moonfall_Curse",
-  "pipeline_cache_namespace": "mm3d"
+  "pipeline_cache_namespace": "mm3d",
+  "desktop_input_admission": "auto"
 }

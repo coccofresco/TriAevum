@@ -47,6 +47,10 @@ pub struct ForgeTitle {
     /// `nri_pipeline_cache.<namespace>.bin`, or the original
     /// `nri_pipeline_cache.bin` for the empty namespace (OoT3D).
     pub pipeline_cache_namespace: &'static str,
+    /// The desktop launch profile's `--input-admission` policy
+    /// (`desktop_input_admission` of `titles/<title>/product.json`); empty adds
+    /// no option (the runtime default, admission on).
+    pub desktop_input_admission: &'static str,
 }
 
 pub const OOT3D: ForgeTitle = ForgeTitle {
@@ -62,6 +66,7 @@ pub const OOT3D: ForgeTitle = ForgeTitle {
     offline_interior_sun: true,
     topscreen_ui: true,
     pipeline_cache_namespace: "",
+    desktop_input_admission: "",
 };
 
 pub const MM3D: ForgeTitle = ForgeTitle {
@@ -83,6 +88,9 @@ pub const MM3D: ForgeTitle = ForgeTitle {
     topscreen_ui: false,
     // titles/mm3d/shaders/mm3d_shader_preparation.h (the session's namespace).
     pipeline_cache_namespace: "mm3d",
+    // MC's 30 Hz update frame does not fit one 90 Hz period with admission on
+    // (North/East Clock Town 80/73 fps on the Linux box); auto holds 90.
+    desktop_input_admission: "auto",
 };
 
 /// Every title this source tree knows (for naming a foreign dump only).
@@ -195,6 +203,15 @@ mod tests {
             assert_eq!(facts["pipeline_cache_namespace"], title.pipeline_cache_namespace);
         }
         assert_eq!(OOT3D.pipeline_cache_namespace, "");
+        for (title, facts) in [
+            (OOT3D, include_str!("../../../../../titles/oot3d/product.json")),
+            (MM3D, include_str!("../../../../../titles/mm3d/product.json")),
+        ] {
+            let facts: serde_json::Value = serde_json::from_str(facts).unwrap();
+            assert_eq!(facts["desktop_input_admission"].as_str().unwrap_or(""), title.desktop_input_admission);
+        }
+        assert_eq!(OOT3D.desktop_input_admission, "");
+        assert_eq!(MM3D.desktop_input_admission, "auto");
         assert_eq!(MM3D.pipeline_cache_namespace, "mm3d");
     }
 

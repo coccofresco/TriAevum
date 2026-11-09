@@ -531,6 +531,13 @@ pub fn publish_private_runtime(
     if let Some(text) = &title_id {
         arguments.extend(["--title-id".into(), text.clone()]);
     }
+    // A title's desktop admission policy (`desktop_input_admission` of
+    // titles/<title>/product.json). Appended last so a title without one keeps
+    // its command line byte-identical; TRIAEVUM_INPUT_ADMISSION still wins.
+    let admission = forge_catalog::title::ACTIVE.desktop_input_admission;
+    if request.android.is_none() && !admission.is_empty() {
+        arguments.extend(["--input-admission".into(), admission.into()]);
+    }
 
     // File arguments become ${profile_dir}/${runtime_dir} placeholders, or
     // explicit absolute paths outside the installation. Android has no
