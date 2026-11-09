@@ -48,21 +48,34 @@ def cmake_base(source: Path, build: Path, ndk: Path) -> list[str]:
             "-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release"]
 
 
+def forge_rustflags() -> str:
+    """CARGO_ENCODED_RUSTFLAGS of the Android Forge (rust_forge_build.py)."""
+    completed = subprocess.run([sys.executable, "-m", "tools.triaevum_release.rust_forge_build",
+                                "--print-rustflags", "--target", TARGET], cwd=ROOT, check=True,
+                               capture_output=True, text=True)
+    return completed.stdout.strip()
+
+
 def recipe(title: str, *, ndk: Path, work: Path, translated_sources: Path, reference_package: Path,
            source_commit: str, gradle: str = "gradle", windows: bool = os.name == "nt",
-           environ: dict | None = None) -> list[tuple[str, list[str], dict]]:
+           environ: dict | None = None, rustflags: str | None = None) -> list[tuple[str, list[str], dict]]:
     """[(step, argv, extra environment)] for `title`."""
     facts = android_facts(title)
     environ = os.environ if environ is None else environ
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("--source-commit must be a full Git commit ID")
     flavor = facts["flavor"][0].upper() + facts["flavor"][1:]
-    runtime, title_build, forge = work / "runtime", work / f"title-{title}", work / "forge"
+    # Runtime and Forge are per title: the runtime's adapters (runtime_titles)
+    # and the Forge's features differ between the products.
+    runtime, title_build, forge = work / f"runtime-{title}", work / f"title-{title}", work / f"forge-{title}"
     stage, package = work / f"stage-{title}", work / f"forge-package-{title}"
     features = [item.split("/", 1)[1] for item in facts["forge_features"]]
+    rustflags = forge_rustflags() if rustflags is None else rustflags
     clang = ndk_tool(ndk, f"aarch64-linux-android{API}-clang", windows)
     steps = [
-        ("runtime configure", cmake_base(ROOT / "ports/android/runtime", runtime, ndk), {}),
+        ("runtime configure", cmake_base(ROOT / "ports/android/runtime", runtime, ndk) + [
+            f"-DTRIAEVUM_TITLES={';'.join(facts['runtime_titles'])}", f"-DTRIAEVUM_PRODUCT_TITLE={title}",
+            "-DTRIAEVUM_DEVELOPER_TOOLS=OFF"], {}),
         ("runtime build", ["cmake", "--build", str(runtime), "--target", "oot3d_native_game", "--parallel", "2"], {}),
         ("title configure", cmake_base(ROOT / "ports/android/native", title_build, ndk) + [
             "-DTRIAEVUM_ANDROID_BUILD_NRI=OFF", f"-DTRIAEVUM_ANDROID_TITLE={title}",
@@ -74,7 +87,9 @@ def recipe(title: str, *, ndk: Path, work: Path, translated_sources: Path, refer
                          str(ROOT / "tools/triaevum_forge/Cargo.toml"), "-p", "forge-android", "--target", TARGET,
                          *(["--features", ",".join(features)] if features else [])],
          {"CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER": clang, "CC_aarch64_linux_android": clang,
-          "AR_aarch64_linux_android": ndk_tool(ndk, "llvm-ar", windows), "CARGO_TARGET_DIR": str(forge)}),
+          "AR_aarch64_linux_android": ndk_tool(ndk, "llvm-ar", windows), "CARGO_TARGET_DIR": str(forge),
+          # 16 KiB pages and the build-path remaps of the publisher Forge build.
+          "CARGO_ENCODED_RUSTFLAGS": rustflags}),
         ("stage", [sys.executable, "-I", str(ROOT / "tools/android/stage_native_app.py"),
                    "--runtime-build", str(runtime), "--title-module", str(title_build / "libtriaevum_title_aot.so"),
                    "--forge-library", str(forge / TARGET / "release/libtriaevum_forge.so"),

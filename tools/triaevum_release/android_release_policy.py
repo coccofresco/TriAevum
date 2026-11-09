@@ -79,6 +79,14 @@ def android_facts(title: str, titles_root: Path = TITLES_ROOT) -> dict:
     if not isinstance(features, list) or not all(
             isinstance(item, str) and item.startswith("forge-android/") for item in features):
         raise ValueError(f"Invalid Android facts for {title}: forge_features")
+    # The runtime's title adapters (TRIAEVUM_TITLES), as the desktop product
+    # configures them: Echoes of Time oot3d only, Moonfall Curse oot3d;mm3d
+    # (docs/MOONFALL_CURSE.md "Release configure"); the product title last.
+    runtime_titles = facts.get("runtime_titles")
+    if (not isinstance(runtime_titles, list) or not runtime_titles or runtime_titles[0] != "oot3d"
+            or runtime_titles[-1] != title or len(set(runtime_titles)) != len(runtime_titles)
+            or not all(item in TITLES for item in runtime_titles)):
+        raise ValueError(f"Invalid Android facts for {title}: runtime_titles")
     result = dict(facts)
     result["version_code"] = version_code(facts["version_name"])
     return result

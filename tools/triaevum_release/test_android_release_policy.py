@@ -164,6 +164,22 @@ class AuditTests(unittest.TestCase):
         path = apk(self.root / "unsigned.apk", signed=False)
         self.assertIn(f"missing {FORGE_SIGNATURE} (android_forge_package.py --sign)", self.audit(path))
 
+    def test_runtime_titles_per_product(self):
+        self.assertEqual(android_facts("oot3d")["runtime_titles"], ["oot3d"])
+        self.assertEqual(android_facts("mm3d")["runtime_titles"], ["oot3d", "mm3d"])
+
+    def test_negative_runtime_titles(self):
+        import json, shutil, tempfile
+        for bad in ([], ["mm3d"], ["mm3d", "oot3d"], ["oot3d", "oot3d", "mm3d"], ["oot3d", "zelda", "mm3d"], "oot3d;mm3d"):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                shutil.copytree(TITLES_ROOT / "mm3d", root / "mm3d")
+                facts = json.loads((root / "mm3d/android.json").read_text(encoding="utf-8"))
+                facts["runtime_titles"] = bad
+                (root / "mm3d/android.json").write_text(json.dumps(facts), encoding="utf-8")
+                with self.assertRaises(ValueError, msg=repr(bad)):
+                    android_facts("mm3d", root)
+
     def test_forge_features_per_title(self):
         self.assertEqual(android_facts("oot3d")["forge_features"], [])
         self.assertEqual(android_facts("mm3d")["forge_features"], ["forge-android/title-mm3d"])

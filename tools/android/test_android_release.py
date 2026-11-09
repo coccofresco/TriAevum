@@ -9,7 +9,8 @@ import android_release  # noqa: E402
 from android_release import SIGNING_VARIABLES, main, recipe  # noqa: E402
 
 ARGS = dict(ndk=Path("/ndk"), work=Path("/work"), translated_sources=Path("/sources"),
-            reference_package=Path("/reference"), source_commit="a" * 40, windows=False)
+            reference_package=Path("/reference"), source_commit="a" * 40, windows=False,
+            rustflags="-C\x1flink-arg=-Wl,-z,max-page-size=16384")
 
 
 def steps(title, environ=None):
@@ -52,6 +53,18 @@ class AndroidReleaseRecipeTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(["--title", "mm3d", "--ndk", "n", "--work", str(android_release.ROOT / "build"),
                   "--translated-sources", "s", "--reference-package", "r", "--source-commit", "a" * 40])
+
+    def test_runtime_and_forge_are_per_product(self):
+        mc, eot = steps("mm3d"), steps("oot3d")
+        self.assertIn("-DTRIAEVUM_TITLES=oot3d;mm3d", mc["runtime configure"][0])
+        self.assertIn("-DTRIAEVUM_PRODUCT_TITLE=mm3d", mc["runtime configure"][0])
+        self.assertIn("-DTRIAEVUM_TITLES=oot3d", eot["runtime configure"][0])
+        self.assertIn("-DTRIAEVUM_PRODUCT_TITLE=oot3d", eot["runtime configure"][0])
+        for result in (mc, eot):
+            self.assertIn("-DTRIAEVUM_DEVELOPER_TOOLS=OFF", result["runtime configure"][0])
+            self.assertIn("max-page-size=16384", result["forge build"][1]["CARGO_ENCODED_RUSTFLAGS"])
+        self.assertNotEqual(mc["forge build"][1]["CARGO_TARGET_DIR"], eot["forge build"][1]["CARGO_TARGET_DIR"])
+        self.assertNotEqual(mc["runtime build"][0], eot["runtime build"][0])
 
     def test_no_private_paths_in_the_recipe_source(self):
         text = Path(android_release.__file__).read_text(encoding="utf-8")
