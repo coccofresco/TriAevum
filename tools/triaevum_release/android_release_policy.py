@@ -11,6 +11,7 @@ version, Gradle flavor); the APK audit refuses the other title's content.
 """
 
 import argparse
+import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import re
@@ -177,12 +178,13 @@ def audit_apk(apk: Path, title: str, *, badging: str | None, signer_sha256: str 
         libraries = {name[len(ABI_DIR):] for name in names if name.startswith(ABI_DIR)}
         for missing in sorted(set(REQUIRED_LIBRARIES) - libraries):
             errors.append(f"missing {ABI_DIR}{missing}")
+        pinned = _pinned_package_files(archive, names)
         for name in names:
             path = PurePosixPath(name)
             lower = path.name.lower()
             if name.startswith("lib/") and not name.startswith(ABI_DIR):
                 errors.append(f"{name}: only arm64-v8a libraries are released")
-            if lower.endswith(FORBIDDEN_EXTENSIONS):
+            if lower.endswith(FORBIDDEN_EXTENSIONS) and name not in pinned:
                 errors.append(f"{name}: forbidden extension")
             if lower in FORBIDDEN_BASENAMES:
                 errors.append(f"{name}: forbidden file")
@@ -232,6 +234,35 @@ def privacy_sweep(root: Path, markers) -> list[str]:
             if any(pattern.search(data) for pattern in patterns):
                 hits.append(relative.as_posix())
     return hits
+
+
+def _release_policy() -> dict:
+    try:
+        from .audit_release import DEFAULT_POLICY
+    except ImportError:
+        from audit_release import DEFAULT_POLICY
+    return json.loads(Path(DEFAULT_POLICY).read_text(encoding="utf-8"))
+
+
+def _pinned_package_files(archive, names) -> set:
+    """Forge-package files that are release data by role, not by extension: the
+    signed inventory lists them under a role the release policy pins by SHA-256
+    (topscreen_singlescreen_asset), and their bytes are the pinned ones."""
+    if FORGE_INVENTORY not in names:
+        return set()
+    pins = _release_policy().get("pinned_role_sha256", {})
+    root = FORGE_INVENTORY.rsplit("/", 1)[0] + "/"
+    allowed = set()
+    files = json.loads(archive.read(FORGE_INVENTORY)).get("files", [])
+    for item in files if isinstance(files, list) else []:
+        if not isinstance(item, dict):
+            continue
+        name = root + str(item.get("path", ""))
+        sha = item.get("sha256")
+        if name in names and sha in pins.get(item.get("role"), ()) \
+                and hashlib.sha256(archive.read(name)).hexdigest() == sha:
+            allowed.add(name)
+    return allowed
 
 
 def _markers() -> list:

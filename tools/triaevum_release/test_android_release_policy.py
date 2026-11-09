@@ -44,7 +44,7 @@ BADGING = {
 }
 
 
-def apk(path: Path, title="oot3d", *, extra=None, libraries=None, catalog=None, signed=True):
+def apk(path: Path, title="oot3d", *, extra=None, libraries=None, catalog=None, signed=True, inventory=None):
     libraries = {name: elf() for name in REQUIRED_LIBRARIES} if libraries is None else libraries
     catalog = {"title": title, "runtime": {"path": ANDROID.runtime, "sha256": "0" * 64}} if catalog is None else catalog
     with zipfile.ZipFile(path, "w") as archive:
@@ -53,7 +53,7 @@ def apk(path: Path, title="oot3d", *, extra=None, libraries=None, catalog=None, 
         for name, data in libraries.items():
             archive.writestr(ABI_DIR + name, data)
         archive.writestr(FORGE_CATALOG, json.dumps(catalog))
-        archive.writestr(FORGE_INVENTORY, "{}")
+        archive.writestr(FORGE_INVENTORY, json.dumps(inventory or {}))
         if signed:
             archive.writestr(FORGE_SIGNATURE, "{}")
         for name, data in (extra or {}).items():
@@ -139,6 +139,23 @@ class AuditTests(unittest.TestCase):
 
     def assertRejected(self, errors, text):
         self.assertTrue(any(text in error for error in errors), errors)
+
+    def test_policy_pinned_topscreen_asset_in_forge_package(self):
+        import hashlib
+        real = (Path(__file__).resolve().parents[2]
+                / "runtime/triaevum_resources/topscreen/singlescreen-3.0/zelda_link_ext.zar").read_bytes()
+        relative = "resources/topscreen/singlescreen-3.0/zelda_link_ext.zar"
+        name = FORGE_INVENTORY.rsplit("/", 1)[0] + "/" + relative
+        record = {"path": relative, "role": "topscreen_singlescreen_asset",
+                  "sha256": hashlib.sha256(real).hexdigest(), "bytes": len(real)}
+        self.assertEqual(self.audit(apk(self.root / "z.apk", extra={name: real},
+                                        inventory={"files": [record]})), [])
+        # Unlisted, other bytes, or another role: still refused.
+        for inventory, data in (({}, real), ({"files": [record]}, b"other"),
+                                ({"files": [dict(record, role="title_neutral_resource")]}, real)):
+            with self.subTest(inventory=inventory, size=len(data)):
+                errors = self.audit(apk(self.root / "z.apk", extra={name: data}, inventory=inventory))
+                self.assertRejected(errors, "forbidden extension")
 
     def test_negative_game_data_and_dev_artefacts(self):
         for name in ("assets/forge-package/a.gar", "assets/x/title.mfpj", "assets/romfs/actor.zar",
