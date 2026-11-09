@@ -4,5 +4,6 @@
   "flavor": "mc",
   "application_id": "org.triaevum.moonfallcurse",
   "label": "Moonfall Curse",
-  "version_name": "0.5.0-alpha.1"
+  "version_name": "0.5.0-alpha.1",
+  "forge_features": ["forge-android/title-mm3d"]
 }

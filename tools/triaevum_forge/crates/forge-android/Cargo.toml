@@ -11,6 +11,11 @@ publish.workspace = true
 name = "triaevum_forge"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# The Moonfall Curse APK's Forge (dekui and Project Restoration produce-at-install),
+# as forge-cli/forge-desktop enable it for the desktop MC Forge.
+title-mm3d = ["forge-core/title-mm3d"]
+
 [dependencies]
 # "https": the HD interface pack download the user starts in the installer
 # (ui_pack_download; owner decision 5). Trusts Android's system CA store.
@@ -20,4 +25,5 @@ jni-sys = "0.3"
 serde_json.workspace = true
 
 [dev-dependencies]
+forge-assets = { path = "../forge-assets" }
 tempfile.workspace = true

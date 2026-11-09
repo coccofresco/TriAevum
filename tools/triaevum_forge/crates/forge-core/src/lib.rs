@@ -28,7 +28,7 @@ pub mod publish;
 pub mod recognize;
 pub mod redact;
 pub mod refresh;
-#[cfg(not(target_os = "android"))]
+// Also on Android: forge-android verifies the Forge package with it.
 pub mod release_signature;
 pub mod repair;
 pub mod restore;

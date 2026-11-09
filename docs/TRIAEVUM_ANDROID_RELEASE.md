@@ -28,12 +28,20 @@ decrypted cartridge image, chosen through the system document picker.
    `-DTRIAEVUM_ANDROID_TITLE=<oot3d|mm3d> -DTRIAEVUM_TRANSLATED_TITLE_DIR=<sources> -DTRIAEVUM_ANDROID_TITLE_OPTIMIZATION=1`
    (strict floating point, `-g0`, 16 KiB pages). An unknown title, or sources whose manifest names another title,
    fail at configure time.
-3. **Stage** the runtime, renderer, title module, Forge library and `libc++_shared.so` with
+3. **Forge library.** Build `crates/forge-android` for `aarch64-linux-android` (release) with the title's
+   `forge_features` from `titles/<title>/android.json`: none for Echoes of Time, `--features title-mm3d` for
+   Moonfall Curse. Without that feature the library refuses to prepare Moonfall Curse (dekui and Project
+   Restoration produce-at-install are compiled in only with it, as in the desktop MC Forge).
+   Then **stage** the runtime, renderer, title module, Forge library and `libc++_shared.so` with
    `tools/android/stage_native_app.py` (stripped).
 4. **Forge package.** `tools/triaevum_release/android_forge_package.py --title <title> --reference-package <desktop
    release> --native-stage <stage> --source-commit <commit> --output <dir>`. The reference must be that title's
    desktop release. Its licences and notices are copied to `notices/`. Game content (`.gar`, `.mfpj`, ROM containers)
-   is refused.
+   is refused. Add `--sign` with `TRIAEVUM_RELEASE_SIGNING_KEY` naming the release key (outside the repository and
+   the package): it writes `release-signature.json` over the exact bytes of `forge-package.json` (the desktop
+   signature scheme and domain). On the device `ForgeNative.verifyPackage` checks that signature under the
+   publisher keys built into Forge (no developer override on Android) and then the size and SHA-256 of every
+   package file; the APK audit refuses an APK without the signature.
 5. **APK.** `gradlew :app:assemble<Eot|Mc>Release -PtriaevumSdlSource=… -PtriaevumNativeStage=<stage>
    -PtriaevumForgePackage=<dir>`.
 6. **Audit.** Run `aapt2 dump badging` and `apksigner verify --print-certs`, then

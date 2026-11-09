@@ -33,6 +33,8 @@ REQUIRED_LIBRARIES = (
 )
 FORGE_CATALOG = "assets/forge-package/precompiled-titles.json"
 FORGE_INVENTORY = "assets/forge-package/forge-package.json"
+# The publisher signature forge-android verifies before Forge reads a package file (A5).
+FORGE_SIGNATURE = "assets/forge-package/release-signature.json"
 # The APK carries no game data and no developer artefact: the Android Forge
 # produces game content on the device from the owner's own dump.
 FORBIDDEN_EXTENSIONS = (
@@ -72,6 +74,11 @@ def android_facts(title: str, titles_root: Path = TITLES_ROOT) -> dict:
         raise ValueError(f"Android facts of {title} disagree with its product facts")
     if not _APPLICATION_ID.match(facts["application_id"]):
         raise ValueError(f"Invalid application id for {title}")
+    # Cargo features of libtriaevum_forge.so (crates/forge-android) for this title.
+    features = facts.get("forge_features")
+    if not isinstance(features, list) or not all(
+            isinstance(item, str) and item.startswith("forge-android/") for item in features):
+        raise ValueError(f"Invalid Android facts for {title}: forge_features")
     result = dict(facts)
     result["version_code"] = version_code(facts["version_name"])
     return result
@@ -185,6 +192,8 @@ def audit_apk(apk: Path, title: str, *, badging: str | None, signer_sha256: str 
             errors.append(f"missing {FORGE_CATALOG}")
         if FORGE_INVENTORY not in names:
             errors.append(f"missing {FORGE_INVENTORY}")
+        if FORGE_SIGNATURE not in names:
+            errors.append(f"missing {FORGE_SIGNATURE} (android_forge_package.py --sign)")
         signed = signer_sha256 is not None
         if not signed and not allow_unsigned:
             errors.append("APK signer not verified (apksigner verify --print-certs)")

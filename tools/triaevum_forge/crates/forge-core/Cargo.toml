@@ -25,15 +25,15 @@ forge-mods = { path = "../forge-mods", default-features = false }
 forge-native = { path = "../forge-native" }
 forge-prepare = { path = "../forge-prepare" }
 forge-rom = { path = "../forge-rom" }
+# Publisher signatures (Ed25519) of update packages (desktop, UX plan WP-04B,
+# owner decision 10) and of the Android Forge package (forge-android): the
+# same ring the HTTPS client already links.
+ring = "0.17"
 serde_json.workspace = true
 tempfile.workspace = true
 # The support bundle (same version and features as forge-mods and forge-native).
 zip = { version = "9", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
-# Update packages' publisher signatures (Ed25519), desktop only: the same
-# ring the HTTPS client already links (UX plan WP-04B, owner decision 10).
-[target.'cfg(not(target_os = "android"))'.dependencies]
-ring = "0.17"
 
 [target.'cfg(windows)'.dependencies]
 # The update helper: inherited process handle, kill-on-close job.

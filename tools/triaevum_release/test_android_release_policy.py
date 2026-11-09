@@ -7,7 +7,7 @@ import unittest
 import zipfile
 
 import android_release_policy as policy
-from android_release_policy import (ABI_DIR, FORGE_CATALOG, FORGE_INVENTORY, REQUIRED_LIBRARIES, android_facts,
+from android_release_policy import (ABI_DIR, FORGE_CATALOG, FORGE_INVENTORY, FORGE_SIGNATURE, REQUIRED_LIBRARIES, android_facts,
                                     audit_apk, elf_errors, parse_badging, privacy_sweep, version_code)
 from release_platform import ANDROID, TITLES_ROOT
 import platform_policy
@@ -44,7 +44,7 @@ BADGING = {
 }
 
 
-def apk(path: Path, title="oot3d", *, extra=None, libraries=None, catalog=None):
+def apk(path: Path, title="oot3d", *, extra=None, libraries=None, catalog=None, signed=True):
     libraries = {name: elf() for name in REQUIRED_LIBRARIES} if libraries is None else libraries
     catalog = {"title": title, "runtime": {"path": ANDROID.runtime, "sha256": "0" * 64}} if catalog is None else catalog
     with zipfile.ZipFile(path, "w") as archive:
@@ -54,6 +54,8 @@ def apk(path: Path, title="oot3d", *, extra=None, libraries=None, catalog=None):
             archive.writestr(ABI_DIR + name, data)
         archive.writestr(FORGE_CATALOG, json.dumps(catalog))
         archive.writestr(FORGE_INVENTORY, "{}")
+        if signed:
+            archive.writestr(FORGE_SIGNATURE, "{}")
         for name, data in (extra or {}).items():
             archive.writestr(name, data)
     return path
@@ -157,6 +159,14 @@ class AuditTests(unittest.TestCase):
         self.assertRejected(self.audit(apk(self.root / "c.apk", libraries=libraries)), "unstripped")
         self.assertRejected(self.audit(apk(self.root / "d.apk", extra={"lib/x86_64/libTriAevum.so": elf()})),
                             "only arm64-v8a")
+
+    def test_negative_unsigned_forge_package(self):
+        path = apk(self.root / "unsigned.apk", signed=False)
+        self.assertIn(f"missing {FORGE_SIGNATURE} (android_forge_package.py --sign)", self.audit(path))
+
+    def test_forge_features_per_title(self):
+        self.assertEqual(android_facts("oot3d")["forge_features"], [])
+        self.assertEqual(android_facts("mm3d")["forge_features"], ["forge-android/title-mm3d"])
 
     def test_negative_debuggable_wrong_identity_unsigned(self):
         path = apk(self.root / "a.apk")
