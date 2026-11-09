@@ -60,3 +60,7 @@ if(TRIAEVUM_DEVELOPER_TOOLS AND TRIAEVUM_TITLE_MM3D)
         TRIAEVUM_DEVELOPER_TOOLS=1 TRIAEVUM_TITLE_MM3D=1)
 endif()
 set_property(TARGET triaevum_f1_settings_smoke PROPERTY FOLDER Tests)
+
+# Build-path remapping: __FILE__ is repository-relative (logs carry no host path).
+add_executable(triaevum_build_path_remap_tests EXCLUDE_FROM_ALL build_path_remap_tests.cpp)
+target_compile_features(triaevum_build_path_remap_tests PRIVATE cxx_std_20)
