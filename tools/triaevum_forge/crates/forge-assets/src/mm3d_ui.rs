@@ -120,21 +120,32 @@ pub fn verify_layer(layer: &Path, cancel: &CancelToken) -> Result<()> {
 /// Called by the normal install worker after input verification. OoT is inert.
 /// Project Restoration is part of the MM3D product (owner decision
 /// 2026-11-08: dekui and Restoration are integrated product code, NOT Forge
-/// inputs): its romfs members are read from the MM3D package's own
-/// resources (RESTORATION_RESOURCES) and fingerprint-verified; the user's
-/// only input is the game dump. Never fetched or inferred from another title.
+/// inputs); the user's only input is the game dump. The package ships no
+/// game bytes (C-DISTRO-1): its Restoration folder (RESTORATION_RESOURCES)
+/// holds the layout recipe, BPS patches and the Restoration-original
+/// members, and the three layout inputs are rebuilt from the user's dump
+/// (mm3d_restoration_layout), then fingerprint-verified as before. Never
+/// fetched or inferred from another title.
 pub const RESTORATION_RESOURCES: &str = "resources/mm3d/project-restoration";
 
-/// Where a Restoration member named by the fingerprint manifest (its own
-/// `romfs/...` layout) lives inside the package: under
-/// RESTORATION_RESOURCES without the `romfs` component, which the release
-/// policy forbids in a public package (forbidden_path_components).
-pub fn restoration_package_member(input: &str) -> Option<String> {
+/// The recipe output (`layout/...`) for a Restoration input named by the
+/// fingerprint manifest in its own `romfs/...` layout.
+pub fn restoration_input(input: &str) -> Option<String> {
     let relative = input.strip_prefix("romfs/")?;
     if relative.is_empty() || relative.split('/').any(|c| c.is_empty() || c == "." || c == "..") {
         return None;
     }
-    Some(format!("{RESTORATION_RESOURCES}/{relative}"))
+    Some(relative.to_owned())
+}
+
+#[cfg(feature = "title-mm3d")]
+fn restoration_layout(resources: &Path, romfs_path: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
+    crate::mm3d_restoration_layout::reconstruct_package(resources, romfs_path)
+}
+/// Only the MM3D Forge (feature title-mm3d) prepares Moonfall Curse.
+#[cfg(not(feature = "title-mm3d"))]
+fn restoration_layout(_: &Path, _: &Path) -> Result<BTreeMap<String, Vec<u8>>> {
+    Err(invalid("This Forge does not prepare Moonfall Curse; use the Moonfall Curse Forge."))
 }
 
 pub fn prepare(
@@ -158,6 +169,7 @@ pub fn prepare(
     }
     let mut inputs = BTreeMap::new();
     let mut files = BTreeMap::new();
+    let mut restoration: Option<BTreeMap<String, Vec<u8>>> = None;
     for entry in manifest["files"].as_array().ok_or_else(|| invalid("Invalid embedded MM fingerprints"))? {
         cancel.check()?;
         let output = text(entry, "output")?;
@@ -168,9 +180,14 @@ pub fn prepare(
         let bytes = if text(entry, "input_root")? == "original" {
             native(romfs_path, &input[6..])?
         } else {
-            let member = restoration_package_member(input)
+            let member = restoration_input(input)
                 .ok_or_else(|| invalid(format!("Invalid MM preparation input {input}")))?;
-            read(&package.join(member)).map_err(|_|invalid(format!("The MM3D package is missing its bundled Project Restoration resources at {}; reinstall the package.",source.display())))?
+            if restoration.is_none() {
+                restoration = Some(restoration_layout(&source, romfs_path)?);
+            }
+            restoration.as_ref().unwrap().get(&member).cloned().ok_or_else(|| {
+                invalid(format!("The Project Restoration layout recipe does not produce {input}; reinstall the package."))
+            })?
         };
         if sha256_hex(&bytes) != text(entry, "input_sha256")? {
             return Err(invalid(format!("Unsupported MM preparation input {input}")));
@@ -294,59 +311,33 @@ mod tests {
         assert_eq!(package.join(RESTORATION_RESOURCES), Path::new("P/resources/mm3d/project-restoration"));
         assert!(!RESTORATION_RESOURCES.starts_with("imports"));
     }
-    /// A release-policy path pattern (a `*` component matches one component,
-    /// as the audit's fnmatch does for these title-neutral patterns).
-    fn policy_path_matches(pattern: &str, path: &str) -> bool {
-        let (pattern, path): (Vec<&str>, Vec<&str>) = (pattern.split('/').collect(), path.split('/').collect());
-        pattern.len() == path.len() && pattern.iter().zip(&path).all(|(p, c)| *p == "*" || p == c)
-    }
-    /// Every Restoration member the preparation reads maps to a package path
-    /// the release policy admits: no forbidden component, no forbidden
-    /// extension (lists checked against release_policy.json below).
+    /// The three Restoration inputs are recipe outputs, never package files:
+    /// no `.gar`/`.mfpj` path is read from the package (C-DISTRO-1).
     #[test]
-    fn restoration_members_are_policy_clean_package_paths() {
+    fn restoration_inputs_are_recipe_outputs() {
         let manifest: Value = serde_json::from_str(FINGERPRINTS).unwrap();
-        let policy_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../triaevum_release/release_policy.json");
-        let policy: Value = serde_json::from_slice(&std::fs::read(policy_path).unwrap()).unwrap();
-        let list = |key: &str| -> Vec<String> {
-            policy[key].as_array().unwrap().iter().map(|v| v.as_str().unwrap().to_owned()).collect()
-        };
-        let (components, extensions) = (list("forbidden_path_components"), list("forbidden_extensions"));
-        let (mut used, mut gar) = (0, 0);
+        let mut used = BTreeSet::new();
         for entry in manifest["files"].as_array().unwrap() {
             let output = entry["output"].as_str().unwrap();
             if entry["input_root"] != "restoration" || !output.starts_with("romfs/") || output.contains(".mm3d-") {
                 continue;
             }
-            let member = restoration_package_member(entry["input"].as_str().unwrap()).unwrap();
-            assert!(member.starts_with("resources/mm3d/project-restoration/layout/"), "{member}");
-            assert!(!member.split('/').any(|c| components.iter().any(|f| f == c)), "{member}");
-            // A forbidden extension (.gar) is admitted only through its role
-            // exception, for exactly the paths that role lists (Q-INTEG-1:
-            // the local MM3D package bundles the modified layout archives
-            // as-is, pinned, like TopScreen's ctxb/zar).
-            if let Some(extension) = extensions.iter().find(|e| member.ends_with(e.as_str())) {
-                let roles = policy["forbidden_extension_role_exceptions"][extension.as_str()].as_array().unwrap();
-                assert!(
-                    roles.iter().any(|role| policy["allowed_roles"][role.as_str().unwrap()]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .any(|path| policy_path_matches(path.as_str().unwrap(), &member))),
-                    "{member}"
-                );
-                gar += 1;
-            }
-            used += 1;
+            used.insert(restoration_input(entry["input"].as_str().unwrap()).unwrap());
         }
-        assert_eq!(used, 3, "Joker.Main.New.gar, Joker.Main.Play.gar, Joker.mfpj");
-        assert_eq!(gar, 2, "both layout archives go through the restoration_layout_asset role");
-        // Negative: the raw manifest path would violate the policy, and
-        // non-romfs or escaping inputs are refused.
-        assert!(components.iter().any(|c| c == "romfs"));
-        assert_eq!(restoration_package_member("code.bps"), None);
-        assert_eq!(restoration_package_member("romfs/../code.bps"), None);
-        assert_eq!(restoration_package_member("romfs/"), None);
+        assert_eq!(
+            used.into_iter().collect::<Vec<_>>(),
+            ["layout/Joker.Main.New.gar", "layout/Joker.Main.Play.gar", "layout/Joker.mfpj"]
+        );
+        assert_eq!(restoration_input("code.bps"), None);
+        assert_eq!(restoration_input("romfs/../code.bps"), None);
+        assert_eq!(restoration_input("romfs/"), None);
+    }
+    /// The OoT3D-only Forge never prepares Moonfall Curse.
+    #[cfg(not(feature = "title-mm3d"))]
+    #[test]
+    fn only_the_mm3d_forge_rebuilds_the_layout() {
+        let p = Path::new("must-not-be-read");
+        assert!(restoration_layout(p, p).unwrap_err().to_string().contains("Moonfall Curse Forge"));
     }
     #[test]
     fn other_titles_are_inert() {
@@ -354,7 +345,8 @@ mod tests {
         assert!(prepare(p, p, p, "oot3d", "", &mut |_, _| {}, &CancelToken::new()).unwrap().is_none());
     }
     #[test]
-    #[ignore = "requires an MM3D package (bundled Restoration resources) and the user MM RomFS"]
+    #[cfg(feature = "title-mm3d")]
+    #[ignore = "requires an MM3D package (Restoration recipe resources) and the user MM RomFS"]
     fn local_atomic_preparation_contract() {
         let package = PathBuf::from(std::env::var_os("TRIAEVUM_MM_TEST_PACKAGE").expect("package"));
         let romfs = PathBuf::from(std::env::var_os("TRIAEVUM_MM_TEST_ROMFS").expect("RomFS"));

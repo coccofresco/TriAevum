@@ -497,3 +497,25 @@ F07 Windows row: still **NOT QUALIFIED**, and no installed run was made at this 
 the MM shader corpus (qualification c347d0ee): the privacy sweep replaced a local path in a comment of
 `azahar_texture_pack_import.h`, which is a decision-policy input, so the recordings count as stale. The rule says
 the sessions must be recorded again, so the package and the run wait for that decision.
+
+## Restoration layout produced at install (C-DISTRO-1, coordinator D25)
+
+The Moonfall Curse package no longer ships `Joker.Main.New.gar`, `Joker.Main.Play.gar` or `Joker.mfpj` (the former
+role `restoration_layout_asset` is removed). It ships `resources/mm3d/project-restoration/layout.recipe.json`
+(`triaevum_restoration_layout_v1`), seven BPS patches under `layout/patches/` and the seven Restoration-original
+members under `layout/members/` (D24 Q1 default; see `LICENSES/Project-Restoration.md`). The title-mm3d Forge
+(`forge-assets` feature `title-mm3d`, module `mm3d_restoration_layout`) rebuilds the three files from the user's dump:
+8 members by reference to the dump's `layout/Joker.Main.Play.gar`, 6 modified members and `Joker.mfpj` by BPS patch
+(source, target and patch CRC32 checked), then emits the GAR v2 archives in their canonical layout. The result feeds the
+unchanged `mm3d_ui::prepare` fingerprint check (`input_sha256` 3b5918df / 5b143a1e / ab79c651) and transform.
+
+- Release policy: roles `restoration_layout_recipe`, `restoration_patch` (`.bps` exception) and
+  `restoration_original_member` (`.ctxb` exception), each pinned by SHA-256; `.gar` has no role exception any more
+  and `.mfpj` is a forbidden extension, so no `.gar`/`.mfpj` can enter a package (planted negatives in
+  `test_release_audit.py`). `package_inventory.rs` mirrors the lists.
+- Generator: `tools/mm3d/restoration_layout.py generate|check|members` (offline, `python -I`, reads the user's dump; never
+  shipped). `check` reconstructs the three files byte-identical; `members` cuts the original members from the
+  Restoration release at packaging time (`title_release.restoration_members`).
+- Acceptance: the prepared MM UI layer of the title-mm3d Forge equals, file for file, the layer of the cut-14b Forge
+  that read the whole files (only the receipt's generator identity differs, so an existing install re-prepares once
+  with identical bytes). No recording is invalidated and no game run was needed.

@@ -139,7 +139,7 @@ def prepare(args) -> dict:
     layout["files"].extend(forge["files"])
     retarget_recipe(layout["files"], args.title)
     if args.restoration_resources is not None:
-        layout["files"].extend(restoration_members(args.restoration_resources))
+        layout["files"].extend(restoration_members(args.restoration_resources, work / "restoration-members"))
     artifacts = {
         "TriAevum.exe": Path(targets["runtime"]),
         "triaevum_title_aot.dll": Path(targets["stub"]),
@@ -253,7 +253,8 @@ def main() -> int:
                         help="The title whose own Forge release is prepared (one title per release)")
     parser.add_argument("--recipe", help="Recipe id (default: the title's own recipe)")
     parser.add_argument("--restoration-resources", type=Path,
-                        help="MM3D only: Project Restoration member tree (romfs/...), fingerprint-verified")
+                        help="MM3D only: Project Restoration release tree (romfs/...), fingerprint-verified; "
+                             "only its original members are packaged")
     parser.add_argument("--shader-pack", type=Path, required=True,
                         help="Publisher input: bundled portable corpus, never a user choice")
     parser.add_argument("--pipeline-manifest", type=Path, action="append", required=True)

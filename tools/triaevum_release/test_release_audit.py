@@ -271,16 +271,20 @@ class PublicReleaseAuditTests(unittest.TestCase):
             result = audit_release(root)
             self.assertTrue(result.ok, result.errors)
 
-    def test_restoration_layout_archives_are_pinned_to_their_role(self) -> None:
-        # Q-INTEG-1 (2026-11-08): the LOCAL MM3D package bundles Project
-        # Restoration's modified layout archives as-is under their own pinned
-        # role (the TopScreen ctxb/zar precedent); .gar is otherwise forbidden.
+    def test_no_layout_archive_in_a_moonfall_curse_package(self) -> None:
+        # C-DISTRO-1 (coordinator D25): the MC package ships Project
+        # Restoration's layout recipe, BPS patches and original members only;
+        # the Forge rebuilds the .gar/.mfpj files from the user's dump. No role
+        # may carry a .gar or .mfpj, and the new roles are pinned.
         policy = json.loads(DEFAULT_POLICY.read_text())
-        role = "restoration_layout_asset"
-        new_gar = "resources/mm3d/project-restoration/layout/Joker.Main.New.gar"
-        self.assertEqual(policy["forbidden_extension_role_exceptions"][".gar"], [role])
-        self.assertTrue(any(fnmatch.fnmatchcase(new_gar, pattern) for pattern in policy["allowed_roles"][role]))
-        self.assertEqual(len(policy["pinned_role_sha256"][role]), 2)
+        self.assertNotIn(".gar", policy["forbidden_extension_role_exceptions"])
+        self.assertNotIn(".mfpj", policy["forbidden_extension_role_exceptions"])
+        self.assertIn(".mfpj", policy["forbidden_extensions"])
+        self.assertNotIn("restoration_layout_asset", policy["allowed_roles"])
+        self.assertEqual(policy["forbidden_extension_role_exceptions"][".bps"], ["restoration_patch"])
+        for role, count in (("restoration_layout_recipe", 1), ("restoration_patch", 7),
+                            ("restoration_original_member", 7)):
+            self.assertEqual(len(policy["pinned_role_sha256"][role]), count, role)
 
         def audit_with(relative: str, role_name: str, data: bytes):
             with tempfile.TemporaryDirectory() as temporary:
@@ -296,14 +300,20 @@ class PublicReleaseAuditTests(unittest.TestCase):
                 atomic_write_json(manifest_path, manifest)
                 return audit_release(root).errors
 
-        # Not the pinned bytes: refused even at the role's own path.
-        errors = audit_with(new_gar, role, b"GAR another archive")
-        self.assertTrue(any(f"not a pinned {role}" in e for e in errors), errors)
-        # Another role cannot carry a .gar, and the role has no other path.
-        errors = audit_with("resources/mm3d/extra.gar", "title_neutral_resource", b"GAR")
+        layout = "resources/mm3d/project-restoration/layout/"
+        # Planted negatives: the former package members, under any role.
+        for name in ("Joker.Main.New.gar", "Joker.Main.Play.gar", "Joker.mfpj"):
+            for role in ("title_neutral_resource", "restoration_original_member", "restoration_patch"):
+                errors = audit_with(layout + name, role, b"GAR\x02 planted archive")
+                self.assertTrue(any("forbidden extension" in e or "not allowed for role" in e for e in errors),
+                                (name, role, errors))
+        errors = audit_with("resources/mm3d/project-restoration/Joker.mfpj", "title_neutral_resource", b"x")
         self.assertTrue(any("forbidden extension" in e for e in errors), errors)
-        errors = audit_with("resources/mm3d/project-restoration/layout/Other.gar", role, b"GAR")
-        self.assertTrue(any(f"not allowed for role {role}" in e for e in errors), errors)
+        # A patch that is not one of the pinned patches is refused at its own path.
+        errors = audit_with(layout + "patches/Other.bps", "restoration_patch", b"BPS1 another")
+        self.assertTrue(any("not a pinned restoration_patch" in e for e in errors), errors)
+        errors = audit_with("resources/mm3d/extra.bps", "title_neutral_resource", b"BPS1")
+        self.assertTrue(any("forbidden extension" in e for e in errors), errors)
 
     def test_singlescreen_assets_are_pinned_and_hd_graphics_excluded(self) -> None:
         def audit_with(relative: str, role: str, data: bytes):

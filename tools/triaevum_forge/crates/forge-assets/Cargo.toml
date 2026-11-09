@@ -7,6 +7,10 @@ license.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
+[features]
+# The MM3D Forge: Project Restoration layout reconstruction (C-DISTRO-1).
+title-mm3d = []
+
 [dependencies]
 forge-base = { path = "../forge-base" }
 serde.workspace = true
