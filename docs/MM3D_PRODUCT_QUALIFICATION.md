@@ -482,3 +482,18 @@ F07 Windows row: still **NOT QUALIFIED** (owner item). The fix needs a title mod
 F07 Windows row: still **NOT QUALIFIED** (owner item). The fatal path is fixed (the process exits).
 Next: put the faulting thread's LR and r0-r3 in the product fault line (a runtime diagnostic change) and
 find the NULL source offline, comparing against the interpreter or a donor. Then the run needs a new grant.
+
+## Release cut part C (2026-11-09, integ round 12)
+
+The cut merges the CATALOGS module window 4 (716b0ba6, fast-forward), the release fix branches fix/build-gate
+(e20d0b63) and fix/privacy-tests (61a0cab2), and the Linux portability fix 13a9adf1. The public-tree privacy sweep
+exits 0 on the merged tree. Dual developer build, C++ suites (49), Python suites and cargo Forge tests for both
+titles pass. OoT3D: generated program identical to 08696784 and C++ shards identical to 53a2904f; the OoT-only
+executable of the cut passes the per-cut O2 (3/3 cap-p13, reproducible=1, uber_draws=0). The MM product runtime
+(registry `a32_generated_overlay_r18`, developer tools OFF, direct plugin, product mode) builds. The window-4
+module table holds the S3 sites 5/6/7 and their +4 boundaries and the Thumb entries.
+
+F07 Windows row: still **NOT QUALIFIED**, and no installed run was made at this cut. The corpus gate refuses
+the MM shader corpus (qualification c347d0ee): the privacy sweep replaced a local path in a comment of
+`azahar_texture_pack_import.h`, which is a decision-policy input, so the recordings count as stale. The rule says
+the sessions must be recorded again, so the package and the run wait for that decision.
