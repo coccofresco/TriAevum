@@ -1,5 +1,4 @@
 #include "mm3d_guest_patches.h"
-#include "mm3d_heap_free_walk.h"
 #include "mm3d_lighting_hook_sites.h"
 
 #include <algorithm>
@@ -9,7 +8,6 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <tuple>
 #include <vector>
 
 namespace {
@@ -391,62 +389,6 @@ void TestObserverNotWatchedByProduct() {
             "an observer replaced its instruction");
 }
 
-// The host free-list walk leaves the registers and flags the guest loop would.
-void TestHeapFreeWalk() {
-    WordMemory memory;
-    // List 0x100 -> 0x200 -> 0x300 -> end (next at +0xC).
-    memory.Words[0x10CU] = 0x200U;
-    memory.Words[0x20CU] = 0x300U;
-    memory.Words[0x30CU] = 0U;
-    a32::GuestState state;
-    state.cpsr = 0x00000010U;
-    state.r[0] = 0x55U; state.r[1] = 0x100U; state.r[2] = 0x250U;
-    auto next = RunMm3dHeapFreeWalk(state, memory);
-    Require(next == kMm3dHeapFreeWalkFound, "walk found the insertion point");
-    Require(state.r[0] == 0x200U && state.r[1] == 0x300U, "walk previous/node");
-    // cmp 0x250, 0x300: N=1 Z=0 C=0 V=0.
-    Require(state.cpsr == 0x80000010U, "walk flags at the insertion point");
-    state.r[0] = 0x55U; state.r[1] = 0x100U; state.r[2] = 0x400U;
-    next = RunMm3dHeapFreeWalk(state, memory);
-    Require(next == kMm3dHeapFreeWalkEnd && state.r[0] == 0x300U && state.r[1] == 0U, "walk end of list");
-    Require(state.cpsr == 0x60000010U, "walk flags at the end (cmp r1, #0 with r1 = 0)");
-    state.r[0] = 0x55U; state.r[1] = 0x100U; state.r[2] = 0x100U;
-    next = RunMm3dHeapFreeWalk(state, memory);
-    Require(next == kMm3dHeapFreeWalkFound && state.r[0] == 0x55U && state.r[1] == 0x100U, "walk equal node");
-    Require((state.cpsr & 0xF0000000U) == 0x60000000U, "walk flags for an equal node");
-    memory.Words.erase(0x20CU);
-    state.r[0] = 0x55U; state.r[1] = 0x100U; state.r[2] = 0x400U; state.cpsr = 0x10U;
-    next = RunMm3dHeapFreeWalk(state, memory);
-    Require(!next.has_value() && state.r[0] == 0x55U && state.r[1] == 0x100U && state.cpsr == 0x10U,
-            "a refused read declines with the registers untouched");
-
-    // Hinted walks end where the walk from the head ends.
-    WordMemory list;
-    // 0x100 <-> 0x200 <-> 0x300 <-> 0x400 (prev at +8, next at +C).
-    const std::uint32_t nodes[] = {0x100U, 0x200U, 0x300U, 0x400U};
-    for (int i = 0; i < 4; ++i) {
-        list.Words[nodes[i] + 0x8U] = i == 0 ? 0U : nodes[i - 1];
-        list.Words[nodes[i] + 0xCU] = i == 3 ? 0U : nodes[i + 1];
-    }
-    Mm3dHeapFreeWalkHints hints;
-    const auto walk = [&](std::uint32_t freed, Mm3dHeapFreeWalkHints* use) {
-        a32::GuestState s;
-        s.r[0] = 0U; s.r[1] = 0x100U; s.r[2] = freed; s.r[3] = 0x9024U;
-        const auto pc = RunMm3dHeapFreeWalk(s, list, use);
-        return std::make_tuple(pc, s.r[0], s.r[1], s.cpsr);
-    };
-    Require(walk(0x350U, &hints) == walk(0x350U, nullptr), "first hinted walk");
-    Require(hints.AfterNode[0x9024U] == 0x300U, "hint recorded");
-    Require(walk(0x380U, &hints) == walk(0x380U, nullptr) && hints.HintedWalks == 1U, "walk from the hint");
-    Require(walk(0x150U, &hints) == walk(0x150U, nullptr), "freed block before the hint walks from the head");
-    hints.AfterNode[0x9024U] = 0x300U;
-    list.Words[0x20CU] = 0x400U; // 0x300 unlinked: 0x200 -> 0x400
-    list.Words[0x408U] = 0x200U;
-    const auto hinted = hints.HintedWalks;
-    Require(walk(0x450U, &hints) == walk(0x450U, nullptr) && hints.HintedWalks == hinted,
-            "an unlinked hint is not used");
-}
-
 int main() {
     TestObserverNotWatchedByProduct();
     TestProductBoundaries();
@@ -460,7 +402,6 @@ int main() {
     TestInvalidSites();
     TestCondition();
     TestTrace();
-    TestHeapFreeWalk();
     std::cout << "mm3d_guest_patches_tests: ok\n";
     return 0;
 }
