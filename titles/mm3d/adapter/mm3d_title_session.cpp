@@ -277,6 +277,12 @@ public:
                    enabledSites, mGuestPatches.Statistics().size());
       process.SetNativeFunctionCallback(&Mm3dGuestPatches::Execute,
                                         &mGuestPatches, mGuestPatches.ProductPcs());
+      // The composition observers (scene layers, scene lights, shadow and
+      // atmosphere spans) arm only once their guard words and blocks are
+      // verified. Unverified, every draw stays in the Unknown layer and the
+      // scene effects (AO, shadows, reflections, temporal AA) never run.
+      if (!mComposition.VerifyHooks(process.Memory(), &Oot3dNativeA32Registry()))
+        throw std::runtime_error("MM3D lighting: wrong image or missing observer block; regenerate registry boundaries");
 #else
       // Each site whose code matches the mounted image replaces its
       // instruction; the registry starts a block at every site.
