@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import subprocess
 from pathlib import Path
@@ -47,14 +48,28 @@ def _product_document(stdout: str) -> Any:
     return json.loads(stdout)
 
 
+# A Windows product prepared on a non-Windows build host (the llvm-mingw
+# cross-build, XBUILD) runs its .exe through this runner, e.g. a wine wrapper.
+# Unset, or on Windows, nothing changes.
+EXE_RUNNER_VARIABLE = "TRIAEVUM_WINDOWS_EXE_RUNNER"
+
+
+def exe_runner_prefix(executable: Path) -> list[str]:
+    runner = os.environ.get(EXE_RUNNER_VARIABLE)
+    if runner and os.name != "nt" and executable.suffix.lower() == ".exe":
+        return [runner]
+    return []
+
+
 def query_product(executable: Path, source_commit: str = "", *, plugin: Path | None = None) -> dict[str, Any]:
     executable = executable.resolve(strict=True)
     try:
+        runner = exe_runner_prefix(executable)
         result = run_native(
-            ([str(executable), "--product-info"] if plugin is None else
-             [str(executable), "--verify-title-plugin", str(plugin.resolve(strict=True))]),
+            runner + ([str(executable), "--product-info"] if plugin is None else
+                      [str(executable), "--verify-title-plugin", str(plugin.resolve(strict=True))]),
             cwd=executable.parent,
-            capture_output=True, text=True, timeout=15, check=False,
+            capture_output=True, text=True, timeout=120 if runner else 15, check=False,
         )
         decode_error = None
         if result.returncode == 0:

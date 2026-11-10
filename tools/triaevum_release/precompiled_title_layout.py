@@ -25,6 +25,24 @@ def artifact(path: Path, destination: str) -> dict:
 PROFILE_MEMBER = "title.profdata"
 
 
+TRANSLATED_SOURCE_FORMAT = "triaevum_translated_title_source_v1"
+
+
+def generated_identity(generated: dict) -> tuple | None:
+    """(code, program, shards, functions) of the translated sources: the
+    generator's own manifest, or the TITLE_SOURCE_MANIFEST.json of a published
+    translated-source archive (unpacked, its files beside it) that a title
+    module was rebuilt from on another toolchain (llvm-mingw, XBUILD)."""
+    if generated.get("format") == "oot3d_whole_aot_cpp_v1":
+        return (generated.get("code_sha256"), generated.get("program_sha256"),
+                generated.get("shard_count"), len(generated.get("functions", [])))
+    if generated.get("format") == TRANSLATED_SOURCE_FORMAT and isinstance(generated.get("build"), dict):
+        origin = generated["build"]
+        return (origin.get("code_sha256"), origin.get("program_sha256"),
+                origin.get("shards"), origin.get("functions"))
+    return None
+
+
 def title_layout(*, runtime: Path, native_module: Path, plugin_manifest: Path,
                  generated_manifest: Path, build_source: Path, recipe: dict,
                  work: Path, profile_data: Path | None = None) -> list[dict]:
@@ -46,11 +64,8 @@ def title_layout(*, runtime: Path, native_module: Path, plugin_manifest: Path,
     if (build.get("format") != "triaevum_generated_cpp_whole_aot_plugin_v2"
             or build.get("profile") != platform.profile
             or build.get("code_sha256") != recipe["inputs"]["code"]["sha256"]
-            or generated.get("format") != "oot3d_whole_aot_cpp_v1"
-            or generated.get("code_sha256") != build["code_sha256"]
-            or generated.get("program_sha256") != build.get("program_sha256")
-            or generated.get("shard_count") != build.get("shards")
-            or len(generated.get("functions", [])) != build.get("functions")):
+            or generated_identity(generated) != (build["code_sha256"], build.get("program_sha256"),
+                                                 build.get("shards"), build.get("functions"))):
         raise ValueError("Title build, translated sources and ROM revision do not correspond")
     name = normalize_relative_path(recipe["id"])
     if "/" in name:
