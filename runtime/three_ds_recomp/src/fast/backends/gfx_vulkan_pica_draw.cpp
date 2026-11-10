@@ -3808,10 +3808,37 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 draw.Blend.Enabled ? static_cast<uint32_t>(draw.Blend.SourceRgb) : 15U,
                 draw.Blend.Enabled ? static_cast<uint32_t>(draw.Blend.DestRgb) : 15U,
                 static_cast<uint32_t>(draw.Blend.EquationRgb), static_cast<uint32_t>(draw.CompositionDomain));
+            std::string trace;
+            if (RasterStats::Collector::Instance().TraceFrame()) {
+                char text[512];
+                const auto* texture = draw.Textures.empty() ? nullptr : &draw.Textures.front();
+                std::snprintf(
+                    text, sizeof(text),
+                    "pipeline=%llx fragment=%llx cmdlist=%08x+%u vertices=%u viewport=%.0fx%.0f@%.0f,%.0f fb=%ux%u "
+                    "textures=%zu tex0=%08x %ux%u fmt=%u hash=%llx alpha_test=%u ref=%u write_mask=%x "
+                    "const=%.3f,%.3f,%.3f,%.3f blend_alpha=%u/%u domain=%u",
+                    static_cast<unsigned long long>(draw.CanonicalPipelineId),
+                    static_cast<unsigned long long>(draw.CanonicalFragmentProgramId), draw.CommandListAddress,
+                    draw.CommandListOffsetWords, draw.VertexCount, draw.ViewportWidth, draw.ViewportHeight,
+                    draw.ViewportX, draw.ViewportY, draw.FramebufferWidth, draw.FramebufferHeight, draw.Textures.size(),
+                    texture ? texture->PhysicalAddress : 0U, texture ? texture->Width : 0U,
+                    texture ? texture->Height : 0U, texture ? texture->NativeFormat : 0U,
+                    static_cast<unsigned long long>(texture ? texture->NativeContentHash : 0U),
+                    draw.AlphaTestEnabled ? 1U : 0U, draw.AlphaReference, draw.ColorWriteMask,
+                    draw.Blend.ConstantColor[0], draw.Blend.ConstantColor[1], draw.Blend.ConstantColor[2],
+                    draw.Blend.ConstantColor[3], static_cast<unsigned>(draw.Blend.SourceAlpha),
+                    static_cast<unsigned>(draw.Blend.DestAlpha), static_cast<unsigned>(draw.CompositionDomain));
+                trace = text;
+            }
             rasterDrawQuery = RasterStats::Collector::Instance().BeginDraw(
-                mDevice, commandBuffer, mCurrentFrame, mFrameCounter, drawKey);
+                mDevice, commandBuffer, mCurrentFrame, mFrameCounter, drawKey, std::move(trace));
         }
-        for (uint32_t scissorPart = 0; scissorPart < scissorParts.Count; ++scissorPart) {
+        const uint32_t recordedScissorParts =
+            RasterStats::Enabled() && renderTarget.NormalGuideView != VK_NULL_HANDLE &&
+                    RasterStats::SkipPipeline(draw.CanonicalPipelineId)
+                ? 0U
+                : scissorParts.Count;
+        for (uint32_t scissorPart = 0; scissorPart < recordedScissorParts; ++scissorPart) {
             const auto part = scissorParts.Rects[scissorPart];
             mScissor = { { part.X, part.Y }, { part.Width, part.Height } };
             nriDraw.Scissor = mScissor;

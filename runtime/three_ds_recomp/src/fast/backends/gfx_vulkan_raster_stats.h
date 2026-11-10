@@ -15,6 +15,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -34,6 +35,20 @@ namespace Fast::RasterStats {
 }
 [[nodiscard]] inline bool Enabled() noexcept { return Level() != 0; }
 [[nodiscard]] inline bool PerDraw() noexcept { return Level() == 2; }
+
+// Developer experiment (TRIAEVUM_RASTER_SKIP=<hex pipeline id>[,<hex>...]): guided
+// draws whose canonical pipeline id is listed are not recorded. Changes the image.
+[[nodiscard]] inline bool SkipPipeline(uint64_t id) noexcept {
+    static const std::string list = [] {
+        const char* value = std::getenv("TRIAEVUM_RASTER_SKIP");
+        return value == nullptr ? std::string() : "," + std::string(value) + ",";
+    }();
+    if (list.empty())
+        return false;
+    char text[24];
+    std::snprintf(text, sizeof(text), ",%llx,", static_cast<unsigned long long>(id));
+    return list.find(text) != std::string::npos;
+}
 
 // Level 2 draw key: class (bits 0-1), depth test (2), depth write (3), discard (4),
 // stencil enabled (5), stencil writes (6), explicit depth (7), blend source RGB (8-11),
@@ -110,13 +125,18 @@ public:
     }
 
     // Level 2: around one guided draw's commands, inside the scope.
-    bool BeginDraw(VkDevice device, VkCommandBuffer commandBuffer, uint32_t slot, uint32_t frame, uint32_t drawKey) {
+    // Every 600 frames, draws of more than 1 M invocations are printed with this text.
+    [[nodiscard]] bool TraceFrame() const noexcept { return mFrame % 600U == 5U; }
+
+    bool BeginDraw(VkDevice device, VkCommandBuffer commandBuffer, uint32_t slot, uint32_t frame, uint32_t drawKey,
+                   std::string trace = {}) {
         AdvanceFrame(device, slot, frame);
         if (!gPipelineStatisticsEnabled || slot >= kSlots || !mSlots[slot].DrawReset ||
             mSlots[slot].DrawUsed >= kDrawQueriesPerSlot || mDrawPool == VK_NULL_HANDLE)
             return false;
         const uint32_t index = slot * kDrawQueriesPerSlot + mSlots[slot].DrawUsed++;
         mDrawClasses[index] = drawKey;
+        mTraces[index] = std::move(trace);
         vkCmdBeginQuery(commandBuffer, mDrawPool, index, 0);
         vkCmdBeginQuery(commandBuffer, mOcclusionPool, index, 0);
         mPendingDrawQuery = index;
@@ -229,6 +249,12 @@ private:
                     entry.Invocations += results[index];
                     entry.Passed += passed[index];
                     ++entry.Draws;
+                    auto& trace = mTraces[slot * kDrawQueriesPerSlot + index];
+                    if (!trace.empty() && results[index] > 1000000U)
+                        std::fprintf(stderr, "[raster-draw] key=%x invocations=%llu passed=%llu %s\n", key,
+                                     static_cast<unsigned long long>(results[index]),
+                                     static_cast<unsigned long long>(passed[index]), trace.c_str());
+                    trace.clear();
                 }
                 ++mDrawQueriedFrames;
             }
@@ -299,6 +325,7 @@ private:
     bool mDrawPoolFailed = false;
     uint32_t mPendingDrawQuery = 0;
     std::array<uint32_t, kSlots * kDrawQueriesPerSlot> mDrawClasses{};
+    std::array<std::string, kSlots * kDrawQueriesPerSlot> mTraces{};
     std::array<uint64_t, kClasses> mClassInvocations{};
     uint64_t mDrawQueriedFrames = 0;
     bool mPoolFailed = false;
