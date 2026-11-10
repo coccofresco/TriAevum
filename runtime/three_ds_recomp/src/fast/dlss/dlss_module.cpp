@@ -345,17 +345,84 @@ int Evaluate(TriaevumDlssFeature* feature, VkCommandBuffer commandBuffer, const 
                : 0;
 }
 
+// The table's entries are the only code the host calls. No C++ exception
+// (std::bad_alloc from a reason string, std::system_error from a lock) may
+// cross the plain-C boundary: the module and the host can be built with
+// different C++ runtimes (the llvm-mingw product loads this MSVC-ABI DLL).
+void SetInternalError(char* reason, size_t reasonBytes) noexcept {
+    if (reason != nullptr && reasonBytes != 0) {
+        const char text[] = "DLSS module internal error";
+        const size_t length = (sizeof(text) < reasonBytes ? sizeof(text) : reasonBytes) - 1;
+        std::memcpy(reason, text, length);
+        reason[length] = '\0';
+    }
+}
+
+int BoundaryVulkanRequirements(TriaevumDlssVulkanRequirements* requirements, char* reason,
+                               size_t reasonBytes) noexcept {
+    try {
+        return VulkanRequirements(requirements, reason, reasonBytes);
+    } catch (...) {
+        SetInternalError(reason, reasonBytes);
+        return 0;
+    }
+}
+
+TriaevumDlssDevice* BoundaryCreateDevice(const TriaevumDlssDeviceDesc* desc, char* reason,
+                                         size_t reasonBytes) noexcept {
+    try {
+        return CreateDevice(desc, reason, reasonBytes);
+    } catch (...) {
+        SetInternalError(reason, reasonBytes);
+        return nullptr;
+    }
+}
+
+void BoundaryDestroyDevice(TriaevumDlssDevice* device) noexcept {
+    try {
+        DestroyDevice(device);
+    } catch (...) {
+    }
+}
+
+TriaevumDlssFeature* BoundaryCreateFeature(TriaevumDlssDevice* device, VkCommandBuffer commandBuffer,
+                                           const TriaevumDlssFeatureDesc* desc, char* reason,
+                                           size_t reasonBytes) noexcept {
+    try {
+        return CreateFeature(device, commandBuffer, desc, reason, reasonBytes);
+    } catch (...) {
+        SetInternalError(reason, reasonBytes);
+        return nullptr;
+    }
+}
+
+void BoundaryDestroyFeature(TriaevumDlssFeature* feature) noexcept {
+    try {
+        DestroyFeature(feature);
+    } catch (...) {
+    }
+}
+
+int BoundaryEvaluate(TriaevumDlssFeature* feature, VkCommandBuffer commandBuffer,
+                     const TriaevumDlssEvaluateDesc* desc) noexcept {
+    try {
+        return Evaluate(feature, commandBuffer, desc);
+    } catch (...) {
+        return 0;
+    }
+}
+
 const TriaevumDlssModule kModule{
     TRIAEVUM_DLSS_ABI_VERSION,
     TRIAEVUM_NGX_VERSION,
     "Upscaling by NVIDIA DLSS. NVIDIA and DLSS are trademarks and/or registered trademarks of NVIDIA "
     "Corporation.",
-    VulkanRequirements,
-    CreateDevice,
-    DestroyDevice,
-    CreateFeature,
-    DestroyFeature,
-    Evaluate,
+    BoundaryVulkanRequirements,
+    BoundaryCreateDevice,
+    BoundaryDestroyDevice,
+    BoundaryCreateFeature,
+    BoundaryDestroyFeature,
+    BoundaryEvaluate,
 };
 } // namespace
 
