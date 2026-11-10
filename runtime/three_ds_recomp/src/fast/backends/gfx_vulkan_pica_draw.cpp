@@ -121,6 +121,20 @@ void GfxRenderingAPIVulkan::ExecuteNativePicaBeforeDrawAnchors(
     const bool timed = mDiagnostics.Enabled();
     using Clock = std::chrono::steady_clock;
     auto begin = timed ? Clock::now() : Clock::time_point{};
+    if (!mNativePicaPrepass.Draws.empty()) {
+        // Work anchored before this draw follows the open prepass window.
+        const auto anchoredHere = [&](const auto* anchor) {
+            return anchor != nullptr && !anchor->AtTargetEnd && anchor->BeforeSubmissionId == draw.SubmissionId;
+        };
+        if (NativeSceneOverlayDraw(draw) ||
+            anchoredHere(Extension::FindPicaEffectPassAnchor(mNativePicaCompositionSchedule,
+                                                             mDirectionalShadowSchedulePlan, reference.Target)) ||
+            anchoredHere(Extension::FindPicaEffectPassAnchor(mNativePicaCompositionSchedule,
+                                                             mPointShadowSchedulePlan, reference.Target)) ||
+            (mInteractiveGrassProviderPlan.Valid() &&
+             anchoredHere(mNativePicaCompositionSchedule.FindPublishedGeometryAnchor(reference.Target))))
+            FlushNativePicaPrepass();
+    }
     if (const auto* anchor = Extension::FindPicaEffectPassAnchor(
             mNativePicaCompositionSchedule, mDirectionalShadowSchedulePlan, reference.Target);
         anchor != nullptr && !anchor->AtTargetEnd && anchor->BeforeSubmissionId == draw.SubmissionId)
@@ -3792,6 +3806,93 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         bool nriOwnedDrawBound = false;
         bool nriPipelineBound = false;
         bool rasterDrawQuery = false;
+        // Opaque depth prepass (TRIAEVUM_DEPTH_PREPASS, FlushNativePicaPrepass):
+        // an eligible draw joins the open window instead of being recorded now;
+        // any other draw flushes the window before it records anything.
+        ParseNativePicaPrepass();
+        bool prepassDeferred = false;
+        if ((mNativePicaPrepass.Enabled || mNativePicaPrepass.AbWindow) &&
+            renderTarget.NormalGuideView != VK_NULL_HANDLE) {
+            auto& prepass = mNativePicaPrepass;
+            if (prepass.LastFrame != mFrameCounter) {
+                prepass.LastFrame = mFrameCounter;
+                ++prepass.Frames;
+                PrintNativePicaPrepassStats();
+            }
+            const bool depthWritingOpaque =
+                draw.DepthTestEnabled && draw.DepthWriteEnabled && !UsesTranslucentBlend(draw.Blend);
+            if (depthWritingOpaque) ++prepass.Candidates;
+            const std::string_view fragment = selectedDraw->FragmentShaderSource;
+            uint8_t reason = 0;
+            if (!nriOwnedDraw) reason = 9;
+            else if (pipelineRecord.PrepassSignature == 0U) reason = pipelineRecord.PrepassIneligible;
+            else if (!prepass.Strict && NativePicaPrepassStrict(pipelineRecord.PrepassSignature)) reason = 2;
+            else if (coveragePipeline != nullptr || RasterStats::PerDraw() || scissorParts.Count == 0U ||
+                     mNativePicaSampleCount != VK_SAMPLE_COUNT_1_BIT || draw.FragmentOperationMode != 0U)
+                reason = 10;
+            else if (fragment.find("gl_FragDepth") != std::string_view::npos ||
+                     fragment.find("imageStore") != std::string_view::npos ||
+                     fragment.find("imageAtomic") != std::string_view::npos)
+                reason = 11;
+            // A discarding draw (alpha test or discard) joins with a depth-only
+            // variant that keeps its program: the same fragments are discarded
+            // in both passes (TRIAEVUM_DEPTH_PREPASS_DISCARD=0 leaves them out).
+            const bool discards = reason == 0U &&
+                (RunsDiscardingAlphaTest(draw) || fragment.find("discard") != std::string_view::npos);
+            if (discards && !prepass.Discard) reason = 11;
+            if (prepass.TraceFrame == mFrameCounter)
+                prepass.Trace += reason == 0U ? (discards ? 'D' : 'E')
+                    : !depthWritingOpaque ? (draw.DepthTestEnabled ? 'b' : 'n')
+                    : static_cast<char>('0' + std::min<int>(reason, 9));
+            if (reason == 0U) {
+                const auto acquisition = selectedDraw == &uberDraw ? NativePicaPipelineAcquisition::Libraries
+                                                                  : backgroundAcquisition;
+                bool depthPending = false, equalPending = false;
+                mNativePicaPrepassVariant = discards ? 3U : 1U;
+                const auto depthOnly = GetOrCreateNativePicaPipeline(
+                    *selectedDraw, *selectedProgram, drawVariant.Reactive, drawVariant.Domain,
+                    drawVariant.RequestedFeatures, drawVariant.AppliedFeatures, false, false, false, acquisition,
+                    &depthPending).Id;
+                mNativePicaPrepassVariant = 2U;
+                const auto equal = GetOrCreateNativePicaPipeline(
+                    *selectedDraw, *selectedProgram, drawVariant.Reactive, drawVariant.Domain,
+                    drawVariant.RequestedFeatures, drawVariant.AppliedFeatures, false, false, false, acquisition,
+                    &equalPending).Id;
+                mNativePicaPrepassVariant = 0U;
+                if (depthPending || equalPending || !mNriPicaPipelineBridge.OwnedPipelineReady(depthOnly) ||
+                    !mNriPicaPipelineBridge.OwnedPipelineReady(equal) ||
+                    !mNriPicaPipelineBridge.OwnedPipelineReady(pipelineRecord.Id)) {
+                    ++prepass.NotReady;
+                } else {
+                    if (!prepass.Draws.empty() &&
+                        (prepass.Target != &renderTarget || prepass.Signature != pipelineRecord.PrepassSignature))
+                        FlushNativePicaPrepass();
+                    if (mNativePicaRenderPassActive && mActiveNativePicaRenderTarget == &renderTarget) {
+                        NativePicaPrepassDraw deferred;
+                        deferred.Desc = nriDraw;
+                        deferred.Bindings = nriVertexBindings;
+                        deferred.Desc.VertexBindings = {};
+                        for (uint32_t part = 0; part < scissorParts.Count; ++part) {
+                            const auto rect = scissorParts.Rects[part];
+                            deferred.Scissors[part] = { { rect.X, rect.Y }, { rect.Width, rect.Height } };
+                        }
+                        deferred.ScissorCount = scissorParts.Count;
+                        deferred.Normal = pipelineRecord.Id;
+                        deferred.DepthOnly = depthOnly;
+                        deferred.Equal = equal;
+                        prepass.Target = &renderTarget;
+                        prepass.Signature = pipelineRecord.PrepassSignature;
+                        prepass.Draws.push_back(std::move(deferred));
+                        prepassDeferred = true;
+                        nriOwnedDrawBound = true;
+                        nriPipelineBound = true;
+                    }
+                }
+            } else if (depthWritingOpaque) {
+                ++prepass.Ineligible[std::min<size_t>(reason, prepass.Ineligible.size() - 1U)];
+            }
+        }
+        if (!prepassDeferred) FlushNativePicaPrepass();
         if (RasterStats::PerDraw() && renderTarget.NormalGuideView != VK_NULL_HANDLE) {
             const std::string_view fragment = selectedDraw->FragmentShaderSource;
             const bool discards = RunsDiscardingAlphaTest(draw) || fragment.find("discard") != std::string_view::npos;
@@ -3936,7 +4037,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // recorded with the switch on and off from the same attachment
         // contents; both results are read back and compared bitwise.
         const Renderer3ds::PicaDevicePipelineRecord* abVariant = nullptr;
-        if (NativePicaAbArmed() && renderTarget.NormalGuideView != VK_NULL_HANDLE && recordedScissorParts != 0U &&
+        if (!prepassDeferred && NativePicaAbArmed() && renderTarget.NormalGuideView != VK_NULL_HANDLE &&
+            recordedScissorParts != 0U &&
             !RasterStats::Enabled() && coveragePipeline == nullptr) {
             Extension::SetPicaAbOverride(NativePicaAbSwitches());
             abVariant = &GetOrCreateNativePicaPipeline(
@@ -3967,7 +4069,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     recordScissorParts(pipelineRecord);
                 }
             });
-        } else {
+        } else if (!prepassDeferred) {
             recordScissorParts(pipelineRecord);
         }
         if (rasterDrawQuery)

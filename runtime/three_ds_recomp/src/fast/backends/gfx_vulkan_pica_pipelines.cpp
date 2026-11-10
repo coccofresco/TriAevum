@@ -140,17 +140,70 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
     // specialized program does not declare stay untouched, as they do there.
     for (size_t location = 1U; location < resolvedState.Colors.size(); ++location)
         if ((shader.DeclaredOutputs & (1U << location)) == 0U) resolvedState.Colors[location].colorWriteMask = 0U;
+    // Opaque depth prepass eligibility of the resolved state (FlushNativePicaPrepass).
+    uint64_t prepassSignature = 0;
+    uint8_t prepassIneligible = 0;
+    {
+        const VkCompareOp compare = resolvedState.DepthCompare;
+        bool blends = false;
+        uint64_t masks = 0;
+        for (size_t location = 0; location < resolvedState.Colors.size(); ++location) {
+            // ONE/ZERO with ADD replaces the destination exactly (no read).
+            const auto& state = resolvedState.Colors[location];
+            const bool replaces = state.colorBlendOp == VK_BLEND_OP_ADD && state.alphaBlendOp == VK_BLEND_OP_ADD &&
+                state.srcColorBlendFactor == VK_BLEND_FACTOR_ONE && state.dstColorBlendFactor == VK_BLEND_FACTOR_ZERO &&
+                state.srcAlphaBlendFactor == VK_BLEND_FACTOR_ONE && state.dstAlphaBlendFactor == VK_BLEND_FACTOR_ZERO;
+            blends = blends || (state.blendEnable != VK_FALSE && state.colorWriteMask != 0U && !replaces);
+            masks |= static_cast<uint64_t>(resolvedState.Colors[location].colorWriteMask & 0xfU) << (4U * location);
+        }
+        if (!resolvedState.DepthTest || !resolvedState.DepthWrite) prepassIneligible = 1;
+        else if (compare != VK_COMPARE_OP_LESS_OR_EQUAL && compare != VK_COMPARE_OP_GREATER_OR_EQUAL &&
+                 compare != VK_COMPARE_OP_LESS && compare != VK_COMPARE_OP_GREATER)
+            prepassIneligible = 4;
+        else if (resolvedState.StencilTest) prepassIneligible = 5;
+        else if (blends) prepassIneligible = 6;
+        else if (resolvedState.LogicOpEnabled && resolvedState.LogicOp != VK_LOGIC_OP_COPY) prepassIneligible = 7;
+        else if (resolvedState.AlphaToCoverage || resolvedState.Samples != VK_SAMPLE_COUNT_1_BIT) prepassIneligible = 8;
+        // Strict compare without culling: a two-sided surface drawn as two
+        // coincident triangles of one draw has two fragments at the same depth
+        // per pixel, where LESS keeps the first and the EQUAL pass the last.
+        else if ((compare == VK_COMPARE_OP_LESS || compare == VK_COMPARE_OP_GREATER) &&
+                 resolvedState.CullMode == VK_CULL_MODE_NONE)
+            prepassIneligible = 12;
+        else prepassSignature = masks | (static_cast<uint64_t>(compare) << 40U) | (1ULL << 63U);
+    }
+    // Prepass variants of the same program and vertex state: depth-only (no
+    // colour or guide write) and the colour pass (compare EQUAL, no depth write).
+    if (mNativePicaPrepassVariant == 1U || mNativePicaPrepassVariant == 3U) {
+        for (auto& color : resolvedState.Colors) color.colorWriteMask = 0U;
+    } else if (mNativePicaPrepassVariant == 2U) {
+        resolvedState.DepthCompare = VK_COMPARE_OP_EQUAL;
+        resolvedState.DepthWrite = false;
+    }
     const auto sourceIdentity = [](const Extension::PicaAotShaderSourceIdentity& value) {
         return std::array<uint64_t, 3>{value.Id, value.SecondaryHash, value.Size};
     };
-    const Renderer3ds::PicaPipelineProgramIdentity programs{
+    static const bool emptyFragment = [] {
+        const char* value = std::getenv("TRIAEVUM_DEPTH_PREPASS_EMPTY_FS");
+        return value == nullptr || value[0] != '0';
+    }();
+    const bool emptyFragmentVariant = mNativePicaPrepassVariant == 1U && emptyFragment;
+    Renderer3ds::PicaPipelineProgramIdentity programs{
         sourceIdentity(shader.VertexSource), sourceIdentity(shader.FragmentSource),
         sourceIdentity(shader.NriFragmentSource), shader.NriDescriptorContract};
+    // The empty fragment stage is another program (and another pipeline).
+    if (emptyFragmentVariant)
+        programs = {sourceIdentity(shader.VertexSource), {0x656d707479667331ULL, 0U, 128U},
+                    {0x656d707479667331ULL, 0U, 128U}, shader.NriDescriptorContract};
     auto key = Renderer3ds::BuildPicaPipelineIdentity(
         programs, draw, resolvedState, mPicaDynamicRenderingScope.Available());
     auto [found, inserted] = mNativePicaPipelines.try_emplace(std::move(key));
     auto& record = found->second;
-    if (inserted) record.Id = {mNextPicaPipelineId++};
+    if (inserted) {
+        record.Id = {mNextPicaPipelineId++};
+        record.PrepassSignature = prepassSignature;
+        record.PrepassIneligible = prepassIneligible;
+    }
     if (record.Vulkan != VK_NULL_HANDLE ||
         (!requireVulkan && mNriPicaPipelineBridge.OwnedPipelineReady(record.Id))) {
         return record;
@@ -237,6 +290,26 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
         auto nriPipeline = resolvedState;
         nriPipeline.VertexSpirv = shader.NriVertexSpirv;
         nriPipeline.FragmentSpirv = shader.NriFragmentSpirv;
+        // The prepass's depth-only variant writes no colour or guide: an empty
+        // fragment stage, so no fragment is shaded. Same vertex SPIR-V and
+        // vertex state (TRIAEVUM_DEPTH_PREPASS_EMPTY_FS=0 keeps the program).
+        // OpCapability Shader; OpMemoryModel Logical GLSL450; OpEntryPoint
+        // Fragment %1 "main"; OpExecutionMode %1 OriginUpperLeft; %2 void;
+        // %3 fn(void); %1 = OpFunction; OpLabel; OpReturn; OpFunctionEnd.
+        static constexpr uint32_t kEmptyFragmentSpirv[] = {
+            0x07230203U, 0x00010000U, 0U, 5U, 0U,
+            0x00020011U, 1U,
+            0x0003000EU, 0U, 1U,
+            0x0005000FU, 4U, 1U, 0x6E69616DU, 0U,
+            0x00030010U, 1U, 7U,
+            0x00020013U, 2U,
+            0x00030021U, 3U, 2U,
+            0x00050036U, 2U, 1U, 0U, 3U,
+            0x000200F8U, 4U,
+            0x000100FDU,
+            0x00010038U,
+        };
+        if (emptyFragmentVariant) nriPipeline.FragmentSpirv = kEmptyFragmentSpirv;
         nriPipeline.VertexBindings = nriBindings;
         nriPipeline.VertexAttributes = nriAttributes;
         if (Renderer3ds::NriPicaPipelineTraceEnabled())

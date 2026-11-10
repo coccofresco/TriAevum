@@ -1377,7 +1377,8 @@ void NativeA32WindowSession::Setup() {
   // The renderer reads it when the context starts it.
   Fast::Renderer3ds::InstallTitleShaderPreparation(
       {Oot3dNativeGame::TitlePreparedShaders(titleAdapter, titleSession.get()),
-       std::string(Oot3dNativeGame::TitlePipelineCacheNamespace(titleAdapter, titleSession.get()))});
+       std::string(Oot3dNativeGame::TitlePipelineCacheNamespace(titleAdapter, titleSession.get())),
+       titleSession != nullptr && titleSession->OpaqueDepthPrepass()});
   if (launch.StartupCheck) {
     // Every requirement above ran on the mounted image (title module ABI,
     // the product's block-start sites, the title session's own checks);

@@ -166,6 +166,10 @@ public:
   // case letters, digits, '_' and '-'). OoT3D (no session) keeps the
   // original file names.
   [[nodiscard]] virtual std::string_view PipelineCacheNamespace() const = 0;
+  // Whether the renderer's opaque depth prepass is on by default for the
+  // title (measured per title; TRIAEVUM_DEPTH_PREPASS overrides). OoT3D (no
+  // session) has it off.
+  [[nodiscard]] virtual bool OpaqueDepthPrepass() const { return false; }
 
   [[nodiscard]] virtual bool IsGameplayHud(uint32_t sourcePc, uint32_t nativeValue) const {
     (void)sourcePc; (void)nativeValue; return false;

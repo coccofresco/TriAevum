@@ -35,6 +35,9 @@ struct TitleShaderPreparation {
     bool Prepared = true;
     // Lower-case letters, digits, '_' and '-'; empty for the original names.
     std::string PipelineCacheNamespace;
+    // The title's default for the opaque depth prepass of the guided scene
+    // scope (TRIAEVUM_DEPTH_PREPASS overrides it; PERF/LINUX_r7.md round 27).
+    bool OpaqueDepthPrepass = false;
 };
 
 struct TitleShaderPreparationPlan {

@@ -1180,6 +1180,50 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void RunNativePicaAbDraw(NativePicaRenderTarget& target, const char* label,
                              const std::function<void(bool variantB)>& record);
     void FinishNativePicaAb();
+    // Opaque depth prepass of the guided scene scope (TRIAEVUM_DEPTH_PREPASS).
+    // A window is a maximal run of consecutive eligible NRI-owned draws into
+    // the same active guided target with equal colour write masks and one
+    // non-strict depth compare (LEQUAL or GEQUAL); any other draw, clear,
+    // fill or scope end flushes it first. Flushed, the window is recorded
+    // depth-only (every colour write masked) and then again with depth
+    // compare EQUAL and no depth write, so each pixel's colour and guides are
+    // written by its visible fragment only (see FlushNativePicaPrepass).
+    struct NativePicaPrepassDraw {
+        Extension::NriPicaOwnedDrawDesc Desc;
+        std::vector<Extension::NriPicaVertexBufferBindingDesc> Bindings;
+        std::array<VkRect2D, 4> Scissors{};
+        uint32_t ScissorCount = 0;
+        Extension::NriPicaPipelineId Normal, DepthOnly, Equal;
+    };
+    struct NativePicaPrepassState {
+        bool Parsed = false;
+        bool Enabled = false;
+        bool Stats = false;
+        bool AbWindow = false; // TRIAEVUM_AB_SWITCH=depth_prepass
+        bool Strict = true;    // LESS/GREATER windows (TRIAEVUM_DEPTH_PREPASS_STRICT=0: excluded)
+        bool Discard = true;   // discarding draws (TRIAEVUM_DEPTH_PREPASS_DISCARD=0: excluded)
+        uint64_t TraceFrame = UINT64_MAX; // TRIAEVUM_DEPTH_PREPASS_TRACE_FRAME: draw classes of one frame
+        std::string Trace;
+        uint32_t AbMinimumDraws = 8;
+        NativePicaRenderTarget* Target = nullptr;
+        uint64_t Signature = 0;
+        std::vector<NativePicaPrepassDraw> Draws;
+        // Statistics (TRIAEVUM_DEPTH_PREPASS_STATS=1), per printed interval.
+        uint64_t Frames = 0, LastFrame = UINT64_MAX, Windows = 0, WindowDraws = 0, Candidates = 0,
+                 NotReady = 0, MaxWindow = 0;
+        std::array<uint64_t, 13> Ineligible{};
+    };
+    NativePicaPrepassState mNativePicaPrepass;
+    // 0: normal pipeline; 1: depth-only (empty fragment stage); 2: EQUAL, no
+    // depth write; 3: depth-only keeping the program (discarding draws).
+    uint32_t mNativePicaPrepassVariant = 0;
+    void ParseNativePicaPrepass();
+    void FlushNativePicaPrepass();
+    void PrintNativePicaPrepassStats();
+    [[nodiscard]] static bool NativePicaPrepassStrict(uint64_t signature) {
+        const auto compare = static_cast<VkCompareOp>((signature >> 40U) & 0xffU);
+        return compare == VK_COMPARE_OP_LESS || compare == VK_COMPARE_OP_GREATER;
+    }
     // `pixels` holds every level, or only the base when `lowerLevels` holds
     // the others (a custom replacement's chain, built apart from its base).
     void CreateNativePicaTextureImage(TextureRecord& texture,

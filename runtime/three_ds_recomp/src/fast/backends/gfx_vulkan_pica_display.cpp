@@ -4303,6 +4303,7 @@ bool GfxRenderingAPIVulkan::ClearPicaRenderTarget(
             depthAttachment.clearValue.depthStencil = {1.0F, 0U};
             const VkClearRect clearRect{
                 {{0, 0}, {target.Width, target.Height}}, 0U, 1U};
+            FlushNativePicaPrepass();
             vkCmdClearAttachments(mCommandBuffers[mCurrentFrame],
                                   attachmentCount,
                                   attachments.data(), 1U, &clearRect);

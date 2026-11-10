@@ -12,6 +12,7 @@
 #include <map>
 #include <string>
 #include "fast/extension/native_ui_overlay.h"
+#include "fast/renderer3ds/title_shader_preparation.h"
 
 namespace Fast {
 
@@ -1761,6 +1762,9 @@ void GfxRenderingAPIVulkan::EndNativePicaRenderPass(std::source_location where) 
     if (!mNativePicaRenderPassActive) {
         return;
     }
+    // A deferred prepass window belongs to this scope: record it before it ends.
+    FlushNativePicaPrepass();
+    if (!mNativePicaRenderPassActive) return; // ended by the window's A/B check
     if (mGpuProfiler.TimelineEnabled()) {
         // Which callers end the native scope on an instrumented (guided)
         // target: each end costs a reload of its attachments later.
@@ -1825,6 +1829,7 @@ void GfxRenderingAPIVulkan::ApplyPendingNativePicaMemoryFills(NativePicaRenderTa
     if (mPendingNativePicaMemoryFills.empty()) {
         return;
     }
+    FlushNativePicaPrepass(); // the window precedes the fill
 
     auto fill = mPendingNativePicaMemoryFills.begin();
     while (fill != mPendingNativePicaMemoryFills.end()) {
@@ -1985,6 +1990,9 @@ bool GfxRenderingAPIVulkan::NativePicaAbArmed() {
                 ab.Switches = Extension::kPicaAbAtmosphereGeometryWrite;
             } else if (selected == "probe_no_color_write") {
                 ab.Switches = Extension::kPicaAbProbeNoColorWrite;
+            } else if (selected == "depth_prepass") {
+                // A whole prepass window (FlushNativePicaPrepass), not one draw.
+                ab.Switches = 0U;
             } else {
                 std::fprintf(stderr, "[ab] unknown TRIAEVUM_AB_SWITCH=%s; disarmed\n", name);
                 ab.Frame = UINT32_MAX;
@@ -2073,9 +2081,9 @@ void GfxRenderingAPIVulkan::RunNativePicaAbDraw(NativePicaRenderTarget& target, 
             CheckNativeVk(vkCreateBuffer(mDevice, &buffer, nullptr, &image.Readback[side]), "vkCreateBuffer(A/B)");
             vkGetBufferMemoryRequirements(mDevice, image.Readback[side], &requirements);
             allocation.allocationSize = requirements.size;
-            allocation.memoryTypeIndex = FindMemoryType(
-                requirements.memoryTypeBits,
-                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            // Cached host memory: the comparison reads every byte (write-combined
+            // memory made one check take ~50 s at 4K).
+            allocation.memoryTypeIndex = FindReadbackMemoryType(requirements.memoryTypeBits);
             CheckNativeVk(vkAllocateMemory(mDevice, &allocation, nullptr, &image.ReadbackMemory[side]),
                           "vkAllocateMemory(A/B readback)");
             CheckNativeVk(vkBindBufferMemory(mDevice, image.Readback[side], image.ReadbackMemory[side], 0),
@@ -2169,6 +2177,10 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
         void* mapped[2]{};
         vkMapMemory(mDevice, image.ReadbackMemory[0], 0, VK_WHOLE_SIZE, 0, &mapped[0]);
         vkMapMemory(mDevice, image.ReadbackMemory[1], 0, VK_WHOLE_SIZE, 0, &mapped[1]);
+        const std::array<VkMappedMemoryRange, 2> ranges{{
+            {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, image.ReadbackMemory[0], 0, VK_WHOLE_SIZE},
+            {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, image.ReadbackMemory[1], 0, VK_WHOLE_SIZE}}};
+        vkInvalidateMappedMemoryRanges(mDevice, 2U, ranges.data());
         auto* a = static_cast<uint8_t*>(mapped[0]);
         auto* b = static_cast<uint8_t*>(mapped[1]);
         // D24 depth texels are copied as 32 bits with 8 undefined high bits.
@@ -2209,6 +2221,164 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
     }
     ab.Images.clear();
     std::fprintf(stderr, "[ab] done\n");
+    // TRIAEVUM_AB_REPEAT=N: N checks, each armed again 7 frames after the last.
+    static uint32_t remaining = [] {
+        const char* value = std::getenv("TRIAEVUM_AB_REPEAT");
+        return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 1U;
+    }();
+    if (remaining > 1U) {
+        --remaining;
+        ab.Done = false;
+        ab.Frame = static_cast<uint32_t>(mFrameCounter) + 7U;
+    }
+}
+
+void GfxRenderingAPIVulkan::ParseNativePicaPrepass() {
+    auto& prepass = mNativePicaPrepass;
+    if (prepass.Parsed) return;
+    prepass.Parsed = true;
+    // The title's default (TitleShaderPreparation::OpaqueDepthPrepass, from
+    // its session) unless TRIAEVUM_DEPTH_PREPASS=0/1 says otherwise.
+    const char* value = std::getenv("TRIAEVUM_DEPTH_PREPASS");
+    prepass.Enabled = value != nullptr && value[0] != '\0'
+        ? value[0] == '1'
+        : Renderer3ds::InstalledTitleShaderPreparation().OpaqueDepthPrepass;
+    const char* stats = std::getenv("TRIAEVUM_DEPTH_PREPASS_STATS");
+    prepass.Stats = stats != nullptr && stats[0] == '1';
+    const char* strict = std::getenv("TRIAEVUM_DEPTH_PREPASS_STRICT");
+    prepass.Strict = strict == nullptr || strict[0] != '0';
+    const char* discard = std::getenv("TRIAEVUM_DEPTH_PREPASS_DISCARD");
+    prepass.Discard = discard == nullptr || discard[0] != '0';
+    if (const char* trace = std::getenv("TRIAEVUM_DEPTH_PREPASS_TRACE_FRAME"))
+        prepass.TraceFrame = std::strtoull(trace, nullptr, 10);
+    const char* abSwitch = std::getenv("TRIAEVUM_AB_SWITCH");
+    prepass.AbWindow = std::getenv("TRIAEVUM_AB_FRAME") != nullptr && abSwitch != nullptr &&
+        std::string_view(abSwitch) == "depth_prepass";
+    if (const char* minimum = std::getenv("TRIAEVUM_AB_MIN_WINDOW"))
+        prepass.AbMinimumDraws = static_cast<uint32_t>(std::strtoul(minimum, nullptr, 10));
+    std::fprintf(stderr, "[prepass] enabled=%u ab_window=%u\n", prepass.Enabled ? 1U : 0U,
+                 prepass.AbWindow ? 1U : 0U);
+}
+
+void GfxRenderingAPIVulkan::PrintNativePicaPrepassStats() {
+    auto& prepass = mNativePicaPrepass;
+    if (!prepass.Trace.empty() && mFrameCounter != prepass.TraceFrame) {
+        // E eligible, D eligible discarding, | window flush, b/n not
+        // depth-writing opaque (test on/off), digits: ineligible reason.
+        std::fprintf(stderr, "[prepass] trace frame=%llu %s\n", static_cast<unsigned long long>(prepass.TraceFrame),
+                     prepass.Trace.c_str());
+        prepass.Trace.clear();
+    }
+    if (prepass.Stats && prepass.Frames >= 600U) {
+        const double frames = static_cast<double>(prepass.Frames);
+        std::fprintf(stderr,
+                     "[prepass] per frame: candidates %.1f windows %.2f window_draws %.1f max_window %llu "
+                     "not_ready %.2f ineligible(no-depth-write %.1f less %.1f greater %.1f other-compare %.1f "
+                     "stencil %.1f blend %.1f logic %.1f a2c/msaa %.1f not-nri %.1f coverage/mode %.1f "
+                     "discard/fragdepth %.1f strict-cull-none %.1f)\n",
+                     static_cast<double>(prepass.Candidates) / frames, static_cast<double>(prepass.Windows) / frames,
+                     static_cast<double>(prepass.WindowDraws) / frames,
+                     static_cast<unsigned long long>(prepass.MaxWindow), static_cast<double>(prepass.NotReady) / frames,
+                     prepass.Ineligible[1] / frames, prepass.Ineligible[2] / frames, prepass.Ineligible[3] / frames,
+                     prepass.Ineligible[4] / frames, prepass.Ineligible[5] / frames, prepass.Ineligible[6] / frames,
+                     prepass.Ineligible[7] / frames, prepass.Ineligible[8] / frames, prepass.Ineligible[9] / frames,
+                     prepass.Ineligible[10] / frames, prepass.Ineligible[11] / frames,
+                     prepass.Ineligible[12] / frames);
+        prepass.Frames = prepass.Windows = prepass.WindowDraws = prepass.Candidates = prepass.NotReady = 0;
+        prepass.MaxWindow = 0;
+        prepass.Ineligible = {};
+    }
+}
+
+// Exactness of a window (all draws eligible: depth test and write with one
+// non-strict compare, no stencil, blend, logic operation other than copy,
+// discard, alpha test, gl_FragDepth or image writes; equal colour write masks):
+// per pixel, the depth-only pass runs every fragment's depth test and write in
+// the original order with the original compare, so it ends with the depth the
+// sequential window ends with (D). With LEQUAL (GEQUAL symmetric) the depth
+// only decreases, every fragment whose depth equals D passed its test in the
+// sequential window, and the last fragment that passed there has depth D.
+// The colour pass (EQUAL, no depth write) passes exactly the fragments at D,
+// in order, so the last writer of every written channel is the same fragment
+// with the same outputs (same programs, inputs and vertex state; the
+// pipelines differ only in output-merger state). Draws outside the window are
+// recorded before or after it, so they see the same attachments.
+// A strict compare (LESS; GREATER symmetric) keeps the FIRST fragment at D,
+// and only if D is nearer than the depth before the window (D0). The colour
+// pass then runs the draws in reverse order, so the earliest draw holding a
+// fragment at D writes last. That is exact unless (a) one draw has two
+// fragments at the same pixel with bitwise equal depth D (the later one
+// wins here) or (b) a fragment's depth equals D0 where no window fragment is
+// nearer (it fails its LESS test there and passes EQUAL here). Strict draws
+// without culling stay out ((a) is what two-sided surfaces drawn as coincident
+// triangles do: EoT's alpha-tested foliage showed it, round 27). Neither case
+// can be excluded by construction; TRIAEVUM_DEPTH_PREPASS_STRICT=0 leaves strict
+// draws out, and the same-frame A/B (TRIAEVUM_AB_SWITCH=depth_prepass)
+// measures them.
+void GfxRenderingAPIVulkan::FlushNativePicaPrepass() {
+    auto& prepass = mNativePicaPrepass;
+    if (prepass.Draws.empty()) return;
+    std::vector<NativePicaPrepassDraw> draws;
+    draws.swap(prepass.Draws);
+    NativePicaRenderTarget* target = prepass.Target;
+    const bool strict = NativePicaPrepassStrict(prepass.Signature);
+    prepass.Target = nullptr;
+    prepass.Signature = 0;
+    if (!mNativePicaRenderPassActive || mActiveNativePicaRenderTarget != target)
+        throw std::runtime_error("depth prepass window outlived its rendering scope");
+    // Developer probe 3 (changes the image): the depth-only pass with a 1x1
+    // scissor (its vertex and primitive cost without fragments).
+    static const bool probeScissor = [] {
+        const char* value = std::getenv("TRIAEVUM_DEPTH_PREPASS_PROBE");
+        return value != nullptr && value[0] == '3';
+    }();
+    const auto recordPass = [&](int pass) {
+        // A strict compare's colour pass runs the draws in reverse order.
+        const bool reverse = pass == 2 && strict;
+        for (size_t index = 0; index < draws.size(); ++index) {
+            auto& entry = draws[reverse ? draws.size() - 1U - index : index];
+            if (entry.Desc.FrameIndex != mCurrentFrame)
+                throw std::runtime_error("depth prepass window crossed a frame");
+            auto desc = entry.Desc;
+            desc.VertexBindings = entry.Bindings;
+            desc.PipelineId = pass == 0 ? entry.Normal : pass == 1 ? entry.DepthOnly : entry.Equal;
+            for (uint32_t part = 0; part < entry.ScissorCount; ++part) {
+                desc.Scissor = entry.Scissors[part];
+                if (pass == 1 && probeScissor) desc.Scissor.extent = { 1U, 1U };
+                if (!mNriPicaPipelineBridge.BindOwnedDraw(desc))
+                    throw std::runtime_error("NRI PICA draw binding failed in a depth prepass window");
+            }
+        }
+    };
+    const auto record = [&](bool withPrepass) {
+        // Developer probe (changes the image): 1 = depth-only pass alone,
+        // 2 = colour pass alone.
+        static const int probe = [] {
+            const char* value = std::getenv("TRIAEVUM_DEPTH_PREPASS_PROBE");
+            return value != nullptr ? std::atoi(value) : 0;
+        }();
+        if (withPrepass) {
+            if (probe != 2) recordPass(1);
+            if (probe != 1) recordPass(2);
+        } else {
+            recordPass(0);
+        }
+    };
+    if (prepass.TraceFrame == mFrameCounter) prepass.Trace += '|';
+    ++prepass.Windows;
+    prepass.WindowDraws += draws.size();
+    prepass.MaxWindow = std::max<uint64_t>(prepass.MaxWindow, draws.size());
+    if (prepass.AbWindow && draws.size() >= prepass.AbMinimumDraws && NativePicaAbArmed()) {
+        char label[160];
+        std::snprintf(label, sizeof(label), "depth_prepass window_draws=%zu scissor_parts=%u", draws.size(),
+                      draws.front().ScissorCount);
+        const bool control = NativePicaAbControl();
+        // Variant B: the window with the prepass (or, for the control, without);
+        // A, the real one: without the prepass.
+        RunNativePicaAbDraw(*target, label, [&](bool variantB) { record(variantB && !control); });
+    } else {
+        record(prepass.Enabled);
+    }
 }
 
 void GfxRenderingAPIVulkan::PaintNativePicaPictureBars(
@@ -2216,6 +2386,7 @@ void GfxRenderingAPIVulkan::PaintNativePicaPictureBars(
     if (bars.Count == 0U) {
         return;
     }
+    FlushNativePicaPrepass();
     // Opaque black on the native colour only: the bars are presentation
     // pixels, so the guides, depth and stencil of what lies under them stay.
     Extension::NriPicaColorRectsClearDesc clear;

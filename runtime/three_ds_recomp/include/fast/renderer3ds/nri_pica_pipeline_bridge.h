@@ -29,6 +29,12 @@ struct PicaDevicePipelineRecord {
     NriPicaPipelineId Id;
     VkPipeline Vulkan = VK_NULL_HANDLE;
     bool NriPreparationAttempted = false;
+    // Opaque depth prepass: non-zero when the resolved state can join a
+    // prepass window (depth test and write with LEQUAL/GEQUAL, no stencil,
+    // blend, logic operation other than copy or alpha to coverage); the value
+    // identifies the colour write masks and the compare. 0: ineligible.
+    uint64_t PrepassSignature = 0;
+    uint8_t PrepassIneligible = 0; // reason when PrepassSignature is 0
 };
 
 struct NriPicaExecutionConfig {
