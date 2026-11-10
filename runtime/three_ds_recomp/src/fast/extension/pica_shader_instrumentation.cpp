@@ -17,6 +17,7 @@
 #include <bit>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <iomanip>
 #include <locale>
 #include <optional>
@@ -1131,6 +1132,44 @@ vec3 pica_surface_shadow(int slot) {
             request.RequestedFeatures, PicaShaderInstrumentationFeature::PointShadowLighting);
         if (pointShadow) {
             decisions.Set(Decision::PointShadow);
+            // Point-shadow guard (diagnostic, TRIAEVUM_POINT_SHADOW_GUARD=1):
+            // skip the cube lookup where its factor cannot change the result.
+            // The visibility is finite and in [0, 1], so a factor of 1.0 in
+            // place of it is bitwise identical where attenuation is +-0 (or
+            // the radiance is all +-0). Off: the text is unchanged.
+            static const bool pointShadowGuard = [] {
+                const char* value = std::getenv("TRIAEVUM_POINT_SHADOW_GUARD");
+                return value != nullptr && value[0] == '1';
+            }();
+            if (pointShadowGuard) {
+                std::string guarded = declarations;
+                const auto replace = [&](std::string_view from, std::string_view to) {
+                    const size_t at = guarded.find(from);
+                    if (at == std::string::npos) return false;
+                    guarded.replace(at, from.size(), to);
+                    return true;
+                };
+                bool applied = replace(
+                    "float pica_point_shadow(float slot, vec3 light_to_fragment, float radius);\n",
+                    "float pica_point_shadow(float slot, vec3 light_to_fragment, float radius);\n"
+                    "float pica_point_shadow_guarded(float attenuation, float slot, vec3 light_to_fragment, float radius) {\n"
+                    "    return attenuation > 0.0 ? pica_point_shadow(slot, light_to_fragment, radius) : 1.0;\n"
+                    "}\n");
+                applied = applied && replace(
+                    "radiance *= attenuation * pica_point_shadow(light.diffuse.w,",
+                    "radiance *= attenuation * pica_point_shadow_guarded(attenuation, light.diffuse.w,");
+                applied = applied && replace(
+                    "light.color.rgb * attenuation * pica_point_shadow(light.color.w,",
+                    "light.color.rgb * attenuation * pica_point_shadow_guarded(attenuation, light.color.w,");
+                applied = applied && replace(
+                    "    radiance *= pica_point_shadow(light.color.w, -to_light, reach);\n",
+                    "    if (any(notEqual(radiance, vec3(0.0))))\n"
+                    "        radiance *= pica_point_shadow(light.color.w, -to_light, reach);\n");
+                if (applied) {
+                    declarations = std::move(guarded);
+                    result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_POINT_SHADOW_GUARD_V1");
+                }
+            }
             declarations += Renderer3ds::PointShadowReceiverShader();
             result.FragmentKey = SaltedVariantKey(result.FragmentKey, "PICA_POINT_SHADOW_V1");
             apply(PicaShaderInstrumentationFeature::PointShadowLighting);
