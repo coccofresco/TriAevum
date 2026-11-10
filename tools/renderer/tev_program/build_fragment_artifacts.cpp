@@ -115,7 +115,12 @@ static int BuildUberFamily(int argc, char** argv, bool nativeLighting = false) {
         for (unsigned policy : policies)
         for (unsigned temporal = 0; temporal < 2; ++temporal)
         for (unsigned surface = nativeLighting ? 1U : 0U; surface < 3; ++surface) {
-            if (nativeLighting && policy != 16 && !shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
+            // A base without fragment lighting composes the raw operand and
+            // native-lit shadow policies (1, 4, 5), not the balanced ones.
+            if (nativeLighting && policy != 16 && (policy & 2U) != 0U &&
+                !shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
+            if (nativeLighting && (policy & 8U) != 0U &&
+                !shader.Hooks.Has(::Oot3d::Renderer::PicaShaderSemantic::MaterialNormal)) continue;
             const auto uber = Fast::Extension::BuildPicaUberEffectProgram({shader.Source, shader.Hooks,
                 temporal != 0, surface != 0, surface == 2,
                 (policy & 1U) != 0, (policy & 2U) != 0, (policy & 4U) != 0,
@@ -156,7 +161,7 @@ static int BuildUberFamily(int argc, char** argv, bool nativeLighting = false) {
             ++modules;
         }
     }
-    Check(modules == (nativeLighting ? 104U : 36U), "unexpected uber effect family size");
+    Check(modules == (nativeLighting ? 128U : 36U), "unexpected uber effect family size " + std::to_string(modules));
     if (countOnly || verify) {
         std::cout << "uber_fragment_artifacts=" << modules << '\n';
         return 0;

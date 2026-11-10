@@ -186,7 +186,7 @@ bool PicaUberEffectSupports(const PicaEffectDecisions& decisions,
     if (!hooks.ValidFor(request.BaseSource)) return false;
     const auto base = Capabilities(request, hooks);
     const bool surface = request.SurfaceInputs;
-    if ((rawPolicy || request.FragmentLightingBalance) && !base.MaterialNormal) return false;
+    if (request.FragmentLightingBalance && !base.MaterialNormal) return false;
     constexpr uint32_t surfaceBits = Decision::SurfaceLighting | Decision::Pbr | Decision::AlbedoReplay |
         Decision::DirectionalShadow | Decision::PointShadow | Decision::ReflectionPbr | Decision::EnvironmentMix;
     if (!surface && (decisions.Bits & surfaceBits) != 0U) return false;
@@ -258,7 +258,10 @@ std::string BuildPicaUberEffectProgram(const PicaUberEffectProgramRequest& reque
     const bool rawPolicy = request.FragmentLightingOperand || request.NativeFragmentLitShadows;
     const bool pbrPolicy = request.PbrNativeBalance || request.PbrNativeUnlit;
     if ((rawPolicy || request.FragmentLightingBalance || pbrPolicy) && !surface) return {};
-    if ((rawPolicy || request.FragmentLightingBalance) && !base.MaterialNormal) return {};
+    // Raw operands and native-lit shadows act on the surface body, which an
+    // unlit base (no MaterialNormal) also composes; the balance needs the
+    // base's own native-lighting capture.
+    if (request.FragmentLightingBalance && !base.MaterialNormal) return {};
     if (rawPolicy && pbrPolicy) return {};
     if (request.PbrNativeBalance && (!base.NativeLighting || request.PbrNativeUnlit || !request.FragmentLightingBalance)) return {};
     if (request.PbrNativeUnlit && request.FragmentLightingBalance) return {};
