@@ -1627,6 +1627,9 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
         mRenderPassActive = false;
         mOverlayRenderPassActive = false;
     }
+    if (RasterStats::PerDraw() && target.NormalGuideView != VK_NULL_HANDLE)
+        RasterStats::Collector::Instance().ResetDrawQueries(
+            mDevice, mCommandBuffers[mCurrentFrame], mCurrentFrame, mFrameCounter);
     const bool rasterStatsQuery = RasterStats::Enabled() &&
         RasterStats::Collector::Instance().PrepareScope(
             mDevice, mCommandBuffers[mCurrentFrame], mCurrentFrame, mFrameCounter,

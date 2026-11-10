@@ -3790,6 +3790,17 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         bool nriOwnedDrawBound = false;
         bool nriPipelineBound = false;
+        bool rasterDrawQuery = false;
+        if (RasterStats::PerDraw() && renderTarget.NormalGuideView != VK_NULL_HANDLE) {
+            const std::string_view fragment = selectedDraw->FragmentShaderSource;
+            const bool discards = RunsDiscardingAlphaTest(draw) || fragment.find("discard") != std::string_view::npos;
+            const RasterStats::DrawClass drawClass = UsesTranslucentBlend(draw.Blend) ? RasterStats::kBlended
+                : !(draw.DepthTestEnabled && draw.DepthWriteEnabled)          ? RasterStats::kOther
+                : discards                                                    ? RasterStats::kOpaqueDiscard
+                                                                              : RasterStats::kOpaque;
+            rasterDrawQuery = RasterStats::Collector::Instance().BeginDraw(
+                mDevice, commandBuffer, mCurrentFrame, mFrameCounter, drawClass);
+        }
         for (uint32_t scissorPart = 0; scissorPart < scissorParts.Count; ++scissorPart) {
             const auto part = scissorParts.Rects[scissorPart];
             mScissor = { { part.X, part.Y }, { part.Width, part.Height } };
@@ -3845,6 +3856,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 }
             }
         }
+        if (rasterDrawQuery)
+            RasterStats::Collector::Instance().EndDraw(commandBuffer);
         mScissor = originalScissor;
         if (coveragePipeline != nullptr) {
             ++mDrawCallCountThisFrame;
