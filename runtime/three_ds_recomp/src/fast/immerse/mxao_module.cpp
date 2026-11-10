@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <iterator>
 #include <stdexcept>
@@ -96,6 +97,16 @@ struct TriaevumImmerseMxao {
 };
 
 namespace {
+// Experiment, default off (the host reads the same variable): temporal
+// accumulation reprojected by depth and camera, without motion vectors.
+bool CameraReprojection() {
+    static const bool enabled = [] {
+        const char* value = std::getenv("TRIAEVUM_MXAO_CAMERA_REPROJECTION");
+        return value != nullptr && value[0] == '1';
+    }();
+    return enabled;
+}
+
 void InvalidateScreenResources(TriaevumImmerseMxao* mxao) {
     const auto* host = mxao->Host;
     if (mxao->Pool)
@@ -164,7 +175,7 @@ TriaevumImmerseMxao* Create(const TriaevumImmerseHost* host, char* reason, size_
         set.ranges = ranges.data();
         set.rangeNum = uint32_t(ranges.size());
         nri::RootConstantDesc root{};
-        root.size = sizeof(MxaoConstants);
+        root.size = CameraReprojection() ? sizeof(MxaoCameraConstants) : sizeof(MxaoConstants);
         root.shaderStages = nri::StageBits::COMPUTE_SHADER;
         nri::PipelineLayoutDesc layout{};
         layout.descriptorSets = &set;
@@ -175,7 +186,12 @@ TriaevumImmerseMxao* Create(const TriaevumImmerseHost* host, char* reason, size_
         layout.flags = nri::PipelineLayoutBits::IGNORE_GLOBAL_SPIRV_OFFSETS;
         if (mxao->Core->CreatePipelineLayout(*mxao->Device, layout, mxao->Layout) != nri::Result::SUCCESS)
             throw std::runtime_error("MXAO pipeline layout failed");
-        const auto sources = BuildMxaoPassShaders(host->DebugGlsl, host->GeometryGuideGlsl);
+        auto sources = BuildMxaoPassShaders(host->DebugGlsl, host->GeometryGuideGlsl);
+        if (CameraReprojection()) {
+            sources[kTemporalProgram] = BuildMxaoCameraTemporalShader(host->GeometryGuideGlsl);
+            if (sources[kTemporalProgram].empty())
+                throw std::runtime_error("MXAO camera reprojection program unavailable");
+        }
         static_assert(std::tuple_size_v<decltype(sources)> == kProgramCount);
         constexpr std::array<const char*, kProgramCount> names{
             "immerse_mxao_deinterleave.comp", "immerse_mxao_occlusion.comp", "immerse_mxao_filter.comp",
@@ -247,7 +263,7 @@ int Configure(TriaevumImmerseMxao* mxao, const TriaevumMxaoTargets* targets) {
             !host->CreateTexture(host->Context, width, height, VK_FORMAT_R16G16_SFLOAT, &mxao->Filtered) ||
             (half && !host->CreateTexture(host->Context, width, height, VK_FORMAT_R32_SFLOAT, &mxao->Resolved)))
             throw std::runtime_error("MXAO scratch allocation failed");
-        const bool accumulates = temporal.Image != VK_NULL_HANDLE;
+        const bool accumulates = temporal.Image != VK_NULL_HANDLE || CameraReprojection();
         if (accumulates)
             for (auto& history : mxao->History)
                 if (!host->CreateTexture(host->Context, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, &history))
@@ -271,7 +287,7 @@ int Configure(TriaevumImmerseMxao* mxao, const TriaevumMxaoTargets* targets) {
         // Programs that do not read the motion vectors or a history still
         // bind a valid input there; none of them writes the native depth.
         nri::Descriptor* motionView = sources[0];
-        if (accumulates) {
+        if (temporal.Image != VK_NULL_HANDLE) {
             if (!host->WrapTexture(host->Context, temporal.Image, temporal.Format, temporal.Width, temporal.Height))
                 throw std::runtime_error("MXAO motion wrapping failed");
             motionView = static_cast<nri::Descriptor*>(host->TextureView(host->Context, temporal.Image, 0));
@@ -354,12 +370,14 @@ int Execute(TriaevumImmerseMxao* mxao, const TriaevumMxaoFrame* frame) {
     if (f.NearPlane <= 0 || f.FarPlane <= f.NearPlane)
         return 0;
     auto* command = static_cast<nri::CommandBuffer*>(host->CommandBuffer(host->Context, f.FrameSlot));
-    const bool accumulates = mxao->Motion.Image != VK_NULL_HANDLE;
+    const bool camera = CameraReprojection();
+    const bool accumulates = mxao->Motion.Image != VK_NULL_HANDLE || camera;
     const size_t setCount = accumulates ? size_t(kSetCount) : size_t(kTemporalSet);
     if (!command || std::any_of(mxao->Sets.begin(), mxao->Sets.begin() + ptrdiff_t(setCount),
                                 [](auto* set) { return set == nullptr; }))
         return 0;
-    MxaoConstants push;
+    MxaoCameraConstants cameraPush;
+    MxaoConstants& push = cameraPush.Base;
     push.Width = mxao->Width;
     push.Height = mxao->Height;
     push.Method = std::min<uint32_t>(settings.Method, 3U);
@@ -422,6 +440,12 @@ int Execute(TriaevumImmerseMxao* mxao, const TriaevumMxaoFrame* frame) {
             std::copy(std::begin(f.InverseCurrentWorldToClip), std::end(f.InverseCurrentWorldToClip), inverse.begin());
             std::copy(std::begin(projection), std::end(projection), view.begin());
             push.PreviousDepth = MxaoPreviousDepthRow(previous, inverse, view, mxao->HistoryFarPlane);
+            if (camera) {
+                const auto rows = MxaoHistoryUvRows(previous, inverse, view, mxao->HistoryFarPlane, f.NdcOrigin,
+                                                    f.NdcX, f.NdcY);
+                cameraPush.HistoryU = rows[0];
+                cameraPush.HistoryV = rows[1];
+            }
         }
         phase = MxaoTemporalPhase(f.TemporalFrameId);
         mxao->LastHistoryValid = continuous;
@@ -438,7 +462,8 @@ int Execute(TriaevumImmerseMxao* mxao, const TriaevumMxaoFrame* frame) {
         mxao->Core->CmdSetPipeline(*command, *mxao->Pipelines[program]);
         const nri::SetDescriptorSetDesc descriptors{ 0, mxao->Sets[set] };
         mxao->Core->CmdSetDescriptorSet(*command, descriptors);
-        const nri::SetRootConstantsDesc constants{ 0, &push, sizeof(push) };
+        const nri::SetRootConstantsDesc constants{ 0, &cameraPush,
+                                                   camera ? uint32_t(sizeof(cameraPush)) : uint32_t(sizeof(push)) };
         mxao->Core->CmdSetRootConstants(*command, constants);
         mxao->Core->CmdDispatch(*command, { (width + group - 1) / group, (height + group - 1) / group, 1 });
     };

@@ -394,6 +394,18 @@ void GfxRenderingAPIVulkan::StartFrame() {
             effects.ReflectionStrength = 1.0F;
             effects.ReflectionMaxDistance = std::max(effects.ReflectionMaxDistance, 3000.0F);
         }
+        // Image-quality experiments for the owner, default off (no preset
+        // change): TRIAEVUM_MXAO_DEPTH_NORMALS=1 selects MXAO's own normals
+        // from depth (no reader of the face normal: the geometry guide is
+        // neither requested nor written); TRIAEVUM_MXAO_SHADING_RATE=0|1|2
+        // overrides the shading rate. TRIAEVUM_MXAO_CAMERA_REPROJECTION=1 is
+        // read where the motion vectors are requested (below).
+        static const char* const depthNormals = std::getenv("TRIAEVUM_MXAO_DEPTH_NORMALS");
+        static const char* const shadingRate = std::getenv("TRIAEVUM_MXAO_SHADING_RATE");
+        if (depthNormals != nullptr && depthNormals[0] == '1')
+            effects.MxaoNormals = Extension::MxaoNormalSource::Depth;
+        if (shadingRate != nullptr && shadingRate[0] >= '0' && shadingRate[0] <= '2')
+            effects.MxaoShadingRate = static_cast<uint8_t>(shadingRate[0] - '0');
     }
 #if defined(TRIAEVUM_RENDERER_DEVELOPER_TOOLS)
     Renderer3ds::PicaSurfaceDebug::Instance().BeginFrame();
@@ -516,7 +528,7 @@ void GfxRenderingAPIVulkan::StartFrame() {
     // vectors.
     const bool temporalAmbientOcclusionRequested =
         graphicsSettings.Effects.AmbientOcclusion == Extension::AmbientOcclusionMode::Mxao &&
-        graphicsSettings.Effects.MxaoTemporal;
+        graphicsSettings.Effects.MxaoTemporal && !Extension::MxaoCameraReprojectionRequested();
     mTemporalMotionEnabled =
         !mNativeFidelityProfile &&
         (aaPolicy.TemporalMotion || globalIlluminationRequested || temporalAmbientOcclusionRequested);

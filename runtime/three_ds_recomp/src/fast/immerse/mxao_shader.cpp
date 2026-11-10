@@ -502,6 +502,35 @@ void main() {
     return source;
 }
 
+std::string BuildMxaoCameraTemporalShader(std::string_view geometryLibrary) {
+    // Experiment (TRIAEVUM_MXAO_CAMERA_REPROJECTION=1): the temporal program
+    // with the history position from depth and the camera alone. Two push
+    // rows give the previous storage UV times the previous clip w; the
+    // apparent motion of the camera stands in for the motion vectors.
+    std::string source = BuildMxaoTemporalShader(geometryLibrary);
+    const auto replace = [&source](std::string_view from, std::string_view to) {
+        const size_t at = source.find(from);
+        if (at == std::string::npos || source.find(from, at + 1U) != std::string::npos)
+            return false;
+        source.replace(at, from.size(), to);
+        return true;
+    };
+    const bool replaced =
+        replace("    vec4 previous_depth;\n} pc;",
+                "    vec4 previous_depth;\n    vec4 history_u;\n    vec4 history_v;\n} pc;") &&
+        replace(R"glsl(        ivec2 motion_extent=textureSize(sampler2D(motion_vectors,point_sampler),0);
+        vec4 motion=texelFetch(sampler2D(motion_vectors,point_sampler),
+            min(ivec2(uv*vec2(motion_extent)),motion_extent-1),0);
+        vec2 history_uv=uv+motion.xy;
+        if(motion.b<0.5 && )glsl",
+                R"glsl(        vec4 camera_p=vec4(proj_position(pixel,depth/pc.response.y),1.0);
+        float camera_w=dot(pc.previous_depth,camera_p);
+        vec2 history_uv=vec2(dot(pc.history_u,camera_p),dot(pc.history_v,camera_p))/max(camera_w,1.0e-12);
+        vec4 motion=vec4(history_uv-uv,0.0,0.0);
+        if(camera_w>0.0 && )glsl");
+    return replaced ? source : std::string{};
+}
+
 std::string BuildMxaoUpsampleShader(std::string_view geometryLibrary) {
     std::string source = Common(geometryLibrary);
     source += R"glsl(

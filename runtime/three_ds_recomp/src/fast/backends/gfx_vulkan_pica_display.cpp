@@ -568,7 +568,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 presentationSettings.Effects.AmbientOcclusion,
             .AmbientOcclusionTemporal =
                 presentationSettings.Effects.AmbientOcclusion == Extension::AmbientOcclusionMode::Mxao &&
-                presentationSettings.Effects.MxaoTemporal && mMxaoPass.Available(),
+                presentationSettings.Effects.MxaoTemporal && mMxaoPass.Available() &&
+                !Extension::MxaoCameraReprojectionRequested(),
             .AmbientOcclusionFaceNormal =
                 Extension::EffectsReadFaceNormal(presentationSettings.Effects) && mMxaoPass.Available(),
             .Reflections = mWaterOnlyReflections && !waterOnScreen
@@ -1609,9 +1610,14 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 // Temporal MXAO reprojects its history with the declared
                 // motion vectors of this frame.
                 const auto* aoMotion = aoReads.Find(Extension::EffectResource::MotionVectors);
-                const bool mxaoTemporal = aoMotion != nullptr &&
+                // TRIAEVUM_MXAO_CAMERA_REPROJECTION=1: temporal without motion
+                // vectors (the module reprojects by depth and camera).
+                const bool mxaoCameraTemporal = Extension::MxaoCameraReprojectionRequested() &&
+                    presentationSettings.Effects.MxaoTemporal && temporalState.has_value();
+                const bool mxaoMotionTemporal = aoMotion != nullptr &&
                     aoMotion->Kind == Extension::EffectResourceBindingKind::Image && temporalState.has_value();
-                const Extension::MxaoMotionInput mxaoMotion = mxaoTemporal
+                const bool mxaoTemporal = mxaoMotionTemporal || mxaoCameraTemporal;
+                const Extension::MxaoMotionInput mxaoMotion = mxaoMotionTemporal
                     ? Extension::MxaoMotionInput{reinterpret_cast<VkImage>(aoMotion->NativeImage),
                                              static_cast<VkFormat>(aoMotion->Format), aoMotion->Width,
                                              aoMotion->Height}
@@ -1630,7 +1636,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                         static_cast<VkFormat>(aoDepthBinding.Format),
                         reinterpret_cast<VkImage>(aoNormalBinding.NativeImage),
                         static_cast<VkFormat>(aoNormalBinding.Format),
-                        aoGeometry, mxaoTemporal ? &mxaoMotion : nullptr) &&
+                        aoGeometry, mxaoMotionTemporal ? &mxaoMotion : nullptr) &&
                     mMxaoPass.Execute(mCurrentFrame, mFrameCounter, *presentationPerspective,
                         effectGuideTarget->WBuffering, presentationSettings.Effects, aoBarrierPlan,
                         Extension::PicaSurfaceCoordinates::FromTransferFlags(transfer.Flags),

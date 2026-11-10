@@ -7,10 +7,24 @@
 #include "fast/extension/scene_view_runtime.h"
 #include <vulkan/vulkan.h>
 #include <array>
+#include <cstdlib>
 #include <memory>
 #include <string>
 
 namespace Fast::Extension {
+
+// Experiment, default off: TRIAEVUM_MXAO_CAMERA_REPROJECTION=1 makes temporal
+// MXAO reproject its history from depth and the camera alone (the iMMERSE
+// module reads the same variable), so the frame requests no motion vectors
+// for it: no motion pass and no rigid-motion guide. Moving actors are not
+// followed (their occlusion history is rejected by depth or lags).
+[[nodiscard]] inline bool MxaoCameraReprojectionRequested() noexcept {
+    static const bool requested = [] {
+        const char* value = std::getenv("TRIAEVUM_MXAO_CAMERA_REPROJECTION");
+        return value != nullptr && value[0] == '1';
+    }();
+    return requested;
+}
 class NriInteropContext;
 struct NriEffectGraphTransientImageBinding;
 struct TemporalViewState;

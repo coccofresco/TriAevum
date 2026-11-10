@@ -122,6 +122,47 @@ struct MxaoConstants {
 };
 static_assert(sizeof(MxaoConstants) == 128);
 
+// Camera reprojection (experiment): the previous storage UV of a projection
+// space p is (dot(HistoryU, p1), dot(HistoryV, p1)) / dot(PreviousDepth, p1).
+struct MxaoCameraConstants {
+    MxaoConstants Base;
+    std::array<float, 4> HistoryU{};
+    std::array<float, 4> HistoryV{};
+};
+static_assert(sizeof(MxaoCameraConstants) == 160);
+
+// HistoryU/HistoryV: viewToPreviousClip as in MxaoPreviousDepthRow, its clip
+// xy mapped to the storage UV of the affine view-NDC frame (origin, x, y),
+// times clip w, scaled by 1 / farPlane like the depth row.
+[[nodiscard]] inline std::array<std::array<float, 4>, 2> MxaoHistoryUvRows(
+    const std::array<float, 16>& previousWorldToClip, const std::array<float, 16>& inverseCurrentWorldToClip,
+    const std::array<float, 16>& projection, float farPlane, const float origin[2], const float ndcX[2],
+    const float ndcY[2]) noexcept {
+    const auto multiply = [](const std::array<float, 16>& a, const std::array<float, 16>& b) {
+        std::array<float, 16> result{};
+        for (size_t column = 0; column < 4; ++column)
+            for (size_t row = 0; row < 4; ++row)
+                for (size_t k = 0; k < 4; ++k)
+                    result[column * 4 + row] += a[k * 4 + row] * b[column * 4 + k];
+        return result;
+    };
+    const auto m = multiply(multiply(previousWorldToClip, inverseCurrentWorldToClip), projection);
+    const float scale = 1.0F / (farPlane > 1.0e-6F ? farPlane : 1.0e-6F);
+    const auto row = [&](size_t r) { return std::array<float, 4>{ m[r], m[4 + r], -m[8 + r], m[12 + r] }; };
+    const auto x = row(0), y = row(1), w = row(3);
+    const float ax = ndcX[0] - origin[0], ay = ndcX[1] - origin[1];
+    const float bx = ndcY[0] - origin[0], by = ndcY[1] - origin[1];
+    const float det = ax * by - bx * ay;
+    const float inv = (det > 1.0e-20F || det < -1.0e-20F) ? 1.0F / det : 0.0F;
+    std::array<std::array<float, 4>, 2> result{};
+    for (size_t i = 0; i < 4; ++i) {
+        const float dx = x[i] - origin[0] * w[i], dy = y[i] - origin[1] * w[i];
+        result[0][i] = (by * dx - bx * dy) * inv * scale;
+        result[1][i] = (-ay * dx + ax * dy) * inv * scale;
+    }
+    return result;
+}
+
 // Adapter math for the temporal mode: the row of
 // PreviousWorldToClip * inverse(CurrentWorldToClip) * Projection giving the
 // previous view's linear depth (clip w) of a current view-space point, for
@@ -170,6 +211,10 @@ static_assert(sizeof(MxaoConstants) == 128);
 // length) for the filter and the next frame. Bindings 5 and 6 are the motion
 // vectors and the previous accumulation.
 [[nodiscard]] std::string BuildMxaoTemporalShader(std::string_view geometryLibrary);
+// The temporal program reprojecting by depth and camera only (experiment,
+// TRIAEVUM_MXAO_CAMERA_REPROJECTION=1; push constants MxaoCameraConstants).
+// Empty if the temporal text no longer has the expected form.
+[[nodiscard]] std::string BuildMxaoCameraTemporalShader(std::string_view geometryLibrary);
 // Half resolution's last step: the R32F visibility (binding 2) brought to the
 // inputs' extent by depth (binding 3).
 [[nodiscard]] std::string BuildMxaoUpsampleShader(std::string_view geometryLibrary);

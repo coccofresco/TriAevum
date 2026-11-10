@@ -2822,6 +2822,9 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1U, &inputs, 0U, nullptr, 0U, nullptr);
+                // TRIAEVUM_GRASS_PROFILE=1: the barrier and the dispatch apart.
+                if (profiler && GrassStageProfileEnabled())
+                    profiler->Mark(frameSlot, "grass_root_lighting_dispatch", commandBuffer);
                 vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mImpl->RootLightingPipeline);
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mImpl->RootLightingLayout,
                                         0U, 1U, &descriptorSet, 0U, nullptr);
@@ -2838,6 +2841,16 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                     vkCmdDispatchIndirect(commandBuffer, compaction.SelectionControl, 0U);
                 else
                     vkCmdDispatch(commandBuffer, (instanceCount + 255U) / 256U, 1U, 1U);
+                if (profiler && GrassStageProfileEnabled()) {
+                    profiler->Mark(frameSlot, "grass_root_lighting_after_dispatch", commandBuffer);
+                    if (frameId % 300U == 0U)
+                        std::fprintf(stderr,
+                                     "[grass-root-lighting] frame=%llu gpu_selection=%u budget=%u admitted=%u "
+                                     "sources=%zu slots=%zu ranges=%zu\n",
+                                     static_cast<unsigned long long>(frameId), gpuSelection ? 1U : 0U, instanceCount,
+                                     mImpl->LastBlades, preparedPlacements.size(),
+                                     gpuSelection ? gpuSlots.size() : size_t(0), ranges.size());
+                }
                 const VkMemoryBarrier lit{VK_STRUCTURE_TYPE_MEMORY_BARRIER, nullptr,
                     VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT};
                 vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
