@@ -527,7 +527,15 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         // title's bodies, catalog planes, drawn pieces). Water that cannot be
         // on screen (HiZWaterPossiblyInView) reflects nothing: the frame
         // plans no reflection, Hi-Z included, as when no water was drawn.
+        // TRIAEVUM_REFLECTION_WATER_GATE=0 (developer timing): plan the
+        // water-only trace on every frame, as if water were always in view.
+        static const bool waterGate = [] {
+            const char* value = std::getenv("TRIAEVUM_REFLECTION_WATER_GATE");
+            return value == nullptr || value[0] != '0';
+        }();
+        static const bool waterGateStats = std::getenv("TRIAEVUM_REFLECTION_WATER_STATS") != nullptr;
         const bool waterOnScreen = [&] {
+            if (mWaterOnlyReflections && !waterGate) return true;
             if (!mWaterOnlyReflections || mReflectableWaterFrame != mFrameCounter) return false;
             if (sceneViewTarget == nullptr || !presentationPerspective.has_value()) return true;
             Renderer3ds::PicaSceneWaterBodies bodies;
@@ -543,6 +551,10 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                                                  presentationPerspective->Projection, presentationPerspective->FarPlane,
                                                  &bodies, resolveWaterMap(*sceneViewTarget));
         }();
+        if (waterGateStats && mWaterOnlyReflections && mFrameCounter % 300U == 0U)
+            std::fprintf(stderr, "[reflection-water] frame=%llu drawn=%u on_screen=%u\n",
+                         static_cast<unsigned long long>(mFrameCounter),
+                         mReflectableWaterFrame == mFrameCounter ? 1U : 0U, waterOnScreen ? 1U : 0U);
         const auto effectPlan = Extension::BuildDisplayEffectPlan({
             .AlphaOverlay = alphaOverlay,
             .WorldSurface = worldSurface,
