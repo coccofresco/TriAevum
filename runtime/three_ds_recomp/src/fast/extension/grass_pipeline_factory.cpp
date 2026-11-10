@@ -96,7 +96,7 @@ void CreateGrassPipelineSet(VkDevice device, const GrassPipelineTargets& targets
     const std::array<PicaAttachmentRequirements, 3> layouts{
         PicaAttachmentRequirements{}, instrumented.BaseGuides(),
         PicaAttachmentRequirements{instrumented.BaseGuides().AuxiliaryOutputs | PicaAuxiliaryOutput::DiffuseAlbedoGuide}};
-    auto colorFormats = kPicaColorAttachmentFormats;
+    auto colorFormats = PicaColorAttachmentFormats();
     VkPipelineRenderingCreateInfoKHR rendering{VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR};
     if (targets.DynamicRendering) {
         if (targets.DepthFormat == VK_FORMAT_UNDEFINED)

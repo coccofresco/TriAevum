@@ -2,6 +2,7 @@
 // clears, overlays and memory fills.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/extension/pica_attachment_formats.h"
 #include "fast/extension/presentation_freeze.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/extension/native_ui_overlay.h"
@@ -1152,7 +1153,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 effectGuideTarget->FogGuideImage, effectGuideTarget->FogGuideView,
                 VK_FORMAT_R8G8B8A8_UNORM);
             bindGuide(Extension::EffectResource::OutlineGeometryGuide, effectGuideTarget->OutlineGeometryGuideImage,
-                      effectGuideTarget->OutlineGeometryGuideView, VK_FORMAT_R32G32B32A32_UINT);
+                      effectGuideTarget->OutlineGeometryGuideView, Extension::PicaGeometryGuideFormat());
             bindGuide(Extension::EffectResource::DiffuseAlbedoGuide, effectGuideTarget->DiffuseAlbedoGuideImage,
                       effectGuideTarget->DiffuseAlbedoGuideView, VK_FORMAT_R16G16B16A16_UNORM);
         }
@@ -1725,6 +1726,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                 giFrame.Guides.Depth = mScreenSpaceGi.SampledDepthView(
                     reinterpret_cast<VkImage>(depth.NativeImage), static_cast<VkFormat>(depth.Format),
                     depth.Width, depth.Height);
+                Extension::WarnPicaThinGuidesReader("global illumination (geometry kind)");
                 giFrame.Guides.Geometry = view(Extension::EffectResource::OutlineGeometryGuide);
                 giFrame.Guides.Surface = view(Extension::EffectResource::DiffuseAlbedoGuide);
                 giFrame.Guides.Motion = view(Extension::EffectResource::MotionVectors);
@@ -2660,9 +2662,10 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                     optionalCompositeImage(Extension::EffectResource::FogGuide),
                     optionalCompositeFormat(Extension::EffectResource::FogGuide),
                     compositeReads.Declares(Extension::EffectResource::OutlineGeometryGuide)
-                        ? optionalCompositeImage(Extension::EffectResource::OutlineGeometryGuide)
+                        ? (Extension::WarnPicaThinGuidesReader("toon outlines (geometry A, native depth)"),
+                           optionalCompositeImage(Extension::EffectResource::OutlineGeometryGuide))
                         : mGeometryGuideFallback.Image,
-                    VK_FORMAT_R32G32B32A32_UINT,
+                    Extension::PicaGeometryGuideFormat(),
                     optionalCompositeImage(Extension::EffectResource::DiffuseIllumination),
                     optionalCompositeFormat(Extension::EffectResource::DiffuseIllumination),
                     optionalCompositeImage(Extension::EffectResource::DiffuseAlbedoGuide),
@@ -3485,7 +3488,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
             compositionFormats.fill(composedFormat);
             // The integer geometry guide cannot fall back to the color source.
             compositionImages[10] = mGeometryGuideFallback.Image;
-            compositionFormats[10] = VK_FORMAT_R32G32B32A32_UINT;
+            compositionFormats[10] = Extension::PicaGeometryGuideFormat();
             Extension::PicaScanoutPolicyInput compositionPolicy{};
             compositionPolicy.TransferFlags = 0U;
             compositionPolicy.AaMode = applyBoundaryFxaa ? 1U : 0U;
@@ -3833,7 +3836,7 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
         imageInfos.fill(imageInfos[0]);
         // The integer geometry guide cannot fall back to the color source.
         scanoutImages[10] = mGeometryGuideFallback.Image;
-        scanoutFormats[10] = VK_FORMAT_R32G32B32A32_UINT;
+        scanoutFormats[10] = Extension::PicaGeometryGuideFormat();
         imageInfos[10].imageView = mGeometryGuideFallback.View;
         constexpr std::array<Extension::EffectResource, 11> scanoutSlotResources{
             Extension::EffectResource::Count,

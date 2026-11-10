@@ -3,6 +3,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 
 #include "fast/extension/nri_interop_context.h"
+#include "fast/extension/pica_attachment_formats.h"
 
 #include <cstdlib>
 #include <string_view>
@@ -75,7 +76,7 @@ bool NriPicaRenderTargetOwner::Create(
           create(VK_FORMAT_R16G16B16A16_SFLOAT, guideUsage, VK_SAMPLE_COUNT_1_BIT, images.RigidMotionGuide) &&
           create(VK_FORMAT_R8G8B8A8_UNORM, guideUsage, VK_SAMPLE_COUNT_1_BIT, images.AmbientGuide) &&
           create(VK_FORMAT_R8G8B8A8_UNORM, guideUsage, VK_SAMPLE_COUNT_1_BIT, images.FogGuide) &&
-          create(VK_FORMAT_R32G32B32A32_UINT, guideUsage, VK_SAMPLE_COUNT_1_BIT, images.OutlineGeometryGuide))) &&
+          create(PicaGeometryGuideFormat(), guideUsage, VK_SAMPLE_COUNT_1_BIT, images.OutlineGeometryGuide))) &&
         create(VK_FORMAT_R32_UINT,
                VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                VK_SAMPLE_COUNT_1_BIT, images.Shadow) &&
@@ -98,7 +99,7 @@ bool NriPicaRenderTargetOwner::Create(
               create(VK_FORMAT_R16G16B16A16_SFLOAT, msaaColorUsage, desc.Samples, images.MsaaRigidMotionGuide) &&
               create(VK_FORMAT_R8G8B8A8_UNORM, msaaColorUsage, desc.Samples, images.MsaaAmbientGuide) &&
               create(VK_FORMAT_R8G8B8A8_UNORM, msaaColorUsage, desc.Samples, images.MsaaFogGuide) &&
-              create(VK_FORMAT_R32G32B32A32_UINT, msaaColorUsage, desc.Samples, images.MsaaOutlineGeometryGuide))) &&
+              create(PicaGeometryGuideFormat(), msaaColorUsage, desc.Samples, images.MsaaOutlineGeometryGuide))) &&
             create(desc.DepthFormat, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                    desc.Samples, images.MsaaDepth);
         if (!msaaCreated) {

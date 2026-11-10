@@ -273,7 +273,7 @@ struct WorldDebugLinePass::Impl {
                 PicaAttachmentRequirements{}, instrumented.BaseGuides(),
                 PicaAttachmentRequirements{instrumented.BaseGuides().AuxiliaryOutputs |
                                            PicaAuxiliaryOutput::DiffuseAlbedoGuide}};
-            auto colorFormats = kPicaColorAttachmentFormats;
+            auto colorFormats = PicaColorAttachmentFormats();
             VkPipelineRenderingCreateInfoKHR rendering{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
             if (DynamicRendering) {
                 if (DepthFormat == VK_FORMAT_UNDEFINED)

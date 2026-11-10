@@ -10,6 +10,7 @@
 #include "fast/extension/immerse_module_loader.h"
 #include "fast/extension/nri_effect_graph_transient_image_arena.h"
 #include "fast/extension/nri_interop_context.h"
+#include "fast/extension/pica_attachment_formats.h"
 #include "fast/extension/resource_state_tracker.h"
 #include "fast/extension/temporal_history_manager.h"
 #include "fast/renderer/pass_shader_artifact.h"
@@ -105,6 +106,10 @@ TriaevumImmerseHost MakeHost(MxaoHostState& impl) {
     };
     host.DestroyTexture = [](void* context, VkImage image) { Self(context).Interop->DestroyOwnedTexture(image); };
     host.WrapTexture = [](void* context, VkImage image, VkFormat format, uint32_t width, uint32_t height) -> int {
+        // The module names the geometry guide R32G32B32A32_UINT; the host
+        // stores it in its own format (RG32UI under TRIAEVUM_THIN_GUIDES=1,
+        // whose G is the same face-normal word the module reads).
+        if (format == VK_FORMAT_R32G32B32A32_UINT) format = PicaGeometryGuideFormat();
         return Self(context).Interop->WrapTexture(image, format, VK_IMAGE_TYPE_2D, VK_IMAGE_USAGE_SAMPLED_BIT, width,
                                                   height);
     };

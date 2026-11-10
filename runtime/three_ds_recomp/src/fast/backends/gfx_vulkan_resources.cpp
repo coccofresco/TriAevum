@@ -2,6 +2,7 @@
 // and graphics pipelines.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
+#include "fast/extension/pica_attachment_formats.h"
 
 namespace Fast {
 
@@ -120,7 +121,7 @@ void GfxRenderingAPIVulkan::CreateFallbackTexture() {
     imageInfo.extent = { 1, 1, 1 };
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
-    imageInfo.format = VK_FORMAT_R32G32B32A32_UINT;
+    imageInfo.format = Fast::Extension::PicaGeometryGuideFormat();
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
@@ -152,7 +153,7 @@ void GfxRenderingAPIVulkan::CreateFallbackTexture() {
     VkImageViewCreateInfo viewInfo{ VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO };
     viewInfo.image = guide.Image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = VK_FORMAT_R32G32B32A32_UINT;
+    viewInfo.format = Fast::Extension::PicaGeometryGuideFormat();
     viewInfo.subresourceRange = range;
     CheckVk(vkCreateImageView(mDevice, &viewInfo, nullptr, &guide.View),
             "vkCreateImageView(geometry guide fallback)");

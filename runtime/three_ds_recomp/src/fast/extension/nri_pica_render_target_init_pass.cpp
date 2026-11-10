@@ -1,5 +1,6 @@
 #include "fast/extension/nri_pica_render_target_init_pass.h"
 #include "fast/extension/pica_attachment_contract.h"
+#include "fast/extension/pica_attachment_formats.h"
 
 #ifdef ENABLE_OOT3D_VULKAN
 
@@ -119,7 +120,7 @@ bool NriPicaRenderTargetInitPass::Execute(
           wrap(desc.Images.RigidMotionGuide, VK_FORMAT_R16G16B16A16_SFLOAT, colorUsage, VK_SAMPLE_COUNT_1_BIT) &&
           wrap(desc.Images.AmbientGuide, VK_FORMAT_R8G8B8A8_UNORM, colorUsage, VK_SAMPLE_COUNT_1_BIT) &&
           wrap(desc.Images.FogGuide, VK_FORMAT_R8G8B8A8_UNORM, colorUsage, VK_SAMPLE_COUNT_1_BIT) &&
-          wrap(desc.Images.OutlineGeometryGuide, VK_FORMAT_R32G32B32A32_UINT, colorUsage, VK_SAMPLE_COUNT_1_BIT))) &&
+          wrap(desc.Images.OutlineGeometryGuide, PicaGeometryGuideFormat(), colorUsage, VK_SAMPLE_COUNT_1_BIT))) &&
         wrap(desc.Images.Shadow, VK_FORMAT_R32_UINT,
              VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
              VK_SAMPLE_COUNT_1_BIT) &&
@@ -136,7 +137,7 @@ bool NriPicaRenderTargetInitPass::Execute(
               !wrap(desc.Images.MsaaRigidMotionGuide, VK_FORMAT_R16G16B16A16_SFLOAT, msaaColorUsage, desc.Samples) ||
               !wrap(desc.Images.MsaaAmbientGuide, VK_FORMAT_R8G8B8A8_UNORM, msaaColorUsage, desc.Samples) ||
               !wrap(desc.Images.MsaaFogGuide, VK_FORMAT_R8G8B8A8_UNORM, msaaColorUsage, desc.Samples) ||
-              !wrap(desc.Images.MsaaOutlineGeometryGuide, VK_FORMAT_R32G32B32A32_UINT, msaaColorUsage,
+              !wrap(desc.Images.MsaaOutlineGeometryGuide, PicaGeometryGuideFormat(), msaaColorUsage,
                     desc.Samples))) ||
             !wrap(desc.Images.MsaaDepth, desc.DepthFormat,
                   VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, desc.Samples))

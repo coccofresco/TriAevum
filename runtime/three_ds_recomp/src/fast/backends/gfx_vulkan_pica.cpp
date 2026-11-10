@@ -2,6 +2,7 @@
 // memory fills and descriptor sets. Other topics: gfx_vulkan_pica_*.cpp.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/extension/pica_attachment_formats.h"
 #include "gfx_vulkan_raster_stats.h"
 
 #include <algorithm>
@@ -385,10 +386,10 @@ void GfxRenderingAPIVulkan::CreateNativePicaRenderPass() {
         for (auto& attachment : attachments) {
             attachment.sType = VK_STRUCTURE_TYPE_ATTACHMENT_DESCRIPTION_2;
         }
-        constexpr std::array<VkFormat, Extension::kPicaColorAttachmentCount> colorFormats{
+        const std::array<VkFormat, Extension::kPicaColorAttachmentCount> colorFormats{
             VK_FORMAT_R8G8B8A8_UNORM,      VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
             VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM,
-            VK_FORMAT_R32G32B32A32_UINT
+            Extension::PicaGeometryGuideFormat()
         };
         for (uint32_t index = 0; index < colorCount; ++index) {
             attachments[index].format = colorFormats[index];
@@ -746,7 +747,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
                 VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                     VK_IMAGE_USAGE_SAMPLED_BIT,
                 VK_SAMPLE_COUNT_1_BIT, target.FogGuideImage, target.FogGuideMemory);
-            createImage(VK_FORMAT_R32G32B32A32_UINT,
+            createImage(Extension::PicaGeometryGuideFormat(),
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                             VK_IMAGE_USAGE_SAMPLED_BIT,
                         VK_SAMPLE_COUNT_1_BIT, target.OutlineGeometryGuideImage, target.OutlineGeometryGuideMemory);
@@ -794,7 +795,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
                     target.MsaaAmbientGuideMemory);
                 createImage(VK_FORMAT_R8G8B8A8_UNORM, msaaColorUsage,
                     mNativePicaSampleCount, target.MsaaFogGuideImage, target.MsaaFogGuideMemory);
-                createImage(VK_FORMAT_R32G32B32A32_UINT, msaaColorUsage, mNativePicaSampleCount,
+                createImage(Extension::PicaGeometryGuideFormat(), msaaColorUsage, mNativePicaSampleCount,
                             target.MsaaOutlineGeometryGuideImage, target.MsaaOutlineGeometryGuideMemory);
             }
             createImage(
@@ -839,7 +840,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
         CheckNativeVk(vkCreateImageView(mDevice, &view, nullptr, &target.FogGuideView),
                       "vkCreateImageView(native PICA fog guide)");
         view.image = target.OutlineGeometryGuideImage;
-        view.format = VK_FORMAT_R32G32B32A32_UINT;
+        view.format = Extension::PicaGeometryGuideFormat();
         CheckNativeVk(vkCreateImageView(mDevice, &view, nullptr, &target.OutlineGeometryGuideView),
                       "vkCreateImageView(native PICA outline geometry guide)");
     }
@@ -884,7 +885,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
             CheckNativeVk(vkCreateImageView(mDevice, &view, nullptr, &target.MsaaFogGuideView),
                           "vkCreateImageView(native PICA MSAA fog guide)");
             view.image = target.MsaaOutlineGeometryGuideImage;
-            view.format = VK_FORMAT_R32G32B32A32_UINT;
+            view.format = Extension::PicaGeometryGuideFormat();
             CheckNativeVk(vkCreateImageView(mDevice, &view, nullptr, &target.MsaaOutlineGeometryGuideView),
                           "vkCreateImageView(native PICA MSAA outline geometry guide)");
         }
@@ -1301,7 +1302,7 @@ GfxRenderingAPIVulkan::GetOrCreateNativePicaRenderTarget(
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                        VK_IMAGE_USAGE_SAMPLED_BIT,
                    Extension::SceneSurfaceKind::FogGuide, key.ColorPhysicalAddress);
-    publishSurface(inserted.OutlineGeometryGuideImage, VK_FORMAT_R32G32B32A32_UINT,
+    publishSurface(inserted.OutlineGeometryGuideImage, Extension::PicaGeometryGuideFormat(),
                    VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                    Extension::SceneSurfaceKind::OutlineGeometryGuide, key.ColorPhysicalAddress);
     mInvalidatedNativePicaRenderTargetAddresses.erase(
@@ -2049,6 +2050,7 @@ void GfxRenderingAPIVulkan::RunNativePicaAbDraw(NativePicaRenderTarget& target, 
         case VK_FORMAT_R16G16B16A16_SFLOAT:
         case VK_FORMAT_R16G16B16A16_UNORM: image.TexelBytes = 8U; image.ComponentBytes = 2U; break;
         case VK_FORMAT_R32G32B32A32_UINT: image.TexelBytes = 16U; image.ComponentBytes = 4U; break;
+        case VK_FORMAT_R32G32_UINT: image.TexelBytes = 8U; image.ComponentBytes = 4U; break;
         default:
             std::fprintf(stderr, "[ab] %s: format %d not compared\n", image.Name, static_cast<int>(formats[index]));
             continue;
