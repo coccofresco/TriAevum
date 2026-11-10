@@ -9,7 +9,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#include <DbgHelp.h>
+#include <dbghelp.h>
 #include <errhandlingapi.h>
 #include <inttypes.h>
 #include <excpt.h>

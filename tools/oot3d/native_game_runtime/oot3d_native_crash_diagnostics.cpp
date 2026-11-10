@@ -9,7 +9,7 @@
 #include <cstdio>
 
 #include <windows.h>
-#include <DbgHelp.h>
+#include <dbghelp.h>
 #endif
 
 namespace Oot3dNativeGame {

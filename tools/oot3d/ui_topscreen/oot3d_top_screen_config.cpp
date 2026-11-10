@@ -13,7 +13,7 @@
 #include <system_error>
 
 #if defined(_WIN32)
-#include <Windows.h>
+#include <windows.h>
 #endif
 
 namespace Oot3dNativeGame {

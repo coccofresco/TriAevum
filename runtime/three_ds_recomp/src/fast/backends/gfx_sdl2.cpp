@@ -52,8 +52,8 @@
 #include "fast/backends/sdl_video_driver_policy.h"
 
 #ifdef _WIN32
-#include <WTypesbase.h>
-#include <Windows.h>
+#include <wtypesbase.h>
+#include <windows.h>
 #include <SDL_syswm.h>
 #endif
 

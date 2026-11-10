@@ -5,7 +5,7 @@
 #ifdef _MSC_VER
 #define strdup _strdup
 #define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <windows.h>
 #include <processthreadsapi.h>
 #include <dbghelp.h>
 #endif
