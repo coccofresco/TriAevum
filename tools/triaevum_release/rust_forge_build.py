@@ -90,8 +90,10 @@ def rustflags(target: str, target_dir: Path | None = None) -> list[str]:
     elif target == WINDOWS_GNU.target:
         # gnullvm: +crt-static links LLVM libunwind statically, so the Forge
         # executables (root and forge/) need no libunwind.dll; UCRT is a system
-        # component on Windows 10+.
-        flags += ["-C", "target-feature=+crt-static"]
+        # component on Windows 10+. strip=debuginfo: the PE has no separate PDB,
+        # and the toolchain's prebuilt mingw-w64 CRT objects carry their CI
+        # build paths in DWARF.
+        flags += ["-C", "target-feature=+crt-static", "-C", "strip=debuginfo"]
     return flags
 
 
