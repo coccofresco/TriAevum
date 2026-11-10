@@ -2628,7 +2628,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         // the shader's result without the mask is identical.
                         static const bool receiverCull = [] {
                             const char* value = std::getenv("TRIAEVUM_SHADOW_RECEIVER_CULL");
-                            return value == nullptr || value[0] != '0';
+                            return value != nullptr && value[0] == '1';
                         }();
                         const auto bounds = mReceiverBoundsFrame == mFrameCounter
                             ? mReceiverBounds.find(draw.SubmissionId) : mReceiverBounds.end();

@@ -1176,8 +1176,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::vector<NativePicaAbImage> Images;
     };
     NativePicaAbState mNativePicaAb;
-    // Directional shadow receiver cull (TRIAEVUM_SHADOW_RECEIVER_CULL, default
-    // on; =0 off): the conservative world bounds the caster preparation
+    // Directional shadow receiver cull (TRIAEVUM_SHADOW_RECEIVER_CULL=1; off by
+    // default: < 0.1 ms in round 33): the conservative world bounds the caster preparation
     // computed for this frame's draws, by submission, with a hash of the
     // inputs they were computed from (vertex uniforms and view). A draw whose
     // bounds read exactly 1.0 everywhere gets its light mask cleared.
