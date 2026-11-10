@@ -862,11 +862,46 @@ int Run(const Options& options) {
         // is then a duplicate, resolved with the draw (and vertex program) the
         // program was recorded with rather than with the shared cache donor.
         for (const auto& packet : recordedPrograms) synthesizeProgram(packet.Registers, packet);
+        // A cache-only program takes the most recorded vertex program whose
+        // composition with it is a built-in vertex artifact (the vertex text
+        // follows the fragment's interface); no vertex program is invented.
+        std::vector<const Oot3dPicaDrawPacket*> donorsByUse;
+        for (const auto& [vertex, entry] : recordedVertexDonors) donorsByUse.push_back(&entry.second);
+        std::stable_sort(donorsByUse.begin(), donorsByUse.end(), [&](const auto* a, const auto* b) {
+            const auto use = [&](const Oot3dPicaDrawPacket* packet) {
+                for (const auto& [vertex, entry] : recordedVertexDonors)
+                    if (&entry.second == packet) return entry.first;
+                return uint64_t{0};
+            };
+            return use(a) > use(b);
+        });
+        const auto donorFor = [&](const std::array<uint32_t, 0x300>& registers) -> const Oot3dPicaDrawPacket& {
+            for (const auto* candidate : donorsByUse) {
+                Oot3dPicaDrawSubmission submission;
+                submission.Packet = *candidate;
+                std::copy(registers.begin() + 0x040, registers.begin() + 0x200,
+                          submission.Packet.Registers.begin() + 0x040);
+                Oot3dPicaVulkanShaderSourceCache probeCache;
+                probeCache.TevMode = donorTevMode;
+                probeCache.UberFragments = donorUberFragments;
+                Oot3dPicaVulkanDrawPlan plan;
+                std::string probeError;
+                if (!DecodeOot3dPicaDrawState(submission.Packet, submission.State, &probeError) ||
+                    !BuildOot3dPicaVulkanPipelinePlan(submission, plan, &probeError, &probeCache))
+                    continue;
+                if (!Fast::Renderer3ds::FindPicaVertexArtifact(TitleVertexArtifacts(),
+                                                              plan.ResolvedVertexShaderSource()).Spirv.empty())
+                    return *candidate;
+            }
+            return *cacheDonor;
+        };
         for (const auto& path : options.SynthesizeCaches) {
             std::ifstream stream(path, std::ios::binary);
             if (!stream) throw std::runtime_error("cannot open cache: " + path.string());
             for (const auto& record : ReadPicaTransferableCache(stream, PicaTransferableDialect::CitraLegacy))
-                if (record.Stage == PicaTransferableStage::Fragment) synthesizeProgram(record.Registers, *cacheDonor);
+                if (record.Stage == PicaTransferableStage::Fragment)
+                    synthesizeProgram(record.Registers,
+                                      donorsByUse.empty() ? *cacheDonor : donorFor(record.Registers));
         }
         synthesis = {{"caches", options.SynthesizeCaches.size()},
                      {"target_effects", targetEffects.size()},
