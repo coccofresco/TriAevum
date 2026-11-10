@@ -7,13 +7,13 @@
 #include <cstdlib>
 #include <cstring>
 
-// Variable-rate shading, phase A (developer, default off): a per-draw-class
-// pipeline fragment shading rate set as dynamic state
-// (VK_KHR_fragment_shading_rate, combiners KEEP/KEEP, no rate attachment).
-// TRIAEVUM_VRS_SKY=1 coarsens the Atmosphere-layer draws (sky quad/dome,
-// cloud layers), =clouds only the depth-off ones; every other draw stays
-// 1x1. TRIAEVUM_VRS_SKY_RATE=2x2 (default) | 4x4. Without device support
-// the switch is ignored and no pipeline or device state changes.
+// Variable-rate shading, phase A: a per-draw-class pipeline fragment shading
+// rate set as dynamic state (VK_KHR_fragment_shading_rate, combiners
+// KEEP/KEEP, no rate attachment). Default (unset) = clouds: the depth-off
+// Atmosphere-layer draws at 2x2. TRIAEVUM_VRS_SKY=0 turns it off, =1 coarsens
+// every Atmosphere-layer draw (sky quad/dome, cloud layers); every other draw
+// stays 1x1. TRIAEVUM_VRS_SKY_RATE=2x2 (default) | 4x4. Without device
+// support the policy is ignored and no pipeline or device state changes.
 namespace Fast::Renderer3ds::PicaVrs {
 
 enum class SkyPolicy : uint8_t { Off, Atmosphere, DepthOffAtmosphere };
@@ -25,8 +25,9 @@ inline constexpr uint8_t kRate4x4 = 2U;
 
 inline SkyPolicy RequestedPolicy() noexcept {
     const char* value = std::getenv("TRIAEVUM_VRS_SKY");
-    if (value == nullptr || *value == '\0' || std::strcmp(value, "0") == 0) return SkyPolicy::Off;
-    if (std::strcmp(value, "clouds") == 0) return SkyPolicy::DepthOffAtmosphere;
+    if (value == nullptr || *value == '\0' || std::strcmp(value, "clouds") == 0)
+        return SkyPolicy::DepthOffAtmosphere;
+    if (std::strcmp(value, "0") == 0) return SkyPolicy::Off;
     return SkyPolicy::Atmosphere;
 }
 

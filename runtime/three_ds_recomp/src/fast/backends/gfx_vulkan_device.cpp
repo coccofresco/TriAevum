@@ -411,8 +411,8 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
              mExtendedDynamicStateEnabled, mGraphicsPipelineLibrariesEnabled))
         extensions.push_back(extension);
     // Variable-rate shading phase A (pica_vrs.h): capabilities are logged
-    // once; the extension and the pipeline rate feature are enabled only
-    // with TRIAEVUM_VRS_SKY set, so the default device is unchanged.
+    // once; the extension and the pipeline rate feature are enabled when the
+    // device has them unless TRIAEVUM_VRS_SKY=0 (default policy: clouds 2x2).
     VkPhysicalDeviceFragmentShadingRateFeaturesKHR shadingRateFeatures{
         VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR};
     bool shadingRateEnabled = false;
