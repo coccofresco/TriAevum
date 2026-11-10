@@ -636,6 +636,25 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         shadowCaster.Dynamic =
             draw.Composition.NativeActorGeometry && !draw.Composition.StaticShadowCacheEligible;
         shadowCaster.OwnerIdentity = draw.Composition.NativeActorIdentity;
+        static const bool poseDump = [] {
+            const char* value = std::getenv("TRIAEVUM_VSM_POSE_DUMP");
+            return value != nullptr && value[0] == '1';
+        }();
+        // Pairs with the [vsm-pose] line of BuildPicaShadowCaster: the
+        // caster's classification, identity and bounds.
+        if (poseDump) {
+            const auto& b = shadowCaster.WorldBounds;
+            std::fprintf(stderr, "[vsm-pose-attr] f=%llu dyn=%d actor=%d owner=%016llx tid=%016llx,%016llx,%llu src=%08x "
+                                 "layer=%u bmin=%.1f,%.1f,%.1f bmax=%.1f,%.1f,%.1f ver=%016llx\n",
+                         (unsigned long long)mFrameCounter, shadowCaster.Dynamic ? 1 : 0,
+                         draw.Composition.NativeActorGeometry ? 1 : 0,
+                         (unsigned long long)draw.Composition.NativeActorIdentity,
+                         (unsigned long long)draw.Composition.TemporalIdentity.Owner,
+                         (unsigned long long)draw.Composition.TemporalIdentity.Instance,
+                         (unsigned long long)draw.Composition.TemporalIdentity.Lifetime, draw.Composition.SourcePc,
+                         unsigned(draw.Composition.Layer), b.Minimum[0], b.Minimum[1], b.Minimum[2], b.Maximum[0],
+                         b.Maximum[1], b.Maximum[2], (unsigned long long)shadowCaster.ContentVersion);
+        }
         std::array<Extension::PicaSceneTextureBinding, 3> sceneTextures{};
         Extension::PicaSceneTextureBinding sceneLightingLut;
         if (alphaTested) {

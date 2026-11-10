@@ -11,7 +11,9 @@
 #include <bit>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
+#include <utility>
 
 namespace Oot3dNativeGame {
 namespace {
@@ -869,6 +871,49 @@ void Mm3dNativePicaCompositionTracker::CaptureSceneLighting(
     const auto current = CaptureMm3dSceneEnvironment(memory);
     mLighting.CaptureSceneLights(current.Play, memory);
     mSceneLighting = mLighting.CaptureRenderer(0U, memory);
+    static const bool cameraScan = [] {
+        const char* value = std::getenv("TRIAEVUM_MM_CAMERA_SCAN");
+        return value != nullptr && value[0] == '1';
+    }();
+    if (cameraScan && current.State && mSceneLighting.WorldToView &&
+        (mStats.SceneFrames == 37U || mStats.SceneFrames == 397U || mStats.SceneFrames == 727U)) {
+        // TRIAEVUM_MM_CAMERA_SCAN=1, three scene frames: guest addresses whose
+        // 3x3 holds the captured world-to-view rotation within 2e-4 (exact
+        // copies and other time samples), in code data and the application heap.
+        const auto& w = *mSceneLighting.WorldToView; // column-major
+        const auto rot = [&](uint32_t base, bool rowMajor, uint32_t stride, float* out) {
+            for (uint32_t r = 0; r < 3; ++r) for (uint32_t c = 0; c < 3; ++c) {
+                uint32_t bits = 0;
+                const uint32_t at = rowMajor ? base + (r * stride + c) * 4U : base + (c * stride + r) * 4U;
+                if (!memory.Read32(at, &bits)) return false;
+                out[r * 3 + c] = std::bit_cast<float>(bits);
+                if (!std::isfinite(out[r * 3 + c])) return false;
+            }
+            return true;
+        };
+        unsigned hits = 0;
+        for (const auto [region, length] : {std::pair<uint32_t, uint32_t>{0x00100000U, 0x00700000U},
+                                            std::pair<uint32_t, uint32_t>{0x08000000U, 0x04000000U}}) {
+            for (uint32_t offset = 0; offset < length && hits < 64U; offset += 4U) {
+                uint32_t first = 0;
+                if (!memory.Read32(region + offset, &first) ||
+                    !(std::abs(double(std::bit_cast<float>(first)) - double(w[0])) < 2e-4)) continue;
+                for (const uint32_t stride : {4U, 3U}) for (const bool rowMajor : {true, false}) {
+                    float m[9];
+                    if (!rot(region + offset, rowMajor, stride, m)) continue;
+                    double diff = 0; bool exact = true;
+                    for (uint32_t r = 0; r < 3; ++r) for (uint32_t c = 0; c < 3; ++c) {
+                        diff = std::max(diff, std::abs(double(m[r * 3 + c]) - double(w[c * 4 + r])));
+                        exact &= m[r * 3 + c] == w[c * 4 + r];
+                    }
+                    if (diff < 2e-4 && (++hits, true))
+                        std::fprintf(stderr, "[mm-camera-scan] frame=%llu addr=%08x region=%08x off=%x rowmajor=%d stride=%u exact=%d diff=%.3g\n",
+                                     (unsigned long long)mStats.SceneFrames, region + offset, region, offset,
+                                     rowMajor ? 1 : 0, stride, exact ? 1 : 0, diff);
+                }
+            }
+        }
+    }
     mStats.SceneDirectionalLights = mSceneLighting.SceneDirectionals ? mSceneLighting.SceneDirectionals->Count : 0U;
     if (mSceneLighting.WorldToView) ++mStats.LightBindings;
 }

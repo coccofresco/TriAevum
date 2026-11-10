@@ -2,6 +2,7 @@
 #include "fast/renderer3ds/pica_vertex_geometry.h"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -58,6 +59,29 @@ VirtualShadowCaster BuildPicaShadowCaster(const PicaShadowGeometryView& geometry
         !UniformMatrix(floatUniforms, transform->ModelFirstUniform, model))
         return {};
     const auto worldFromModel = Multiply(viewToWorld, postView);
+    static const bool poseDump = [] {
+        const char* value = std::getenv("TRIAEVUM_VSM_POSE_DUMP");
+        return value != nullptr && value[0] == '1';
+    }();
+    // TRIAEVUM_VSM_POSE_DUMP=1 (with TRIAEVUM_VSM_TRACE=1): the first 200000
+    // rigid caster builds, the captured view-to-world and the view and model
+    // uniforms, for offline pairing analysis (PERF LINUX_r7 round 14).
+    if (gVersionTrace.Enabled && poseDump) {
+        static uint64_t dumped = 0;
+        if (dumped++ < 200000U) {
+            const auto local = Multiply(postView, model);
+            std::fprintf(stderr, "[vsm-pose] g=%016llx a=%d v2w=", (unsigned long long)geometryVersion,
+                         anchor != nullptr ? 1 : 0);
+            for (size_t i = 0; i < 16; ++i) std::fprintf(stderr, "%.9g,", double(viewToWorld[i]));
+            std::fprintf(stderr, " l=");
+            for (size_t i = 0; i < 16; ++i) std::fprintf(stderr, "%.9g,", double(local[i]));
+            std::fprintf(stderr, " p=");
+            for (size_t i = 0; i < 16; ++i) std::fprintf(stderr, "%08x,", std::bit_cast<uint32_t>(postView[i]));
+            std::fprintf(stderr, " m=");
+            for (size_t i = 0; i < 16; ++i) std::fprintf(stderr, "%08x,", std::bit_cast<uint32_t>(model[i]));
+            std::fprintf(stderr, "\n");
+        }
+    }
     const auto* skeleton = hooks.SkeletonProgram();
     const bool skinned = skeleton && (booleanUniforms & (1U << skeleton->EnableBooleanUniform)) != 0;
     const auto* surface = hooks.SurfaceProgram();
