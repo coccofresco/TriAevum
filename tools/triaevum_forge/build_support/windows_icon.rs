@@ -9,13 +9,16 @@
 // lld-link). Included by the build scripts with `include!`.
 
 /// Embeds `ico` (relative to the package's manifest folder) as icon group 1 of
-/// the package's binaries when building for Windows (MSVC); a no-op elsewhere.
+/// the package's binaries when building for Windows (MSVC, or the llvm-mingw
+/// `gnullvm` target, whose lld also takes `.res` inputs); a no-op elsewhere.
 fn embed_windows_icon(ico: &str) {
     let manifest = std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let ico = manifest.join(ico);
     println!("cargo:rerun-if-changed={}", ico.display());
     let windows = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows");
-    if !windows || std::env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("msvc") {
+    let env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    let llvm_mingw = env == "gnu" && std::env::var("CARGO_CFG_TARGET_ABI").as_deref() == Ok("llvm");
+    if !windows || !(env == "msvc" || llvm_mingw) {
         return;
     }
     let bytes = std::fs::read(&ico).unwrap_or_else(|error| panic!("cannot read {}: {error}", ico.display()));
