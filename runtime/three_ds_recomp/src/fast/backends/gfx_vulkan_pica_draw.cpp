@@ -3810,6 +3810,38 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         // an eligible draw joins the open window instead of being recorded now;
         // any other draw flushes the window before it records anything.
         ParseNativePicaPrepass();
+        // TRIAEVUM_REPLACE_BLEND_STATS=1: draws per frame whose blend is enabled
+        // and ONE/ZERO ADD (the c62e161fc replace-blend branch), by colour format.
+        static const bool replaceBlendStats = [] {
+            const char* value = std::getenv("TRIAEVUM_REPLACE_BLEND_STATS");
+            return value != nullptr && value[0] == '1';
+        }();
+        if (replaceBlendStats) {
+            static uint64_t statFrame = 0, statFrames = 0, enabledReplace = 0, floatReplace = 0, blendedDraws = 0;
+            static uint64_t lastId = 0;
+            if (statFrame != mFrameCounter) {
+                statFrame = mFrameCounter;
+                if (++statFrames >= 600U) {
+                    std::fprintf(stderr, "[replace-blend] per frame: blend-enabled %.2f replace(non-float) %.3f "
+                                 "replace(float) %.3f last_pipeline %016llx\n",
+                                 blendedDraws / 600.0, enabledReplace / 600.0, floatReplace / 600.0,
+                                 static_cast<unsigned long long>(lastId));
+                    statFrames = enabledReplace = floatReplace = blendedDraws = 0;
+                }
+            }
+            if (draw.Blend.Enabled) {
+                ++blendedDraws;
+                if (Renderer3ds::PicaBlendReplacesDestination(draw.Blend)) {
+                    const VkFormat format =
+                        Extension::BoundPicaColorAttachmentFormats(mActiveNativePicaAttachments)[0];
+                    const bool isFloat = format == VK_FORMAT_R16G16B16A16_SFLOAT ||
+                        format == VK_FORMAT_R32G32B32A32_SFLOAT || format == VK_FORMAT_B10G11R11_UFLOAT_PACK32 ||
+                        format == VK_FORMAT_R16_SFLOAT || format == VK_FORMAT_R32_SFLOAT;
+                    ++(isFloat ? floatReplace : enabledReplace);
+                    lastId = pipelineRecord.Id.Value;
+                }
+            }
+        }
         bool prepassDeferred = false;
         if ((mNativePicaPrepass.Enabled || mNativePicaPrepass.AbWindow) &&
             renderTarget.NormalGuideView != VK_NULL_HANDLE) {
@@ -4050,6 +4082,12 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (abVariant->Id.Value == pipelineRecord.Id.Value ||
                 (nriOwnedDraw && !mNriPicaPipelineBridge.OwnedPipelineReady(abVariant->Id)))
                 abVariant = nullptr;
+            // TRIAEVUM_AB_BLEND_ONLY=1: only draws with blending enabled.
+            static const bool blendOnly = [] {
+                const char* value = std::getenv("TRIAEVUM_AB_BLEND_ONLY");
+                return value != nullptr && value[0] == '1';
+            }();
+            if (blendOnly && !draw.Blend.Enabled) abVariant = nullptr;
             if (abVariant != nullptr && mNativePicaAb.SkipRemaining != 0U) {
                 --mNativePicaAb.SkipRemaining;
                 abVariant = nullptr;
@@ -4057,9 +4095,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         if (abVariant != nullptr) {
             char label[160];
-            std::snprintf(label, sizeof(label), "pipeline=%llx layer=%u nri_owned=%u program=%s",
+            std::snprintf(label, sizeof(label), "pipeline=%llx layer=%u blend=%u nri_owned=%u program=%s",
                           static_cast<unsigned long long>(draw.CanonicalPipelineId),
-                          static_cast<unsigned>(draw.Composition.Layer), nriOwnedDraw ? 1U : 0U,
+                          static_cast<unsigned>(draw.Composition.Layer), draw.Blend.Enabled ? 1U : 0U,
+                          nriOwnedDraw ? 1U : 0U,
                           selectedDraw == &uberDraw ? "uber" : "specialized");
             // Variant B: the switch on (or, for the control, the selected
             // pipeline again), recorded first and then undone.
