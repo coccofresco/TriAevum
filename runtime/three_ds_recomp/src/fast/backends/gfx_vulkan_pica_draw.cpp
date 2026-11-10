@@ -970,6 +970,30 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             sceneDraw &&
             draw.Composition.Layer ==
                 ::Oot3d::Renderer::PicaCompositionLayer::OpaqueWorld;
+        // TRIAEVUM_RIM_STATS=1 (developer count, any build): per layer, opaque
+        // (depth-writing, not translucent) scene draws, draws with surface
+        // lighting, and those of them that received the rim, per 600 frames.
+        static const bool rimStats = std::getenv("TRIAEVUM_RIM_STATS") != nullptr;
+        if (rimStats) {
+            if (mFrameCounter != mRimStatsFrame) {
+                mRimStatsFrame = mFrameCounter;
+                if (++mRimStatsFrames == 600U) {
+                    std::string text;
+                    for (size_t layer = 0; layer < 5U; ++layer) {
+                        char item[128];
+                        std::snprintf(item, sizeof(item), " layer%zu=opaque:%.1f/lit:%.1f/rim:%.1f", layer,
+                                      mRimStats[layer][2] / 600.0, mRimStats[layer][0] / 600.0,
+                                      mRimStats[layer][1] / 600.0);
+                        text += item;
+                    }
+                    std::fprintf(stderr, "[rim-stats] per frame%s\n", text.c_str());
+                    mRimStats = {};
+                    mRimStatsFrames = 0;
+                }
+            }
+            if (sceneDraw && draw.DepthWriteEnabled && !UsesTranslucentBlend(draw.Blend))
+                ++mRimStats[static_cast<size_t>(draw.Composition.Layer) & 7U][2];
+        }
         const bool nativeMemoryOnly = mNativePicaCompositionSchedule.Purpose() ==
             Renderer3ds::PicaCompositionPurpose::NativeMemory;
 
@@ -1263,8 +1287,11 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     surfaceLighting->BakedReferenceUp = {};
                 if (Extension::PicaDrawReceivesRimLight(mFrameEnvironment, draw.CompositionDomain,
                         draw.Composition, draw.Blend, surfaceAppearance,
-                        draw.DepthTestEnabled, draw.DepthWriteEnabled, draw.FragmentOperationMode))
+                        draw.DepthTestEnabled, draw.DepthWriteEnabled, draw.FragmentOperationMode)) {
                     Renderer3ds::AssignPicaSurfaceRim(*surfaceLighting, mFrameEnvironment.Rim);
+                    ++mRimStats[static_cast<size_t>(draw.Composition.Layer) & 7U][1];
+                }
+                ++mRimStats[static_cast<size_t>(draw.Composition.Layer) & 7U][0];
                 // Relative source weights (the guide's 8-bit radiance would
                 // clip gains above one); the gain applies when GI is composed.
                 const auto sources =

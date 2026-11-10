@@ -1194,6 +1194,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::string Log;
     };
     SkyProbeState mSkyProbe;
+    // TRIAEVUM_RIM_STATS=1: [layer][0 lit, 1 rim, 2 opaque scene draws].
+    std::array<std::array<uint64_t, 3>, 8> mRimStats{};
+    uint64_t mRimStatsFrame = UINT64_MAX, mRimStatsFrames = 0;
     void SkyProbeDraw(NativePicaRenderTarget& target, const GfxNativePicaDrawView& draw, bool reactive,
                       bool before);
     void SkyProbeReadback(NativePicaRenderTarget& target, int side);

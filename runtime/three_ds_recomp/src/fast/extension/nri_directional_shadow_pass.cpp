@@ -1429,6 +1429,13 @@ bool NriDirectionalShadowPass::ExecuteMap(const NriDirectionalShadowExecuteDesc&
     input.Settings = desc.Settings;
     input.CullCasters =
         desc.Environment == nullptr || desc.Environment->CasterFaces == Renderer3ds::ShadowCasterFaces::Native;
+    // TRIAEVUM_RIM_STATS=1 (developer count, any build): the caster face rule every 600 maps.
+    static const bool rimStats = std::getenv("TRIAEVUM_RIM_STATS") != nullptr;
+    static uint64_t maps = 0;
+    if (rimStats && ++maps % 600U == 0U)
+        std::fprintf(stderr, "[rim-stats] frame=%llu cull_casters=%u environment=%u\n",
+                     static_cast<unsigned long long>(desc.FrameId), input.CullCasters ? 1U : 0U,
+                     desc.Environment != nullptr ? 1U : 0U);
     // Validates the settings and the light. Each layout is planned at its own
     // direction below.
     const auto plan = BuildDirectionalShadowFramePlan(input);
