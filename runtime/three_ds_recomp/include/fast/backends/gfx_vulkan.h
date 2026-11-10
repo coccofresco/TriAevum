@@ -99,6 +99,7 @@
 #include "fast/extension/temporal_history_manager.h"
 #include "fast/extension/temporal_aa_pass.h"
 #include "fast/extension/temporal_jitter.h"
+#include <source_location>
 #include <vulkan/vulkan.h>
 #include <imgui.h>
 
@@ -983,7 +984,8 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::span<const float> depthValues,
         std::span<const uint8_t> stencilValues);
     void BeginNativePicaRenderPass(NativePicaRenderTarget& target);
-    void EndNativePicaRenderPass();
+    // The caller is recorded for the split diagnostic (TRIAEVUM_GPU_TIMELINE).
+    void EndNativePicaRenderPass(std::source_location where = std::source_location::current());
     // The output extent the top-screen target is resolved against: the
     // presentation picture (NativePicaOutputExtent), or its native-aspect fit
     // for a title that does not widen.

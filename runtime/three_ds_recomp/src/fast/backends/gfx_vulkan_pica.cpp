@@ -2,6 +2,11 @@
 // memory fills and descriptor sets. Other topics: gfx_vulkan_pica_*.cpp.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+
+#include <cstdio>
+#include <cstring>
+#include <map>
+#include <string>
 #include "fast/extension/native_ui_overlay.h"
 
 namespace Fast {
@@ -1739,9 +1744,32 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
     mActiveNativePicaAttachments = attachments;
 }
 
-void GfxRenderingAPIVulkan::EndNativePicaRenderPass() {
+void GfxRenderingAPIVulkan::EndNativePicaRenderPass(std::source_location where) {
     if (!mNativePicaRenderPassActive) {
         return;
+    }
+    if (mGpuProfiler.TimelineEnabled()) {
+        // Which callers end the native scope on an instrumented (guided)
+        // target: each end costs a reload of its attachments later.
+        static std::map<std::string, uint64_t> ends;
+        static uint64_t frames = 0;
+        static uint32_t lastFrame = UINT32_MAX;
+        if (mActiveNativePicaRenderTarget != nullptr &&
+            mActiveNativePicaRenderTarget->NormalGuideView != VK_NULL_HANDLE) {
+            const char* file = where.file_name();
+            if (const char* slash = std::strrchr(file, '/')) file = slash + 1;
+            ++ends[std::string(file) + ":" + std::to_string(where.line())];
+        }
+        if (mFrameCounter != lastFrame) {
+            lastFrame = static_cast<uint32_t>(mFrameCounter);
+            if (++frames == 300U) {
+                for (const auto& [site, count] : ends)
+                    std::fprintf(stderr, "[pica-scope-end] %6.2f per frame  %s\n",
+                                 static_cast<double>(count) / 300.0, site.c_str());
+                ends.clear();
+                frames = 0;
+            }
+        }
     }
     if (mPicaDynamicRenderingScope.Active()) {
         mPicaDynamicRenderingScope.End(
