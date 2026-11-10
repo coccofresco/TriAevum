@@ -26,6 +26,10 @@ set_target_properties(triaevum_immerse PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
     FOLDER immerse)
+if(MINGW)
+    # The loader looks for triaevum_immerse.dll, as the MSVC build names it.
+    set_target_properties(triaevum_immerse PROPERTIES PREFIX "")
+endif()
 source_group("immerse" FILES
     "${CMAKE_CURRENT_LIST_DIR}/mxao_module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mxao_shader.cpp"

@@ -162,6 +162,11 @@ if (USE_OPENGLES)
 endif()
 
 target_link_libraries(three_ds_recomp_runtime PUBLIC prism monocypher)
+if(MINGW)
+    # The GNU driver ignores #pragma comment(lib): CrashHandler.cpp (Dbghelp)
+    # and azahar_texture_pack_import.cpp (ole32) name their import libraries.
+    target_link_libraries(three_ds_recomp_runtime PUBLIC dbghelp ole32)
+endif()
 
 if(THREE_DS_RECOMP_ENABLE_VULKAN)
     target_sources(three_ds_recomp_runtime PRIVATE fast/renderer/shaderc_compiler.cpp)

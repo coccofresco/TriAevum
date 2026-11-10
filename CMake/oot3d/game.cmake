@@ -566,7 +566,11 @@ target_compile_options(oot3d_native_crash_diagnostics PRIVATE
     "${WARNING_OVERRIDE}")
 if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     target_compile_definitions(oot3d_native_crash_diagnostics PRIVATE NOMINMAX)
-    target_link_libraries(oot3d_native_crash_diagnostics PUBLIC dbghelp.lib)
+    if(MINGW)
+        target_link_libraries(oot3d_native_crash_diagnostics PUBLIC dbghelp)
+    else()
+        target_link_libraries(oot3d_native_crash_diagnostics PUBLIC dbghelp.lib)
+    endif()
     set_property(TARGET oot3d_native_crash_diagnostics PROPERTY
         MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 endif()
@@ -810,7 +814,9 @@ if (OOT3D_WHOLE_AOT_PRODUCT_MODE)
             "/OPT:NOICF")
     endif()
 endif()
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
+# llvm-mingw: shaderc_shared.dll is built from pinned sources and linked normally
+# (lld in MinGW mode has no delay-load); it ships beside the product executable.
+if(MSVC AND CMAKE_SYSTEM_NAME STREQUAL "Windows" AND OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
     # The Windows package keeps shaderc beside the other DLLs in runtime/; it
     # loads after main registers that directory (UseRuntimeLibraryDirectory).
     target_link_options(oot3d_native_game PRIVATE "/DELAYLOAD:shaderc_shared.dll")

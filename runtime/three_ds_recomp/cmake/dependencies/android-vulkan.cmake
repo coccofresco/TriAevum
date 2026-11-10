@@ -15,7 +15,8 @@ FetchContent_Declare(android_glslang
     SOURCE_SUBDIR _download_only)
 FetchContent_MakeAvailable(android_vulkan_headers android_spirv_headers android_spirv_tools android_glslang)
 set(Vulkan_INCLUDE_DIR "${android_vulkan_headers_SOURCE_DIR}/include" CACHE PATH "Android Vulkan headers" FORCE)
-find_library(Vulkan_LIBRARY vulkan REQUIRED)
+# MinGW links the Windows loader through an import library named vulkan-1.
+find_library(Vulkan_LIBRARY NAMES vulkan vulkan-1 REQUIRED)
 set(SHADERC_SKIP_TESTS ON CACHE BOOL "" FORCE)
 set(SHADERC_SKIP_EXAMPLES ON CACHE BOOL "" FORCE)
 set(SHADERC_SKIP_COPYRIGHT_CHECK ON CACHE BOOL "" FORCE)
@@ -32,4 +33,12 @@ set(SHADERC_GLSLANG_DIR "${android_glslang_SOURCE_DIR}" CACHE STRING "" FORCE)
 FetchContent_Declare(android_shaderc
     URL https://github.com/google/shaderc/archive/d5f08ae5c5a9a45165578445cbd0f9adf0223448.tar.gz)
 FetchContent_MakeAvailable(android_shaderc)
-add_library(three_ds_recomp_shaderc ALIAS shaderc)
+if(MINGW)
+    # The Windows product ships shaderc_shared.dll beside TriAevum.exe, as the
+    # MSVC route does; the persistent shader cache is keyed to that DLL's
+    # identity (shaderc_compiler.cpp IdentifyCompiler), not the executable's.
+    set_target_properties(shaderc_shared PROPERTIES PREFIX "" OUTPUT_NAME shaderc_shared)
+    add_library(three_ds_recomp_shaderc ALIAS shaderc_shared)
+else()
+    add_library(three_ds_recomp_shaderc ALIAS shaderc)
+endif()

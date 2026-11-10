@@ -98,6 +98,11 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
         set(OOT3D_WINDOWS_ARM64 FALSE)
     endif()
 
+endif()
+# A llvm-mingw cross-build from a Linux host brings its dependencies through
+# its own vcpkg toolchain file and triplet (CMake/TriAevumLlvmMingwToolchain.cmake
+# chainloaded); the automatic Windows-host vcpkg bootstrap is skipped there.
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows" AND NOT (MINGW AND NOT CMAKE_HOST_WIN32))
     include(CMake/automate-vcpkg.cmake)
 
     set(VCPKG_TRIPLET x64-windows-static)

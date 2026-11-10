@@ -139,8 +139,9 @@ endif()
 if(THREE_DS_RECOMP_ENABLE_VULKAN)
 	# Android and macOS build shaderc/glslang from pinned sources: neither has
 	# a Vulkan SDK with shaderc on the build host (macOS uses the Khronos
-	# loader with MoltenVK as its ICD).
-	if(ANDROID OR APPLE)
+	# loader with MoltenVK as its ICD). The llvm-mingw Windows build does the
+	# same: the Vulkan SDK's shaderc_shared.dll is an MSVC-toolchain binary.
+	if(ANDROID OR APPLE OR MINGW)
 		include(cmake/dependencies/android-vulkan.cmake)
 	endif()
 	find_package(Vulkan REQUIRED)
@@ -302,6 +303,23 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 			set(NRI_SHADERS_PATH "${CMAKE_CURRENT_BINARY_DIR}/nri-shaders"
 				CACHE STRING "" FORCE)
 		endif()
+		if(MINGW AND NOT CMAKE_HOST_WIN32 AND THREE_DS_RECOMP_ENABLE_NRI_NIS)
+			# llvm-mingw cross-build on a Linux host: ShaderMake is built for the
+			# host (no .exe suffix) and must drive a host DXC, not the Windows
+			# dxc.exe its target-based logic predicts. Normal variables shadow
+			# the cache entries for NRI's shader target, as for Android above.
+			set(THREE_DS_RECOMP_HOST_DXC "" CACHE FILEPATH
+				"Host (Linux) dxc for SPIR-V shader builds in a MinGW cross-build")
+			if(NOT EXISTS "${THREE_DS_RECOMP_HOST_DXC}")
+				message(FATAL_ERROR "Set THREE_DS_RECOMP_HOST_DXC to a host dxc for the MinGW cross-build")
+			endif()
+			set(SHADERMAKE_PATH
+				"${FETCHCONTENT_BASE_DIR}/shadermake-build/build/ShaderMake")
+			set(SHADERMAKE_DXC_PATH "${THREE_DS_RECOMP_HOST_DXC}")
+			set(SHADERMAKE_DXC_VK_PATH "${THREE_DS_RECOMP_HOST_DXC}")
+			set(NRI_SHADERS_PATH "${CMAKE_CURRENT_BINARY_DIR}/nri-shaders"
+				CACHE STRING "" FORCE)
+		endif()
 		FetchContent_MakeAvailable(nri)
 		unset(_oot3d_nri_existing_source)
 		# However NRI was provided, the renderer needs every patch: an
@@ -314,6 +332,11 @@ if(THREE_DS_RECOMP_ENABLE_VULKAN)
 			COMMAND_ERROR_IS_FATAL ANY)
 		set(THREE_DS_RECOMP_NRI_PATCHED_SOURCE_DIR "${nri_SOURCE_DIR}"
 			CACHE INTERNAL "NRI source directory verified to carry the OOT3D patches")
+		if(MINGW AND TARGET NRI_Shared)
+			# NRI's upscaler interface uses FLT_MAX without <cfloat>; the MSVC
+			# STL reaches it transitively, libc++ does not.
+			target_compile_options(NRI_Shared PRIVATE -include cfloat)
+		endif()
 		if(WIN32 AND NRI_STATIC_LIBRARY AND TARGET NRI)
 			# VERSIONINFO belongs to a final DLL/EXE. Keeping NRI.rc in the
 			# static archive also makes Ninja depend on the caller's ambient

@@ -342,6 +342,14 @@ if(MSVC)
     endforeach()
 endif()
 
+if(MINGW)
+    # The donor's Vulkan backend uses std::lock_guard without <mutex>; the
+    # MSVC STL reaches it transitively, libc++ does not.
+    foreach(_target oot3d_ffx_denoiser oot3d_ffx_sssr oot3d_ffx_sssr_backend_vk)
+        target_compile_options(${_target} PRIVATE -include mutex)
+    endforeach()
+endif()
+
 if(NOT WIN32)
     option(THREE_DS_RECOMP_FFX_SANITIZE "Instrument only FidelityFX host code with AddressSanitizer" OFF)
     # The donor's opaque context budgets assume 16-bit wchar_t debug names.

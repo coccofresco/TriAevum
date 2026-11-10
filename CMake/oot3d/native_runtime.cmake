@@ -434,7 +434,7 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
                     "Whole-AOT ThinLTO/profile modes require clang-cl/LLVM")
             endif()
         endif()
-        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             execute_process(
                 COMMAND "${CMAKE_CXX_COMPILER}" /clang:--print-resource-dir
                 OUTPUT_VARIABLE _oot3d_clang_resource_dir
@@ -453,7 +453,14 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
             target_compile_options(oot3d_native_whole_aot PRIVATE
                 -flto=thin)
         endif()
-        if (OOT3D_WHOLE_AOT_PROFILE_MODE STREQUAL "generate")
+        if (OOT3D_WHOLE_AOT_PROFILE_MODE STREQUAL "generate" AND NOT MSVC)
+            # GNU-style clang drivers (llvm-mingw, Linux) link the profile
+            # runtime themselves when the final link sees the flag.
+            target_compile_options(oot3d_native_whole_aot PRIVATE
+                -fprofile-instr-generate)
+            target_link_options(oot3d_native_whole_aot INTERFACE
+                -fprofile-instr-generate)
+        elseif (OOT3D_WHOLE_AOT_PROFILE_MODE STREQUAL "generate")
             target_compile_options(oot3d_native_whole_aot PRIVATE
                 -fprofile-instr-generate)
             set(_oot3d_clang_profile_runtime
@@ -489,6 +496,10 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
             if (NOT EXISTS "${OOT3D_WHOLE_AOT_ORDER_FILE}")
                 message(FATAL_ERROR
                     "OOT3D_WHOLE_AOT_ORDER_FILE does not exist")
+            endif()
+            if (NOT MSVC)
+                message(FATAL_ERROR
+                    "OOT3D_WHOLE_AOT_ORDER_FILE is an lld-link /ORDER file (MSVC-style toolchains only)")
             endif()
             target_link_options(oot3d_native_whole_aot INTERFACE
                 "/ORDER:@${OOT3D_WHOLE_AOT_ORDER_FILE}")
@@ -548,7 +559,7 @@ if (EXISTS "${_oot3d_whole_aot_generated_header}" AND
         add_library(oot3d_native_whole_aot STATIC IMPORTED GLOBAL)
         set_target_properties(oot3d_native_whole_aot PROPERTIES
             IMPORTED_LOCATION "${OOT3D_WHOLE_AOT_PREBUILT_LIBRARY}")
-        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
             execute_process(
                 COMMAND "${CMAKE_CXX_COMPILER}" /clang:--print-resource-dir
                 OUTPUT_VARIABLE _oot3d_clang_resource_dir
@@ -641,7 +652,7 @@ if (EXISTS "${OOT3D_MASS_AOT_GENERATED_DIR}/oot3d_mass_generated.h" AND
         tools/oot3d/native_a32_runtime/mass_cpp)
     target_compile_definitions(oot3d_native_a32_process PRIVATE
         OOT3D_NATIVE_GENERATED_MASS_AOT=1)
-    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    if (MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         execute_process(
             COMMAND "${CMAKE_CXX_COMPILER}" /clang:--print-resource-dir
             OUTPUT_VARIABLE _oot3d_mass_clang_resource_dir
