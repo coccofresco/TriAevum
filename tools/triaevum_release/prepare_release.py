@@ -172,10 +172,7 @@ def prepare(args) -> dict:
                                 "role": "optional_vulkan_runtime"})
     # The release's default scene environment profiles (read-only; the user's
     # own profiles in the data directory take precedence).
-    for profile in sorted((ROOT / "runtime/triaevum_resources/environments").glob("*.environment.json")):
-        layout["files"].append({"source": str(profile.resolve()),
-                                "path": f"resources/environments/{profile.name}",
-                                "role": "default_environment_profile"})
+    layout["files"].extend(environment_profile_layout())
     layout_path = work / "release-layout.json"
     layout["files"].extend(title_layout(
         runtime=Path(targets["runtime"]), native_module=artifacts["oot3d_game_module.dll"],
@@ -227,6 +224,22 @@ def prepare(args) -> dict:
     if args.archive is not None:
         result["archive"] = create_release_archive(args.output, args.archive)
     return result
+
+
+ENVIRONMENTS = ROOT / "runtime/triaevum_resources/environments"
+
+
+def environment_profile_layout(environments: Path = ENVIRONMENTS) -> list[dict]:
+    """The release's default scene environment profiles: OoT3D's at the top
+    level and every other title's beneath its adapter key (environments/mm3d),
+    as TitleReleaseSceneEnvironmentDirectory reads them."""
+    files = []
+    for profile in sorted(environments.rglob("*.environment.json")):
+        relative = profile.relative_to(environments).as_posix()
+        files.append({"source": str(profile.resolve()),
+                      "path": f"resources/environments/{relative}",
+                      "role": "default_environment_profile"})
+    return files
 
 
 def main() -> int:
