@@ -22,14 +22,28 @@ static void Identity(std::ostream& out, PicaShaderSourceIdentity id) {
 }
 
 int main(int argc, char** argv) try {
-    if (argc < 3) throw std::runtime_error("usage: export_vertex_programs output.h input.shbin [...]");
+    // Options precede the output: --vertex-only reports geometry DVLEs instead
+    // of failing on them (build_vertex_artifacts' scope for mixed-stage SHBINs,
+    // e.g. MM3D's LineShader); --title names the title in the header comment.
+    // Without options the output is unchanged.
+    bool vertexOnly = false;
+    std::string title = "OOT3D";
+    int first = 1;
+    for (; first < argc; ++first) {
+        const std::string option = argv[first];
+        if (option == "--vertex-only") vertexOnly = true;
+        else if (option == "--title" && first + 1 < argc) title = argv[++first];
+        else break;
+    }
+    if (argc - first < 2)
+        throw std::runtime_error("usage: export_vertex_programs [--vertex-only] [--title NAME] output.h input.shbin [...]");
     std::ostringstream output;
-    output << "// Generated translated OOT3D title shader source. Do not classify as title-neutral.\n"
+    output << "// Generated translated " << title << " title shader source. Do not classify as title-neutral.\n"
               "// Translator: TriAevum / Citra-Azahar GLSL decompiler (GPL-2.0-or-later).\n"
               "#pragma once\n#include \"fast/renderer3ds/pica_vertex_program.h\"\n"
               "namespace Oot3dNativeGame {\ninline const Fast::Renderer3ds::PicaTranslatedVertexProgram kTranslatedVertexPrograms[] = {\n";
-    size_t entries = 0;
-    for (int arg = 2; arg < argc; ++arg) {
+    size_t entries = 0, geometry = 0;
+    for (int arg = first + 1; arg < argc; ++arg) {
         std::ifstream input(argv[arg], std::ios::binary);
         if (!input) throw std::runtime_error("cannot open SHBIN");
         std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
@@ -52,8 +66,14 @@ int main(int argc, char** argv) try {
         for (size_t i = 0; i < ns; ++i) swizzles[i] = word(p + word(p+16) + i*8);
         for (size_t i = 0; i < count; ++i) {
             const size_t d = word(8+i*4);
-            if (word(d) != 0x454c5644 || ((word(d+4) >> 16) & 255) != 0)
-                throw std::runtime_error("unsupported non-vertex DVLE");
+            if (word(d) != 0x454c5644) throw std::runtime_error("not DVLE");
+            const auto stage = (word(d+4) >> 16) & 255;
+            if (stage == 1 && vertexOnly) {
+                std::cout << "untranslated_geometry_dvle " << argv[arg] << " entry=" << i << '\n';
+                ++geometry;
+                continue;
+            }
+            if (stage != 0) throw std::runtime_error("unsupported non-vertex DVLE");
             const auto entry = word(d+8);
             if (entry >= nc) throw std::runtime_error("invalid entry point");
             const auto body = Translate(code, swizzles, entry);
@@ -74,7 +94,10 @@ int main(int argc, char** argv) try {
         }
     }
     output << "};\n} // namespace Oot3dNativeGame\n";
-    std::ofstream file(argv[1], std::ios::binary | std::ios::trunc);
+    if (entries == 0) throw std::runtime_error("no vertex DVLE translated");
+    std::ofstream file(argv[first], std::ios::binary | std::ios::trunc);
     if (!file || !(file << output.str())) throw std::runtime_error("cannot write translated source");
-    std::cout << "translated_vertex_entries=" << entries << '\n';
+    std::cout << "translated_vertex_entries=" << entries;
+    if (vertexOnly) std::cout << " untranslated_geometry_dvle=" << geometry;
+    std::cout << '\n';
 } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
