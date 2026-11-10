@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_set>
 #include <array>
 #include <cstdint>
 #include <span>
@@ -160,6 +161,11 @@ class VirtualShadowMapCache final {
     }
 
   private:
+    // TRIAEVUM_VSM_TRACE diagnostic state.
+    std::unordered_set<uint64_t> mTracePreviousContent;
+    std::unordered_set<uint64_t> mTracePreviousPose;
+    uint32_t mTraceCalls = 0, mTraceTransformInvalidations = 0;
+    double mTraceStatic = 0, mTraceNewContent = 0, mTraceNewPose = 0, mTraceZero = 0, mTraceDynamic = 0;
     struct KeyHash {
         size_t operator()(const VirtualShadowPageKey& key) const noexcept;
     };

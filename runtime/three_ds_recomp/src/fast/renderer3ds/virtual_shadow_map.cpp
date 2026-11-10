@@ -1,6 +1,9 @@
 #include "fast/renderer3ds/virtual_shadow_map.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <unordered_map>
 #include <cmath>
 #include <limits>
 
@@ -170,9 +173,49 @@ void VirtualShadowMapCache::Prepare(const VirtualShadowLayout& layout, std::span
         mResidency.reserve(mPages.size());
         mUpdates.reserve(mPages.size());
     }
+    // TRIAEVUM_VSM_TRACE=1: why static pages refresh (light-transform
+    // invalidations, and static casters whose content version is new while
+    // their pose version is not, or both are new).
+    static const bool trace = [] {
+        const char* value = std::getenv("TRIAEVUM_VSM_TRACE");
+        return value != nullptr && value[0] == '1';
+    }();
     if (mWorldToLight != layout.WorldToLight) {
         mWorldToLight = layout.WorldToLight;
         Invalidate();
+        if (trace) ++mTraceTransformInvalidations;
+    }
+    if (trace) {
+        std::unordered_map<uint64_t, bool> versions;
+        uint32_t staticCount = 0, newContent = 0, newPose = 0, zero = 0, dynamic = 0;
+        for (const auto& caster : casters) {
+            if (caster.Dynamic) { ++dynamic; continue; }
+            if (caster.ContentVersion == 0) { ++zero; continue; }
+            ++staticCount;
+            versions.emplace(caster.ContentVersion, true);
+            if (!mTracePreviousContent.contains(caster.ContentVersion)) {
+                ++newContent;
+                if (!mTracePreviousPose.contains(caster.PoseVersion)) ++newPose;
+            }
+        }
+        mTracePreviousContent.clear();
+        mTracePreviousPose.clear();
+        for (const auto& caster : casters)
+            if (!caster.Dynamic && caster.ContentVersion != 0) {
+                mTracePreviousContent.insert(caster.ContentVersion);
+                mTracePreviousPose.insert(caster.PoseVersion);
+            }
+        mTraceStatic += staticCount; mTraceNewContent += newContent; mTraceNewPose += newPose;
+        mTraceZero += zero; mTraceDynamic += dynamic;
+        if (++mTraceCalls == 300U) {
+            std::fprintf(stderr,
+                         "[vsm-trace] calls=300 transform_invalidations=%u static=%.1f new_content=%.1f "
+                         "new_content_new_pose=%.1f zero_version=%.1f dynamic=%.1f per call\n",
+                         mTraceTransformInvalidations, mTraceStatic / 300.0, mTraceNewContent / 300.0,
+                         mTraceNewPose / 300.0, mTraceZero / 300.0, mTraceDynamic / 300.0);
+            mTraceCalls = mTraceTransformInvalidations = 0;
+            mTraceStatic = mTraceNewContent = mTraceNewPose = mTraceZero = mTraceDynamic = 0;
+        }
     }
     mLightBounds.resize(casters.size());
     for (size_t index = 0; index < casters.size(); ++index)

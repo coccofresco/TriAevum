@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 
@@ -16,6 +18,31 @@ uint64_t Hash(uint64_t hash, uint64_t value) noexcept {
     }
     return hash;
 }
+// TRIAEVUM_VSM_TRACE=1: how rigid casters keep their version (anchor reuse)
+// or lose it (no anchor, new geometry version, pose outside the anchor cell).
+struct ShadowCasterVersionTrace {
+    bool Enabled = [] {
+        const char* value = std::getenv("TRIAEVUM_VSM_TRACE");
+        return value != nullptr && value[0] == '1';
+    }();
+    uint64_t Calls = 0, NoAnchor = 0, Reused = 0, NewGeometry = 0, Moved = 0, Skinned = 0, Fresh = 0;
+    double MaxTranslation = 0, MaxLinear = 0, SumTranslation = 0, SumLinear = 0;
+    void Count(uint64_t& field) noexcept {
+        if (!Enabled) return;
+        ++field;
+        if (++Calls == 20000U) {
+            std::fprintf(stderr, "[vsm-caster-version] calls=20000 no_anchor=%llu anchor_reused=%llu new_geometry=%llu "
+                                 "moved=%llu first=%llu skinned_or_unversioned=%llu moved_max_translation=%.6g moved_max_linear=%.3g "
+                                 "moved_mean_translation=%.3g moved_mean_linear=%.3g\n",
+                         (unsigned long long)NoAnchor, (unsigned long long)Reused, (unsigned long long)NewGeometry,
+                         (unsigned long long)Moved, (unsigned long long)Fresh, (unsigned long long)Skinned, MaxTranslation,
+                         MaxLinear, Moved ? SumTranslation / (3.0 * Moved) : 0.0, Moved ? SumLinear / (9.0 * Moved) : 0.0);
+            MaxTranslation = MaxLinear = SumTranslation = SumLinear = 0;
+            Calls = NoAnchor = Reused = NewGeometry = Moved = Skinned = Fresh = 0;
+        }
+    }
+};
+ShadowCasterVersionTrace gVersionTrace;
 } // namespace
 
 VirtualShadowCaster BuildPicaShadowCaster(const PicaShadowGeometryView& geometry,
@@ -53,6 +80,12 @@ VirtualShadowCaster BuildPicaShadowCaster(const PicaShadowGeometryView& geometry
         anchor->Valid = true;
         return { bounds, anchor->Signature, false, 0, VirtualShadowCasterVersionState::Rigid, pose };
     };
+    if (gVersionTrace.Enabled) {
+        if (skinned || geometryVersion == 0) gVersionTrace.Count(gVersionTrace.Skinned);
+        else if (anchor == nullptr) gVersionTrace.Count(gVersionTrace.NoAnchor);
+        else if (!anchor->Valid) gVersionTrace.Count(gVersionTrace.Fresh);
+        else if (anchor->GeometryVersion != geometryVersion) gVersionTrace.Count(gVersionTrace.NewGeometry);
+    }
     if (!skinned && geometryVersion != 0) {
         world = Multiply(worldFromModel, model);
         if (anchor != nullptr && anchor->Valid && anchor->GeometryVersion == geometryVersion) {
@@ -64,6 +97,17 @@ VirtualShadowCaster BuildPicaShadowCaster(const PicaShadowGeometryView& geometry
                 inside = std::isfinite(world[index]) &&
                          std::abs(double(world[index]) - double(anchor->World[index])) <= tolerance;
             }
+            if (gVersionTrace.Enabled && !inside) {
+                for (size_t index = 0; index < world.size(); ++index) {
+                    const double delta = std::abs(double(world[index]) - double(anchor->World[index]));
+                    if (!std::isfinite(delta) || index % 4 == 3) continue;
+                    double& maximum = index >= 12 ? gVersionTrace.MaxTranslation : gVersionTrace.MaxLinear;
+                    double& sum = index >= 12 ? gVersionTrace.SumTranslation : gVersionTrace.SumLinear;
+                    maximum = std::max(maximum, delta);
+                    sum += delta;
+                }
+            }
+            gVersionTrace.Count(inside ? gVersionTrace.Reused : gVersionTrace.Moved);
             if (inside) {
                 uint64_t pose = Hash(1469598103934665603ULL, geometryVersion);
                 for (size_t index = 0; index < world.size(); ++index) {
