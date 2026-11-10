@@ -1001,6 +1001,21 @@ void TestSceneSnapshots() {
     Require(!probe.CaptureRenderer(0,f.Memory).ScenePoints && !probe.CaptureRenderer(0,f.Memory).Water,"review gate leaked supplemental payload");
     probe.SetSupplementalPublication(true,true);
     Require(first.WorldToView && (*first.WorldToView)[12]==-10,"view transpose wrong");
+    {   // The renderer's own camera (renderer + 0x14, world-to-view at + 0x58) is the exact one.
+        const uint32_t camera=0x02008000U;
+        const float rows[] = {1,2e-5F,0,-10.25F,-2e-5F,1,0,-20,0,0,1,-30};
+        for (uint32_t i = 0; i < 12; ++i) f.F32(camera + 0x58U + i * 4U, rows[i]);
+        Require(probe.CaptureRenderer(f.Renderer,f.Memory).WorldToViewRotationError>0,"absent camera claimed exact");
+        f.W32(f.Renderer + 0x14U, camera);
+        const auto exact=probe.CaptureRenderer(f.Renderer,f.Memory);
+        Require(exact.WorldToView && (*exact.WorldToView)[12]==-10.25F && (*exact.WorldToView)[1]==-2e-5F &&
+                exact.WorldToViewRotationError==0,"renderer camera not used exactly");
+        f.F32(camera + 0x58U + 4U, 0.01F);   // another camera: not the View's
+        const auto other=probe.CaptureRenderer(f.Renderer,f.Memory);
+        Require(other.WorldToView && (*other.WorldToView)[12]==-10 && other.WorldToViewRotationError>0,
+                "disagreeing camera was used");
+        f.W32(f.Renderer + 0x14U, 0);
+    }
     probe.CaptureSceneLights(f.Play,f.Memory);
     Require(probe.CaptureRenderer(0,f.Memory).SceneDirectionals==first.SceneDirectionals,"same guest frame advanced continuity");
     f.W16(f.Play+0x148U,0x61);

@@ -6,6 +6,7 @@
 #include "recomp/a32_runtime.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cmath>
 #include <cstdio>
@@ -482,8 +483,40 @@ Fast::Renderer3ds::PicaNativeLightBinding Mm3dNativeA32LightingProbe::CaptureRen
     // The View's world-to-view is not bit-identical to the camera MM folds
     // into its model-views: measured rotation differences of 7.8e-6 median,
     // 3.4e-5 maximum, independent of camera speed (PERF LINUX_r7 round 14).
-    // The shadow anchor test bounds its pose check by that error.
-    if (result.WorldToView && Mm3dShadowPoseFixEnabled())
+    // A renderer's own camera is that exact matrix (mm3d_title_contracts.h);
+    // it is used when it is readable and agrees with the View (the same
+    // camera, not another one such as a stereo or menu camera). Otherwise the
+    // shadow anchor test bounds its pose check by the measured error.
+    bool exact = false;
+    uint32_t camera = 0;
+    if (result.WorldToView && Mm3dExactRenderCameraEnabled() && Object(renderer, 0x18U) &&
+        memory.Read32(renderer + kMm3dRendererCameraOffset, &camera) && Object(camera, 0x88U)) {
+        std::array<float, 16> own{}; own[15] = 1.0F;
+        bool valid = true;
+        for (uint32_t row = 0; valid && row < 3; ++row) for (uint32_t column = 0; valid && column < 4; ++column) {
+            uint32_t bits = 0;
+            valid = memory.Read32(camera + kMm3dRenderCameraWorldToViewOffset + (row * 4U + column) * 4U, &bits);
+            const float f = std::bit_cast<float>(bits);
+            const float view = (*result.WorldToView)[column * 4U + row];
+            // Rotation within 1e-3, translation within 1 unit of the View's.
+            valid = valid && std::isfinite(f) && std::fabs(f - view) <= (column == 3U ? 1.0F : 1.0e-3F);
+            own[column * 4U + row] = f;
+        }
+        if (valid) { result.WorldToView = own; exact = true; }
+    }
+    if (result.WorldToView) {
+        // TRIAEVUM_MM_CAMERA_TRACE=1: which camera the captures used (stderr, per 20000).
+        static const bool trace = [] { const char* v = std::getenv("TRIAEVUM_MM_CAMERA_TRACE"); return v && v[0] == '1'; }();
+        if (trace) {
+            static std::atomic<uint64_t> counts[3]{};
+            ++counts[exact ? 0 : (renderer ? 1 : 2)];
+            if (const uint64_t total = counts[0] + counts[1] + counts[2]; total % 20000U == 0U)
+                std::fprintf(stderr, "[mm-camera] exact=%llu rejected=%llu no-renderer=%llu\n",
+                    static_cast<unsigned long long>(counts[0].load()), static_cast<unsigned long long>(counts[1].load()),
+                    static_cast<unsigned long long>(counts[2].load()));
+        }
+    }
+    if (result.WorldToView && !exact && Mm3dShadowPoseFixEnabled())
         result.WorldToViewRotationError = kMm3dRenderCameraRotationError;
     const auto current = CaptureMm3dSceneEnvironment(memory);
     const bool snapshotCurrent = mHaveSnapshot && current.State && current.Play == mSnapshotPlay &&

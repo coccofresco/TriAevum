@@ -39,8 +39,8 @@ inline constexpr uint32_t kMm3dViewAtOffset = 0x34U;
 inline constexpr uint32_t kMm3dViewWorldToViewOffset = 0x17CU;
 // Largest measured per-element rotation difference between that matrix and
 // the camera inside MM's model-view uniforms (East Clock Town, walking:
-// 7.8e-6 median, 3.4e-5 max; PERF LINUX_r7 round 14). No bit-identical copy
-// of the render camera exists in guest memory to read instead.
+// 7.8e-6 median, 3.4e-5 max; PERF LINUX_r7 round 14). Used only for draws
+// whose renderer camera (below) is not available.
 inline constexpr float kMm3dRenderCameraRotationError = 3.4e-5F;
 // TRIAEVUM_MM_SHADOW_POSE_FIX=0 restores the previous shadow behaviour (exact
 // camera assumed; unattributed actor-part models stay static casters) for
@@ -48,6 +48,26 @@ inline constexpr float kMm3dRenderCameraRotationError = 3.4e-5F;
 [[nodiscard]] inline bool Mm3dShadowPoseFixEnabled() noexcept {
   static const bool enabled = [] {
     const char* value = std::getenv("TRIAEVUM_MM_SHADOW_POSE_FIX");
+    return value == nullptr || value[0] != '0';
+  }();
+  return enabled;
+}
+// The camera MM multiplies into its model-views. A model renderer (the
+// object at model + 0xA0 of the 0x0063BED4 model class) keeps a pointer to
+// its camera at + 0x14; that camera's world-to-view (Mtx34, rows) is at
+// + 0x58. The skeleton builder's callers (0x005E50A0, 0x005EAD98) copy it
+// (0x00140960) and pass it to both the bone model-view builder 0x005EDC08
+// (out = camera x bone world, 0x0021B640) and the renderer's light context
+// (0x005E7D34 / 0x005E8000), so it is the exact matrix in every model-view
+// and view-space light of that renderer. Read at the model draw entry, it
+// gives the shadow pass an exact world pose (no camera error bound).
+inline constexpr uint32_t kMm3dRendererCameraOffset = 0x14U;
+inline constexpr uint32_t kMm3dRenderCameraWorldToViewOffset = 0x58U;
+// TRIAEVUM_MM_EXACT_RENDER_CAMERA=0 uses the View's matrix with the error
+// bound (round 15 behaviour) for every draw. Default on.
+[[nodiscard]] inline bool Mm3dExactRenderCameraEnabled() noexcept {
+  static const bool enabled = [] {
+    const char* value = std::getenv("TRIAEVUM_MM_EXACT_RENDER_CAMERA");
     return value == nullptr || value[0] != '0';
   }();
   return enabled;
