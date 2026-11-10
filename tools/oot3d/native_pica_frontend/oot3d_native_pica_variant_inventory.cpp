@@ -32,6 +32,10 @@
 // given session recorded, i.e. the product profile), with the draw state that
 // derives from the record's registers. Synthesized modules carry no pipeline
 // recipe: the runtime prepares their pipelines in the background.
+// --synthesize-recorded adds the sessions' own draws as program sources (the
+// first register snapshot of each canonical fragment program), for a title
+// without a faithful Citra cache; they go through the same transplant and
+// identity check after any cache records.
 //
 // Every resolved request, recorded or synthesized, is checked for an
 // always-available program (strategy A.1): a parametric base, the effect
@@ -155,6 +159,9 @@ struct Options {
     std::vector<std::filesystem::path> SynthesizeCaches;
     std::vector<std::filesystem::path> SynthesizeEffects;
     std::filesystem::path SynthesisTrace;
+    // Program source for synthesis besides Citra caches: the register
+    // snapshots of the recorded sessions' own draws (one per canonical program).
+    bool SynthesizeRecorded = false;
     bool RequireWitness = false;
     // Recover only output-equivalent legacy contexts, never synthesize new
     // coverage from unknown inputs. Original witnesses remain mandatory.
@@ -309,8 +316,8 @@ int Usage() {
                  "       [--pipelines SESSION_PIPELINE_INVENTORY ...] --shader-inventory OUT\n"
                  "       [--pipeline-manifest OUT] --report OUT [--require-witness] [--require-uber]\n"
                  "       [--uber-gap-sources DIR]\n"
-                 "       [--infer-report OUT] [--synthesize-cache CACHE ... --synthesize-effects REQUESTS ...\n"
-                 "       [--synthesis-trace OUT]]\n";
+                 "       [--infer-report OUT] [--synthesize-cache CACHE ... | --synthesize-recorded]\n"
+                 "       [--synthesize-effects REQUESTS ... [--synthesis-trace OUT]]\n";
     return 64;
 }
 
@@ -380,9 +387,15 @@ int Run(const Options& options) {
 
     // Synthesis inputs: the target effects (recorded by every given session),
     // the context classes recorded under them, and a donor draw.
-    const bool synthesize = !options.SynthesizeCaches.empty();
+    const bool synthesize = !options.SynthesizeCaches.empty() || options.SynthesizeRecorded;
     if (synthesize && options.SynthesizeEffects.empty())
-        throw std::runtime_error("--synthesize-cache needs --synthesize-effects");
+        throw std::runtime_error("--synthesize-cache/--synthesize-recorded needs --synthesize-effects");
+    // --synthesize-recorded: the first draw of each canonical fragment program
+    // the sessions recorded, as a register snapshot (the program source a
+    // cache record would be). Programs a session drew only under other effects
+    // are thereby resolved under the target effects too.
+    std::vector<std::array<uint32_t, 0x300>> recordedPrograms;
+    std::set<std::tuple<uint64_t, uint64_t, uint64_t>> recordedProgramIds;
     std::map<std::string, Fast::Extension::EffectsSettings> targetEffects;
     for (size_t index = 0; index < options.SynthesizeEffects.size(); ++index) {
         Fast::Extension::PicaVariantRequestSession session;
@@ -479,6 +492,21 @@ int Run(const Options& options) {
                 donor = raw.Draws.front().Packet;
                 donorTevMode = shaderCache.TevMode;
                 donorUberFragments = raw.UberFragments;
+            }
+            if (options.SynthesizeRecorded) {
+                for (const auto& draw : raw.Draws) {
+                    Oot3dPicaDrawPacket alone;
+                    alone.Registers = draw.Packet.Registers;
+                    Oot3dPicaDecodedDrawState aloneState;
+                    Oot3dPicaGeneratedFragmentShader aloneShader;
+                    if (!DecodeOot3dPicaDrawState(alone, aloneState, &error) ||
+                        !GenerateOot3dPicaFragmentShader(alone, aloneState, aloneShader, &error,
+                                                         Oot3dPicaShaderBuildPurpose::OfflineSource))
+                        continue;  // counted as a source failure if synthesis meets it again
+                    const auto id = Oot3d::Renderer::IdentifyPicaShaderSource(aloneShader.Source);
+                    if (recordedProgramIds.insert({id.Id, id.SecondaryHash, id.Size}).second)
+                        recordedPrograms.push_back(draw.Packet.Registers);
+                }
             }
             // Frame facts (native fidelity, temporal motion, receivers) follow
             // from the effects: a context is replayed only with its own effects.
@@ -684,11 +712,10 @@ int Run(const Options& options) {
             for (const auto& [effects, classes] : contexts)
                 for (const auto& [key, context] : classes) trace << Json{{"context", key}}.dump() << '\n';
         }
-        for (const auto& path : options.SynthesizeCaches) {
-            std::ifstream stream(path, std::ios::binary);
-            if (!stream) throw std::runtime_error("cannot open cache: " + path.string());
-            for (const auto& record : ReadPicaTransferableCache(stream, PicaTransferableDialect::CitraLegacy)) {
-                if (record.Stage != PicaTransferableStage::Fragment) continue;
+        // One program source (a cache record's or a recorded draw's registers).
+        const auto synthesizeProgram = [&](const std::array<uint32_t, 0x300>& registers) {
+            {
+                const struct { const std::array<uint32_t, 0x300>& Registers; } record{registers};
                 ++records;
                 // The record's own canonical program, as the cache importer builds it.
                 Oot3dPicaDrawPacket alone;
@@ -699,13 +726,13 @@ int Run(const Options& options) {
                     !GenerateOot3dPicaFragmentShader(alone, aloneState, aloneShader, &error,
                                                      Oot3dPicaShaderBuildPurpose::OfflineSource)) {
                     ++sourceFailures;
-                    continue;
+                    return;
                 }
                 const auto program = Oot3d::Renderer::IdentifyPicaShaderSource(aloneShader.Source);
                 const bool recordRasterDepth = Oot3dPicaFragmentDepthIsRasterDepth(aloneState);
                 if (!programs.insert({program.Id, program.SecondaryHash, program.Size}).second) {
                     ++duplicates;
-                    continue;
+                    return;
                 }
                 // The specialized text leaves depth to fixed function only for
                 // Z-buffering with range -1 and near plane 0
@@ -805,7 +832,14 @@ int Run(const Options& options) {
                     }
                 }
             }
+        };
+        for (const auto& path : options.SynthesizeCaches) {
+            std::ifstream stream(path, std::ios::binary);
+            if (!stream) throw std::runtime_error("cannot open cache: " + path.string());
+            for (const auto& record : ReadPicaTransferableCache(stream, PicaTransferableDialect::CitraLegacy))
+                if (record.Stage == PicaTransferableStage::Fragment) synthesizeProgram(record.Registers);
         }
+        for (const auto& registers : recordedPrograms) synthesizeProgram(registers);
         synthesis = {{"caches", options.SynthesizeCaches.size()},
                      {"target_effects", targetEffects.size()},
                      {"contexts", std::accumulate(contexts.begin(), contexts.end(), size_t{0},
@@ -823,6 +857,7 @@ int Run(const Options& options) {
                      {"new_modules", newModules},
                      {"uber_programs", uberCounts},
                      {"rejected", rejected}};
+        if (options.SynthesizeRecorded) synthesis["recorded_programs"] = recordedPrograms.size();
     }
     if (!inventory.Finish(&error)) throw std::runtime_error(error);
 
@@ -967,6 +1002,8 @@ int main(int argc, char** argv) {
             options.InferReport = next();
         } else if (argument == "--synthesize-cache") {
             options.SynthesizeCaches.push_back(next());
+        } else if (argument == "--synthesize-recorded") {
+            options.SynthesizeRecorded = true;
         } else if (argument == "--synthesize-effects") {
             options.SynthesizeEffects.push_back(next());
         } else if (argument == "--synthesis-trace") {
@@ -978,7 +1015,8 @@ int main(int argc, char** argv) {
     if (options.Sessions.empty() || options.ShaderInventory.empty() || options.Report.empty()) return Usage();
     try {
         if (options.RecoverLegacyFragmentContext &&
-            (!options.RequireWitness || !options.SynthesizeCaches.empty() || !options.InferReport.empty()))
+            (!options.RequireWitness || !options.SynthesizeCaches.empty() || options.SynthesizeRecorded ||
+             !options.InferReport.empty()))
             throw std::runtime_error("legacy recovery requires --require-witness and forbids synthesis/inference");
         return Run(options);
     } catch (const std::exception& exception) {

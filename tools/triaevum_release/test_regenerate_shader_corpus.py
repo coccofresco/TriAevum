@@ -77,7 +77,10 @@ class VariantRecordTests(unittest.TestCase):
                     encoding="utf-8")
             elif name.startswith("oot3d_native_pica_variant_inventory"):
                 synthesis = {"programs": 2, "contexts": 3, "resolves": 12, "new_modules": 4,
-                             "uber_programs": {"available": 12}} if "--synthesize-cache" in command else None
+                             "uber_programs": {"available": 12}} \
+                    if "--synthesize-cache" in command or "--synthesize-recorded" in command else None
+                if "--synthesize-recorded" in command:
+                    synthesis["recorded_programs"] = 2
                 Path(_option(command, "--report")).write_text(json.dumps(
                     {"sessions": [{"requests": 191}], "witness_mismatches": 0, "uber_gaps": 0,
                      "synthesis": synthesis, "recipes": {"input": 1, "written": 1}}), encoding="utf-8")
@@ -148,6 +151,35 @@ class VariantRecordTests(unittest.TestCase):
         _session(self.root / "product" / "boot")
         with self.assertRaisesRegex(RuntimeError, "needs a Citra cache"):
             self._regenerate([(1, 0x11, 0x12, 13)], synthesis_effects=[self.root / "product"])
+
+    def test_synthesis_from_recorded_draws_needs_no_cache(self):
+        both = [(1, 0x11, 0x12, 13), (2, 0x21, 0x22, 23)]
+        product = _session(self.root / "product" / "boot")
+        _, _, commands, receipt = self._regenerate(both, synthesis_effects=[self.root / "product"],
+                                                   synthesis_recorded=True)
+        replay = next(command for command in commands if "--session" in command)
+        self.assertIn("--synthesize-recorded", replay)
+        self.assertNotIn("--synthesize-cache", replay)
+        self.assertEqual(_option(replay, "--synthesize-effects"), str(product / regeneration.VARIANT_REQUESTS))
+        step = next(step for step in receipt["steps"] if "variant_sessions" in step)
+        self.assertIn("recorded_programs", step["synthesis"])
+
+    def test_cache_synthesis_command_and_receipt_are_unchanged(self):
+        # EoT's invocation: no --synthesize-recorded, no recorded_programs key.
+        cache = self.root / "cache.bin"
+        cache.write_bytes(b"cache")
+        _session(self.root / "product" / "boot")
+        _, _, commands, receipt = self._regenerate([(1, 0x11, 0x12, 13), (2, 0x21, 0x22, 23)], caches=[cache],
+                                                   synthesis_effects=[self.root / "product"])
+        replay = next(command for command in commands if "--session" in command)
+        self.assertNotIn("--synthesize-recorded", replay)
+        step = next(step for step in receipt["steps"] if "variant_sessions" in step)
+        self.assertEqual(set(step["synthesis"]), {"effects_sessions", "programs", "contexts", "resolves",
+                                                  "new_modules", "uber_programs"})
+
+    def test_recorded_synthesis_without_effects_is_refused(self):
+        with self.assertRaisesRegex(RuntimeError, "needs --synthesis-effects"):
+            self._regenerate([(1, 0x11, 0x12, 13)], synthesis_recorded=True)
 
     def _capture_import(self, name: str, *, inventory_format=regeneration.CAPTURE_INVENTORY_FORMAT,
                         manifest_format=regeneration.PIPELINE_MANIFEST_FORMAT) -> tuple[Path, Path]:

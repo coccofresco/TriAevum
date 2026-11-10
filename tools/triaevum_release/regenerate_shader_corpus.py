@@ -139,7 +139,8 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
                variant_records: list[Path] | None = None, root: Path = ROOT,
                compile_cache: Path | None = None, jobs: int | None = None,
                synthesis_effects: list[Path] | None = None,
-               capture_imports: list[tuple[Path, Path]] | None = None) -> dict:
+               capture_imports: list[tuple[Path, Path]] | None = None,
+               synthesis_recorded: bool = False) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     suffix = ".exe" if (tools / "oot3d_native_pica_aot_compiler.exe").exists() else ""
     tool = {name: str(tools / f"oot3d_native_pica_{name}{suffix}")
@@ -198,8 +199,10 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
     targets = variant_sessions(synthesis_effects or [])
     if targets and not sessions:
         raise RuntimeError("--synthesis-effects needs recorded sessions (--variant-records)")
-    if targets and not caches:
-        raise RuntimeError("--synthesis-effects needs a Citra cache (--citra-cache)")
+    if targets and not caches and not synthesis_recorded:
+        raise RuntimeError("--synthesis-effects needs a Citra cache (--citra-cache) or --synthesis-recorded")
+    if synthesis_recorded and not targets:
+        raise RuntimeError("--synthesis-recorded needs --synthesis-effects")
     policies = [json.loads(session["policy_inputs"].read_text(encoding="utf-8")) for session in sessions]
     requests = 0
     if sessions:
@@ -212,6 +215,8 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
                         "--pipelines", str(session["pipelines"])]
         for cache in caches if targets else []:
             command += ["--synthesize-cache", str(cache)]
+        if synthesis_recorded:
+            command += ["--synthesize-recorded"]
         for target in targets:
             command += ["--synthesize-effects", str(target["variant_requests"])]
         command += ["--shader-inventory", str(shaders), "--pipeline-manifest", str(manifest),
@@ -236,7 +241,9 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
                       "synthesis": None if synthesis is None else {
                           "effects_sessions": [str(target["directory"]) for target in targets],
                           **{key: synthesis.get(key) for key in ("programs", "contexts", "resolves",
-                                                                  "new_modules", "uber_programs")}},
+                                                                  "new_modules", "uber_programs")},
+                          **({"recorded_programs": synthesis.get("recorded_programs")}
+                             if synthesis_recorded else {})},
                       "recipes": report.get("recipes"), "shaders": shaders.name, "pipelines": manifest.name,
                       "report": report_path.name, "seconds": round(seconds, 1)})
     pack = output / "expanded-union.o3ps"
@@ -304,6 +311,10 @@ def main() -> int:
     parser.add_argument("--synthesis-effects", type=Path, action="append", default=[],
                         help="Directory of recorded sessions of the shipped profile: the Citra caches' programs "
                              "are synthesized under the effects they all recorded (repeatable)")
+    parser.add_argument("--synthesis-recorded", action="store_true",
+                        help="Also take the recorded sessions' own draws (one register snapshot per canonical "
+                             "fragment program) as synthesis program sources: a title without a faithful Citra "
+                             "cache (MM3D)")
     parser.add_argument("--output", type=Path, required=True, help="New private output directory")
     parser.add_argument("--compile-cache", type=Path,
                         help="Publisher SPIR-V cache shared between regenerations (private)")
@@ -314,7 +325,8 @@ def main() -> int:
     print(json.dumps(regenerate(args.tools, args.capture_corpus, args.citra_cache, args.output,
                                 args.variant_records, compile_cache=args.compile_cache, jobs=args.jobs,
                                 synthesis_effects=args.synthesis_effects,
-                                capture_imports=[tuple(pair) for pair in args.capture_inventory]),
+                                capture_imports=[tuple(pair) for pair in args.capture_inventory],
+                                synthesis_recorded=args.synthesis_recorded),
                      indent=2))
     return 0
 
