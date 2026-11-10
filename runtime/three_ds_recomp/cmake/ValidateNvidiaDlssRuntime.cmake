@@ -4,7 +4,41 @@ endif()
 if(NOT EXPECTED_VERSION)
     message(FATAL_ERROR "EXPECTED_VERSION is required")
 endif()
-if(NOT WIN32)
+if(NOT CMAKE_HOST_WIN32)
+    # A Windows runtime (nvngx_dlss.dll) verified on a non-Windows build host (MinGW cross-build):
+    # osslsigncode against a pinned trust bundle, see tools/triaevum_release/dlss_runtime_signature.py.
+    # Never skipped silently. A Linux runtime (.so) carries no Authenticode signature: unchanged.
+    if(NOT RUNTIME_PATH MATCHES "\\.[dD][lL][lL]$")
+        return()
+    endif()
+    foreach(_required OSSLSIGNCODE TRUST_BUNDLE TRUST_BUNDLE_SHA256)
+        if(NOT ${_required})
+            message(FATAL_ERROR
+                "Rejected DLSS runtime '${RUNTIME_PATH}': verifying a Windows runtime on a "
+                "non-Windows host needs -D${_required} (osslsigncode and a pinned trust bundle)")
+        endif()
+    endforeach()
+    if(NOT PYTHON_EXECUTABLE)
+        find_program(PYTHON_EXECUTABLE NAMES python3 python REQUIRED)
+    endif()
+    get_filename_component(_validator
+        "${CMAKE_CURRENT_LIST_DIR}/../../../tools/triaevum_release/dlss_runtime_signature.py" ABSOLUTE)
+    execute_process(
+        COMMAND "${PYTHON_EXECUTABLE}" -I "${_validator}"
+            --runtime "${RUNTIME_PATH}" --expected-version "${EXPECTED_VERSION}"
+            --osslsigncode "${OSSLSIGNCODE}" --trust-bundle "${TRUST_BUNDLE}"
+            --trust-bundle-sha256 "${TRUST_BUNDLE_SHA256}"
+        RESULT_VARIABLE _result
+        OUTPUT_VARIABLE _output
+        ERROR_VARIABLE _error
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_STRIP_TRAILING_WHITESPACE)
+    if(NOT _result EQUAL 0)
+        message(FATAL_ERROR
+            "Rejected DLSS runtime '${RUNTIME_PATH}' (validator ${_result}): "
+            "${_error}${_output}")
+    endif()
+    message(STATUS "${_output}")
     return()
 endif()
 
