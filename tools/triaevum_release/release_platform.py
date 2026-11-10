@@ -58,6 +58,13 @@ WINDOWS = ReleasePlatform("x86_64-pc-windows-msvc", "runtime/TriAevum.exe",
                           "triaevum_title_aot.dll", "x86_64-windows-thinlto-release-v1",
                           "clang-cl.exe", "llvm-lib.exe", "triaevum_title_whole_aot_support.lib", ".zip",
                           "Echoes_of_Time.exe")
+# The same Windows product built with llvm-mingw (Itanium C++ ABI, libc++,
+# UCRT) on the Linux build machine: a platform of its own (XBUILD Q2), so that
+# modules and title caches of the MSVC-ABI product are never mixed with it.
+# Its title module and support library come from GNU-style Clang (linux_title).
+WINDOWS_GNU = replace(WINDOWS, target="x86_64-w64-windows-gnu",
+                      profile="x86_64-windows-gnu-release-v1", compiler="clang++",
+                      archiver="llvm-ar", support_library="libtriaevum_title_whole_aot_support.a")
 LINUX = ReleasePlatform("x86_64-unknown-linux-gnu", "TriAevum",
                         "TriAevumForge", "forge/oot3d_game_module.so",
                         "triaevum_title_aot.so", "x86_64-linux-thinlto-release-v1",
@@ -82,7 +89,7 @@ ANDROID = ReleasePlatform("aarch64-linux-android", "lib/arm64-v8a/libTriAevum.so
 def for_title(title: str, value: ReleasePlatform = None) -> ReleasePlatform:
     """The Windows or Linux platform of `title`'s product (its installed executable name)."""
     value = WINDOWS if value is None else value
-    if value.target == WINDOWS.target:
+    if is_windows(value):
         return replace(value, installed_runtime=product_executable(title))
     if value.target == LINUX.target:
         return replace(value, installed_runtime=product_executable(title, os_name="linux"))
@@ -105,7 +112,7 @@ def installed_runtime_path(root: Path, value: ReleasePlatform) -> Path:
     if packaged.is_file():
         return packaged
     installed, legacy = root / value.installed_runtime, root / LEGACY_WINDOWS_RUNTIME
-    if value.target == WINDOWS.target and not installed.is_file() and legacy.is_file():
+    if is_windows(value) and not installed.is_file() and legacy.is_file():
         return legacy
     return installed
 
@@ -146,17 +153,21 @@ def place_installed_runtime(root: Path, value: ReleasePlatform) -> Path:
         os.replace(packaged, installed)
         # No second, stale game executable under the pre-product name.
         legacy = root / LEGACY_WINDOWS_RUNTIME
-        if value.target == WINDOWS.target and legacy != installed and legacy.is_file():
+        if is_windows(value) and legacy != installed and legacy.is_file():
             legacy.unlink()
     return installed
 
 
-def is_windows(value: ReleasePlatform) -> bool:
-    return value.target == WINDOWS.target
+WINDOWS_TARGETS = ("x86_64-pc-windows-msvc", "x86_64-w64-windows-gnu")
+
+
+def is_windows(value: "ReleasePlatform | str") -> bool:
+    """Any Windows product (MSVC-ABI or llvm-mingw); takes a platform or a target."""
+    return (value if isinstance(value, str) else value.target) in WINDOWS_TARGETS
 
 
 def for_target(target: str) -> ReleasePlatform:
-    for item in (WINDOWS, LINUX, MACOS):
+    for item in (WINDOWS, WINDOWS_GNU, LINUX, MACOS):
         if target == item.target:
             return item
     raise ValueError(f"Unsupported release target: {target}")

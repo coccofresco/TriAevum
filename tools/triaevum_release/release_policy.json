@@ -47,6 +47,96 @@
     ], "restoration_layout_recipe": ["bd1e6820126405c48e2f89e30f87fd5df34f1ae5aab9dccc9cfc3c94755fde70"], "restoration_patch": ["4dc95d1a920db24c9fdb3b636ef0c15202f341658db7a92d210f25fc909660c5", "4fa3a63a836296999d74651ac3d816d623c5ae6b44aaeb476d11c8983687f322", "7496fe3589fa8f7d2e56b9ae690ebb719334567f3093d05b5d2ea459ebf76ce2", "752f66f30721191b2f9a6fb11995821f8130635219fd849a3aa93b705e2ca586", "8c817c05553cac5e19f47d7020be9ded6c56c0b26e5d10ff2c96f377ca9ddd4b", "a2f5c94ab872fcfb964cc74cd1a5977108e2b536c7ebfb3ca399ca783bf7b45f", "bdf12bef65868c3b0d35fec3c1fadf93f34a97bf79b9c47fb5280710a1094206"], "restoration_original_member": ["0f3079d21d0a848289ed90e94336a9f6b68704c77ac9f9b7d04a321e22707add", "19814f879d8944ff9cd8ca7e30eb7bed3e55285ee79e6af4c4c9420f9b5feb0e", "6bc5ef3e6d7d3d24571a3a9a3cb7b70a858499e0ccf0af2ae7087fcddd1894b6", "6fab0d7e2519344fe7df8a901d44d38a5e4d0e7eee50e5f90fe537f19b828e2c", "8ee7d8087bccdcd51f986512f655aa9659631041b725e28edd09eaaaff3d7ac5", "c3dc8693bc6359686dee07fb96dc4be1404c728dddbc7d170388a5626ba35ae9", "d61e3c7e90afba082b9b00859328f2e060e3fbee66239dc51042b4d1bb2011da"]
   },
   "platforms": {
+    "x86_64-w64-windows-gnu": {
+      "allowed_roles": {
+        "runtime_executable": [
+          "runtime/TriAevum.exe"
+        ],
+        "forge_executable": [
+          "TriAevumForge.exe"
+        ],
+        "forge_tool": [
+          "forge/*.exe"
+        ],
+        "shader_preparation_tool": [
+          "forge/oot3d_native_pica_aot_compiler.exe",
+          "forge/oot3d_native_nri_pipeline_prepare.exe"
+        ],
+        "forge_toolchain_setup": [
+          "forge/toolchain-setup.json",
+          "forge/toolchain-plan.json",
+          "forge/toolchain-license.txt"
+        ],
+        "forge_link_library": [
+          "forge/*.lib"
+        ],
+        "forge_tool_resource": [
+          "lib/clang/*",
+          "lib/clang/**/*"
+        ],
+        "forge_runtime_module": [
+          "forge/*.dll"
+        ],
+        "runtime_library": [
+          "runtime/*.dll"
+        ],
+        "separately_licensed_module": [
+          "runtime/triaevum_immerse.dll",
+          "runtime/triaevum_dlss.dll",
+          "runtime/nvngx_dlss.dll"
+        ],
+        "optional_vulkan_runtime": [
+          "runtime/amd_fidelityfx_vk.dll"
+        ],
+        "precompiled_title": [
+          "titles/*/triaevum_title_aot.dll"
+        ],
+        "documentation": [
+          "README.md",
+          "docs/*",
+          "docs/**/*"
+        ],
+        "root_runtime_library": [
+          "libc++.dll",
+          "libunwind.dll",
+          "shaderc_shared.dll"
+        ]
+      },
+      "required_paths": [
+        "runtime/TriAevum.exe",
+        "TriAevumForge.exe",
+        "forge/oot3d_game_module.dll",
+        "docs/LICENSE_SCOPE.md",
+        "docs/THIRD_PARTY_NOTICES.md",
+        "docs/SOURCE_OFFER.md",
+        "libc++.dll",
+        "libunwind.dll",
+        "shaderc_shared.dll",
+        "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+        "LICENSES/mingw-w64.txt"
+      ],
+      "forge_profiles": {
+        "python_pyinstaller": {
+          "required_paths": [
+            "LICENSES/Python-3.13.txt"
+          ]
+        },
+        "rust": {
+          "allowed_roles": {
+            "forge_command_line": [
+              "forge/triaevum-forge.exe"
+            ],
+            "forge_update_helper": [
+              "forge/triaevum-update-helper.exe"
+            ]
+          },
+          "required_paths": [
+            "forge/triaevum-forge.exe",
+            "forge/triaevum-update-helper.exe"
+          ]
+        }
+      }
+    },
     "x86_64-pc-windows-msvc": {
       "allowed_roles": {
         "runtime_executable": ["runtime/TriAevum.exe"],

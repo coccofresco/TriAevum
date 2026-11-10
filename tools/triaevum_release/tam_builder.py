@@ -40,6 +40,7 @@ SUPPORTED_TARGET_TRIPLES = {
     "aarch64-unknown-linux-gnu",
     "x86_64-apple-darwin",
     "x86_64-pc-windows-msvc",
+    "x86_64-w64-windows-gnu",
     "x86_64-unknown-linux-gnu",
 }
 HEADER = struct.Struct("<8sHHHHIIQQ24s")

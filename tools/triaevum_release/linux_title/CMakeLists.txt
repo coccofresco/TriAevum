@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.26)
 project(TriAevumLinuxTitle LANGUAGES CXX)
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-    message(FATAL_ERROR "This publisher target currently supports Linux x86_64 only")
+# Linux x86_64, and the llvm-mingw Windows x86_64 product (the same GNU-style
+# Clang driver and flags; CMake/TriAevumLlvmMingwToolchain.cmake).
+if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR MINGW) OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    message(FATAL_ERROR "This publisher target supports Linux x86_64 and llvm-mingw Windows x86_64 only")
 endif()
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(FATAL_ERROR "Use Clang for the strict floating-point title build")

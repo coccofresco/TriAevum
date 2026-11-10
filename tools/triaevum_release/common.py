@@ -74,7 +74,8 @@ RELEASE_MANIFEST_PATHS = ("release-manifest.json", "docs/release-manifest.json")
 
 
 def release_manifest_relative(target: str) -> str:
-    return RELEASE_MANIFEST_PATHS[1] if target == "x86_64-pc-windows-msvc" else RELEASE_MANIFEST_PATHS[0]
+    return RELEASE_MANIFEST_PATHS[1] if target in ("x86_64-pc-windows-msvc", "x86_64-w64-windows-gnu") \
+        else RELEASE_MANIFEST_PATHS[0]
 
 
 def release_manifest_path(package: Path) -> Path:

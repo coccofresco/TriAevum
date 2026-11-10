@@ -253,10 +253,11 @@ def _function_symbol(entry: int) -> str:
     return f"triaevum_aot_function_{entry:08x}"
 
 
-def render_function_shard(functions: Sequence[DirectFunction]) -> str:
+def render_function_shard(functions: Sequence[DirectFunction],
+                          target_triple: str = "x86_64-pc-windows-msvc") -> str:
     lines = [
         '; TriAevum direct AOT function shard',
-        'target triple = "x86_64-pc-windows-msvc"',
+        f'target triple = "{target_triple}"',
         '',
         '%triaevum.Flow = type { i8, i32, i32 }',
         '%triaevum.PackedOp = type { i32, i32 }',
@@ -349,6 +350,7 @@ def render_registry(
     functions: Sequence[DirectFunction],
     dispatch_pcs: Sequence[int],
     dispatch_owners: Sequence[int],
+    target_triple: str = "x86_64-pc-windows-msvc",
 ) -> str:
     declarations = [
         f"declare void @{_function_symbol(function.entry)}("
@@ -361,7 +363,7 @@ def render_registry(
     return "\n".join(
         [
             "; TriAevum direct AOT registry",
-            'target triple = "x86_64-pc-windows-msvc"',
+            f'target triple = "{target_triple}"',
             "",
             "%triaevum.Program = type { i32, i32, ptr, ptr, i64, ptr, i64 }",
             *declarations,
@@ -523,13 +525,13 @@ def build_direct_aot_plugin(
     sources: list[tuple[Path, Path]] = []
     for index, shard in enumerate(shards):
         source = ir_root / f"shard_{index:03d}.ll"
-        source_bytes = render_function_shard(shard).encode("utf-8")
+        source_bytes = render_function_shard(shard, toolchain.target_triple).encode("utf-8")
         if not source.is_file() or source.read_bytes() != source_bytes:
             source.write_bytes(source_bytes)
         sources.append((source, object_root / f"shard_{index:03d}.obj"))
     registry_source = ir_root / "registry.ll"
     registry_bytes = render_registry(
-        functions, dispatch_pcs, dispatch_owners
+        functions, dispatch_pcs, dispatch_owners, toolchain.target_triple
     ).encode("utf-8")
     if (
         not registry_source.is_file()
