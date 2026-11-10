@@ -4,5 +4,6 @@
   "product_name": "Echoes of Time",
   "windows_executable": "Echoes_of_Time.exe",
   "linux_executable": "Echoes_of_Time",
-  "pipeline_cache_namespace": ""
+  "pipeline_cache_namespace": "",
+  "desktop_input_admission": "auto"
 }

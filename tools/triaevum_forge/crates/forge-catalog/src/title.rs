@@ -66,7 +66,9 @@ pub const OOT3D: ForgeTitle = ForgeTitle {
     offline_interior_sun: true,
     topscreen_ui: true,
     pipeline_cache_namespace: "",
-    desktop_input_admission: "",
+    // Parity with MC: EoT user_b at 4K on the Linux box 48.9 -> 68.3 fps, Kokiri
+    // 83.9 -> 88.9 (PERF/LINUX_r7.md rounds 18-19). Input latency to be signed off.
+    desktop_input_admission: "auto",
 };
 
 pub const MM3D: ForgeTitle = ForgeTitle {
@@ -210,7 +212,7 @@ mod tests {
             let facts: serde_json::Value = serde_json::from_str(facts).unwrap();
             assert_eq!(facts["desktop_input_admission"].as_str().unwrap_or(""), title.desktop_input_admission);
         }
-        assert_eq!(OOT3D.desktop_input_admission, "");
+        assert_eq!(OOT3D.desktop_input_admission, "auto");
         assert_eq!(MM3D.desktop_input_admission, "auto");
         assert_eq!(MM3D.pipeline_cache_namespace, "mm3d");
     }

@@ -108,7 +108,7 @@ fn installs_the_precompiled_title_and_publishes_the_runtime() {
     // A plain package is its own activation: its data is a runtime_dir path.
     assert_eq!(arguments[10 - shift / 2..12 - shift / 2], ["--config", "${runtime_dir}/data/config/TriAevum.json"]);
     assert_eq!(arguments[24 - shift..26 - shift], ["--height", "720"]);
-    // A title's desktop admission policy is the last option; none for OoT3D.
+    // A title's desktop admission policy is the last option (auto for both titles).
     let admission = forge_catalog::title::ACTIVE.desktop_input_admission;
     let end = if admission.is_empty() {
         assert!(!arguments.contains(&"--input-admission"), "{arguments:?}");
