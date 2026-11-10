@@ -5,6 +5,12 @@ namespace Fast::Extension {
 std::string BuildGrassVertexShader();
 // Once per visible root, before the blades: the lighting every blade vertex reads.
 std::string BuildGrassRootLightingComputeShader();
+// Experiment (TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE=1): the same program with a
+// per-anchor result buffer (binding 15). depth_state.x: 1 evaluates and stores
+// per anchor with stamp depth_state.y (bits), 2 reuses an anchor's result of
+// that stamp and environment, evaluating only roots without one. Empty if the
+// program text no longer has the expected form.
+std::string BuildGrassRootLightingReuseComputeShader();
 // rasterDepth: the blades' PICA depth equals the rasterized depth, so the
 // program leaves depth to fixed function and keeps early depth testing.
 // wholeBlades (with rasterDepth): no LOD stipple and no tuft cutout, hence no

@@ -2264,6 +2264,20 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
                 std::fprintf(stderr, "[ab]     %s: pre_window_depth_tie=%llu in_window=%llu at%s\n", name,
                              static_cast<unsigned long long>(preWindowTie),
                              static_cast<unsigned long long>(differing - preWindowTie), where.c_str());
+            // RGBA8 targets: non-zero texels per channel of A, and B >= 254
+            // (the material guide's water mark).
+            if (texel == 4U && component == 1U) {
+                std::array<uint64_t, 5> channels{};
+                for (uint64_t pixel = 0; pixel < pixels; ++pixel) {
+                    const uint8_t* l = left + pixel * 4U;
+                    for (uint32_t c = 0; c < 4U; ++c) channels[c] += l[c] != 0U ? 1U : 0U;
+                    channels[4] += l[2] >= 254U ? 1U : 0U;
+                }
+                std::fprintf(stderr, "[ab]     %s: nonzero_r=%llu g=%llu b=%llu a=%llu b_ge254=%llu\n", name,
+                             static_cast<unsigned long long>(channels[0]), static_cast<unsigned long long>(channels[1]),
+                             static_cast<unsigned long long>(channels[2]), static_cast<unsigned long long>(channels[3]),
+                             static_cast<unsigned long long>(channels[4]));
+            }
         };
         compare(image.Name, a, b, image.TexelBytes, image.ComponentBytes);
         if ((image.Aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0U)

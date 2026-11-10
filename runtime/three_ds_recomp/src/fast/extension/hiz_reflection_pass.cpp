@@ -11,12 +11,71 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string>
+#include <utility>
 #include <stdexcept>
 #include <vector>
 
 namespace Fast::Extension {
 namespace {
+
+// Experiment, default off: TRIAEVUM_REFLECTION_QUARTER=1 traces and filters
+// the reflection at a quarter of the scene's resolution per axis (instead of
+// half) and the existing upsample brings it to the scene (its 2x2 rule
+// widened to 4x4: a pixel takes the samples at or after it that saw the same
+// surface). The shader texts are rewritten from the half-resolution ones; if
+// any expected line is missing the pass stays at half resolution.
+bool ReflectionQuarterRequested() {
+    static const bool requested = [] {
+        const char* value = std::getenv("TRIAEVUM_REFLECTION_QUARTER");
+        return value != nullptr && value[0] == '1';
+    }();
+    return requested;
+}
+
+bool ReplaceEach(std::string& source, const std::vector<std::pair<std::string, std::string>>& edits) {
+    for (const auto& [from, to] : edits) {
+        const size_t at = source.find(from);
+        if (at == std::string::npos) return false;
+        for (size_t next = at; next != std::string::npos; next = source.find(from, next + to.size()))
+            source.replace(next, from.size(), to);
+    }
+    return true;
+}
+
+struct ReflectionSources {
+    std::string Trace, Filter, Upsample;
+    uint32_t Scale = 2U;
+};
+
+ReflectionSources BuildReflectionSources() {
+    ReflectionSources sources{BuildHiZReflectionComputeShader(), BuildHiZReflectionBilateralFilterShader(),
+                              BuildHiZReflectionUpsampleShader(), 2U};
+    if (!ReflectionQuarterRequested()) return sources;
+    ReflectionSources quarter = sources;
+    const std::string halfExtent = "ivec2 half_extent = (ivec2(pc.extent) + 1) / 2;";
+    const std::string quarterExtent = "ivec2 half_extent = (ivec2(pc.extent) + 3) / 4;";
+    const bool applied =
+        ReplaceEach(quarter.Trace, {{"ivec2 full = pixel * 2;", "ivec2 full = pixel * 4;"}}) &&
+        ReplaceEach(quarter.Filter, {{"clamp(q * 2, ivec2(0)", "clamp(q * 4, ivec2(0)"}, {halfExtent, quarterExtent}}) &&
+        ReplaceEach(quarter.Upsample, {{halfExtent, quarterExtent},
+                                       {"ivec2 base = pixel >> 1;", "ivec2 base = pixel >> 2;"},
+                                       {"ivec2 odd = pixel & 1;", "ivec2 odd = ivec2(greaterThan(pixel & 3, ivec2(0)));"},
+                                       {"min(q * 2, ivec2(pc.extent) - 1)", "min(q * 4, ivec2(pc.extent) - 1)"}});
+    // The water normal's footprint follows the sample spacing (optional).
+    if (applied) {
+        (void)ReplaceEach(quarter.Trace, {{"float footprint = depth * 2.0 *", "float footprint = depth * 4.0 *"}});
+        (void)ReplaceEach(quarter.Filter, {{"float footprint = depth * 2.0 *", "float footprint = depth * 4.0 *"}});
+        quarter.Scale = 4U;
+        std::fprintf(stderr, "[reflection] quarter resolution (TRIAEVUM_REFLECTION_QUARTER=1)\n");
+        return quarter;
+    }
+    std::fprintf(stderr, "[reflection] TRIAEVUM_REFLECTION_QUARTER=1 not applied (shader text changed)\n");
+    return sources;
+}
 struct ReflectionPush {
     uint32_t Width, Height;
     float InvWidth, InvHeight, Strength, MaxDistance, Thickness, EdgeFade;
@@ -45,6 +104,7 @@ struct HiZReflectionPass::Impl {
     nri::CoreInterface* Core = nullptr;
     nri::PipelineLayout* PipelineLayout = nullptr;
     nri::Pipeline* RayPipeline = nullptr;
+    uint32_t TraceScale = 2U;
     nri::Pipeline* FilterPipeline = nullptr;
     nri::Pipeline* UpsamplePipeline = nullptr;
     nri::Descriptor* LinearSampler = nullptr;
@@ -162,12 +222,14 @@ bool HiZReflectionPass::Initialize(VkPhysicalDevice physicalDevice,
                 throw std::runtime_error(std::string("NRI ") + name +
                                          " pipeline failed");
         };
-        createPipeline(BuildHiZReflectionComputeShader(),
+        const auto sources = BuildReflectionSources();
+        mImpl->TraceScale = sources.Scale;
+        createPipeline(sources.Trace,
                        "oot3d_hiz_reflection.comp", mImpl->RayPipeline);
-        createPipeline(BuildHiZReflectionBilateralFilterShader(),
+        createPipeline(sources.Filter,
                        "oot3d_hiz_reflection_filter.comp",
                        mImpl->FilterPipeline);
-        createPipeline(BuildHiZReflectionUpsampleShader(),
+        createPipeline(sources.Upsample,
                        "oot3d_hiz_reflection_upsample.comp",
                        mImpl->UpsamplePipeline);
         const auto createSampler = [&](nri::Filter filter,
@@ -506,10 +568,10 @@ bool HiZReflectionPass::Execute(VkCommandBuffer commandBuffer,
         return true;
     };
     mImpl->Interop->TimelineMark(frameSlot, "reflection trace");
-    dispatch(mImpl->RayPipeline, mImpl->RaySets[slot], 2U);
+    dispatch(mImpl->RayPipeline, mImpl->RaySets[slot], mImpl->TraceScale);
     mImpl->Interop->TimelineMark(frameSlot, "reflection filter");
     if (!toRead(0U)) return false;
-    dispatch(mImpl->FilterPipeline, mImpl->FilterSets[slot], 2U);
+    dispatch(mImpl->FilterPipeline, mImpl->FilterSets[slot], mImpl->TraceScale);
     mImpl->Interop->TimelineMark(frameSlot, "reflection upsample");
     if (!toRead(2U)) return false;
     dispatch(mImpl->UpsamplePipeline, mImpl->UpsampleSets[slot], 1U);

@@ -2,6 +2,7 @@
 #include "oot3d_native_a32_window_session.h"
 #include "oot3d_overlay_acceptance_driver.h"
 #include "fast/extension/visual_clock.h"
+#include "fast/extension/presentation_freeze.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "oot3d/renderer/ui_presentation_layout.h"
 #include "oot3d_hud_button_labels.h"
@@ -304,7 +305,23 @@ bool NativeA32WindowSession::RunFrame() {
   // Decided from the menu as the previous frame left it, so a frame never
   // changes its mind halfway; closing resumes from the same clock phase.
   // With the menu closed this is the unchanged schedule.
-  const bool guestHeld = inGameMenu.HoldsGame();
+  // TRIAEVUM_FREEZE_FRAME=N (diagnostic, default off): from guest refresh N
+  // on the game is held as by the menu; the last guest frame is presented
+  // again (presentation_freeze.h).
+  // N counts the guest refreshes after the first presented frame (the
+  // loaded state's own count is the base).
+  static const uint64_t freezeAfter = Fast::Extension::PresentationFreezeFrame();
+  static uint64_t freezeBase = ~0ULL;
+  if (freezeAfter != 0U && freezeBase == ~0ULL) freezeBase = frameCount;
+  const uint64_t freezeFrame = freezeAfter != 0U ? freezeBase + freezeAfter : 0U;
+  static bool freezeReported = false;
+  if (freezeFrame != 0U && frameCount >= freezeFrame && !freezeReported) {
+    freezeReported = true;
+    std::fprintf(stderr, "[freeze] guest held at frame %llu (base %llu, +%llu), presentation %llu\n",
+                 static_cast<unsigned long long>(frameCount), static_cast<unsigned long long>(freezeBase),
+                 static_cast<unsigned long long>(freezeAfter), static_cast<unsigned long long>(runFrameCount));
+  }
+  const bool guestHeld = inGameMenu.HoldsGame() || (freezeFrame != 0U && frameCount >= freezeFrame);
   const auto presentationStep =
       guestHeld ? Oot3dNativeGame::NativePresentationStep{}
                 : presentationScheduler.Advance(presentationElapsedSeconds);
@@ -744,7 +761,8 @@ bool NativeA32WindowSession::RunFrame() {
       std::max<uint32_t>(1U, guestRefreshesDue);
   for (uint32_t guestRefreshIndex = 0;
        guestRefreshIndex < guestRefreshIterations; ++guestRefreshIndex) {
-    const bool advanceGuest = guestRefreshIndex < guestRefreshesDue;
+    const bool advanceGuest = guestRefreshIndex < guestRefreshesDue &&
+        !(freezeFrame != 0U && frameCount >= freezeFrame);
     const bool presentHostFrame =
         guestRefreshIndex + 1U == guestRefreshIterations;
     if (advanceGuest) {

@@ -1101,6 +1101,43 @@ void main() {
 )glsl";
 }
 
+std::string BuildGrassRootLightingReuseComputeShader() {
+    std::string source = BuildGrassRootLightingComputeShader();
+    const auto replace = [&source](std::string_view from, std::string_view to) {
+        const size_t at = source.find(from);
+        if (at == std::string::npos || source.find(from, at + 1U) != std::string::npos) return false;
+        source.replace(at, from.size(), to);
+        return true;
+    };
+    const bool applied =
+        replace("layout(std430,set=0,binding=14) readonly buffer GrassSelectionControl { uint values[]; } selection_control;\n",
+                "layout(std430,set=0,binding=14) readonly buffer GrassSelectionControl { uint values[]; } selection_control;\n"
+                "// Per static anchor: lighting (w: stamp bits), ambient response (w: environment bits).\n"
+                "layout(std430,set=0,binding=15) buffer GrassAnchorLighting { vec4 values[]; } anchor_lighting;\n") &&
+        replace("    uint first = root_anchor_indices.values[root_index] * 3u;\n",
+                "    uint anchor = root_anchor_indices.values[root_index];\n"
+                "    uint reuse_mode = uint(grass.depth_state.x + 0.5);\n"
+                "    uint reuse_stamp = floatBitsToUint(grass.depth_state.y);\n"
+                "    if (reuse_mode == 2u) {\n"
+                "        vec4 stored_lighting = anchor_lighting.values[anchor * 2u];\n"
+                "        vec4 stored_ambient = anchor_lighting.values[anchor * 2u + 1u];\n"
+                "        if (floatBitsToUint(stored_lighting.w) == reuse_stamp &&\n"
+                "            floatBitsToUint(stored_ambient.w) == environment_index) {\n"
+                "            root_lighting.values[root_index * 2u] = vec4(stored_lighting.xyz, 0.0);\n"
+                "            root_lighting.values[root_index * 2u + 1u] = vec4(stored_ambient.xyz, 0.0);\n"
+                "            return;\n"
+                "        }\n"
+                "    }\n"
+                "    uint first = anchor * 3u;\n") &&
+        replace("    root_lighting.values[root_index * 2u + 1u] = vec4(ambient_response, 0.0);\n}\n",
+                "    root_lighting.values[root_index * 2u + 1u] = vec4(ambient_response, 0.0);\n"
+                "    if (reuse_mode == 1u) {\n"
+                "        anchor_lighting.values[anchor * 2u] = vec4(lighting, uintBitsToFloat(reuse_stamp));\n"
+                "        anchor_lighting.values[anchor * 2u + 1u] = vec4(ambient_response, uintBitsToFloat(environment_index));\n"
+                "    }\n}\n");
+    return applied ? source : std::string();
+}
+
 std::string BuildGrassCompactionComputeShader() {
     return std::string("#version 450\n#define GRASS_ANCHOR_WORDS ") +
         std::to_string(sizeof(GrassWorldAnchor) / sizeof(uint32_t)) + "u\n" + R"glsl(

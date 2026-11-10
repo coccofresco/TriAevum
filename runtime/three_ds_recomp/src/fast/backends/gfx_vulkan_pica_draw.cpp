@@ -2,6 +2,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "fast/renderer3ds/title_shader_preparation.h"
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/extension/presentation_freeze.h"
 #include "gfx_vulkan_raster_stats.h"
 #include "fast/renderer3ds/pica_exclude_scissor.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
@@ -1330,8 +1331,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     plane.Bodies[0] = *waterSurface.Plane;
                     plane.Count = 1U;
                 }
-                const float seconds =
-                    std::chrono::duration<float>(std::chrono::steady_clock::now() - mWaterEpoch).count();
+                const float seconds = Extension::FreezeAwareWaterSeconds(
+                    std::chrono::duration<float>(std::chrono::steady_clock::now() - mWaterEpoch).count());
                 const auto* rings = draw.LightBinding.Water
                     ? &AdvanceWaterRipples(*draw.LightBinding.Water, std::fmod(std::max(seconds, 0.0F), 3600.0F))
                     : nullptr;
@@ -4407,6 +4408,14 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
         // insertion anchor, just like other receivers at this boundary.
         grassShadowHistory = mNriDirectionalShadowPass.FindLatestHistory(
             target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress, mFrameCounter);
+    }
+    {
+        // TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE=1: in-between samples reuse the
+        // root lighting of the last native one.
+        const auto& sample = mPicaSceneFrame.TemporalSample();
+        const bool inBetween = sample.Kind == Renderer3ds::PicaFrameTemporalSampleKind::Transition &&
+                               sample.Alpha < 0.999F;
+        mInteractiveGrassPass.SetRootLightingSample(!inBetween, sample.CurrentSourceFrameId);
     }
     const bool prepared = mInteractiveGrassPass.Prepare(
         mCommandBuffers[mCurrentFrame], target.Width, target.Height, *perspective, settings.Grass,

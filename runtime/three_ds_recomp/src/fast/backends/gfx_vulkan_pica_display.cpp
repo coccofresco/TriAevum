@@ -2,6 +2,7 @@
 // clears, overlays and memory fills.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/extension/presentation_freeze.h"
 #include "fast/renderer3ds/pica_surface_debug.h"
 #include "fast/extension/native_ui_overlay.h"
 
@@ -2441,7 +2442,8 @@ bool GfxRenderingAPIVulkan::ExecuteNativePicaDisplayGraph(
                             return Extension::BuildHiZWaterUniforms(
                                 water ? &*worldToView : nullptr,
                                 water ? &bodies : nullptr,
-                                std::chrono::duration<float>(std::chrono::steady_clock::now() - mWaterEpoch).count(),
+                                Extension::FreezeAwareWaterSeconds(std::chrono::duration<float>(
+                                    std::chrono::steady_clock::now() - mWaterEpoch).count()),
                                 mWaterOnlyReflections,
                                 mWaterRipplesFrame == mFrameCounter ? &mWaterRings : nullptr, waterMap);
                         }(),

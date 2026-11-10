@@ -2,6 +2,7 @@
 #include "fast/backends/oot3d_vulkan_gpu_profiler.h"
 #include "fast/renderer3ds/slow_step_trace.h"
 #include "fast/extension/interactive_grass_pass.h"
+#include "fast/extension/presentation_freeze.h"
 #include "fast/extension/grass_shader_sources.h"
 #include "fast/extension/pica_attachment_contract.h"
 #include "fast/renderer3ds/pica_surface_lighting_pass.h"
@@ -626,6 +627,15 @@ struct InteractiveGrassPass::Impl {
     // Per visible root: lighting and ambient response; with the CPU selection,
     // the root ranges of each environment.
     std::array<BufferSlot, 2> RootLighting{};
+    // TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE=1: per static anchor, the lighting of
+    // the last native sample (grass_root_lighting.comp reuse variant).
+    bool RootLightingReuse = false;
+    BufferSlot AnchorLighting{};
+    bool SampleNative = true;
+    uint64_t SampleSourceFrame = 0U;
+    uint32_t NativeStamp = 0U;
+    uint64_t NativeStampRevision = ~0ULL;
+    uint64_t ReuseNativeInvocations = 0U, ReuseInBetweenInvocations = 0U, ReuseFallbackInvocations = 0U;
     std::array<BufferSlot, 2> RootRangeBuffers{};
     std::vector<std::array<uint32_t, 4>> RootRanges;
     std::array<BufferSlot, 2> ShadowVisibleIndices{};
@@ -877,7 +887,7 @@ struct InteractiveGrassPass::Impl {
         auto& invocation = frame.Additional[index];
         if (invocation.Set == VK_NULL_HANDLE) {
             const std::array<VkDescriptorPoolSize, 2> sizes{{
-                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 12}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}}};
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 13}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1}}};
             VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             pool.maxSets = 1; pool.poolSizeCount = static_cast<uint32_t>(sizes.size()); pool.pPoolSizes = sizes.data();
             if (vkCreateDescriptorPool(Device, &pool, nullptr, &invocation.Pool) != VK_SUCCESS)
@@ -1335,7 +1345,11 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                                           Renderer::SpirvStage::Fragment, unguidedSources[group].second,
                                           "GRASS_AUXILIARY_OUTPUTS", "1");
             constexpr VkShaderStageFlags vertexCompute = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-            const std::array<VkDescriptorSetLayoutBinding, 13> environmentBindings{{
+            mImpl->RootLightingReuse = [] {
+                const char* value = std::getenv("TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE");
+                return value != nullptr && value[0] == '1';
+            }() && !BuildGrassRootLightingReuseComputeShader().empty();
+            std::vector<VkDescriptorSetLayoutBinding> environmentBindings{{
                 {0U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
                 {1U, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1U, vertexCompute, nullptr},
                 {2U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
@@ -1349,6 +1363,8 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                 {12U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute, nullptr},
                 {13U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_COMPUTE_BIT, nullptr},
                 {14U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_COMPUTE_BIT, nullptr}}};
+            if (mImpl->RootLightingReuse)
+                environmentBindings.push_back({15U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, VK_SHADER_STAGE_COMPUTE_BIT, nullptr});
             VkDescriptorSetLayoutCreateInfo descriptorLayoutInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
             descriptorLayoutInfo.bindingCount = static_cast<uint32_t>(environmentBindings.size());
@@ -1360,7 +1376,7 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                     "cannot create interactive grass descriptor layout");
             }
             const std::array<VkDescriptorPoolSize, 2> poolSizes{{
-                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 24}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}}};
+                {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 26}, {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 2}}};
             VkDescriptorPoolCreateInfo poolInfo{
                 VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
             poolInfo.maxSets =
@@ -1413,9 +1429,12 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                                        &mImpl->RootLightingLayout) != VK_SUCCESS)
                 throw std::runtime_error("cannot create grass root lighting pipeline layout");
             {
-                const auto lightingSource = BuildGrassRootLightingComputeShader();
+                const auto lightingSource = mImpl->RootLightingReuse ? BuildGrassRootLightingReuseComputeShader()
+                                                                     : BuildGrassRootLightingComputeShader();
                 VkShaderModule lightingModule = Compile(shaders, device, lightingSource.c_str(),
-                                                        Renderer::SpirvStage::Compute, "grass_root_lighting.comp");
+                                                        Renderer::SpirvStage::Compute,
+                                                        mImpl->RootLightingReuse ? "grass_root_lighting_reuse.comp"
+                                                                                 : "grass_root_lighting.comp");
                 VkComputePipelineCreateInfo lightingInfo{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
                 lightingInfo.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0,
                                       VK_SHADER_STAGE_COMPUTE_BIT, lightingModule, "main", nullptr};
@@ -1627,6 +1646,10 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 mImpl->HasFallbackFrame = true;
             }
             visualSeconds = mImpl->FallbackSeconds;
+            // TRIAEVUM_FREEZE_FRAME: the held wind stands at a time every run
+            // shares (the presentations before the hold vary between runs).
+            if (clock.HostHold && PresentationFreezeFrame() != 0U)
+                visualSeconds = static_cast<double>(PresentationFreezeFrame()) / 30.0;
         }
         {
             GrassStageTimer interactionTimer(GrassStage::Interaction);
@@ -2808,6 +2831,43 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 write.pBufferInfo = info;
                 vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
             }
+            // TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE=1: mode 1 (native sample:
+            // evaluate, store per anchor), 2 (in-between: reuse the last
+            // native sample's anchors), 0 (CPU selection: evaluate only).
+            uint32_t reuseMode = 0U;
+            if (mImpl->RootLightingReuse) {
+                const size_t anchors = std::max<size_t>(uploadedAnchors.size(), 1U);
+                const VkDeviceSize anchorBytes = VkDeviceSize(anchors) * 2U * 4U * sizeof(float);
+                if (anchorBytes > mImpl->AnchorLighting.Capacity) mImpl->NativeStampRevision = ~0ULL;
+                mImpl->EnsureBuffer(mImpl->AnchorLighting, anchorBytes + anchorBytes / 4U,
+                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+                if (gpuCompacted) {
+                    const bool native = mImpl->SampleNative || mImpl->NativeStampRevision != uploadedRevision;
+                    if (native) {
+                        const uint32_t stamp = static_cast<uint32_t>(mImpl->SampleSourceFrame) | 1U;
+                        mImpl->NativeStamp = stamp == mImpl->NativeStamp && !mImpl->SampleNative ? stamp + 2U : stamp;
+                        mImpl->NativeStampRevision = uploadedRevision;
+                        reuseMode = 1U;
+                        ++(mImpl->SampleNative ? mImpl->ReuseNativeInvocations : mImpl->ReuseFallbackInvocations);
+                    } else {
+                        reuseMode = 2U;
+                        ++mImpl->ReuseInBetweenInvocations;
+                    }
+                }
+                const VkDescriptorBufferInfo anchorInfo{mImpl->AnchorLighting.Buffer, 0, VK_WHOLE_SIZE};
+                VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+                write.dstSet = descriptorSet; write.dstBinding = 15U;
+                write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; write.descriptorCount = 1;
+                write.pBufferInfo = &anchorInfo;
+                vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
+                if (frameId % 300U == 0U)
+                    std::fprintf(stderr, "[grass-root-lighting-reuse] frame=%llu native=%llu in_between=%llu "
+                                 "revision_fallback=%llu\n",
+                                 static_cast<unsigned long long>(frameId),
+                                 static_cast<unsigned long long>(mImpl->ReuseNativeInvocations),
+                                 static_cast<unsigned long long>(mImpl->ReuseInBetweenInvocations),
+                                 static_cast<unsigned long long>(mImpl->ReuseFallbackInvocations));
+            }
             if (profiler)
                 profiler->Mark(frameSlot, "grass_root_lighting", commandBuffer);
             if (instanceCount != 0U) {
@@ -2829,6 +2889,10 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, mImpl->RootLightingLayout,
                                         0U, 1U, &descriptorSet, 0U, nullptr);
                 GrassPushConstants lightingPush{};
+                if (reuseMode != 0U) {
+                    lightingPush.DepthState[0] = static_cast<float>(reuseMode);
+                    lightingPush.DepthState[1] = std::bit_cast<float>(mImpl->NativeStamp);
+                }
                 lightingPush.Flags = {instanceCount, gpuSelection ? 1U : 0U,
                     static_cast<uint32_t>(gpuSelection ? preparedPlacements.size() : ranges.size()),
                     gpuSelection ? static_cast<uint32_t>(gpuSlots.size()) : 0U};
@@ -3068,6 +3132,11 @@ void InteractiveGrassPass::SetCacheDirectory(std::filesystem::path directory) {
     }();
     mImpl->PlacementBuilder.SetCacheDirectory(disabled ? std::filesystem::path{} : std::move(directory));
 }
+void InteractiveGrassPass::SetRootLightingSample(bool native, uint64_t sourceFrameId) {
+    mImpl->SampleNative = native;
+    mImpl->SampleSourceFrame = sourceFrameId;
+}
+
 void InteractiveGrassPass::ResetTemporalState() {
     mImpl->SelectionCache.Reset();
     mImpl->CandidateCache.clear();
@@ -3119,6 +3188,7 @@ void InteractiveGrassPass::Shutdown() {
         for (auto* slots : {&mImpl->RootLighting, &mImpl->RootRangeBuffers})
             for (auto& buffer : *slots)
                 mImpl->DestroyBuffer(buffer);
+        mImpl->DestroyBuffer(mImpl->AnchorLighting);
         if (mImpl->RootLightingPipeline != VK_NULL_HANDLE)
             vkDestroyPipeline(mImpl->Device, mImpl->RootLightingPipeline, nullptr);
         if (mImpl->RootLightingLayout != VK_NULL_HANDLE)
