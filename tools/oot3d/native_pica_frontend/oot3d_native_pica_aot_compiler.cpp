@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -84,14 +85,6 @@ bool ParseOptions(int argc, char** argv, Options& options) {
                options.MergedInventory.empty() && !options.Manifest.empty();
     return !options.Inventories.empty() && !options.Pack.empty() &&
            !options.Manifest.empty();
-}
-
-nlohmann::json ReadJson(const std::filesystem::path& path) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input)
-        throw std::runtime_error("could not open inventory: " +
-                                 path.string());
-    return nlohmann::json::parse(input);
 }
 
 uint64_t HashWords(std::span<const uint32_t> words) {
@@ -183,11 +176,39 @@ int TriAevumPassCompilerMain(int argc, char** argv) {
             return 0;
         }
         uint32_t schema = 0U;
-        nlohmann::json inputs = nlohmann::json::array();
-        std::map<std::pair<std::string, std::string>, std::string>
-            uniqueSources;
+        // One entry per (stage, source_id), in that order (the merged
+        // inventory's and the jobs' order). Inventories are parsed one shader
+        // at a time: a corpus inventory can exceed the memory of its DOM.
+        std::map<std::pair<std::string, std::string>, nlohmann::json> uniqueInputs;
+        const auto mergeInput = [&](nlohmann::json input) {
+            const std::string stage = input.at("stage");
+            const std::string sourceId = input.at("source_id");
+            const auto [found, inserted] =
+                uniqueInputs.emplace(std::pair{stage, sourceId}, nlohmann::json());
+            if (inserted) {
+                found->second = std::move(input);
+            } else if (found->second.at("source") != input.at("source")) {
+                throw std::runtime_error(
+                    "shader source identity collision while merging inventories: " +
+                    stage + ":" + sourceId);
+            }
+        };
         for (const auto& inventoryPath : options.Inventories) {
-            const auto inventory = ReadJson(inventoryPath);
+            std::ifstream stream(inventoryPath, std::ios::binary);
+            if (!stream)
+                throw std::runtime_error("could not open inventory: " + inventoryPath.string());
+            std::string topKey;
+            const nlohmann::json::parser_callback_t onEvent =
+                [&](int depth, nlohmann::json::parse_event_t event, nlohmann::json& parsed) {
+                    using Event = nlohmann::json::parse_event_t;
+                    if (depth == 1 && event == Event::key) topKey = parsed.get<std::string>();
+                    if (depth == 2 && event == Event::object_end && topKey == "shaders") {
+                        mergeInput(std::move(parsed));
+                        return false;  // merged; not kept in the document
+                    }
+                    return true;
+                };
+            const auto inventory = nlohmann::json::parse(stream, onEvent);
             if (inventory.value("format", std::string{}) !=
                     "oot3d_pica_effective_shader_inventory_v1" ||
                 !inventory.contains("shaders") ||
@@ -208,62 +229,69 @@ int TriAevumPassCompilerMain(int argc, char** argv) {
             else if (schema != inventorySchema)
                 throw std::runtime_error(
                     "effective shader inventories use different descriptor schemas");
-
-            for (const auto& input : inventory.at("shaders")) {
-                const std::string stage = input.at("stage");
-                const std::string sourceId = input.at("source_id");
-                const std::string source = input.at("source");
-                const auto key = std::pair{stage, sourceId};
-                const auto [found, inserted] =
-                    uniqueSources.emplace(key, source);
-                if (!inserted && found->second != source) {
-                    throw std::runtime_error(
-                        "shader source identity collision while merging inventories: " +
-                        stage + ":" + sourceId);
-                }
-                if (inserted)
-                    inputs.push_back(input);
-            }
         }
-        if (inputs.empty() ||
-            inputs.size() > std::numeric_limits<uint32_t>::max())
+        if (uniqueInputs.empty() ||
+            uniqueInputs.size() > std::numeric_limits<uint32_t>::max())
             throw std::runtime_error(
                 "effective shader inventory merge is empty or too large");
 
         // Renderer-owned sources accompany every seed, without needing a game
         // capture. Explicit mode zero keeps developer diagnostics out of Forge.
-        const size_t capturedSources = inputs.size();
+        const size_t capturedSources = uniqueInputs.size();
         const auto appendRendererSource = [&](PicaAotShaderStage stage,
                                               const std::string& source) {
             const auto identity = IdentifyPicaAotShaderSource(source);
             const std::string stageName(PicaAotShaderStageName(stage));
             const auto sourceId = FormatPicaAotShaderId(identity.Id);
-            const auto [found, inserted] = uniqueSources.emplace(
-                std::pair{stageName, sourceId}, source);
-            if (!inserted && found->second != source)
-                throw std::runtime_error("renderer shader source identity collision");
-            if (inserted)
-                inputs.push_back({{"stage", stageName}, {"source_id", sourceId},
+            const auto found = uniqueInputs.find(std::pair{stageName, sourceId});
+            if (found != uniqueInputs.end()) {
+                if (found->second.at("source") != source)
+                    throw std::runtime_error("renderer shader source identity collision");
+                return;
+            }
+            uniqueInputs.emplace(std::pair{stageName, sourceId},
+                nlohmann::json{{"stage", stageName}, {"source_id", sourceId},
                     {"secondary_hash", FormatPicaAotShaderId(identity.SecondaryHash)},
                     {"source_size", identity.Size}, {"source", source}});
         };
         appendRendererSource(PicaAotShaderStage::Vertex, BuildPicaScanoutVertexShader());
         appendRendererSource(PicaAotShaderStage::Fragment, BuildPicaScanoutFragmentShader(false, 0));
-        const size_t rendererSourcesAdded = inputs.size() - capturedSources;
+        const size_t rendererSourcesAdded = uniqueInputs.size() - capturedSources;
 
-        std::sort(inputs.begin(), inputs.end(), [](const auto& left,
-                                                   const auto& right) {
-            return std::tie(left.at("stage"), left.at("source_id")) <
-                   std::tie(right.at("stage"), right.at("source_id"));
-        });
         if (!options.MergedInventory.empty()) {
-            const nlohmann::json merged = {
-                {"format", "oot3d_pica_effective_shader_inventory_v1"},
-                {"descriptor_schema_version", schema},
-                {"shader_count", inputs.size()},
-                {"shaders", inputs},
-            };
-            WriteJsonAtomically(options.MergedInventory, merged);
+            // The same bytes as dump(2) of the whole document, written one
+            // shader at a time (keys in nlohmann's sorted order).
+            std::error_code directoryError;
+            if (!options.MergedInventory.parent_path().empty())
+                std::filesystem::create_directories(options.MergedInventory.parent_path(), directoryError);
+            const auto temporary = options.MergedInventory.string() + ".tmp";
+            {
+                std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+                output << "{\n  \"descriptor_schema_version\": " << schema
+                       << ",\n  \"format\": \"oot3d_pica_effective_shader_inventory_v1\",\n  \"shader_count\": "
+                       << uniqueInputs.size() << ",\n  \"shaders\": [";
+                bool first = true;
+                for (const auto& [key, input] : uniqueInputs) {
+                    output << (first ? "\n" : ",\n");
+                    first = false;
+                    const std::string text = input.dump(2);
+                    size_t begin = 0;
+                    while (begin <= text.size()) {
+                        const size_t end = std::min(text.find('\n', begin), text.size());
+                        output << "    " << std::string_view(text).substr(begin, end - begin);
+                        if (end == text.size()) break;
+                        output << '\n';
+                        begin = end + 1;
+                    }
+                }
+                output << "\n  ]\n}\n";
+                if (!output) throw std::runtime_error("could not write merged inventory");
+            }
+            std::error_code error;
+            std::filesystem::remove(options.MergedInventory, error);
+            error.clear();
+            std::filesystem::rename(temporary, options.MergedInventory, error);
+            if (error) throw std::runtime_error("could not publish merged inventory: " + error.message());
         }
 
         struct Job {
@@ -274,16 +302,18 @@ int TriAevumPassCompilerMain(int argc, char** argv) {
             std::string SourceName;
             std::vector<uint32_t> Spirv;
             std::string Error;
+            size_t SpirvWords = 0;
+            uint64_t SpirvHash = 0;
         };
         std::vector<Job> jobs;
-        jobs.reserve(inputs.size());
-        for (const auto& input : inputs) {
+        jobs.reserve(uniqueInputs.size());
+        for (auto& [key, input] : uniqueInputs) {
             Job job;
             job.StageName = input.at("stage");
             if (!ParsePicaAotShaderStage(job.StageName, job.Stage))
                 throw std::runtime_error("unknown shader stage: " +
                                          job.StageName);
-            job.Source = input.at("source");
+            job.Source = std::move(input.at("source").get_ref<std::string&>());
             job.Identity = IdentifyPicaAotShaderSource(job.Source);
             if (input.value("source_id", std::string{}) !=
                     FormatPicaAotShaderId(job.Identity.Id) ||
@@ -314,15 +344,56 @@ int TriAevumPassCompilerMain(int argc, char** argv) {
         const unsigned workers = std::max(1U, std::min<unsigned>(
             options.Jobs != 0U ? options.Jobs : std::min(8U, std::max(1U, std::thread::hardware_concurrency())),
             static_cast<unsigned>(jobs.size())));
+        uniqueInputs.clear();  // the sources live in the jobs now
+        // The pack is written as it compiles, in the pack's own entry order
+        // (stage, source identity; WritePicaAotShaderPack's layout, byte for
+        // byte): only one batch of SPIR-V is held in memory.
+        std::vector<size_t> packOrder(jobs.size());
+        for (size_t index = 0; index < packOrder.size(); ++index) packOrder[index] = index;
+        std::sort(packOrder.begin(), packOrder.end(), [&](size_t left, size_t right) {
+            return std::tie(jobs[left].Stage, jobs[left].Identity) < std::tie(jobs[right].Stage, jobs[right].Identity);
+        });
+        for (size_t index = 1; index < packOrder.size(); ++index)
+            if (jobs[packOrder[index - 1]].Stage == jobs[packOrder[index]].Stage &&
+                jobs[packOrder[index - 1]].Identity == jobs[packOrder[index]].Identity)
+                throw std::runtime_error("PICA AOT shader pack contains an invalid entry");
+        constexpr size_t kHeaderBytes = 24U, kEntryBytes = 56U;
+        constexpr uint64_t kMaximumPackBytes = 4ULL * 1024ULL * 1024ULL * 1024ULL;
+        const auto appendU32 = [](std::vector<uint8_t>& bytes, uint32_t value) {
+            for (uint32_t shift = 0; shift < 32U; shift += 8U) bytes.push_back(static_cast<uint8_t>(value >> shift));
+        };
+        const auto appendU64 = [](std::vector<uint8_t>& bytes, uint64_t value) {
+            for (uint32_t shift = 0; shift < 64U; shift += 8U) bytes.push_back(static_cast<uint8_t>(value >> shift));
+        };
+        if (!options.Pack.parent_path().empty()) {
+            std::error_code directoryError;
+            std::filesystem::create_directories(options.Pack.parent_path(), directoryError);
+        }
+        const auto packTemporary = options.Pack.string() + ".tmp";
+        std::ofstream packFile(packTemporary, std::ios::binary | std::ios::trunc);
+        std::vector<uint8_t> header{'O', '3', 'P', 'S', 'A', 'O', 'T', 0};
+        appendU32(header, kPicaAotShaderPackVersion);
+        appendU32(header, schema);
+        appendU32(header, static_cast<uint32_t>(jobs.size()));
+        appendU32(header, 0U);
+        header.resize(kHeaderBytes + jobs.size() * kEntryBytes, 0U);
+        packFile.write(reinterpret_cast<const char*>(header.data()), static_cast<std::streamsize>(header.size()));
+        std::vector<uint8_t> table;
+        table.reserve(jobs.size() * kEntryBytes);
+        uint64_t packBytes = header.size();
+
         const auto compileStart = std::chrono::steady_clock::now();
-        std::atomic<size_t> next{0};
+        const size_t batchSize = std::max<size_t>(64U, size_t{workers} * 16U);
+        for (size_t batchBegin = 0; batchBegin < packOrder.size(); batchBegin += batchSize) {
+        const size_t batchEnd = std::min(packOrder.size(), batchBegin + batchSize);
+        std::atomic<size_t> next{batchBegin};
         std::atomic<bool> failed{false};
         std::vector<std::thread> threads;
         for (unsigned worker = 0; worker < workers; ++worker) {
             threads.emplace_back([&] {
                 shaderc::Compiler compiler;
-                for (size_t index = next++; index < jobs.size() && !failed; index = next++) {
-                    auto& job = jobs[index];
+                for (size_t position = next++; position < batchEnd && !failed; position = next++) {
+                    auto& job = jobs[packOrder[position]];
                     try {
                         const auto compile = [&] {
                             return CompileShader(compiler, job.Source, job.Stage, job.SourceName);
@@ -343,55 +414,73 @@ int TriAevumPassCompilerMain(int argc, char** argv) {
         }
         for (auto& thread : threads)
             thread.join();
-        for (const auto& job : jobs) {
+        for (size_t position = batchBegin; position < batchEnd; ++position) {
+            auto& job = jobs[packOrder[position]];
             if (!job.Error.empty())
                 throw std::runtime_error(job.Error);
+            const auto& spirv = job.Spirv;
+            if (spirv.empty() || spirv.size() > std::numeric_limits<uint32_t>::max() ||
+                spirv.front() != 0x07230203U || job.Identity.Id == 0U ||
+                job.Identity.SecondaryHash == 0U || job.Identity.Size == 0U)
+                throw std::runtime_error("PICA AOT shader pack contains an invalid entry");
+            const auto* data = reinterpret_cast<const uint8_t*>(spirv.data());
+            const size_t size = spirv.size() * sizeof(uint32_t);
+            uint64_t binaryHash = 1469598103934665603ULL;
+            for (size_t byte = 0; byte < size; ++byte) binaryHash = (binaryHash ^ data[byte]) * 1099511628211ULL;
+            if (binaryHash == 0U) binaryHash = 1U;
+            appendU32(table, static_cast<uint32_t>(job.Stage));
+            appendU32(table, 0U);
+            appendU64(table, job.Identity.Id);
+            appendU64(table, job.Identity.SecondaryHash);
+            appendU64(table, job.Identity.Size);
+            appendU32(table, static_cast<uint32_t>(spirv.size()));
+            appendU32(table, 0U);
+            appendU64(table, packBytes);
+            appendU64(table, binaryHash);
+            packFile.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+            packBytes += size;
+            if (packBytes > kMaximumPackBytes)
+                throw std::runtime_error("PICA AOT shader pack exceeds its size limit");
+            job.SpirvWords = spirv.size();
+            job.SpirvHash = HashWords(spirv);
+            job.Spirv = {};
+            job.Source = {};
+        }
+        }
+        packFile.seekp(static_cast<std::streamoff>(kHeaderBytes));
+        packFile.write(reinterpret_cast<const char*>(table.data()), static_cast<std::streamsize>(table.size()));
+        packFile.close();
+        if (!packFile) throw std::runtime_error("could not write PICA AOT shader pack");
+        {
+            std::error_code publishError;
+            std::filesystem::remove(options.Pack, publishError);
+            publishError.clear();
+            std::filesystem::rename(packTemporary, options.Pack, publishError);
+            if (publishError)
+                throw std::runtime_error("could not publish PICA AOT shader pack: " + publishError.message());
         }
         const double compileSeconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - compileStart).count();
 
-        std::vector<PicaAotShaderBinary> binaries;
-        binaries.reserve(jobs.size());
         nlohmann::json manifestEntries = nlohmann::json::array();
-        for (auto& job : jobs) {
-            const auto& stageName = job.StageName;
-            const auto& identity = job.Identity;
-            const auto stage = job.Stage;
-            auto spirv = std::move(job.Spirv);
-            const uint64_t spirvHash = HashWords(spirv);
+        for (const auto& job : jobs) {
             manifestEntries.push_back({
-                {"stage", stageName},
-                {"source_id", FormatPicaAotShaderId(identity.Id)},
-                {"secondary_hash",
-                 FormatPicaAotShaderId(identity.SecondaryHash)},
-                {"source_size", identity.Size},
-                {"spirv_words", spirv.size()},
-                {"spirv_hash", FormatPicaAotShaderId(spirvHash)},
+                {"stage", job.StageName},
+                {"source_id", FormatPicaAotShaderId(job.Identity.Id)},
+                {"secondary_hash", FormatPicaAotShaderId(job.Identity.SecondaryHash)},
+                {"source_size", job.Identity.Size},
+                {"spirv_words", job.SpirvWords},
+                {"spirv_hash", FormatPicaAotShaderId(job.SpirvHash)},
             });
-            binaries.push_back({stage, identity, std::move(spirv)});
         }
-
         std::string error;
-        if (!WritePicaAotShaderPack(options.Pack, schema, binaries,
-                                    &error)) {
-            throw std::runtime_error(error);
-        }
+        // Verify re-reads every binary against its table hash without keeping it.
         PicaAotShaderPack verification;
         if (!verification.Load(options.Pack, &error) || !verification.Verify(&error) ||
-            verification.EntryCount() != binaries.size() ||
+            verification.EntryCount() != jobs.size() ||
             verification.DescriptorSchemaVersion() != schema) {
             throw std::runtime_error(
                 "published AOT shader pack failed verification: " + error);
-        }
-        for (const auto& binary : binaries) {
-            const auto found = verification.Find(binary.Stage,
-                                                 binary.Source);
-            if (found.size() != binary.Spirv.size() ||
-                !std::equal(found.begin(), found.end(),
-                            binary.Spirv.begin())) {
-                throw std::runtime_error(
-                    "published AOT shader binary failed round-trip");
-            }
         }
 
         nlohmann::json inventoryPaths = nlohmann::json::array();
@@ -407,7 +496,7 @@ int TriAevumPassCompilerMain(int argc, char** argv) {
                  ? nlohmann::json(nullptr)
                  : nlohmann::json(options.MergedInventory.string())},
             {"pack", options.Pack.string()},
-            {"shader_count", binaries.size()},
+            {"shader_count", jobs.size()},
             {"renderer_sources_added", rendererSourcesAdded},
             {"compilation",
              {{"workers", workers}, {"seconds", compileSeconds},
@@ -418,7 +507,7 @@ int TriAevumPassCompilerMain(int argc, char** argv) {
             {"shaders", std::move(manifestEntries)},
         };
         WriteJsonAtomically(options.Manifest, manifest);
-        std::cout << "PICA AOT shader pack: " << binaries.size()
+        std::cout << "PICA AOT shader pack: " << jobs.size()
                   << " modules, schema " << schema << ", "
                   << options.Pack.string() << '\n';
         return 0;
