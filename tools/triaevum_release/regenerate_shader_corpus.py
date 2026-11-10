@@ -140,7 +140,7 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
                compile_cache: Path | None = None, jobs: int | None = None,
                synthesis_effects: list[Path] | None = None,
                capture_imports: list[tuple[Path, Path]] | None = None,
-               synthesis_recorded: bool = False) -> dict:
+               synthesis_recorded: bool = False, synthesis_recorded_donors: bool = False) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     suffix = ".exe" if (tools / "oot3d_native_pica_aot_compiler.exe").exists() else ""
     tool = {name: str(tools / f"oot3d_native_pica_{name}{suffix}")
@@ -217,6 +217,8 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
             command += ["--synthesize-cache", str(cache)]
         if synthesis_recorded:
             command += ["--synthesize-recorded"]
+        if synthesis_recorded_donors and caches:
+            command += ["--synthesize-recorded-donors"]
         for target in targets:
             command += ["--synthesize-effects", str(target["variant_requests"])]
         command += ["--shader-inventory", str(shaders), "--pipeline-manifest", str(manifest),
@@ -315,6 +317,9 @@ def main() -> int:
                         help="Also take the recorded sessions' own draws (one register snapshot per canonical "
                              "fragment program) as synthesis program sources: a title without a faithful Citra "
                              "cache (MM3D)")
+    parser.add_argument("--synthesis-recorded-donors", action="store_true",
+                        help="Cache programs borrow a recorded vertex program they compose with (a title with "
+                             "several vertex programs, MM3D); the sources stay the caches' programs, as EoT's")
     parser.add_argument("--output", type=Path, required=True, help="New private output directory")
     parser.add_argument("--compile-cache", type=Path,
                         help="Publisher SPIR-V cache shared between regenerations (private)")
@@ -326,7 +331,8 @@ def main() -> int:
                                 args.variant_records, compile_cache=args.compile_cache, jobs=args.jobs,
                                 synthesis_effects=args.synthesis_effects,
                                 capture_imports=[tuple(pair) for pair in args.capture_inventory],
-                                synthesis_recorded=args.synthesis_recorded),
+                                synthesis_recorded=args.synthesis_recorded,
+                                synthesis_recorded_donors=args.synthesis_recorded_donors),
                      indent=2))
     return 0
 

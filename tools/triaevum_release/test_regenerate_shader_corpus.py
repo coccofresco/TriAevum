@@ -177,6 +177,20 @@ class VariantRecordTests(unittest.TestCase):
         self.assertEqual(set(step["synthesis"]), {"effects_sessions", "programs", "contexts", "resolves",
                                                   "new_modules", "uber_programs"})
 
+    def test_cache_synthesis_can_borrow_recorded_vertex_donors(self):
+        cache = self.root / "cache.bin"
+        cache.write_bytes(b"cache")
+        _session(self.root / "product" / "boot")
+        _, _, commands, receipt = self._regenerate([(1, 0x11, 0x12, 13), (2, 0x21, 0x22, 23)], caches=[cache],
+                                                   synthesis_effects=[self.root / "product"],
+                                                   synthesis_recorded_donors=True)
+        replay = next(command for command in commands if "--session" in command)
+        self.assertIn("--synthesize-recorded-donors", replay)
+        self.assertNotIn("--synthesize-recorded", replay)
+        self.assertEqual(_option(replay, "--synthesize-cache"), str(cache))
+        step = next(step for step in receipt["steps"] if "variant_sessions" in step)
+        self.assertNotIn("recorded_programs", step["synthesis"])
+
     def test_recorded_synthesis_without_effects_is_refused(self):
         with self.assertRaisesRegex(RuntimeError, "needs --synthesis-effects"):
             self._regenerate([(1, 0x11, 0x12, 13)], synthesis_recorded=True)

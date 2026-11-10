@@ -162,6 +162,9 @@ struct Options {
     // Program source for synthesis besides Citra caches: the register
     // snapshots of the recorded sessions' own draws (one per canonical program).
     bool SynthesizeRecorded = false;
+    // Only the vertex donors of the recorded draws, for cache programs (EoT's
+    // sources: the cache alone), on a title with several vertex programs.
+    bool SynthesizeRecordedDonors = false;
     bool RequireWitness = false;
     // Recover only output-equivalent legacy contexts, never synthesize new
     // coverage from unknown inputs. Original witnesses remain mandatory.
@@ -316,7 +319,7 @@ int Usage() {
                  "       [--pipelines SESSION_PIPELINE_INVENTORY ...] --shader-inventory OUT\n"
                  "       [--pipeline-manifest OUT] --report OUT [--require-witness] [--require-uber]\n"
                  "       [--uber-gap-sources DIR]\n"
-                 "       [--infer-report OUT] [--synthesize-cache CACHE ... | --synthesize-recorded]\n"
+                 "       [--infer-report OUT] [--synthesize-cache CACHE ... [--synthesize-recorded-donors] | --synthesize-recorded]\n"
                  "       [--synthesize-effects REQUESTS ... [--synthesis-trace OUT]]\n";
     return 64;
 }
@@ -502,7 +505,7 @@ int Run(const Options& options) {
                     if (parametric) ++parametricCastersOutsideFamily;
                 }
             }
-            if (options.SynthesizeRecorded)
+            if (options.SynthesizeRecorded || options.SynthesizeRecordedDonors)
                 ++recordedVertexDonors.try_emplace(canonical.VertexIdentity.Id, 0U, draw.Packet).first->second.first;
             plans.emplace(draw.CanonicalPipelineId, std::move(canonical));
         }
@@ -1067,6 +1070,8 @@ int main(int argc, char** argv) {
             options.SynthesizeCaches.push_back(next());
         } else if (argument == "--synthesize-recorded") {
             options.SynthesizeRecorded = true;
+        } else if (argument == "--synthesize-recorded-donors") {
+            options.SynthesizeRecordedDonors = true;
         } else if (argument == "--synthesize-effects") {
             options.SynthesizeEffects.push_back(next());
         } else if (argument == "--synthesis-trace") {
