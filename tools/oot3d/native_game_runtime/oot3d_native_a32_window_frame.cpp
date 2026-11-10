@@ -2972,9 +2972,11 @@ void NativeA32WindowSession::UpdateDevLab(uint64_t guestFrame) {
     const auto &command = *devLabCommand;
     const std::string op = command["op"].get<std::string>();
     // Another title's guest (MM3D): the ops below read OoT3D's actors,
-    // cameras and tables, so only the title-neutral ones are offered.
-    static constexpr std::array<std::string_view, 6> kTitleOps{"script", "capture", "panel",
-                                                              "status", "wait",    "quit"};
+    // cameras and tables, so only the title-neutral ones are offered
+    // ("graphics" applies a partial Graphics block through the shared settings
+    // runtime, as the corpus sweep needs for each title's profiles).
+    static constexpr std::array<std::string_view, 7> kTitleOps{"script", "capture", "panel", "status",
+                                                              "wait",   "quit",    "graphics"};
     if (devToolsTitle && std::find(kTitleOps.begin(), kTitleOps.end(), op) == kTitleOps.end()) {
       finish("rejected", {{"reason", "op unavailable for this title"}});
       return;

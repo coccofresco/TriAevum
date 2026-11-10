@@ -249,7 +249,9 @@ The developer lab drives MM3D too (`TRIAEVUM_DEV_LAB`, title-neutral ops
 only): `{"op":"script","script":"mm3d:zone=deku-palace"}` runs the title's
 TRIAEVUM_DEV_WARP script, the same WarpTo/WarpToZone requests as the tab's Warp
 buttons, and acknowledges once settled with the scene, entrance and arrival
-state; `{"op":"panel","tab":"Dev Tools"}` shows F1 on that tab so a lab
+state; `{"op":"graphics","graphics":{...}}` applies a partial Graphics block
+(not saved), as the shader-corpus sweep does for each profile;
+`{"op":"panel","tab":"Dev Tools"}` shows F1 on that tab so a lab
 `capture` records it (the capture includes ImGui). The lab's tab request,
 F1 show/hide and `TRIAEVUM_CRASH_DIALOG=0` exist only in developer builds
 (`TRIAEVUM_RENDERER_DEVELOPER_TOOLS` in the shared runtime). A private lab verifier (not shipped, not part of this repository) runs a plan
