@@ -1197,6 +1197,16 @@ void NativeA32WindowSession::Setup() {
         sceneEnvironmentBase.Groups[group] = std::move(profile);
     }
   }
+  // A release without this title's profiles (environments/<adapter key>) runs
+  // on the built-in fallback; say so instead of degrading silently.
+  {
+    const auto releaseEnvironments =
+        Oot3dNativeGame::TitleReleaseSceneEnvironmentDirectory(launch.Host.ResourceRoot, titleAdapter);
+    std::error_code missing;
+    if (!releaseEnvironments.empty() && !std::filesystem::is_directory(releaseEnvironments, missing))
+      std::cerr << "TRIAEVUM_SCENE_ENVIRONMENT release profiles missing at " << releaseEnvironments.string()
+                << "; using built-in fallback profiles\n";
+  }
   sceneEnvironment = std::make_shared<Oot3dNativeGame::SceneEnvironmentRuntime>(
       Oot3dNativeGame::TitleSceneEnvironmentDirectory(launch.Host.ConfigurationPath, titleAdapter),
       [](const Fast::Renderer3ds::PicaEnvironmentLighting& environment) {
