@@ -478,9 +478,11 @@ bool PicaExtensionPassEnabled(const CompiledEffectGraph& graph,
 CompiledEffectGraph BuildPicaExtensionGraph(const PicaAttachmentFeatureRequests& requests) {
     EffectGraph graph;
     std::vector<EffectResourceUse> guideOutputs;
-    // A water-only trace finds the water and its normal itself.
+    // Every reflection trace, water-only included, reads the normal guide
+    // (filter weights; the display requires its view), so reflections request
+    // it themselves instead of relying on AO/outlines/GI to write it.
     if (requests.AmbientOcclusion || requests.ToonOutline ||
-        (requests.Reflections && !requests.ReflectionsWaterOnly) || requests.GlobalIllumination) {
+        requests.Reflections || requests.GlobalIllumination) {
         guideOutputs.push_back(Write(EffectResource::NormalGuide));
     }
     if (requests.Reflections || requests.TemporalReconstruction || requests.GlobalIllumination) {
@@ -573,8 +575,7 @@ CompiledEffectGraph BuildPicaExtensionGraph(const PicaAttachmentFeatureRequests&
     std::vector<EffectResourceUse> reflectionResources{
         Read(EffectResource::PicaSceneFrame), Read(EffectResource::NativeSceneView),
         Read(EffectResource::SceneColor), Read(EffectResource::NativeDepth)};
-    if (!requests.ReflectionsWaterOnly)
-        reflectionResources.push_back(Read(EffectResource::NormalGuide));
+    reflectionResources.push_back(Read(EffectResource::NormalGuide));
     reflectionResources.push_back(Read(EffectResource::MaterialGuide));
     reflectionResources.push_back(Write(EffectResource::ReflectionColor));
     graph.Add({ .Name = std::string(PicaExtensionPassName(PicaExtensionPass::Reflections)),
