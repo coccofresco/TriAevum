@@ -56,9 +56,9 @@ class InteractiveGrassPass final {
                       const PicaAttachmentRequirements& attachments);
     void SetCacheDirectory(std::filesystem::path directory);
     // TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE=1 (experiment, default off): the
-    // presentation sample the next Prepare belongs to. Native samples (not an
-    // in-between transition sample) evaluate the root lighting and keep it per
-    // anchor; in-between samples reuse it.
+    // presentation sample the next Prepare belongs to. The first sample of each
+    // new source frame (or native = true) evaluates the root lighting and keeps
+    // it per anchor; the other samples of that source frame reuse it.
     void SetRootLightingSample(bool native, uint64_t sourceFrameId);
     void ResetTemporalState();
     void Shutdown();

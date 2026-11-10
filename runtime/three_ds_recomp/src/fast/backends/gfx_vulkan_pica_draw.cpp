@@ -4425,12 +4425,11 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
             target.Key.RenderTargetNamespace, target.Key.ColorPhysicalAddress, mFrameCounter);
     }
     {
-        // TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE=1: in-between samples reuse the
-        // root lighting of the last native one.
+        // TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE=1: the first sample of each new
+        // source frame is native; the pass reuses its root lighting on the
+        // in-between samples of the same source frame.
         const auto& sample = mPicaSceneFrame.TemporalSample();
-        const bool inBetween = sample.Kind == Renderer3ds::PicaFrameTemporalSampleKind::Transition &&
-                               sample.Alpha < 0.999F;
-        mInteractiveGrassPass.SetRootLightingSample(!inBetween, sample.CurrentSourceFrameId);
+        mInteractiveGrassPass.SetRootLightingSample(false, sample.CurrentSourceFrameId);
     }
     const bool prepared = mInteractiveGrassPass.Prepare(
         mCommandBuffers[mCurrentFrame], target.Width, target.Height, *perspective, settings.Grass,

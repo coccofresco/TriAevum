@@ -633,6 +633,8 @@ struct InteractiveGrassPass::Impl {
     BufferSlot AnchorLighting{};
     bool SampleNative = true;
     uint64_t SampleSourceFrame = 0U;
+    uint64_t LastSampleSourceFrame = 0U;
+    uint32_t ReuseDiagnosticMode = 0U;
     uint32_t NativeStamp = 0U;
     uint64_t NativeStampRevision = ~0ULL;
     uint64_t ReuseNativeInvocations = 0U, ReuseInBetweenInvocations = 0U, ReuseFallbackInvocations = 0U;
@@ -1238,11 +1240,11 @@ struct InteractiveGrassPass::Impl {
 
     void EnsureBuffer(
         BufferSlot& slot, VkDeviceSize bytes,
-        VkBufferUsageFlags usage, VkDeviceSize minimumCapacity = 1U << 20U) {
+        VkBufferUsageFlags usage, VkDeviceSize minimumCapacity = 1U << 20U, bool deviceLocal = false) {
         if (bytes <= slot.Capacity) return;
         DestroyBuffer(slot);
         try {
-            CreateBuffer(slot, bytes, usage, minimumCapacity);
+            CreateBuffer(slot, bytes, usage, minimumCapacity, deviceLocal);
         } catch (...) {
             // Never keep a half-built buffer: the next frame would take its
             // capacity for a usable, mapped allocation.
@@ -1251,7 +1253,10 @@ struct InteractiveGrassPass::Impl {
         }
     }
 
-    void CreateBuffer(BufferSlot& slot, VkDeviceSize bytes, VkBufferUsageFlags usage, VkDeviceSize minimumCapacity) {
+    // deviceLocal: GPU-only storage (not mapped), e.g. the root lighting
+    // reuse buffer that only compute reads and writes.
+    void CreateBuffer(BufferSlot& slot, VkDeviceSize bytes, VkBufferUsageFlags usage, VkDeviceSize minimumCapacity,
+                      bool deviceLocal = false) {
         slot.Capacity = GrassBufferCapacity(std::max(bytes, minimumCapacity));
         VkBufferCreateInfo bufferInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
         bufferInfo.size = slot.Capacity;
@@ -1266,14 +1271,15 @@ struct InteractiveGrassPass::Impl {
         allocation.allocationSize = requirements.size;
         allocation.memoryTypeIndex = FindMemoryType(
             PhysicalDevice, requirements.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            deviceLocal ? VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                        : VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
         if (GrassGpuAllocationRefused(PhysicalDevice, allocation.memoryTypeIndex, slot.Capacity) ||
             vkAllocateMemory(Device, &allocation, nullptr, &slot.Memory) != VK_SUCCESS)
             throw GrassGpuOutOfMemory(
                 "cannot allocate interactive grass streaming buffer");
         TrackGrassGpuMemory(false, static_cast<int64_t>(slot.Capacity), "streaming", usage);
         if (vkBindBufferMemory(Device, slot.Buffer, slot.Memory, 0) != VK_SUCCESS ||
-            vkMapMemory(Device, slot.Memory, 0, slot.Capacity, 0, &slot.Mapped) != VK_SUCCESS)
+            (!deviceLocal && vkMapMemory(Device, slot.Memory, 0, slot.Capacity, 0, &slot.Mapped) != VK_SUCCESS))
             throw std::runtime_error(
                 "cannot map interactive grass streaming buffer");
     }
@@ -1345,9 +1351,12 @@ bool InteractiveGrassPass::Initialize(VkPhysicalDevice physicalDevice,
                                           Renderer::SpirvStage::Fragment, unguidedSources[group].second,
                                           "GRASS_AUXILIARY_OUTPUTS", "1");
             constexpr VkShaderStageFlags vertexCompute = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-            mImpl->RootLightingReuse = [] {
+            mImpl->RootLightingReuse = [this] {
                 const char* value = std::getenv("TRIAEVUM_GRASS_ROOT_LIGHTING_REUSE");
-                return value != nullptr && value[0] == '1';
+                // 1: reuse on in-between samples; diagnostics 2: every sample
+                // native (store cost), 3: only the first sample native (reuse cost).
+                mImpl->ReuseDiagnosticMode = value != nullptr && (value[0] == '2' || value[0] == '3') ? uint32_t(value[0] - '0') : 0U;
+                return value != nullptr && value[0] >= '1' && value[0] <= '3';
             }() && !BuildGrassRootLightingReuseComputeShader().empty();
             std::vector<VkDescriptorSetLayoutBinding> environmentBindings{{
                 {0U, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1U, vertexCompute | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
@@ -2840,11 +2849,14 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 const VkDeviceSize anchorBytes = VkDeviceSize(anchors) * 2U * 4U * sizeof(float);
                 if (anchorBytes > mImpl->AnchorLighting.Capacity) mImpl->NativeStampRevision = ~0ULL;
                 mImpl->EnsureBuffer(mImpl->AnchorLighting, anchorBytes + anchorBytes / 4U,
-                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, 1U << 20U, true);
                 if (gpuCompacted) {
-                    const bool native = mImpl->SampleNative || mImpl->NativeStampRevision != uploadedRevision;
+                    const bool sampleNative = mImpl->ReuseDiagnosticMode == 2U ||
+                        (mImpl->ReuseDiagnosticMode == 3U ? mImpl->NativeStampRevision == ~0ULL : mImpl->SampleNative);
+                    const bool native = sampleNative || mImpl->NativeStampRevision != uploadedRevision;
                     if (native) {
-                        const uint32_t stamp = static_cast<uint32_t>(mImpl->SampleSourceFrame) | 1U;
+                        // A normal float bit pattern: the stamp travels in a float push constant.
+                        const uint32_t stamp = (static_cast<uint32_t>(mImpl->SampleSourceFrame) & 0x3fffffffU) | 0x40000001U;
                         mImpl->NativeStamp = stamp == mImpl->NativeStamp && !mImpl->SampleNative ? stamp + 2U : stamp;
                         mImpl->NativeStampRevision = uploadedRevision;
                         reuseMode = 1U;
@@ -2862,11 +2874,13 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
                 if (frameId % 300U == 0U)
                     std::fprintf(stderr, "[grass-root-lighting-reuse] frame=%llu native=%llu in_between=%llu "
-                                 "revision_fallback=%llu\n",
+                                 "revision_fallback=%llu anchors=%zu buffer_bytes=%llu\n",
                                  static_cast<unsigned long long>(frameId),
                                  static_cast<unsigned long long>(mImpl->ReuseNativeInvocations),
                                  static_cast<unsigned long long>(mImpl->ReuseInBetweenInvocations),
-                                 static_cast<unsigned long long>(mImpl->ReuseFallbackInvocations));
+                                 static_cast<unsigned long long>(mImpl->ReuseFallbackInvocations),
+                                 uploadedAnchors.size(),
+                                 static_cast<unsigned long long>(mImpl->AnchorLighting.Capacity));
             }
             if (profiler)
                 profiler->Mark(frameSlot, "grass_root_lighting", commandBuffer);
@@ -3133,7 +3147,10 @@ void InteractiveGrassPass::SetCacheDirectory(std::filesystem::path directory) {
     mImpl->PlacementBuilder.SetCacheDirectory(disabled ? std::filesystem::path{} : std::move(directory));
 }
 void InteractiveGrassPass::SetRootLightingSample(bool native, uint64_t sourceFrameId) {
-    mImpl->SampleNative = native;
+    // The first presented sample of each new source frame is the native one
+    // (evaluate + store); later samples of the same source frame reuse it.
+    mImpl->SampleNative = native || sourceFrameId == 0U || sourceFrameId != mImpl->LastSampleSourceFrame;
+    mImpl->LastSampleSourceFrame = sourceFrameId;
     mImpl->SampleSourceFrame = sourceFrameId;
 }
 
