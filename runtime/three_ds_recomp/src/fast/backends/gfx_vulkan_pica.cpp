@@ -1990,6 +1990,10 @@ bool GfxRenderingAPIVulkan::NativePicaAbArmed() {
                 ab.Switches = Extension::kPicaAbAtmosphereGeometryWrite;
             } else if (selected == "probe_no_color_write") {
                 ab.Switches = Extension::kPicaAbProbeNoColorWrite;
+            } else if (selected == "geometry_guide_partial") {
+                ab.Switches = Extension::kPicaAbGeometryGuidePartial;
+            } else if (selected == "replace_blend") {
+                ab.Switches = Extension::kPicaAbReplaceBlend;
             } else if (selected == "depth_prepass") {
                 // A whole prepass window (FlushNativePicaPrepass), not one draw.
                 ab.Switches = 0U;
@@ -1999,6 +2003,10 @@ bool GfxRenderingAPIVulkan::NativePicaAbArmed() {
             }
             const char* control = std::getenv("TRIAEVUM_AB_CONTROL");
             ab.Control = control != nullptr && control[0] == '1';
+            // TRIAEVUM_AB_SKIP_STEP=S: check k (0, 1, ...) passes over the
+            // first k*S draws the switch changes, so repeats sample other draws.
+            if (const char* step = std::getenv("TRIAEVUM_AB_SKIP_STEP"))
+                ab.SkipStep = static_cast<uint32_t>(std::strtoul(step, nullptr, 10));
             std::fprintf(stderr, "[ab] armed frame=%u switch=%s control=%u\n", ab.Frame,
                          std::string(selected).c_str(), ab.Control ? 1U : 0U);
         }
@@ -2281,6 +2289,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
         --remaining;
         ab.Done = false;
         ab.Frame = static_cast<uint32_t>(mFrameCounter) + 7U;
+        ++ab.Checks;
+        ab.SkipRemaining = ab.Checks * ab.SkipStep;
     }
 }
 

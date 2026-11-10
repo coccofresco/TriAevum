@@ -4050,6 +4050,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             if (abVariant->Id.Value == pipelineRecord.Id.Value ||
                 (nriOwnedDraw && !mNriPicaPipelineBridge.OwnedPipelineReady(abVariant->Id)))
                 abVariant = nullptr;
+            if (abVariant != nullptr && mNativePicaAb.SkipRemaining != 0U) {
+                --mNativePicaAb.SkipRemaining;
+                abVariant = nullptr;
+            }
         }
         if (abVariant != nullptr) {
             char label[160];

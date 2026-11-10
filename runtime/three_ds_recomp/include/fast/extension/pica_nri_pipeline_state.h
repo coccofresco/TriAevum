@@ -22,7 +22,11 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     Renderer3ds::PicaAttachmentRequirements attachments,
     VkSampleCountFlagBits samples, VkFormat depthFormat,
     bool writesReactiveMask = false, bool outlineOcclusionOnly = false,
-    bool geometryGuideAtReset = false);
+    bool geometryGuideAtReset = false,
+    // Features the draw requested and whether its program is the superset
+    // (uber) program: the full geometry guide write needs both (see .cpp).
+    PicaShaderInstrumentationFeature requestedFeatures = PicaShaderInstrumentationFeature::None,
+    bool supersetProgram = true);
 
 // Developer same-frame A/B (TRIAEVUM_AB_FRAME): switches the pipeline-state
 // code consults while one variant of a draw is recorded. Each bit undoes one
@@ -33,6 +37,12 @@ enum PicaAbSwitch : uint32_t {
     kPicaAbAtmosphereGeometryWrite = 1U << 0,
     // Sensitivity probe: no colour write for the A/B'd draw (must differ).
     kPicaAbProbeNoColorWrite = 1U << 1,
+    // Keep the partial (G|B) geometry guide write of a specialized program
+    // instead of the full RGBA write (TRIAEVUM_GEOMETRY_GUIDE_FULL_WRITE=0).
+    kPicaAbGeometryGuidePartial = 1U << 2,
+    // Keep blending for destination-replacing blends (ONE/ZERO ADD) and the
+    // COPY logic op (TRIAEVUM_REPLACE_BLEND_OFF=0).
+    kPicaAbReplaceBlend = 1U << 3,
 };
 void SetPicaAbOverride(uint32_t switches);
 [[nodiscard]] uint32_t PicaAbOverride();

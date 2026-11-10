@@ -1170,6 +1170,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         bool Done = false;
         bool Pending = false;
         uint32_t RecordedFrame = 0;
+        uint32_t SkipStep = 0, Checks = 0, SkipRemaining = 0;
         uint32_t Width = 0, Height = 0;
         std::string Label;
         std::vector<NativePicaAbImage> Images;

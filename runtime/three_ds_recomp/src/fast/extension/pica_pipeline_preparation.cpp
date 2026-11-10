@@ -40,7 +40,9 @@ PicaPipelinePreparationItem ResolvePicaPipelinePreparationItem(
         draw, entry.ShaderOutputs,
         {static_cast<Renderer3ds::PicaAuxiliaryOutput>(entry.AttachmentRequirementsKey)},
         static_cast<VkSampleCountFlagBits>(entry.SampleCount), depthFormat,
-        entry.WritesReactiveMask, entry.OutlineOcclusionOnly);
+        entry.WritesReactiveMask, entry.OutlineOcclusionOnly, false, entry.RequestedFeatures,
+        // The inventory records specialized programs only.
+        false);
     item.Descriptor.VertexSpirv = pack.Find(PicaAotShaderStage::Vertex, entry.VertexSource);
     const auto& source = entry.NriFragmentSource;
     if (builtIn != nullptr)

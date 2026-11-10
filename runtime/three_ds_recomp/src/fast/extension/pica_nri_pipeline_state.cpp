@@ -8,6 +8,16 @@
 namespace Fast::Extension {
 namespace {
 uint32_t gPicaAbOverride = 0U;
+bool IsFloatColorFormat(VkFormat format) {
+    switch (format) {
+        case VK_FORMAT_R16_SFLOAT: case VK_FORMAT_R16G16_SFLOAT: case VK_FORMAT_R16G16B16A16_SFLOAT:
+        case VK_FORMAT_R32_SFLOAT: case VK_FORMAT_R32G32_SFLOAT: case VK_FORMAT_R32G32B32A32_SFLOAT:
+        case VK_FORMAT_B10G11R11_UFLOAT_PACK32: case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+            return true;
+        default:
+            return false;
+    }
+}
 }
 void SetPicaAbOverride(uint32_t switches) { gPicaAbOverride = switches; }
 uint32_t PicaAbOverride() { return gPicaAbOverride; }
@@ -183,7 +193,8 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     const PicaFragmentInstrumentationOutputLayout& outputs,
     Renderer3ds::PicaAttachmentRequirements attachments,
     VkSampleCountFlagBits samples, VkFormat depthFormat,
-    bool writesReactiveMask, bool outlineOcclusionOnly, bool geometryGuideAtReset) {
+    bool writesReactiveMask, bool outlineOcclusionOnly, bool geometryGuideAtReset,
+    PicaShaderInstrumentationFeature requestedFeatures, bool supersetProgram) {
     VkPipelineDepthStencilStateCreateInfo depthStencil{
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     depthStencil.depthTestEnable = draw.DepthTestEnabled ||
@@ -331,6 +342,29 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
         draw.DepthCompare == Renderer3ds::PicaCompareFunction::Always &&
         (outputs.WritesOutlineGeometryGuide || outputs.WritesFaceNormalGuide))
         outlineGeometryAttachment.colorWriteMask = 0U;
+    // Full geometry guide write (default; TRIAEVUM_GEOMETRY_GUIDE_FULL_WRITE=0
+    // keeps the partial one). A specialized program that stores the face
+    // normal (G|B) and no outline geometry first sets the whole output to the
+    // cleared value (0, 0, 0, 1.0f) and leaves R/A there. With the draw not
+    // requesting the outline geometry (Toon outlines off, which is global for
+    // depth-writing scene draws), nothing in the frame stores anything but the
+    // cleared value in R/A (clears, fills and the outline-clear programs; grass
+    // and the superset program write G/B only, or R/A cleared), so the
+    // unmasked store writes the bits already there and replaces a 16 B
+    // read-modify-write by a full write. R/A are read only by the outline
+    // passes (Toon outline, scanout outline), which run only with outlines on.
+    // Not for the superset program (it may store a different G/B than its
+    // specialized program would, see above).
+    static const bool fullGeometryWrite = [] {
+        const char* value = std::getenv("TRIAEVUM_GEOMETRY_GUIDE_FULL_WRITE");
+        return value == nullptr || value[0] != '0';
+    }();
+    constexpr VkColorComponentFlags kFaceNormalChannels = VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
+    if (fullGeometryWrite && !supersetProgram && (PicaAbOverride() & kPicaAbGeometryGuidePartial) == 0U &&
+        outputs.WritesFaceNormalGuide && !outputs.WritesOutlineGeometryGuide &&
+        !HasPicaShaderInstrumentationFeature(requestedFeatures, PicaShaderInstrumentationFeature::OutlineGeometryGuide) &&
+        outlineGeometryAttachment.colorWriteMask == kFaceNormalChannels)
+        outlineGeometryAttachment.colorWriteMask = 0xFU;
     VkPipelineColorBlendAttachmentState fogAttachment{};
     fogAttachment.colorWriteMask = outputs.WritesFogGuide ? 0xfU : 0U;
     VkPipelineColorBlendAttachmentState albedoAttachment{};
@@ -369,6 +403,30 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     result.Colors = colorAttachments;
     result.LogicOpEnabled = !shadowProducer && !draw.Blend.Enabled;
     result.LogicOp = ToNativeVkLogic(draw.LogicOperation);
+    // Destination-replacing state without the destination read (default;
+    // TRIAEVUM_REPLACE_BLEND_OFF=0 keeps it). ONE/ZERO with ADD stores the
+    // (clamped, converted) source: exact for UNORM colour targets, where the
+    // destination term is 0 * d = 0; a float target is left blended (0 * Inf
+    // or NaN is NaN). The COPY logic op is the identity on integer and
+    // normalized attachments; it is dropped only when no such attachment that
+    // is written has blending configured (the logic op disables it there).
+    static const bool replaceBlendOff = [] {
+        const char* value = std::getenv("TRIAEVUM_REPLACE_BLEND_OFF");
+        return value == nullptr || value[0] != '0';
+    }();
+    if (replaceBlendOff && (PicaAbOverride() & kPicaAbReplaceBlend) == 0U) {
+        if (result.Colors[0].blendEnable != VK_FALSE && Renderer3ds::PicaBlendReplacesDestination(draw.Blend) &&
+            !IsFloatColorFormat(result.ColorFormats[0]))
+            result.Colors[0].blendEnable = VK_FALSE;
+        if (result.LogicOpEnabled && result.LogicOp == VK_LOGIC_OP_COPY) {
+            bool blendedFixedPoint = false;
+            for (size_t index = 0; index < result.Colors.size(); ++index)
+                blendedFixedPoint = blendedFixedPoint ||
+                    (result.ColorFormats[index] != VK_FORMAT_UNDEFINED && !IsFloatColorFormat(result.ColorFormats[index]) &&
+                     result.Colors[index].colorWriteMask != 0U && result.Colors[index].blendEnable != VK_FALSE);
+            if (!blendedFixedPoint) result.LogicOpEnabled = false;
+        }
+    }
     result.ColorAttachmentCount = attachments.ColorAttachmentCount();
     result.DepthStencilFormat = depthFormat;
     return result;
