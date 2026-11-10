@@ -692,6 +692,10 @@ bool TamTargetMatchesCurrentProcess(std::string_view target) {
 #elif defined(_WIN32)
 #if defined(_M_ARM64) || defined(__aarch64__)
   return target == "aarch64-pc-windows-msvc";
+#elif defined(__MINGW32__)
+  // The llvm-mingw product (Itanium C++ ABI, libc++): a module built for the
+  // MSVC-ABI product is refused, and the reverse (XBUILD Q2 platform identity).
+  return target == "x86_64-w64-windows-gnu";
 #else
   return target == "x86_64-pc-windows-msvc";
 #endif
