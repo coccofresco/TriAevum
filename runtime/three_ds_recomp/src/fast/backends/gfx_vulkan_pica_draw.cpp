@@ -4386,6 +4386,8 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
         Extension::GrassStageProfileEnabled() ? &mGpuProfiler : nullptr);
     bool executed = false;
     if (prepared) {
+        if (Extension::GrassStageProfileEnabled())
+            mGpuProfiler.Mark(mCurrentFrame, "grass_pass_begin", mCommandBuffers[mCurrentFrame]);
         BeginNativePicaRenderPass(target);
         // Grass writes the geometry guide's face normal and kind.
         target.GeometryGuideResetSerial = 0U;

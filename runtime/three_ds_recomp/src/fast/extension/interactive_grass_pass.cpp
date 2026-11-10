@@ -2808,6 +2808,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 write.pBufferInfo = info;
                 vkUpdateDescriptorSets(mImpl->Device, 1, &write, 0, nullptr);
             }
+            if (profiler)
+                profiler->Mark(frameSlot, "grass_root_lighting", commandBuffer);
             if (instanceCount != 0U) {
                 // The inputs (selection, compaction, shadow grid, surface
                 // lighting) are visible to the compute; an earlier invocation's
@@ -2841,6 +2843,8 @@ bool InteractiveGrassPass::Prepare(VkCommandBuffer commandBuffer, uint32_t width
                 vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                     VK_PIPELINE_STAGE_VERTEX_SHADER_BIT, 0, 1U, &lit, 0U, nullptr, 0U, nullptr);
             }
+            if (profiler)
+                profiler->Mark(frameSlot, "after grass_root_lighting", commandBuffer);
         }
         if (drawCards) {
             GrassStageTimer cardTimer(GrassStage::Cards);
