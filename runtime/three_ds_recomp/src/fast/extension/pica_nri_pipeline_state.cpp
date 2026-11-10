@@ -6,6 +6,11 @@
 #include <stdexcept>
 
 namespace Fast::Extension {
+namespace {
+uint32_t gPicaAbOverride = 0U;
+}
+void SetPicaAbOverride(uint32_t switches) { gPicaAbOverride = switches; }
+uint32_t PicaAbOverride() { return gPicaAbOverride; }
 using Renderer3ds::kPicaColorAttachmentCount;
 VkFormat FindPicaDepthFormat(VkPhysicalDevice physicalDevice) {
     for (auto format : {VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT}) {
@@ -321,6 +326,7 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     // TRIAEVUM_ATMOSPHERE_GEOMETRY_WRITE=1 keeps it always (developer A/B).
     static const bool atmosphereGeometryWrite = std::getenv("TRIAEVUM_ATMOSPHERE_GEOMETRY_WRITE") != nullptr;
     if (geometryGuideAtReset && !atmosphereGeometryWrite &&
+        (PicaAbOverride() & kPicaAbAtmosphereGeometryWrite) == 0U &&
         draw.Composition.Layer == Renderer3ds::PicaCompositionLayer::Atmosphere && draw.DepthWriteEnabled &&
         draw.DepthCompare == Renderer3ds::PicaCompareFunction::Always &&
         (outputs.WritesOutlineGeometryGuide || outputs.WritesFaceNormalGuide))
@@ -336,6 +342,7 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
         attachment,        guideAttachment, materialAttachment,       rigidMotionAttachment,
         ambientAttachment, fogAttachment,   outlineGeometryAttachment, albedoAttachment
     };
+    if ((PicaAbOverride() & kPicaAbProbeNoColorWrite) != 0U) colorAttachments[0].colorWriteMask = 0U;
     if (outlineOcclusionOnly) ConfigureOutlineOcclusionPass(depthStencil, colorAttachments);
 
     Renderer3ds::NriPicaGraphicsPipelineDesc result;

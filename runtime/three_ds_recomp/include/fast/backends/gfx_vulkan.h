@@ -7,6 +7,7 @@
 #endif
 
 #include "fast/backends/gfx_rendering_api.h"
+#include <functional>
 #include "fast/backends/gpu_copy_image_pool.h"
 #include "fast/renderer/spirv_cache.h"
 #include "fast/renderer3ds/pica_shader_module_identity.h"
@@ -1138,6 +1139,47 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // Set per native draw from NativePicaGeometryGuideAtReset; read by
     // GetOrCreateNativePicaPipeline for the pipeline state.
     bool mNativePicaDrawGeometryGuideAtReset = false;
+    // Same-frame A/B identity check (developer, off by default):
+    // TRIAEVUM_AB_FRAME=N arms it from presented frame N on, TRIAEVUM_AB_SWITCH
+    // names the switch (atmosphere_geometry_write; control=1 compares the
+    // selected pipeline with itself). The first guided draw the switch changes
+    // is recorded twice from one snapshot of every bound attachment (colour,
+    // guides, depth and stencil): variant B (switch on) is read back and
+    // undone, then the real draw (A) is recorded and read back. Equal
+    // attachments after the draw make every later draw of the frame equal.
+    struct NativePicaAbImage {
+        const char* Name = "";
+        VkImage Target = VK_NULL_HANDLE;
+        VkFormat Format = VK_FORMAT_UNDEFINED;
+        VkImageAspectFlags Aspect = 0;
+        uint32_t TexelBytes = 0;     // colour or depth aspect
+        uint32_t ComponentBytes = 0;
+        VkImage Snapshot = VK_NULL_HANDLE;
+        VkDeviceMemory SnapshotMemory = VK_NULL_HANDLE;
+        VkBuffer Readback[2]{};
+        VkDeviceMemory ReadbackMemory[2]{};
+        VkDeviceSize StencilOffset = 0; // depth: stencil bytes follow the depth texels
+        VkDeviceSize Bytes = 0;
+    };
+    struct NativePicaAbState {
+        bool Parsed = false;
+        uint32_t Frame = UINT32_MAX;
+        uint32_t Switches = 0;
+        bool Control = false;
+        bool Done = false;
+        bool Pending = false;
+        uint32_t RecordedFrame = 0;
+        uint32_t Width = 0, Height = 0;
+        std::string Label;
+        std::vector<NativePicaAbImage> Images;
+    };
+    NativePicaAbState mNativePicaAb;
+    [[nodiscard]] bool NativePicaAbArmed();
+    [[nodiscard]] uint32_t NativePicaAbSwitches() const { return mNativePicaAb.Switches; }
+    [[nodiscard]] bool NativePicaAbControl() const { return mNativePicaAb.Control; }
+    void RunNativePicaAbDraw(NativePicaRenderTarget& target, const char* label,
+                             const std::function<void(bool variantB)>& record);
+    void FinishNativePicaAb();
     // `pixels` holds every level, or only the base when `lowerLevels` holds
     // the others (a custom replacement's chain, built apart from its base).
     void CreateNativePicaTextureImage(TextureRecord& texture,

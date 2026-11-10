@@ -4,8 +4,11 @@
 #include "gfx_vulkan_pica_internal.h"
 #include "gfx_vulkan_raster_stats.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string_view>
 #include <map>
 #include <string>
 #include "fast/extension/native_ui_overlay.h"
@@ -1968,6 +1971,244 @@ bool GfxRenderingAPIVulkan::NativePicaGeometryGuideAtReset(const NativePicaRende
             fill.StartPhysicalAddress <= target.Key.ColorPhysicalAddress && fill.EndPhysicalAddress >= colorEnd)
             return true;
     return false;
+}
+
+bool GfxRenderingAPIVulkan::NativePicaAbArmed() {
+    auto& ab = mNativePicaAb;
+    if (!ab.Parsed) {
+        ab.Parsed = true;
+        if (const char* frame = std::getenv("TRIAEVUM_AB_FRAME")) {
+            ab.Frame = static_cast<uint32_t>(std::strtoul(frame, nullptr, 10));
+            const char* name = std::getenv("TRIAEVUM_AB_SWITCH");
+            const std::string_view selected = name != nullptr ? name : "atmosphere_geometry_write";
+            if (selected == "atmosphere_geometry_write") {
+                ab.Switches = Extension::kPicaAbAtmosphereGeometryWrite;
+            } else if (selected == "probe_no_color_write") {
+                ab.Switches = Extension::kPicaAbProbeNoColorWrite;
+            } else {
+                std::fprintf(stderr, "[ab] unknown TRIAEVUM_AB_SWITCH=%s; disarmed\n", name);
+                ab.Frame = UINT32_MAX;
+            }
+            const char* control = std::getenv("TRIAEVUM_AB_CONTROL");
+            ab.Control = control != nullptr && control[0] == '1';
+            std::fprintf(stderr, "[ab] armed frame=%u switch=%s control=%u\n", ab.Frame,
+                         std::string(selected).c_str(), ab.Control ? 1U : 0U);
+        }
+    }
+    if (ab.Pending && mFrameCounter >= ab.RecordedFrame + 4U) FinishNativePicaAb();
+    return !ab.Done && ab.Frame != UINT32_MAX && mFrameCounter >= ab.Frame &&
+        mNativePicaSampleCount == VK_SAMPLE_COUNT_1_BIT;
+}
+
+void GfxRenderingAPIVulkan::RunNativePicaAbDraw(NativePicaRenderTarget& target, const char* label,
+                                               const std::function<void(bool variantB)>& record) {
+    auto& ab = mNativePicaAb;
+    if (!mNativePicaRenderPassActive || mActiveNativePicaRenderTarget != &target) {
+        record(false);
+        return;
+    }
+    ab.Done = true;
+    const auto formats = Extension::BoundPicaColorAttachmentFormats(mActiveNativePicaAttachments);
+    const std::array<VkImage, Extension::kPicaColorAttachmentCount> colors{
+        target.ColorImage,         target.NormalGuideImage, target.MaterialGuideImage,
+        target.RigidMotionGuideImage, target.AmbientGuideImage, target.FogGuideImage,
+        target.OutlineGeometryGuideImage, target.DiffuseAlbedoGuideImage };
+    static constexpr const char* kNames[] = { "colour", "normal", "material", "rigid_motion",
+                                              "ambient", "fog", "geometry", "diffuse_albedo" };
+    ab.Images.clear();
+    ab.Width = target.Width;
+    ab.Height = target.Height;
+    for (size_t index = 0; index < colors.size(); ++index) {
+        if (formats[index] == VK_FORMAT_UNDEFINED || colors[index] == VK_NULL_HANDLE) continue;
+        NativePicaAbImage image;
+        image.Name = kNames[index];
+        image.Target = colors[index];
+        image.Format = formats[index];
+        image.Aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+        switch (formats[index]) {
+        case VK_FORMAT_R8G8B8A8_UNORM: image.TexelBytes = 4U; image.ComponentBytes = 1U; break;
+        case VK_FORMAT_R16G16B16A16_SFLOAT:
+        case VK_FORMAT_R16G16B16A16_UNORM: image.TexelBytes = 8U; image.ComponentBytes = 2U; break;
+        case VK_FORMAT_R32G32B32A32_UINT: image.TexelBytes = 16U; image.ComponentBytes = 4U; break;
+        default:
+            std::fprintf(stderr, "[ab] %s: format %d not compared\n", image.Name, static_cast<int>(formats[index]));
+            continue;
+        }
+        ab.Images.push_back(image);
+    }
+    {
+        NativePicaAbImage depth;
+        depth.Name = "depth";
+        depth.Target = target.DepthImage;
+        depth.Format = mDepthFormat;
+        depth.Aspect = NativeDepthAspect(mDepthFormat);
+        depth.TexelBytes = depth.ComponentBytes =
+            (mDepthFormat == VK_FORMAT_D16_UNORM || mDepthFormat == VK_FORMAT_D16_UNORM_S8_UINT) ? 2U : 4U;
+        ab.Images.push_back(depth);
+    }
+    const VkDeviceSize pixels = static_cast<VkDeviceSize>(target.Width) * target.Height;
+    for (auto& image : ab.Images) {
+        VkImageCreateInfo info{ VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO };
+        info.imageType = VK_IMAGE_TYPE_2D;
+        info.extent = { target.Width, target.Height, 1 };
+        info.mipLevels = info.arrayLayers = 1;
+        info.format = image.Format;
+        info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        info.samples = VK_SAMPLE_COUNT_1_BIT;
+        CheckNativeVk(vkCreateImage(mDevice, &info, nullptr, &image.Snapshot), "vkCreateImage(A/B snapshot)");
+        VkMemoryRequirements requirements{};
+        vkGetImageMemoryRequirements(mDevice, image.Snapshot, &requirements);
+        VkMemoryAllocateInfo allocation{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        allocation.allocationSize = requirements.size;
+        allocation.memoryTypeIndex = FindMemoryType(requirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+        CheckNativeVk(vkAllocateMemory(mDevice, &allocation, nullptr, &image.SnapshotMemory), "vkAllocateMemory(A/B)");
+        CheckNativeVk(vkBindImageMemory(mDevice, image.Snapshot, image.SnapshotMemory, 0), "vkBindImageMemory(A/B)");
+        image.StencilOffset = pixels * image.TexelBytes;
+        image.Bytes = image.StencilOffset + ((image.Aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0U ? pixels : 0U);
+        for (int side = 0; side < 2; ++side) {
+            VkBufferCreateInfo buffer{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+            buffer.size = image.Bytes;
+            buffer.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+            CheckNativeVk(vkCreateBuffer(mDevice, &buffer, nullptr, &image.Readback[side]), "vkCreateBuffer(A/B)");
+            vkGetBufferMemoryRequirements(mDevice, image.Readback[side], &requirements);
+            allocation.allocationSize = requirements.size;
+            allocation.memoryTypeIndex = FindMemoryType(
+                requirements.memoryTypeBits,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            CheckNativeVk(vkAllocateMemory(mDevice, &allocation, nullptr, &image.ReadbackMemory[side]),
+                          "vkAllocateMemory(A/B readback)");
+            CheckNativeVk(vkBindBufferMemory(mDevice, image.Readback[side], image.ReadbackMemory[side], 0),
+                          "vkBindBufferMemory(A/B readback)");
+        }
+    }
+    const VkCommandBuffer command = mCommandBuffers[mCurrentFrame];
+    // The targets rest in attachment layouts between scopes.
+    const auto transition = [&](bool toGeneral, bool snapshots, bool fromUndefined) {
+        std::vector<VkImageMemoryBarrier> barriers;
+        for (const auto& image : ab.Images) {
+            VkImageMemoryBarrier barrier{ VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
+            barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+            barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.subresourceRange = { image.Aspect, 0, 1, 0, 1 };
+            const VkImageLayout attachment = image.Aspect == VK_IMAGE_ASPECT_COLOR_BIT
+                ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            if (snapshots) {
+                barrier.image = image.Snapshot;
+                barrier.oldLayout = fromUndefined ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_GENERAL;
+                barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            } else {
+                barrier.image = image.Target;
+                barrier.oldLayout = toGeneral ? attachment : VK_IMAGE_LAYOUT_GENERAL;
+                barrier.newLayout = toGeneral ? VK_IMAGE_LAYOUT_GENERAL : attachment;
+            }
+            barriers.push_back(barrier);
+        }
+        vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
+                             nullptr, 0, nullptr, static_cast<uint32_t>(barriers.size()), barriers.data());
+    };
+    const auto copyImages = [&](bool toSnapshot) {
+        for (const auto& image : ab.Images) {
+            VkImageCopy region{};
+            region.srcSubresource = { image.Aspect, 0, 0, 1 };
+            region.dstSubresource = region.srcSubresource;
+            region.extent = { target.Width, target.Height, 1 };
+            vkCmdCopyImage(command, toSnapshot ? image.Target : image.Snapshot, VK_IMAGE_LAYOUT_GENERAL,
+                           toSnapshot ? image.Snapshot : image.Target, VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+        }
+    };
+    const auto readBack = [&](int side) {
+        for (const auto& image : ab.Images) {
+            VkBufferImageCopy region{};
+            region.imageSubresource = { image.Aspect == VK_IMAGE_ASPECT_COLOR_BIT
+                                            ? VK_IMAGE_ASPECT_COLOR_BIT : VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 };
+            region.imageExtent = { target.Width, target.Height, 1 };
+            vkCmdCopyImageToBuffer(command, image.Target, VK_IMAGE_LAYOUT_GENERAL, image.Readback[side], 1, &region);
+            if ((image.Aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0U) {
+                region.bufferOffset = image.StencilOffset;
+                region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+                vkCmdCopyImageToBuffer(command, image.Target, VK_IMAGE_LAYOUT_GENERAL, image.Readback[side], 1,
+                                       &region);
+            }
+        }
+    };
+    EndNativePicaRenderPass();
+    transition(true, false, false);
+    transition(true, true, true);
+    copyImages(true);
+    transition(false, false, false);
+    BeginNativePicaRenderPass(target);
+    record(true);
+    EndNativePicaRenderPass();
+    transition(true, false, false);
+    readBack(1);
+    transition(true, true, false);
+    copyImages(false);
+    transition(false, false, false);
+    BeginNativePicaRenderPass(target);
+    record(false);
+    EndNativePicaRenderPass();
+    transition(true, false, false);
+    readBack(0);
+    transition(false, false, false);
+    BeginNativePicaRenderPass(target);
+    ab.Pending = true;
+    ab.RecordedFrame = mFrameCounter;
+    ab.Label = label;
+}
+
+void GfxRenderingAPIVulkan::FinishNativePicaAb() {
+    auto& ab = mNativePicaAb;
+    ab.Pending = false;
+    vkDeviceWaitIdle(mDevice);
+    std::fprintf(stderr, "[ab] frame=%u %ux%u %s variant_b=%s\n", ab.RecordedFrame, ab.Width, ab.Height,
+                 ab.Label.c_str(), ab.Control ? "same pipeline (control)" : "switch on");
+    const uint64_t pixels = static_cast<uint64_t>(ab.Width) * ab.Height;
+    for (auto& image : ab.Images) {
+        void* mapped[2]{};
+        vkMapMemory(mDevice, image.ReadbackMemory[0], 0, VK_WHOLE_SIZE, 0, &mapped[0]);
+        vkMapMemory(mDevice, image.ReadbackMemory[1], 0, VK_WHOLE_SIZE, 0, &mapped[1]);
+        auto* a = static_cast<uint8_t*>(mapped[0]);
+        auto* b = static_cast<uint8_t*>(mapped[1]);
+        // D24 depth texels are copied as 32 bits with 8 undefined high bits.
+        if (image.Format == VK_FORMAT_D24_UNORM_S8_UINT || image.Format == VK_FORMAT_X8_D24_UNORM_PACK32)
+            for (uint64_t pixel = 0; pixel < pixels; ++pixel) a[pixel * 4U + 3U] = b[pixel * 4U + 3U] = 0U;
+        const auto compare = [&](const char* name, const uint8_t* left, const uint8_t* right, uint32_t texel,
+                                 uint32_t component) {
+            uint64_t differing = 0, maxDiff = 0, nonZero = 0;
+            for (uint64_t pixel = 0; pixel < pixels; ++pixel) {
+                const uint8_t* l = left + pixel * texel;
+                const uint8_t* r = right + pixel * texel;
+                for (uint32_t byte = 0; byte < texel; ++byte)
+                    if (l[byte] != 0U) { ++nonZero; break; }
+                if (std::memcmp(l, r, texel) == 0) continue;
+                ++differing;
+                for (uint32_t offset = 0; offset < texel; offset += component) {
+                    uint64_t lv = 0, rv = 0;
+                    std::memcpy(&lv, l + offset, component);
+                    std::memcpy(&rv, r + offset, component);
+                    maxDiff = std::max(maxDiff, lv > rv ? lv - rv : rv - lv);
+                }
+            }
+            std::fprintf(stderr, "[ab]   %-14s differing_pixels=%llu max_abs_diff=%llu (raw units) nonzero_pixels_a=%llu\n",
+                         name, static_cast<unsigned long long>(differing), static_cast<unsigned long long>(maxDiff),
+                         static_cast<unsigned long long>(nonZero));
+        };
+        compare(image.Name, a, b, image.TexelBytes, image.ComponentBytes);
+        if ((image.Aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0U)
+            compare("stencil", a + image.StencilOffset, b + image.StencilOffset, 1U, 1U);
+        vkUnmapMemory(mDevice, image.ReadbackMemory[0]);
+        vkUnmapMemory(mDevice, image.ReadbackMemory[1]);
+        for (int side = 0; side < 2; ++side) {
+            vkDestroyBuffer(mDevice, image.Readback[side], nullptr);
+            vkFreeMemory(mDevice, image.ReadbackMemory[side], nullptr);
+        }
+        vkDestroyImage(mDevice, image.Snapshot, nullptr);
+        vkFreeMemory(mDevice, image.SnapshotMemory, nullptr);
+    }
+    ab.Images.clear();
+    std::fprintf(stderr, "[ab] done\n");
 }
 
 void GfxRenderingAPIVulkan::PaintNativePicaPictureBars(

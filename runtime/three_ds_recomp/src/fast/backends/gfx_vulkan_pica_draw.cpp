@@ -3859,7 +3859,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             RasterStats::Enabled() && renderTarget.NormalGuideView != VK_NULL_HANDLE &&
                     RasterStats::SkipPipeline(draw.CanonicalPipelineId, UsesTranslucentBlend(draw.Blend),
                                               !UsesTranslucentBlend(draw.Blend) && draw.DepthTestEnabled &&
-                                                  draw.DepthWriteEnabled)
+                                                  draw.DepthWriteEnabled,
+                                              static_cast<uint32_t>(draw.CompositionDomain) == 2U)
                 ? 0U
                 : scissorParts.Count;
         // Developer timeline split (TRIAEVUM_GPU_TIMELINE=1 with TRIAEVUM_ATMOSPHERE_MARKS=1): the
@@ -3871,20 +3872,23 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             mGpuProfiler.Mark(mCurrentFrame,
                               draw.DepthWriteEnabled ? "atmosphere depth-writing draw" : "atmosphere draw",
                               commandBuffer);
+        // Records the draw once per scissor part with `drawPipeline` (the
+        // selected pipeline, or a same-frame A/B variant of it).
+        const auto recordScissorParts = [&](const Renderer3ds::PicaDevicePipelineRecord& drawPipeline) {
         for (uint32_t scissorPart = 0; scissorPart < recordedScissorParts; ++scissorPart) {
             const auto part = scissorParts.Rects[scissorPart];
             mScissor = { { part.X, part.Y }, { part.Width, part.Height } };
             nriDraw.Scissor = mScissor;
             // Coverage runs before the native draw: stencil must still have its
             // original value if that draw modifies it. The auxiliary pass is read-only.
-            nriDraw.PipelineId = coveragePipeline ? coveragePipeline->Id : pipelineRecord.Id;
+            nriDraw.PipelineId = coveragePipeline ? coveragePipeline->Id : drawPipeline.Id;
             nriOwnedDrawBound = nriOwnedDraw && mNriPicaPipelineBridge.BindOwnedDraw(nriDraw);
             if (nriOwnedDraw && !nriOwnedDrawBound) {
                 throw std::runtime_error("NRI PICA draw binding failed in an NRI-owned "
                                          "rendering scope");
             }
             if (nriOwnedDrawBound && coveragePipeline != nullptr) {
-                nriDraw.PipelineId = pipelineRecord.Id;
+                nriDraw.PipelineId = drawPipeline.Id;
                 if (!mNriPicaPipelineBridge.DrawBoundGeometry(nriDraw))
                     throw std::runtime_error("NRI native draw after outline coverage failed");
             }
@@ -3925,6 +3929,46 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     vkCmdDraw(commandBuffer, draw.VertexCount, 1, 0, 0);
                 }
             }
+        }
+        };
+        // Same-frame A/B (developer, TRIAEVUM_AB_FRAME): the first guided draw
+        // at or after that frame whose pipeline the A/B switch changes is
+        // recorded with the switch on and off from the same attachment
+        // contents; both results are read back and compared bitwise.
+        const Renderer3ds::PicaDevicePipelineRecord* abVariant = nullptr;
+        if (NativePicaAbArmed() && renderTarget.NormalGuideView != VK_NULL_HANDLE && recordedScissorParts != 0U &&
+            !RasterStats::Enabled() && coveragePipeline == nullptr) {
+            Extension::SetPicaAbOverride(NativePicaAbSwitches());
+            abVariant = &GetOrCreateNativePicaPipeline(
+                *selectedDraw, *selectedProgram, drawVariant.Reactive, drawVariant.Domain,
+                drawVariant.RequestedFeatures, drawVariant.AppliedFeatures, false, false, !nriOwnedDraw,
+                selectedDraw == &uberDraw ? NativePicaPipelineAcquisition::Libraries
+                                          : NativePicaPipelineAcquisition::Blocking);
+            Extension::SetPicaAbOverride(0U);
+            if (abVariant->Id.Value == pipelineRecord.Id.Value ||
+                (nriOwnedDraw && !mNriPicaPipelineBridge.OwnedPipelineReady(abVariant->Id)))
+                abVariant = nullptr;
+        }
+        if (abVariant != nullptr) {
+            char label[160];
+            std::snprintf(label, sizeof(label), "pipeline=%llx layer=%u nri_owned=%u program=%s",
+                          static_cast<unsigned long long>(draw.CanonicalPipelineId),
+                          static_cast<unsigned>(draw.Composition.Layer), nriOwnedDraw ? 1U : 0U,
+                          selectedDraw == &uberDraw ? "uber" : "specialized");
+            // Variant B: the switch on (or, for the control, the selected
+            // pipeline again), recorded first and then undone.
+            const bool control = NativePicaAbControl();
+            RunNativePicaAbDraw(renderTarget, label, [&](bool variantB) {
+                if (variantB && !control) {
+                    Extension::SetPicaAbOverride(NativePicaAbSwitches());
+                    recordScissorParts(*abVariant);
+                    Extension::SetPicaAbOverride(0U);
+                } else {
+                    recordScissorParts(pipelineRecord);
+                }
+            });
+        } else {
+            recordScissorParts(pipelineRecord);
         }
         if (rasterDrawQuery)
             RasterStats::Collector::Instance().EndDraw(commandBuffer);
