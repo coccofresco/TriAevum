@@ -3798,8 +3798,18 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 : !(draw.DepthTestEnabled && draw.DepthWriteEnabled)          ? RasterStats::kOther
                 : discards                                                    ? RasterStats::kOpaqueDiscard
                                                                               : RasterStats::kOpaque;
+            const bool stencilWrites = draw.Stencil.Enabled && draw.Stencil.WriteMask != 0U &&
+                (draw.Stencil.Fail != GfxNativePicaStencilAction::Keep ||
+                 draw.Stencil.DepthFail != GfxNativePicaStencilAction::Keep ||
+                 draw.Stencil.Pass != GfxNativePicaStencilAction::Keep);
+            const uint32_t drawKey = RasterStats::PackDrawKey(
+                drawClass, draw.DepthTestEnabled, draw.DepthWriteEnabled, discards, draw.Stencil.Enabled, stencilWrites,
+                fragment.find("gl_FragDepth") != std::string_view::npos,
+                draw.Blend.Enabled ? static_cast<uint32_t>(draw.Blend.SourceRgb) : 15U,
+                draw.Blend.Enabled ? static_cast<uint32_t>(draw.Blend.DestRgb) : 15U,
+                static_cast<uint32_t>(draw.Blend.EquationRgb), static_cast<uint32_t>(draw.CompositionDomain));
             rasterDrawQuery = RasterStats::Collector::Instance().BeginDraw(
-                mDevice, commandBuffer, mCurrentFrame, mFrameCounter, drawClass);
+                mDevice, commandBuffer, mCurrentFrame, mFrameCounter, drawKey);
         }
         for (uint32_t scissorPart = 0; scissorPart < scissorParts.Count; ++scissorPart) {
             const auto part = scissorParts.Rects[scissorPart];

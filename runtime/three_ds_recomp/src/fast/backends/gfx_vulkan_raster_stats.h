@@ -14,6 +14,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string_view>
+#include <map>
+#include <utility>
+#include <vector>
 
 namespace Fast::RasterStats {
 
@@ -31,6 +34,17 @@ namespace Fast::RasterStats {
 }
 [[nodiscard]] inline bool Enabled() noexcept { return Level() != 0; }
 [[nodiscard]] inline bool PerDraw() noexcept { return Level() == 2; }
+
+// Level 2 draw key: class (bits 0-1), depth test (2), depth write (3), discard (4),
+// stencil enabled (5), stencil writes (6), explicit depth (7), blend source RGB (8-11),
+// destination RGB (12-15), RGB equation (16-19), composition domain (20-23).
+[[nodiscard]] inline uint32_t PackDrawKey(uint32_t drawClass, bool depthTest, bool depthWrite, bool discard,
+                                          bool stencil, bool stencilWrites, bool explicitDepth, uint32_t sourceRgb,
+                                          uint32_t destRgb, uint32_t equation, uint32_t domain) noexcept {
+    return (drawClass & 3U) | (depthTest ? 4U : 0U) | (depthWrite ? 8U : 0U) | (discard ? 16U : 0U) |
+           (stencil ? 32U : 0U) | (stencilWrites ? 64U : 0U) | (explicitDepth ? 128U : 0U) | ((sourceRgb & 15U) << 8) |
+           ((destRgb & 15U) << 12) | ((equation & 15U) << 16) | ((domain & 15U) << 20);
+}
 
 enum DrawClass : uint32_t { kOpaque = 0, kOpaqueDiscard = 1, kBlended = 2, kOther = 3, kClasses = 4 };
 
@@ -91,22 +105,27 @@ public:
         if (!gPipelineStatisticsEnabled || slot >= kSlots || mSlots[slot].DrawReset || !EnsureDrawPool(device))
             return;
         vkCmdResetQueryPool(commandBuffer, mDrawPool, slot * kDrawQueriesPerSlot, kDrawQueriesPerSlot);
+        vkCmdResetQueryPool(commandBuffer, mOcclusionPool, slot * kDrawQueriesPerSlot, kDrawQueriesPerSlot);
         mSlots[slot].DrawReset = true;
     }
 
     // Level 2: around one guided draw's commands, inside the scope.
-    bool BeginDraw(VkDevice device, VkCommandBuffer commandBuffer, uint32_t slot, uint32_t frame, DrawClass drawClass) {
+    bool BeginDraw(VkDevice device, VkCommandBuffer commandBuffer, uint32_t slot, uint32_t frame, uint32_t drawKey) {
         AdvanceFrame(device, slot, frame);
         if (!gPipelineStatisticsEnabled || slot >= kSlots || !mSlots[slot].DrawReset ||
             mSlots[slot].DrawUsed >= kDrawQueriesPerSlot || mDrawPool == VK_NULL_HANDLE)
             return false;
         const uint32_t index = slot * kDrawQueriesPerSlot + mSlots[slot].DrawUsed++;
-        mDrawClasses[index] = drawClass;
+        mDrawClasses[index] = drawKey;
         vkCmdBeginQuery(commandBuffer, mDrawPool, index, 0);
+        vkCmdBeginQuery(commandBuffer, mOcclusionPool, index, 0);
         mPendingDrawQuery = index;
         return true;
     }
-    void EndDraw(VkCommandBuffer commandBuffer) { vkCmdEndQuery(commandBuffer, mDrawPool, mPendingDrawQuery); }
+    void EndDraw(VkCommandBuffer commandBuffer) {
+        vkCmdEndQuery(commandBuffer, mOcclusionPool, mPendingDrawQuery);
+        vkCmdEndQuery(commandBuffer, mDrawPool, mPendingDrawQuery);
+    }
 
     void RecordDraw(const DrawState& draw) {
         ++mDraws;
@@ -141,7 +160,11 @@ private:
         info.queryType = VK_QUERY_TYPE_PIPELINE_STATISTICS;
         info.queryCount = kSlots * kDrawQueriesPerSlot;
         info.pipelineStatistics = VK_QUERY_PIPELINE_STATISTIC_FRAGMENT_SHADER_INVOCATIONS_BIT;
-        if (vkCreateQueryPool(device, &info, nullptr, &mDrawPool) != VK_SUCCESS) {
+        VkQueryPoolCreateInfo occlusion{ VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
+        occlusion.queryType = VK_QUERY_TYPE_OCCLUSION;
+        occlusion.queryCount = kSlots * kDrawQueriesPerSlot;
+        if (vkCreateQueryPool(device, &occlusion, nullptr, &mOcclusionPool) != VK_SUCCESS ||
+            vkCreateQueryPool(device, &info, nullptr, &mDrawPool) != VK_SUCCESS) {
             mDrawPool = VK_NULL_HANDLE;
             mDrawPoolFailed = true;
             return false;
@@ -192,11 +215,21 @@ private:
         }
         if (state.DrawUsed != 0U && mDrawPool != VK_NULL_HANDLE) {
             std::array<uint64_t, kDrawQueriesPerSlot> results{};
+            std::array<uint64_t, kDrawQueriesPerSlot> passed{};
             if (vkGetQueryPoolResults(device, mDrawPool, slot * kDrawQueriesPerSlot, state.DrawUsed,
                                       sizeof(uint64_t) * state.DrawUsed, results.data(), sizeof(uint64_t),
+                                      VK_QUERY_RESULT_64_BIT) == VK_SUCCESS &&
+                vkGetQueryPoolResults(device, mOcclusionPool, slot * kDrawQueriesPerSlot, state.DrawUsed,
+                                      sizeof(uint64_t) * state.DrawUsed, passed.data(), sizeof(uint64_t),
                                       VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
-                for (uint32_t index = 0; index < state.DrawUsed; ++index)
-                    mClassInvocations[mDrawClasses[slot * kDrawQueriesPerSlot + index]] += results[index];
+                for (uint32_t index = 0; index < state.DrawUsed; ++index) {
+                    const uint32_t key = mDrawClasses[slot * kDrawQueriesPerSlot + index];
+                    mClassInvocations[key & 3U] += results[index];
+                    auto& entry = mKeys[key];
+                    entry.Invocations += results[index];
+                    entry.Passed += passed[index];
+                    ++entry.Draws;
+                }
                 ++mDrawQueriedFrames;
             }
         }
@@ -232,6 +265,23 @@ private:
                          mClassInvocations[kOpaque] / n, mClassInvocations[kOpaqueDiscard] / n,
                          mClassInvocations[kBlended] / n, mClassInvocations[kOther] / n, pixelsPerFrame);
         }
+        if (PerDraw() && mDrawQueriedFrames != 0U) {
+            const double n = static_cast<double>(mDrawQueriedFrames);
+            std::vector<std::pair<uint32_t, KeyStats>> keys(mKeys.begin(), mKeys.end());
+            std::sort(keys.begin(), keys.end(),
+                      [](const auto& a, const auto& b) { return a.second.Invocations > b.second.Invocations; });
+            for (size_t i = 0; i < keys.size() && i < 14; ++i) {
+                const uint32_t k = keys[i].first;
+                std::fprintf(stderr,
+                             "[raster-stats] key class=%u dt=%u dw=%u discard=%u stencil=%u stencil_write=%u "
+                             "frag_depth=%u blend=%u/%u/%u domain=%u draws_per_frame=%.1f invocations=%.0f "
+                             "passed_samples=%.0f\n",
+                             k & 3U, (k >> 2) & 1U, (k >> 3) & 1U, (k >> 4) & 1U, (k >> 5) & 1U, (k >> 6) & 1U,
+                             (k >> 7) & 1U, (k >> 8) & 15U, (k >> 12) & 15U, (k >> 16) & 15U, (k >> 20) & 15U,
+                             keys[i].second.Draws / n, keys[i].second.Invocations / n, keys[i].second.Passed / n);
+            }
+        }
+        mKeys.clear();
         mClassInvocations = {};
         mDrawQueriedFrames = 0;
         mFrames = mQueriedFrames = mScopes = mDraws = mExplicitDepth = mDiscard = 0;
@@ -241,9 +291,14 @@ private:
 
     VkQueryPool mPool = VK_NULL_HANDLE;
     VkQueryPool mDrawPool = VK_NULL_HANDLE;
+    VkQueryPool mOcclusionPool = VK_NULL_HANDLE;
+    struct KeyStats {
+        uint64_t Invocations = 0, Passed = 0, Draws = 0;
+    };
+    std::map<uint32_t, KeyStats> mKeys;
     bool mDrawPoolFailed = false;
     uint32_t mPendingDrawQuery = 0;
-    std::array<DrawClass, kSlots * kDrawQueriesPerSlot> mDrawClasses{};
+    std::array<uint32_t, kSlots * kDrawQueriesPerSlot> mDrawClasses{};
     std::array<uint64_t, kClasses> mClassInvocations{};
     uint64_t mDrawQueriedFrames = 0;
     bool mPoolFailed = false;
