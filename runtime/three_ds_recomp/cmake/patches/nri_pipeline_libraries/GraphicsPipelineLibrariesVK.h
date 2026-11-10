@@ -110,6 +110,8 @@ class GraphicsPipelineLibraries {
         case VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK: case VK_DYNAMIC_STATE_STENCIL_WRITE_MASK: return 2;
         case VK_DYNAMIC_STATE_DEPTH_BOUNDS: case VK_DYNAMIC_STATE_STENCIL_REFERENCE: return 2;
         case VK_DYNAMIC_STATE_BLEND_CONSTANTS: return 3;
+        // Pre-rasterization and fragment shader state: listed in both parts.
+        case VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR: return 1;
         default: return -1;
         }
     }
@@ -195,6 +197,7 @@ class GraphicsPipelineLibraries {
         for (uint32_t i = 0; i < in.pDynamicState->dynamicStateCount; ++i) {
             auto state = in.pDynamicState->pDynamicStates[i];
             dynamics[size_t(DynamicPart(state))].push_back(state);
+            if (state == VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR) dynamics[2].push_back(state);
         }
         for (size_t p = 0; p < 4; ++p) {
             std::sort(dynamics[p].begin(), dynamics[p].end());

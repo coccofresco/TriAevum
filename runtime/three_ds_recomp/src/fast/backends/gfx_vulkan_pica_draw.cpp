@@ -5,6 +5,7 @@
 #include "fast/extension/presentation_freeze.h"
 #include "gfx_vulkan_raster_stats.h"
 #include "fast/renderer3ds/pica_exclude_scissor.h"
+#include "fast/renderer3ds/pica_vrs.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
 #include "fast/renderer3ds/pica_fragment_balance.h"
 #include "fast/renderer3ds/pica_surface_appearance.h"
@@ -4116,6 +4117,19 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             mGpuProfiler.Mark(mCurrentFrame,
                               draw.DepthWriteEnabled ? "atmosphere depth-writing draw" : "atmosphere draw",
                               commandBuffer);
+        // VRS phase A (TRIAEVUM_VRS_SKY, pica_vrs.h): Atmosphere-layer draws
+        // coarse, all others 1x1; set before every PICA draw while on.
+        uint8_t shadingRate = Renderer3ds::PicaVrs::kRate1x1;
+        if (Renderer3ds::PicaVrs::Dynamic() &&
+            draw.Composition.Layer == Renderer3ds::PicaCompositionLayer::Atmosphere &&
+            coveragePipeline == nullptr) {
+            const std::string_view fragment = selectedDraw->FragmentShaderSource;
+            shadingRate = Renderer3ds::PicaVrs::DrawRate(
+                true, draw.DepthTestEnabled || draw.DepthWriteEnabled,
+                fragment.find("gl_FragDepth") != std::string_view::npos,
+                RunsDiscardingAlphaTest(draw) || fragment.find("discard") != std::string_view::npos);
+        }
+        nriDraw.ShadingRate = shadingRate;
         // Records the draw once per scissor part with `drawPipeline` (the
         // selected pipeline, or a same-frame A/B variant of it).
         const auto recordScissorParts = [&](const Renderer3ds::PicaDevicePipelineRecord& drawPipeline) {
@@ -4153,6 +4167,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 vkCmdSetViewport(commandBuffer, 0, 1, &mViewport);
                 vkCmdSetScissor(commandBuffer, 0, 1, &mScissor);
                 vkCmdSetBlendConstants(commandBuffer, draw.Blend.ConstantColor);
+                Renderer3ds::PicaVrs::CmdSetRate(commandBuffer, shadingRate);
                 vkCmdPushConstants(commandBuffer, mNativePicaPipelineLayout,
                                    VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(nativeDrawPush),
                                    &nativeDrawPush);

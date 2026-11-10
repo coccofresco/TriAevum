@@ -4,6 +4,7 @@
 
 #ifdef ENABLE_OOT3D_VULKAN
 #include "fast/renderer3ds/vulkan_image_contract.h"
+#include "fast/renderer3ds/pica_vrs.h"
 
 #include <algorithm>
 #include <array>
@@ -575,6 +576,9 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
     for (const char* extension : Renderer3ds::PicaPipelineStateExtensions(
              extendedDynamicStateEnabled, graphicsPipelineLibrariesEnabled))
         deviceExtensions.push_back(extension);
+    // VRS phase A: NRI loads vkCmdSetFragmentShadingRateKHR only for a listed extension.
+    if (Renderer3ds::PicaVrs::Dynamic())
+        deviceExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
     desc.vkExtensions.deviceExtensions = deviceExtensions.data();
     desc.vkExtensions.deviceExtensionNum =
         static_cast<uint32_t>(deviceExtensions.size());

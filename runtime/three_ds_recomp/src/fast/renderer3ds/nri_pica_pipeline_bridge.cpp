@@ -8,6 +8,7 @@
 #include "fast/renderer3ds/pica_device_pipeline_pool.h"
 #include "fast/renderer3ds/pica_nri_upload.h"
 #include "fast/renderer3ds/pica_preparation_queue.h"
+#include "fast/renderer3ds/pica_vrs.h"
 #include "fast/renderer3ds/vulkan_pipeline_cache_store.h"
 
 #ifdef ENABLE_RENDERER3DS_NRI
@@ -639,6 +640,9 @@ nri::Pipeline* NriPicaPipelineBridge::CreatePipeline(const NriPicaGraphicsPipeli
     pipeline.rasterization.frontCounterClockwise =
         desc.FrontFace == VK_FRONT_FACE_COUNTER_CLOCKWISE;
     pipeline.multisample = &multisample;
+    // VRS phase A (pica_vrs.h): the rate is dynamic state of every PICA
+    // pipeline while the switch is on; default off leaves the pipeline as is.
+    pipeline.rasterization.shadingRate = PicaVrs::Dynamic();
     pipeline.outputMerger.colors = colors.data();
     pipeline.outputMerger.colorNum = desc.ColorAttachmentCount;
     pipeline.outputMerger.depth.compareOp =
@@ -1239,6 +1243,14 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
         *command, nri::BindPoint::GRAPHICS,
         *mImpl->DescriptorLayout);
     core->CmdSetPipeline(*command, *pipeline->second);
+    if (PicaVrs::Dynamic()) {
+        const nri::ShadingRateDesc rate{
+            desc.ShadingRate == PicaVrs::kRate4x4   ? nri::ShadingRate::FRAGMENT_SIZE_4X4
+            : desc.ShadingRate == PicaVrs::kRate2x2 ? nri::ShadingRate::FRAGMENT_SIZE_2X2
+                                                    : nri::ShadingRate::FRAGMENT_SIZE_1X1,
+            nri::ShadingRateCombiner::KEEP, nri::ShadingRateCombiner::KEEP};
+        core->CmdSetShadingRate(*command, rate);
+    }
     const nri::SetDescriptorSetDesc setDesc{
         0, set, nri::BindPoint::GRAPHICS};
     core->CmdSetDescriptorSet(*command, setDesc);

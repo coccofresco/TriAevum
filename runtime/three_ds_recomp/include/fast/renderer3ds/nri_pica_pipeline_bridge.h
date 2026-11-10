@@ -164,6 +164,8 @@ struct NriPicaOwnedDrawDesc {
     std::array<float, 4> BlendConstants{};
     bool StencilTest = false;
     uint8_t StencilReference = 0;
+    // Fragment shading rate code (pica_vrs.h); set only with VRS on.
+    uint8_t ShadingRate = 0;
 };
 
 struct NriPicaPipelineStatistics {

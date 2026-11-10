@@ -6,6 +6,7 @@
 #include "fast/renderer3ds/vulkan_commands.h"
 #include "fast/renderer3ds/vulkan_memory_budget.h"
 #include "fast/renderer3ds/vulkan_device_path_report.h"
+#include "fast/renderer3ds/pica_vrs.h"
 
 namespace Fast {
 
@@ -409,6 +410,86 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
     for (const char* extension : Renderer3ds::PicaPipelineStateExtensions(
              mExtendedDynamicStateEnabled, mGraphicsPipelineLibrariesEnabled))
         extensions.push_back(extension);
+    // Variable-rate shading phase A (pica_vrs.h): capabilities are logged
+    // once; the extension and the pipeline rate feature are enabled only
+    // with TRIAEVUM_VRS_SKY set, so the default device is unchanged.
+    VkPhysicalDeviceFragmentShadingRateFeaturesKHR shadingRateFeatures{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR};
+    bool shadingRateEnabled = false;
+    {
+        const bool hasShadingRate = hasExtension(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+        VkPhysicalDeviceFragmentShadingRatePropertiesKHR rateProperties{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR};
+        if (hasShadingRate) {
+            VkPhysicalDeviceFeatures2 query{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+            query.pNext = &shadingRateFeatures;
+            RequiredInstanceCommand<PFN_vkGetPhysicalDeviceFeatures2>(mInstance, "vkGetPhysicalDeviceFeatures2")(
+                mPhysicalDevice, &query);
+            shadingRateFeatures.pNext = nullptr;
+            VkPhysicalDeviceProperties2 props{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+            props.pNext = &rateProperties;
+            RequiredInstanceCommand<PFN_vkGetPhysicalDeviceProperties2>(mInstance, "vkGetPhysicalDeviceProperties2")(
+                mPhysicalDevice, &props);
+        }
+        std::string rates;
+        if (hasShadingRate && shadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE) {
+            auto getRates = reinterpret_cast<PFN_vkGetPhysicalDeviceFragmentShadingRatesKHR>(
+                vkGetInstanceProcAddr(mInstance, "vkGetPhysicalDeviceFragmentShadingRatesKHR"));
+            uint32_t count = 0;
+            if (getRates != nullptr && getRates(mPhysicalDevice, &count, nullptr) == VK_SUCCESS) {
+                std::vector<VkPhysicalDeviceFragmentShadingRateKHR> list(
+                    count, {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_KHR});
+                if (getRates(mPhysicalDevice, &count, list.data()) == VK_SUCCESS) {
+                    for (uint32_t i = 0; i < count; ++i) {
+                        char entry[48];
+                        std::snprintf(entry, sizeof(entry), "%s%ux%u:%x", rates.empty() ? "" : ",",
+                                      list[i].fragmentSize.width, list[i].fragmentSize.height,
+                                      unsigned(list[i].sampleCounts));
+                        rates += entry;
+                    }
+                }
+            }
+        }
+        const auto& p = rateProperties;
+        std::fprintf(stderr,
+            "TRIAEVUM_VRS_CAPABILITY extension=%u pipeline=%u primitive=%u attachment=%u "
+            "attachment_texel=%ux%u..%ux%u attachment_aspect=%u primitive_multi_viewport=%u layered_attachments=%u "
+            "non_trivial_combiners=%u max_fragment=%ux%u max_aspect=%u max_coverage_samples=%u max_samples=%x "
+            "depth_stencil_writes=%u sample_mask=%u shader_sample_mask=%u conservative=%u fragment_shader_interlock=%u "
+            "custom_sample_locations=%u strict_multiply_combiner=%u rates=%s\n",
+            unsigned(hasShadingRate), unsigned(shadingRateFeatures.pipelineFragmentShadingRate),
+            unsigned(shadingRateFeatures.primitiveFragmentShadingRate),
+            unsigned(shadingRateFeatures.attachmentFragmentShadingRate),
+            p.minFragmentShadingRateAttachmentTexelSize.width, p.minFragmentShadingRateAttachmentTexelSize.height,
+            p.maxFragmentShadingRateAttachmentTexelSize.width, p.maxFragmentShadingRateAttachmentTexelSize.height,
+            p.maxFragmentShadingRateAttachmentTexelSizeAspectRatio,
+            unsigned(p.primitiveFragmentShadingRateWithMultipleViewports), unsigned(p.layeredShadingRateAttachments),
+            unsigned(p.fragmentShadingRateNonTrivialCombinerOps), p.maxFragmentSize.width, p.maxFragmentSize.height,
+            p.maxFragmentSizeAspectRatio, p.maxFragmentShadingRateCoverageSamples,
+            unsigned(p.maxFragmentShadingRateRasterizationSamples),
+            unsigned(p.fragmentShadingRateWithShaderDepthStencilWrites), unsigned(p.fragmentShadingRateWithSampleMask),
+            unsigned(p.fragmentShadingRateWithShaderSampleMask),
+            unsigned(p.fragmentShadingRateWithConservativeRasterization),
+            unsigned(p.fragmentShadingRateWithFragmentShaderInterlock),
+            unsigned(p.fragmentShadingRateWithCustomSampleLocations),
+            unsigned(p.fragmentShadingRateStrictMultiplyCombiner), rates.empty() ? "-" : rates.c_str());
+        const auto policy = Renderer3ds::PicaVrs::RequestedPolicy();
+        uint8_t skyRate = Renderer3ds::PicaVrs::RequestedSkyRate();
+        if (skyRate == Renderer3ds::PicaVrs::kRate4x4 &&
+            (p.maxFragmentSize.width < 4U || p.maxFragmentSize.height < 4U))
+            skyRate = Renderer3ds::PicaVrs::kRate2x2;
+        shadingRateEnabled = policy != Renderer3ds::PicaVrs::SkyPolicy::Off && hasShadingRate &&
+            shadingRateFeatures.pipelineFragmentShadingRate == VK_TRUE;
+        if (shadingRateEnabled) {
+            extensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+            Renderer3ds::PicaVrs::gSkyRate.store(skyRate);
+            Renderer3ds::PicaVrs::gPolicy.store(static_cast<uint8_t>(policy));
+        }
+        if (policy != Renderer3ds::PicaVrs::SkyPolicy::Off)
+            std::fprintf(stderr, "TRIAEVUM_VRS enabled=%u policy=%s sky_rate=%s\n", unsigned(shadingRateEnabled),
+                         policy == Renderer3ds::PicaVrs::SkyPolicy::Atmosphere ? "atmosphere" : "clouds",
+                         skyRate == Renderer3ds::PicaVrs::kRate4x4 ? "4x4" : "2x2");
+    }
     if (mSynchronization2Enabled)
         extensions.push_back(VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME);
     if (mDynamicRenderingEnabled)
@@ -521,8 +602,20 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         enabledDeviceFault.pNext = featureChain;
         featureChain = &enabledDeviceFault;
     }
+    VkPhysicalDeviceFragmentShadingRateFeaturesKHR enabledShadingRate{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR};
+    if (shadingRateEnabled) {
+        enabledShadingRate.pipelineFragmentShadingRate = VK_TRUE;
+        enabledShadingRate.pNext = featureChain;
+        featureChain = &enabledShadingRate;
+    }
     createInfo.pNext = featureChain;
     CheckVk(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice), "vkCreateDevice");
+    if (shadingRateEnabled) {
+        Renderer3ds::PicaVrs::gCmdSetRate = reinterpret_cast<PFN_vkCmdSetFragmentShadingRateKHR>(
+            vkGetDeviceProcAddr(mDevice, "vkCmdSetFragmentShadingRateKHR"));
+        Renderer3ds::PicaVrs::gDynamic.store(Renderer3ds::PicaVrs::gCmdSetRate != nullptr);
+    }
     vkGetDeviceQueue(mDevice, mGraphicsQueueFamily, 0, &mGraphicsQueue);
     vkGetDeviceQueue(mDevice, mPresentQueueFamily,
                      queuePlan.PresentQueueIndex, &mPresentQueue);

@@ -1,6 +1,7 @@
 // Native PICA on Vulkan: shader modules, programs, pipelines and prewarm.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "fast/renderer3ds/pica_vrs.h"
 
 namespace Fast {
 
@@ -399,13 +400,15 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
     colorBlend.logicOp = resolvedState.LogicOp;
     colorBlend.attachmentCount = colorAttachmentCount;
     colorBlend.pAttachments = colorAttachments.data();
+    // The fragment shading rate is dynamic only with VRS on (pica_vrs.h).
     const VkDynamicState dynamicStates[]{VK_DYNAMIC_STATE_VIEWPORT,
                                          VK_DYNAMIC_STATE_SCISSOR,
-                                         VK_DYNAMIC_STATE_BLEND_CONSTANTS};
+                                         VK_DYNAMIC_STATE_BLEND_CONSTANTS,
+                                         VK_DYNAMIC_STATE_FRAGMENT_SHADING_RATE_KHR};
     VkPipelineDynamicStateCreateInfo dynamic{
         VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO};
     dynamic.dynamicStateCount =
-        static_cast<uint32_t>(std::size(dynamicStates));
+        static_cast<uint32_t>(std::size(dynamicStates)) - (Renderer3ds::PicaVrs::Dynamic() ? 0U : 1U);
     dynamic.pDynamicStates = dynamicStates;
     VkGraphicsPipelineCreateInfo pipelineInfo{
         VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};

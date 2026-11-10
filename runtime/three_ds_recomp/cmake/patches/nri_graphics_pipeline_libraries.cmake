@@ -70,3 +70,10 @@ patch_nri("Source/VK/PipelineVK.hpp"
     }
     if (vkResult == VK_ERROR_FEATURE_NOT_PRESENT)
         vkResult = vk.CreateGraphicsPipelines(m_Device, pipelineCache, 1, &info, m_Device.GetVkAllocationCallbacks(), &m_Handle);]=])
+# VRS phase A sets the pipeline rate as dynamic state and binds no rate
+# attachment: a rate-enabled pipeline keeps flags 0 (library path eligible).
+patch_nri("Source/VK/PipelineVK.hpp"
+    [=[    if (r.shadingRate && m_Device.m_IsSupported.dynamicRendering)
+        flags |= VK_PIPELINE_CREATE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;]=]
+    [=[    if (r.shadingRate && m_Device.m_IsSupported.dynamicRendering && false) // TriAevum: no rate attachment
+        flags |= VK_PIPELINE_CREATE_RENDERING_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR;]=])
