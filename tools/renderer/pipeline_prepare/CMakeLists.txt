@@ -51,6 +51,11 @@ endif()
 # runtime (pica_builtin_fragment_families.h).
 add_executable(triaevum_nri_pipeline_prepare main.cpp "${runtime}/src/fast/extension/pica_builtin_fragment_families.cpp")
 target_link_libraries(triaevum_nri_pipeline_prepare PRIVATE triaevum_pipeline_preparation)
+if(MINGW)
+    # Shipped as forge/oot3d_native_nri_pipeline_prepare.exe by the llvm-mingw
+    # product, away from the root libc++.dll: static libc++ and libunwind.
+    target_link_options(triaevum_nri_pipeline_prepare PRIVATE -static-libstdc++ -static-libgcc)
+endif()
 # --startup-programs embeds the translated title vertex family, as the runtime
 # executable does: this helper is the title's Forge tool, not title-neutral.
 target_include_directories(triaevum_nri_pipeline_prepare PRIVATE "${root}/tools/oot3d/native_pica_frontend")

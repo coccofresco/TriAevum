@@ -527,6 +527,14 @@ if(OOT3D_ENABLE_VULKAN_RENDERER AND TARGET three_ds_recomp_shaderc)
             NOMINMAX)
         set_property(TARGET oot3d_native_pica_aot_compiler PROPERTY
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        if(MINGW)
+            # The forge/ shader helper of the llvm-mingw product: its own static
+            # libc++ and libunwind, since libc++.dll sits beside the root
+            # executables only (XBUILD); shaderc_shared.dll beside it is
+            # self-contained.
+            target_link_options(oot3d_native_pica_aot_compiler PRIVATE
+                -static-libstdc++ -static-libgcc)
+        endif()
         add_custom_command(TARGET oot3d_native_pica_aot_compiler POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                     $<TARGET_FILE:three_ds_recomp_shaderc>
