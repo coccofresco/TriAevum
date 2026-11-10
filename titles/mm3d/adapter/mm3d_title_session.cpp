@@ -70,6 +70,11 @@ public:
     return true;
   }
   bool NativeFragmentLighting() const override { return kMm3dNativeFragmentLighting; }
+  // Opaque depth prepass on (PERF/LINUX_r7.md rounds 27-29): ~1 ms at 4K in
+  // the clock town scenes. Owner accepted the known 1-4 px strict-compare ties
+  // inside one draw (coplanar duplicate triangles, round 28).
+  // TRIAEVUM_DEPTH_PREPASS=0 turns it off.
+  bool OpaqueDepthPrepass() const override { return true; }
   std::vector<Fast::Renderer3ds::PicaShaderSourceIdentity> StartupUberModules() const override {
     return Mm3dStartupUberModules();
   }
