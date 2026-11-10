@@ -64,6 +64,14 @@ endif()
 # Windows 7 (0x601). Match the MSVC build's target (Windows 10).
 set(CMAKE_C_FLAGS_INIT "-D_WIN32_WINNT=0x0A00 -DWINVER=0x0A00")
 set(CMAKE_CXX_FLAGS_INIT "-D_WIN32_WINNT=0x0A00 -DWINVER=0x0A00")
+# TRIAEVUM_BUILD_ROOT (environment): the build machine's work root. Every
+# compile under it records /build instead (__FILE__, assertions), also in
+# vcpkg ports, whose triplet chainloads this file and so never sees
+# VCPKG_C_FLAGS (CMake/vcpkg-triplets/x64-mingw-llvm.cmake passes the variable).
+if(DEFINED ENV{TRIAEVUM_BUILD_ROOT} AND NOT "$ENV{TRIAEVUM_BUILD_ROOT}" STREQUAL "")
+    string(APPEND CMAKE_C_FLAGS_INIT " -ffile-prefix-map=$ENV{TRIAEVUM_BUILD_ROOT}=/build")
+    string(APPEND CMAKE_CXX_FLAGS_INIT " -ffile-prefix-map=$ENV{TRIAEVUM_BUILD_ROOT}=/build")
+endif()
 # Released PE files carry no DWARF: the prebuilt static libraries (the
 # toolchain's mingw-w64 CRT, vcpkg ports) would otherwise embed their build
 # machines' paths, which the release audit refuses. MSVC keeps debug data in
