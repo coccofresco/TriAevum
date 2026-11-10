@@ -154,8 +154,26 @@ void VirtualShadowMapCache::InvalidateComposition() noexcept {
         page.Valid = false;
 }
 
+namespace {
+// TRIAEVUM_VSM_TRACE=1: why static pages refresh (diagnostic).
+const bool gRefreshTrace = [] {
+    const char* value = std::getenv("TRIAEVUM_VSM_TRACE");
+    return value != nullptr && value[0] == '1';
+}();
+uint64_t gCalls[2] = {}, gRefresh[2][2] = {};
+} // namespace
+
 void VirtualShadowMapCache::Prepare(const VirtualShadowLayout& layout, std::span<const VirtualShadowCaster> casters,
                                     uint64_t frameId, const VirtualShadowConstruction* construction) {
+    if (gRefreshTrace && ++gCalls[construction != nullptr ? 1 : 0] + gCalls[construction != nullptr ? 0 : 1] >= 600U) {
+        std::fprintf(stderr, "[vsm-refresh] calls displayed=%llu construction=%llu | displayed: new=%llu signature=%llu | "
+                             "construction: new=%llu signature=%llu\n",
+                     (unsigned long long)gCalls[0], (unsigned long long)gCalls[1], (unsigned long long)gRefresh[0][0],
+                     (unsigned long long)gRefresh[0][1], (unsigned long long)gRefresh[1][0],
+                     (unsigned long long)gRefresh[1][1]);
+        gCalls[0] = gCalls[1] = 0;
+        gRefresh[0][0] = gRefresh[0][1] = gRefresh[1][0] = gRefresh[1][1] = 0;
+    }
     mStatistics = {};
     mTable.fill(0);
     mUpdates.clear();
@@ -370,6 +388,7 @@ void VirtualShadowMapCache::Prepare(const VirtualShadowLayout& layout, std::span
             page.PendingSignature = signature;
             page.PendingStaticSignature = staticSignature;
             const bool refreshStatic = !page.StaticValid || page.StaticSignature != staticSignature;
+            if (refreshStatic) ++gRefresh[mConstruction ? 1 : 0][page.StaticValid ? 1 : 0];
             if (mConstruction) {
                 // Composed from static depth alone.
                 page.PendingSignature = Mix(staticSignature) ^ Mix(Mix(0));

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
 
 namespace Oot3dNativeGame {
 
@@ -36,6 +37,21 @@ inline constexpr uint32_t kMm3dViewAtOffset = 0x34U;
 // The View's world-to-view matrix (Mtx34, rows): it maps the eye to the
 // origin and the view direction to -Z.
 inline constexpr uint32_t kMm3dViewWorldToViewOffset = 0x17CU;
+// Largest measured per-element rotation difference between that matrix and
+// the camera inside MM's model-view uniforms (East Clock Town, walking:
+// 7.8e-6 median, 3.4e-5 max; PERF LINUX_r7 round 14). No bit-identical copy
+// of the render camera exists in guest memory to read instead.
+inline constexpr float kMm3dRenderCameraRotationError = 3.4e-5F;
+// TRIAEVUM_MM_SHADOW_POSE_FIX=0 restores the previous shadow behaviour (exact
+// camera assumed; unattributed actor-part models stay static casters) for
+// comparison. Default on.
+[[nodiscard]] inline bool Mm3dShadowPoseFixEnabled() noexcept {
+  static const bool enabled = [] {
+    const char* value = std::getenv("TRIAEVUM_MM_SHADOW_POSE_FIX");
+    return value == nullptr || value[0] != '0';
+  }();
+  return enabled;
+}
 
 // The play state (N64 MM's PlayState): Play_Init calls View_Init on
 // play + 0x1F8 (0x0012AA40), so the play state's View is the current View

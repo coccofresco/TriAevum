@@ -293,7 +293,27 @@ Mm3dNativePicaCompositionTracker::ObserveBlockEntry(
             }
             const uint32_t slot = state.r[0] + 8U + count * 4U;
             const bool producer = overlayProducer || state.r[14] == 0x0020A8DCU ||
-                state.r[14] == 0x0020A8F8U || state.r[14] == 0x0020A918U;
+                state.r[14] == 0x0020A8F8U || state.r[14] == 0x0020A918U ||
+                // Actor-part enqueues (observed only inside an actor's draw:
+                // Link's equipment, NPC skeleton parts). Without them those
+                // models carried no actor and were static shadow casters.
+                (Mm3dShadowPoseFixEnabled() && !mActorDrawStack.empty() &&
+                 (state.r[14] == 0x0020A988U || state.r[14] == 0x00592F58U || state.r[14] == 0x001B30B8U));
+            {
+                static const bool trace = [] {
+                    const char* value = std::getenv("TRIAEVUM_MM_QUEUE_TRACE");
+                    return value != nullptr && value[0] == '1';
+                }();
+                static std::vector<uint64_t> seen;
+                const uint64_t key = (uint64_t{state.r[14]} << 1U) | (producer ? 1U : 0U);
+                if (trace && seen.size() < 128U && std::find(seen.begin(), seen.end(), key) == seen.end()) {
+                    seen.push_back(key);
+                    std::fprintf(stderr, "[mm-queue] lr=%08x producer=%d stack=%zu top=%016llx list=%08x submit_lr=%08x\n",
+                                 state.r[14], producer ? 1 : 0, mActorDrawStack.size(),
+                                 mActorDrawStack.empty() ? 0ULL : (unsigned long long)mActorDrawStack.back(), state.r[0],
+                                 mModelSubmit ? mModelSubmit->ReturnPc : 0U);
+                }
+            }
             const bool shadow = producer && !overlayProducer && mModelSubmit && mModelSubmit->Model == state.r[1] && mModelSubmit->Shadow;
             // Always replace the slot, including unrelated producers; never key by model alone.
             QueueOwner owner{state.r[1], mQueueGeneration,

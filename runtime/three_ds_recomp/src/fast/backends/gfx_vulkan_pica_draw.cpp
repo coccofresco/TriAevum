@@ -632,7 +632,8 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
             draw.VertexUniformBytes.subspan(Extension::kPicaPackedVertexFloatOffset), viewToWorld, version, shadowCache,
             resolution.Cacheable
                 ? ShadowCasterAnchor(geometry.Identity, draw.Composition.TemporalIdentity, draw.SubmissionId)
-                : nullptr);
+                : nullptr,
+            draw.LightBinding.WorldToViewRotationError);
         shadowCaster.Dynamic =
             draw.Composition.NativeActorGeometry && !draw.Composition.StaticShadowCacheEligible;
         shadowCaster.OwnerIdentity = draw.Composition.NativeActorIdentity;
@@ -3410,7 +3411,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     geometryResolution.Cacheable
                         ? ShadowCasterAnchor(geometry.Identity, draw.Composition.TemporalIdentity,
                                              draw.SubmissionId)
-                        : nullptr);
+                        : nullptr,
+                    draw.LightBinding.WorldToViewRotationError);
             }
             shadowCaster.Dynamic =
                 draw.Composition.NativeActorGeometry && !draw.Composition.StaticShadowCacheEligible;

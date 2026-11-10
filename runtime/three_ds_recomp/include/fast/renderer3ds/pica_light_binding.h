@@ -273,6 +273,11 @@ struct PicaNativeLightBinding {
     // Column-major world-to-view captured with the native geometry commands.
     // Replayed/interpolated with this draw, never read from a live camera.
     std::optional<std::array<float, 16>> WorldToView;
+    // Bound on the rotation difference between WorldToView and the camera the
+    // title folded into the draw's model-view. 0 (the default) means the
+    // title captures that exact camera, as OoT3D does. MM3D's View matrix is
+    // not bit-identical to its render camera (PERF LINUX_r7 round 14).
+    float WorldToViewRotationError = 0.0F;
     std::shared_ptr<const PicaScenePointLights> ScenePoints;
     std::shared_ptr<const PicaSceneDirectionalLights> SceneDirectionals;
     std::shared_ptr<const PicaSceneWaterBodies> Water;

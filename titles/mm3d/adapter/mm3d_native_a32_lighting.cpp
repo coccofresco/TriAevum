@@ -479,6 +479,12 @@ Fast::Renderer3ds::PicaNativeLightBinding Mm3dNativeA32LightingProbe::CaptureRen
         else for (uint32_t slot = 0; slot < 4U; ++slot) if (!(enabled & (1U << slot))) result.Sources[slot] = {};
     }
     result.WorldToView = CaptureWorldToView(memory);
+    // The View's world-to-view is not bit-identical to the camera MM folds
+    // into its model-views: measured rotation differences of 7.8e-6 median,
+    // 3.4e-5 maximum, independent of camera speed (PERF LINUX_r7 round 14).
+    // The shadow anchor test bounds its pose check by that error.
+    if (result.WorldToView && Mm3dShadowPoseFixEnabled())
+        result.WorldToViewRotationError = kMm3dRenderCameraRotationError;
     const auto current = CaptureMm3dSceneEnvironment(memory);
     const bool snapshotCurrent = mHaveSnapshot && current.State && current.Play == mSnapshotPlay &&
         current.State->GuestFrame == mSnapshotFrame && current.State->SceneId == mSnapshotScene &&

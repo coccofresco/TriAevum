@@ -50,7 +50,7 @@ VirtualShadowCaster BuildPicaShadowCaster(const PicaShadowGeometryView& geometry
                                           const PicaVertexShaderHookLayout& hooks, uint32_t booleanUniforms,
                                           std::span<const uint8_t> floatUniforms, const ShadowMatrix& viewToWorld,
                                           uint64_t geometryVersion, PicaShadowCasterCache& cache,
-                                          PicaShadowCasterAnchor* anchor) noexcept {
+                                          PicaShadowCasterAnchor* anchor, float cameraRotationError) noexcept {
     const auto* transform = hooks.TransformProgram();
     if (!transform || geometry.VertexOrIndexCount == 0)
         return {};
@@ -113,11 +113,29 @@ VirtualShadowCaster BuildPicaShadowCaster(const PicaShadowGeometryView& geometry
     if (!skinned && geometryVersion != 0) {
         world = Multiply(worldFromModel, model);
         if (anchor != nullptr && anchor->Valid && anchor->GeometryVersion == geometryVersion) {
+            // The rebuilt pose is inverse(captured camera) x model-view. When
+            // the title's captured camera differs from the one inside the
+            // model-view by a rotation error e (per matrix element), the
+            // rebuilt rotation is off by up to e and the rebuilt origin by up
+            // to e times the camera-to-origin distance. The cell grows by that
+            // much times a safety factor; with e == 0 (an exact camera) both
+            // terms are 0 and the tolerances are the fixed ones, unchanged.
+            double translationTolerance = 1.0 / 128.0, linearTolerance = 1.0 / 131072.0;
+            if (cameraRotationError > 0.0F) {
+                constexpr double kCameraErrorSafety = 2.0;
+                const double dx = double(anchor->World[12]) - double(viewToWorld[12]);
+                const double dy = double(anchor->World[13]) - double(viewToWorld[13]);
+                const double dz = double(anchor->World[14]) - double(viewToWorld[14]);
+                const double distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+                translationTolerance =
+                    std::max(translationTolerance, kCameraErrorSafety * double(cameraRotationError) * distance);
+                linearTolerance = std::max(linearTolerance, kCameraErrorSafety * double(cameraRotationError));
+            }
             bool inside = true;
             for (size_t index = 0; index < world.size() && inside; ++index) {
                 const bool translation = index >= 12 && index < 15;
                 const bool projective = index % 4 == 3;
-                const double tolerance = translation ? 1.0 / 128.0 : projective ? 0.0 : 1.0 / 131072.0;
+                const double tolerance = translation ? translationTolerance : projective ? 0.0 : linearTolerance;
                 inside = std::isfinite(world[index]) &&
                          std::abs(double(world[index]) - double(anchor->World[index])) <= tolerance;
             }

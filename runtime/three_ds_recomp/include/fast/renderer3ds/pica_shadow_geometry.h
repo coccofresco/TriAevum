@@ -53,6 +53,6 @@ struct PicaShadowCasterAnchor {
 BuildPicaShadowCaster(const PicaShadowGeometryView& geometry, const PicaVertexShaderHookLayout& hooks,
                       uint32_t booleanUniforms, std::span<const uint8_t> floatUniforms, const ShadowMatrix& viewToWorld,
                       uint64_t geometryVersion, PicaShadowCasterCache& cache,
-                      PicaShadowCasterAnchor* anchor = nullptr) noexcept;
+                      PicaShadowCasterAnchor* anchor = nullptr, float cameraRotationError = 0.0F) noexcept;
 
 } // namespace Fast::Renderer3ds
