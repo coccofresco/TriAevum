@@ -7,7 +7,7 @@ whole_aot_plugin_backend). The llvm-mingw Windows build (XBUILD) and other
 CMake-built title modules record the same correspondence here, so
 prepare_release.py --title-build binds them the same way:
 
-    python -I tools/triaevum_release/title_module_receipt.py \
+    python -m tools.triaevum_release.title_module_receipt \
         --plugin <build>/triaevum_title_aot.dll --target x86_64-w64-windows-gnu \
         --translated-manifest <translated>/TITLE_SOURCE_MANIFEST.json \
         --compiler <llvm-mingw>/bin/x86_64-w64-mingw32-clang++ --flags "-O2 -ffp-model=strict"
