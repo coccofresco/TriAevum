@@ -3829,13 +3829,29 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     draw.Blend.ConstantColor[3], static_cast<unsigned>(draw.Blend.SourceAlpha),
                     static_cast<unsigned>(draw.Blend.DestAlpha), static_cast<unsigned>(draw.CompositionDomain));
                 trace = text;
+                trace += selectedDraw == &uberDraw ? " program=uber" : " program=specialized";
+                trace += coveragePipeline != nullptr ? " coverage_pass=1" : " coverage_pass=0";
+                trace += " fs_bytes=" + std::to_string(selectedDraw->FragmentShaderSource.size());
+                if (const char* dump = std::getenv("TRIAEVUM_RASTER_DUMP_DIR");
+                    dump != nullptr && RasterStats::SkipPipeline(draw.CanonicalPipelineId)) {
+                    char path[512];
+                    std::snprintf(path, sizeof(path), "%s/%llx.frag", dump,
+                                  static_cast<unsigned long long>(draw.CanonicalPipelineId));
+                    if (std::FILE* file = std::fopen(path, "wb")) {
+                        std::fwrite(selectedDraw->FragmentShaderSource.data(), 1,
+                                    selectedDraw->FragmentShaderSource.size(), file);
+                        std::fclose(file);
+                    }
+                }
             }
             rasterDrawQuery = RasterStats::Collector::Instance().BeginDraw(
                 mDevice, commandBuffer, mCurrentFrame, mFrameCounter, drawKey, std::move(trace));
         }
         const uint32_t recordedScissorParts =
             RasterStats::Enabled() && renderTarget.NormalGuideView != VK_NULL_HANDLE &&
-                    RasterStats::SkipPipeline(draw.CanonicalPipelineId)
+                    RasterStats::SkipPipeline(draw.CanonicalPipelineId, UsesTranslucentBlend(draw.Blend),
+                                              !UsesTranslucentBlend(draw.Blend) && draw.DepthTestEnabled &&
+                                                  draw.DepthWriteEnabled)
                 ? 0U
                 : scissorParts.Count;
         for (uint32_t scissorPart = 0; scissorPart < recordedScissorParts; ++scissorPart) {

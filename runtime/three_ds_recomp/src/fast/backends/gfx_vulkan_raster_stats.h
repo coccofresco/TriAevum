@@ -38,13 +38,17 @@ namespace Fast::RasterStats {
 
 // Developer experiment (TRIAEVUM_RASTER_SKIP=<hex pipeline id>[,<hex>...]): guided
 // draws whose canonical pipeline id is listed are not recorded. Changes the image.
-[[nodiscard]] inline bool SkipPipeline(uint64_t id) noexcept {
+// Also accepts "all", "opaque" (depth test + write, not blended) and "blended".
+[[nodiscard]] inline bool SkipPipeline(uint64_t id, bool blended = false, bool opaque = false) noexcept {
     static const std::string list = [] {
         const char* value = std::getenv("TRIAEVUM_RASTER_SKIP");
         return value == nullptr ? std::string() : "," + std::string(value) + ",";
     }();
     if (list.empty())
         return false;
+    if (list.find(",all,") != std::string::npos || (blended && list.find(",blended,") != std::string::npos) ||
+        (opaque && list.find(",opaque,") != std::string::npos))
+        return true;
     char text[24];
     std::snprintf(text, sizeof(text), ",%llx,", static_cast<unsigned long long>(id));
     return list.find(text) != std::string::npos;
