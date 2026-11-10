@@ -4006,6 +4006,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             }
         }
         if (!prepassDeferred) FlushNativePicaPrepass();
+        if (RasterStats::PerDraw() && !prepassDeferred)
+            SkyProbeDraw(renderTarget, draw, drawVariant.Reactive, true);
         if (RasterStats::PerDraw() && renderTarget.NormalGuideView != VK_NULL_HANDLE) {
             const std::string_view fragment = selectedDraw->FragmentShaderSource;
             const bool discards = RunsDiscardingAlphaTest(draw) || fragment.find("discard") != std::string_view::npos;
@@ -4222,6 +4224,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         if (rasterDrawQuery)
             RasterStats::Collector::Instance().EndDraw(commandBuffer);
+        if (RasterStats::PerDraw() && !prepassDeferred)
+            SkyProbeDraw(renderTarget, draw, drawVariant.Reactive, false);
         if (markAtmosphere)
             mGpuProfiler.Mark(mCurrentFrame, "pica guides after atmosphere", commandBuffer);
         mScissor = originalScissor;

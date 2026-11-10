@@ -130,7 +130,7 @@ public:
     }
 
     // Level 2: around one guided draw's commands, inside the scope.
-    // Every 600 frames, draws of more than 1 M invocations are printed with this text.
+    // Every 600 frames, draws of more than 1 M invocations (TRIAEVUM_RASTER_TRACE_MIN) are printed with this text.
     [[nodiscard]] bool TraceFrame() const noexcept { return mFrame % 600U == 5U; }
     // Guided draws recorded so far in this slot's frame (the order of the next one).
     [[nodiscard]] uint32_t DrawOrder(uint32_t slot) const noexcept {
@@ -267,7 +267,12 @@ private:
                     entry.Passed += passed[index];
                     ++entry.Draws;
                     auto& trace = mTraces[slot * kDrawQueriesPerSlot + index];
-                    if (!trace.empty() && results[index] > 1000000U)
+                    // TRIAEVUM_RASTER_TRACE_MIN=n: print traced draws above n invocations (default 1 M).
+                    static const uint64_t traceMinimum = [] {
+                        const char* value = std::getenv("TRIAEVUM_RASTER_TRACE_MIN");
+                        return value != nullptr ? std::strtoull(value, nullptr, 10) : 1000000ULL;
+                    }();
+                    if (!trace.empty() && results[index] >= traceMinimum)
                         std::fprintf(stderr, "[raster-draw] key=%x invocations=%llu passed=%llu %s\n", key,
                                      static_cast<unsigned long long>(results[index]),
                                      static_cast<unsigned long long>(passed[index]), trace.c_str());

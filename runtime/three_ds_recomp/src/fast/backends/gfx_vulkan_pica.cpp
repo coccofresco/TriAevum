@@ -2297,6 +2297,209 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
     }
 }
 
+void GfxRenderingAPIVulkan::SkyProbeDraw(NativePicaRenderTarget& target, const GfxNativePicaDrawView& draw,
+                                         bool reactive, bool before) {
+    auto& probe = mSkyProbe;
+    if (!probe.Parsed) {
+        probe.Parsed = true;
+        const char* value = std::getenv("TRIAEVUM_SKY_PROBE");
+        probe.Enabled = value != nullptr && value[0] == '1' && RasterStats::PerDraw();
+    }
+    if (!probe.Enabled || target.NormalGuideView == VK_NULL_HANDLE || target.MaterialGuideImage == VK_NULL_HANDLE ||
+        mNativePicaSampleCount != VK_SAMPLE_COUNT_1_BIT)
+        return;
+    if (probe.Stage == 2) {
+        if (mFrameCounter >= probe.RecordedFrame + 4U) FinishSkyProbe();
+        return;
+    }
+    const bool atmosphere = draw.Composition.Layer == Renderer3ds::PicaCompositionLayer::Atmosphere;
+    if (probe.Stage == 0) {
+        if (before || !RasterStats::Collector::Instance().TraceFrame() || !atmosphere || !draw.DepthWriteEnabled)
+            return;
+        probe.Width = target.Width;
+        probe.Height = target.Height;
+        probe.RecordedFrame = mFrameCounter;
+        probe.WindowDraws = 0;
+        probe.AfterSkyGroup = false;
+        probe.Log.clear();
+        SkyProbeReadback(target, 0);
+        probe.Stage = 1;
+        return;
+    }
+    if (mFrameCounter != probe.RecordedFrame) {
+        // The scope ended without a later non-opaque draw: nothing to compare.
+        std::fprintf(stderr, "[sky-probe] frame=%llu window ended with the frame (draws=%u)%s\n",
+                     static_cast<unsigned long long>(probe.RecordedFrame), probe.WindowDraws, probe.Log.c_str());
+        probe.Stage = 0;
+        return;
+    }
+    if (!before) return;
+    const bool translucent = UsesTranslucentBlend(draw.Blend);
+    const bool opaque = draw.DepthTestEnabled && draw.DepthWriteEnabled && !translucent;
+    char line[256];
+    std::snprintf(line, sizeof(line), "\n[sky-probe]   #%u pipeline=%llx layer=%u domain=%u dt=%u dw=%u cmp=%u blend=%u/%u "
+                  "eq=%u translucent=%u reactive=%u mask=%x alpha_test=%u",
+                  probe.WindowDraws, static_cast<unsigned long long>(draw.CanonicalPipelineId),
+                  static_cast<unsigned>(draw.Composition.Layer), static_cast<unsigned>(draw.CompositionDomain),
+                  draw.DepthTestEnabled ? 1U : 0U, draw.DepthWriteEnabled ? 1U : 0U,
+                  static_cast<unsigned>(draw.DepthCompare), draw.Blend.Enabled ? 1U : 0U,
+                  static_cast<unsigned>(draw.Blend.SourceRgb) * 16U + static_cast<unsigned>(draw.Blend.DestRgb),
+                  static_cast<unsigned>(draw.Blend.EquationRgb), translucent ? 1U : 0U, reactive ? 1U : 0U,
+                  draw.ColorWriteMask, draw.AlphaTestEnabled ? 1U : 0U);
+    // The sky group: the Atmosphere draws that follow the sky directly.
+    if (atmosphere && !probe.AfterSkyGroup) {
+        if (probe.Log.size() < 64000U) probe.Log += line;
+        ++probe.WindowDraws;
+        return;
+    }
+    probe.AfterSkyGroup = true;
+    if (opaque && !atmosphere) {
+        if (probe.Log.size() < 64000U) probe.Log += line;
+        ++probe.WindowDraws;
+        return;
+    }
+    probe.Log += line;
+    probe.Log += " <- first non-opaque draw: second readback before it";
+    SkyProbeReadback(target, 1);
+    probe.Stage = 2;
+}
+
+void GfxRenderingAPIVulkan::SkyProbeReadback(NativePicaRenderTarget& target, int side) {
+    auto& probe = mSkyProbe;
+    FlushNativePicaPrepass();
+    const bool active = mNativePicaRenderPassActive && mActiveNativePicaRenderTarget == &target;
+    if (!active) return;
+    const auto formats = Extension::BoundPicaColorAttachmentFormats(mActiveNativePicaAttachments);
+    const VkFormat materialFormat = formats[static_cast<size_t>(Extension::PicaColorAttachment::MaterialGuide)];
+    probe.MaterialBytes = materialFormat == VK_FORMAT_R8G8B8A8_UNORM ? 4U : 0U;
+    probe.DepthBytes = (mDepthFormat == VK_FORMAT_D16_UNORM || mDepthFormat == VK_FORMAT_D16_UNORM_S8_UINT) ? 2U : 4U;
+    const VkDeviceSize pixels = static_cast<VkDeviceSize>(target.Width) * target.Height;
+    const VkImageAspectFlags depthAspect = NativeDepthAspect(mDepthFormat);
+    for (int kind = 0; kind < 2; ++kind) {
+        const uint32_t bytes = kind == 0 ? probe.DepthBytes : probe.MaterialBytes;
+        if (bytes == 0U || probe.Buffers[side][kind] != VK_NULL_HANDLE) continue;
+        VkBufferCreateInfo buffer{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+        buffer.size = pixels * bytes;
+        buffer.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        CheckNativeVk(vkCreateBuffer(mDevice, &buffer, nullptr, &probe.Buffers[side][kind]), "vkCreateBuffer(sky probe)");
+        VkMemoryRequirements requirements{};
+        vkGetBufferMemoryRequirements(mDevice, probe.Buffers[side][kind], &requirements);
+        VkMemoryAllocateInfo allocation{ VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
+        allocation.allocationSize = requirements.size;
+        allocation.memoryTypeIndex = FindReadbackMemoryType(requirements.memoryTypeBits);
+        CheckNativeVk(vkAllocateMemory(mDevice, &allocation, nullptr, &probe.Memory[side][kind]),
+                      "vkAllocateMemory(sky probe)");
+        CheckNativeVk(vkBindBufferMemory(mDevice, probe.Buffers[side][kind], probe.Memory[side][kind], 0),
+                      "vkBindBufferMemory(sky probe)");
+    }
+    const VkCommandBuffer command = mCommandBuffers[mCurrentFrame];
+    EndNativePicaRenderPass();
+    const auto transition = [&](bool toTransfer) {
+        std::array<VkImageMemoryBarrier, 2> barriers{};
+        uint32_t count = 0;
+        for (int kind = 0; kind < 2; ++kind) {
+            if ((kind == 0 ? probe.DepthBytes : probe.MaterialBytes) == 0U) continue;
+            auto& barrier = barriers[count++];
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT;
+            barrier.srcQueueFamilyIndex = barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.image = kind == 0 ? target.DepthImage : target.MaterialGuideImage;
+            barrier.subresourceRange = { kind == 0 ? depthAspect : VkImageAspectFlags{ VK_IMAGE_ASPECT_COLOR_BIT },
+                                         0, 1, 0, 1 };
+            const VkImageLayout attachment = kind == 0 ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+                                                       : VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            barrier.oldLayout = toTransfer ? attachment : VK_IMAGE_LAYOUT_GENERAL;
+            barrier.newLayout = toTransfer ? VK_IMAGE_LAYOUT_GENERAL : attachment;
+        }
+        vkCmdPipelineBarrier(command, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
+                             nullptr, 0, nullptr, count, barriers.data());
+    };
+    transition(true);
+    for (int kind = 0; kind < 2; ++kind) {
+        if ((kind == 0 ? probe.DepthBytes : probe.MaterialBytes) == 0U) continue;
+        VkBufferImageCopy region{};
+        region.imageSubresource = { kind == 0 ? VkImageAspectFlags{ VK_IMAGE_ASPECT_DEPTH_BIT }
+                                              : VkImageAspectFlags{ VK_IMAGE_ASPECT_COLOR_BIT }, 0, 0, 1 };
+        region.imageExtent = { target.Width, target.Height, 1 };
+        vkCmdCopyImageToBuffer(command, kind == 0 ? target.DepthImage : target.MaterialGuideImage,
+                               VK_IMAGE_LAYOUT_GENERAL, probe.Buffers[side][kind], 1, &region);
+    }
+    transition(false);
+    BeginNativePicaRenderPass(target);
+}
+
+void GfxRenderingAPIVulkan::FinishSkyProbe() {
+    auto& probe = mSkyProbe;
+    vkDeviceWaitIdle(mDevice);
+    const uint64_t pixels = static_cast<uint64_t>(probe.Width) * probe.Height;
+    const uint32_t depthMask = probe.DepthBytes == 2U ? 0xffffU
+        : (mDepthFormat == VK_FORMAT_D24_UNORM_S8_UINT || mDepthFormat == VK_FORMAT_X8_D24_UNORM_PACK32) ? 0xffffffU
+                                                                                                          : 0xffffffffU;
+    void* mapped[2][2]{};
+    for (int side = 0; side < 2; ++side)
+        for (int kind = 0; kind < 2; ++kind)
+            if (probe.Memory[side][kind] != VK_NULL_HANDLE)
+                vkMapMemory(mDevice, probe.Memory[side][kind], 0, VK_WHOLE_SIZE, 0, &mapped[side][kind]);
+    const auto depthAt = [&](int side, uint64_t pixel) {
+        uint32_t value = 0;
+        std::memcpy(&value, static_cast<const uint8_t*>(mapped[side][0]) + pixel * probe.DepthBytes, probe.DepthBytes);
+        return value & depthMask;
+    };
+    // (a) the sky's depth: distinct values right after the sky.
+    std::map<uint32_t, uint64_t> skyDepths;
+    for (uint64_t pixel = 0; pixel < pixels && skyDepths.size() < 64U; ++pixel) ++skyDepths[depthAt(0, pixel)];
+    uint32_t skyDepth = 0;
+    uint64_t skyCount = 0;
+    for (const auto& [value, count] : skyDepths)
+        if (count > skyCount) { skyDepth = value; skyCount = count; }
+    uint64_t covered = 0, nearer = 0, farther = 0, materialTie = 0, materialSkyNonZero = 0, materialLower = 0;
+    uint32_t skyAlphaMin = 255U, skyAlphaMax = 0U;
+    const bool material = mapped[0][1] != nullptr && mapped[1][1] != nullptr;
+    for (uint64_t pixel = 0; pixel < pixels; ++pixel) {
+        const uint32_t after = depthAt(1, pixel);
+        const uint32_t sky = depthAt(0, pixel);
+        uint32_t skyAlpha = 0, endAlpha = 0;
+        if (material) {
+            skyAlpha = static_cast<const uint8_t*>(mapped[0][1])[pixel * 4U + 3U];
+            endAlpha = static_cast<const uint8_t*>(mapped[1][1])[pixel * 4U + 3U];
+            skyAlphaMin = std::min(skyAlphaMin, skyAlpha);
+            skyAlphaMax = std::max(skyAlphaMax, skyAlpha);
+        }
+        if (after == sky) continue;
+        ++covered;
+        (after > sky ? farther : nearer) += 1U; // "farther" = larger raw depth value
+        if (material) {
+            materialSkyNonZero += skyAlpha != 0U ? 1U : 0U;
+            materialTie += (skyAlpha != 0U && endAlpha == skyAlpha) ? 1U : 0U;
+            materialLower += endAlpha < skyAlpha ? 1U : 0U;
+        }
+    }
+    std::fprintf(stderr,
+                 "[sky-probe] frame=%llu %ux%u depth_bytes=%u sky_depth_distinct=%zu%s sky_depth=%08x (%llu px) "
+                 "covered_at_second=%llu (f=%.4f) larger_raw=%llu smaller_raw=%llu material=%u sky_alpha=%u..%u "
+                 "covered_with_sky_alpha>0=%llu covered_alpha_equal_sky>0=%llu covered_alpha_below_sky=%llu "
+                 "window_draws=%u%s\n",
+                 static_cast<unsigned long long>(probe.RecordedFrame), probe.Width, probe.Height, probe.DepthBytes,
+                 skyDepths.size(), skyDepths.size() >= 64U ? "+" : "", skyDepth,
+                 static_cast<unsigned long long>(skyCount), static_cast<unsigned long long>(covered),
+                 pixels ? static_cast<double>(covered) / static_cast<double>(pixels) : 0.0,
+                 static_cast<unsigned long long>(farther), static_cast<unsigned long long>(nearer), material ? 1U : 0U,
+                 skyAlphaMin, skyAlphaMax, static_cast<unsigned long long>(materialSkyNonZero),
+                 static_cast<unsigned long long>(materialTie), static_cast<unsigned long long>(materialLower),
+                 probe.WindowDraws, probe.Log.c_str());
+    for (int side = 0; side < 2; ++side)
+        for (int kind = 0; kind < 2; ++kind) {
+            if (mapped[side][kind] != nullptr) vkUnmapMemory(mDevice, probe.Memory[side][kind]);
+            if (probe.Buffers[side][kind] != VK_NULL_HANDLE) vkDestroyBuffer(mDevice, probe.Buffers[side][kind], nullptr);
+            if (probe.Memory[side][kind] != VK_NULL_HANDLE) vkFreeMemory(mDevice, probe.Memory[side][kind], nullptr);
+            probe.Buffers[side][kind] = VK_NULL_HANDLE;
+            probe.Memory[side][kind] = VK_NULL_HANDLE;
+        }
+    probe.Log.clear();
+    probe.Stage = 0;
+}
+
 void GfxRenderingAPIVulkan::ParseNativePicaPrepass() {
     auto& prepass = mNativePicaPrepass;
     if (prepass.Parsed) return;

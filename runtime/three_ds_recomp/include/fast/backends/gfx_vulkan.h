@@ -1176,6 +1176,28 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         std::vector<NativePicaAbImage> Images;
     };
     NativePicaAbState mNativePicaAb;
+    // Sky probe (developer, TRIAEVUM_SKY_PROBE=1 with TRIAEVUM_RASTER_STATS=2):
+    // in a raster-stats trace frame, the guided target's depth and material
+    // guide are read back right after its first depth-writing Atmosphere draw
+    // (the sky) and again before the first later draw that is neither
+    // Atmosphere nor opaque (depth test and write, no translucent blend); the
+    // draws in between are listed. Decides whether the sky can move after the
+    // opaque world (round 34).
+    struct SkyProbeState {
+        bool Parsed = false, Enabled = false;
+        int Stage = 0; // 0 waiting, 1 after the sky, 2 read back (pending)
+        uint64_t RecordedFrame = 0;
+        uint32_t Width = 0, Height = 0, DepthBytes = 0, MaterialBytes = 0, WindowDraws = 0;
+        bool AfterSkyGroup = false;
+        VkBuffer Buffers[2][2]{};          // [side][0 depth, 1 material]
+        VkDeviceMemory Memory[2][2]{};
+        std::string Log;
+    };
+    SkyProbeState mSkyProbe;
+    void SkyProbeDraw(NativePicaRenderTarget& target, const GfxNativePicaDrawView& draw, bool reactive,
+                      bool before);
+    void SkyProbeReadback(NativePicaRenderTarget& target, int side);
+    void FinishSkyProbe();
     // Directional shadow receiver cull (TRIAEVUM_SHADOW_RECEIVER_CULL=1; off by
     // default: < 0.1 ms in round 33): the conservative world bounds the caster preparation
     // computed for this frame's draws, by submission, with a hash of the
