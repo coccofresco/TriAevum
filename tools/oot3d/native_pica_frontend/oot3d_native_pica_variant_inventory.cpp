@@ -381,7 +381,20 @@ int Run(const Options& options) {
                       {"base_explicit_depth", canonical.UberSource.find("gl_FragDepth = pica_depth;") != std::string::npos},
                       {"base_lighting", canonical.UberSource.find("usampler2D pica_lighting_lut;") != std::string::npos},
                       {"base_integer_texture0", canonical.UberSource.find("usampler2D pica_texture0") != std::string::npos},
-                      {"base_bytes", canonical.UberSource.size()}, {"count", 0U}};
+                      {"base_bytes", canonical.UberSource.size()},
+                      // Which PicaUberEffectSupports condition can apply.
+                      {"policy", {{"operand", result.Decisions.FragmentLightingOperand},
+                                  {"balance", result.Decisions.FragmentLightingBalance},
+                                  {"native_shadows", result.Decisions.NativeFragmentLitShadows},
+                                  {"pbr_balance", result.Decisions.PbrNativeBalance},
+                                  {"pbr_unlit", result.Decisions.PbrNativeUnlit}}},
+                      {"paths", {{"normal", static_cast<unsigned>(result.Decisions.Normal)},
+                                 {"albedo", static_cast<unsigned>(result.Decisions.Albedo)},
+                                 {"ambient", static_cast<unsigned>(result.Decisions.Ambient)}}},
+                      {"base_material_normal", canonical.UberHooks.Has(Fast::Renderer3ds::PicaShaderSemantic::MaterialNormal)},
+                      {"base_capture_valid", canonical.UberHooks.NativeLightingCapture.Valid(
+                          canonical.UberSource.size(), canonical.UberHooks.Offset(Fast::Renderer3ds::PicaShaderHook::PicaLighting))},
+                      {"count", 0U}};
         sample["count"] = sample["count"].get<uint64_t>() + 1U;
     };
 
@@ -845,13 +858,16 @@ int Run(const Options& options) {
         uint64_t donorDraws = 0;
         for (const auto& [vertex, entry] : recordedVertexDonors)
             if (entry.first > donorDraws) donorDraws = entry.first, cacheDonor = &entry.second;
+        // Recorded sources first: a cache record of a program the sessions drew
+        // is then a duplicate, resolved with the draw (and vertex program) the
+        // program was recorded with rather than with the shared cache donor.
+        for (const auto& packet : recordedPrograms) synthesizeProgram(packet.Registers, packet);
         for (const auto& path : options.SynthesizeCaches) {
             std::ifstream stream(path, std::ios::binary);
             if (!stream) throw std::runtime_error("cannot open cache: " + path.string());
             for (const auto& record : ReadPicaTransferableCache(stream, PicaTransferableDialect::CitraLegacy))
                 if (record.Stage == PicaTransferableStage::Fragment) synthesizeProgram(record.Registers, *cacheDonor);
         }
-        for (const auto& packet : recordedPrograms) synthesizeProgram(packet.Registers, packet);
         synthesis = {{"caches", options.SynthesizeCaches.size()},
                      {"target_effects", targetEffects.size()},
                      {"contexts", std::accumulate(contexts.begin(), contexts.end(), size_t{0},
