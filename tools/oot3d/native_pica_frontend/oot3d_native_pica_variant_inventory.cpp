@@ -394,7 +394,12 @@ int Run(const Options& options) {
     // the sessions recorded, as a register snapshot (the program source a
     // cache record would be). Programs a session drew only under other effects
     // are thereby resolved under the target effects too.
-    std::vector<std::array<uint32_t, 0x300>> recordedPrograms;
+    // Each recorded source keeps its own draw as donor (its own vertex program:
+    // a title with several, e.g. MM3D's 14, has no single canonical one).
+    std::vector<Oot3dPicaDrawPacket> recordedPrograms;
+    // With --synthesize-recorded, cache records take as donor the draw of the
+    // most frequently recorded canonical vertex program instead of the first draw.
+    std::map<uint64_t, std::pair<uint64_t, Oot3dPicaDrawPacket>> recordedVertexDonors;
     std::set<std::tuple<uint64_t, uint64_t, uint64_t>> recordedProgramIds;
     std::map<std::string, Fast::Extension::EffectsSettings> targetEffects;
     for (size_t index = 0; index < options.SynthesizeEffects.size(); ++index) {
@@ -484,6 +489,8 @@ int Run(const Options& options) {
                     if (parametric) ++parametricCastersOutsideFamily;
                 }
             }
+            if (options.SynthesizeRecorded)
+                ++recordedVertexDonors.try_emplace(canonical.VertexIdentity.Id, 0U, draw.Packet).first->second.first;
             plans.emplace(draw.CanonicalPipelineId, std::move(canonical));
         }
 
@@ -505,7 +512,7 @@ int Run(const Options& options) {
                         continue;  // counted as a source failure if synthesis meets it again
                     const auto id = Oot3d::Renderer::IdentifyPicaShaderSource(aloneShader.Source);
                     if (recordedProgramIds.insert({id.Id, id.SecondaryHash, id.Size}).second)
-                        recordedPrograms.push_back(draw.Packet.Registers);
+                        recordedPrograms.push_back(draw.Packet);
                 }
             }
             // Frame facts (native fidelity, temporal motion, receivers) follow
@@ -713,7 +720,8 @@ int Run(const Options& options) {
                 for (const auto& [key, context] : classes) trace << Json{{"context", key}}.dump() << '\n';
         }
         // One program source (a cache record's or a recorded draw's registers).
-        const auto synthesizeProgram = [&](const std::array<uint32_t, 0x300>& registers) {
+        const auto synthesizeProgram = [&](const std::array<uint32_t, 0x300>& registers,
+                                           const Oot3dPicaDrawPacket& donorPacket) {
             {
                 const struct { const std::array<uint32_t, 0x300>& Registers; } record{registers};
                 ++records;
@@ -754,7 +762,7 @@ int Run(const Options& options) {
                     const auto expected = Oot3d::Renderer::IdentifyPicaShaderSource(aloneShader.Source);
                     // Transplant: everything below the geometry pipeline (0x200) is the record's.
                     Oot3dPicaDrawSubmission submission;
-                    submission.Packet = *donor;
+                    submission.Packet = donorPacket;
                     std::copy(record.Registers.begin() + 0x040, record.Registers.begin() + 0x200,
                               submission.Packet.Registers.begin() + 0x040);
                     depthForm(submission.Packet);
@@ -833,13 +841,17 @@ int Run(const Options& options) {
                 }
             }
         };
+        const Oot3dPicaDrawPacket* cacheDonor = &*donor;
+        uint64_t donorDraws = 0;
+        for (const auto& [vertex, entry] : recordedVertexDonors)
+            if (entry.first > donorDraws) donorDraws = entry.first, cacheDonor = &entry.second;
         for (const auto& path : options.SynthesizeCaches) {
             std::ifstream stream(path, std::ios::binary);
             if (!stream) throw std::runtime_error("cannot open cache: " + path.string());
             for (const auto& record : ReadPicaTransferableCache(stream, PicaTransferableDialect::CitraLegacy))
-                if (record.Stage == PicaTransferableStage::Fragment) synthesizeProgram(record.Registers);
+                if (record.Stage == PicaTransferableStage::Fragment) synthesizeProgram(record.Registers, *cacheDonor);
         }
-        for (const auto& registers : recordedPrograms) synthesizeProgram(registers);
+        for (const auto& packet : recordedPrograms) synthesizeProgram(packet.Registers, packet);
         synthesis = {{"caches", options.SynthesizeCaches.size()},
                      {"target_effects", targetEffects.size()},
                      {"contexts", std::accumulate(contexts.begin(), contexts.end(), size_t{0},
