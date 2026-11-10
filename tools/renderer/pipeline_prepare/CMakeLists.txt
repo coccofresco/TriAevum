@@ -17,6 +17,17 @@ if(NOT TARGET NRI)
         set(NRI_ENABLE_${feature} OFF CACHE BOOL "" FORCE)
     endforeach()
     add_subdirectory("${TRIAEVUM_NRI_SOURCE_DIR}" nri)
+    if(WIN32 AND TARGET NRI)
+        # As the runtime build: NRI.rc (VERSIONINFO) belongs to a final binary,
+        # not the static archive; llvm-mingw's llvm-rc cannot resolve its include.
+        get_target_property(_nri_sources NRI SOURCES)
+        list(FILTER _nri_sources EXCLUDE REGEX "NRI\.rc$")
+        set_property(TARGET NRI PROPERTY SOURCES "${_nri_sources}")
+    endif()
+    if(MINGW AND TARGET NRI_Shared)
+        # As the runtime build: FLT_MAX without <cfloat> under libc++.
+        target_compile_options(NRI_Shared PRIVATE -include cfloat)
+    endif()
     if(MSVC AND CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND TARGET NRI_Shared)
         # As the runtime build: NRI enables /WX for clang-cl after its Clang
         # suppressions; warnings in the pinned SDK must not block the helper.
