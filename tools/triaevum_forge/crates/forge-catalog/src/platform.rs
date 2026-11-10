@@ -61,8 +61,17 @@ pub struct ReleasePlatform {
     pub installed_runtime: &'static str,
 }
 
+/// The Windows product's platform key: the MSVC-ABI build, or the llvm-mingw
+/// build (Itanium C++ ABI, libc++), which is a platform of its own (XBUILD Q2)
+/// so that modules and title caches of the two are never mixed. Selected by
+/// the toolchain this Forge is built with (gnullvm for the llvm-mingw product).
+#[cfg(all(target_os = "windows", target_env = "gnu"))]
+pub const WINDOWS_TARGET: &str = "x86_64-w64-windows-gnu";
+#[cfg(not(all(target_os = "windows", target_env = "gnu")))]
+pub const WINDOWS_TARGET: &str = "x86_64-pc-windows-msvc";
+
 pub const WINDOWS: ReleasePlatform = ReleasePlatform {
-    target: "x86_64-pc-windows-msvc",
+    target: WINDOWS_TARGET,
     runtime: "runtime/TriAevum.exe",
     forge: "TriAevumForge.exe",
     native_module: "forge/oot3d_game_module.dll",

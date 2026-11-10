@@ -199,7 +199,7 @@ pub struct ReleasePlatform {
 }
 
 pub const WINDOWS: ReleasePlatform = ReleasePlatform {
-    target: "x86_64-pc-windows-msvc",
+    target: forge_catalog::platform::WINDOWS_TARGET,
     runtime: "runtime/TriAevum.exe",
     forge: "TriAevumForge.exe",
     native_module: "forge/oot3d_game_module.dll",

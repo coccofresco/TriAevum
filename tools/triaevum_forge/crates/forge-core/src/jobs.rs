@@ -56,7 +56,7 @@ pub fn capabilities() -> Value {
 
 pub fn target_triple() -> &'static str {
     if cfg!(all(target_os = "windows", target_arch = "x86_64")) {
-        "x86_64-pc-windows-msvc"
+        forge_catalog::platform::WINDOWS_TARGET
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         "x86_64-unknown-linux-gnu"
     } else if cfg!(all(target_os = "android", target_arch = "aarch64")) {

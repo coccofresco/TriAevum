@@ -40,13 +40,14 @@ pub const SECTION_NATIVE_IMAGE: u32 = 2;
 pub const SECTION_TITLE_AOT_IMAGE: u32 = 3;
 pub const SECTION_REQUIRED: u32 = 1 << 0;
 pub const SECTION_EXECUTABLE: u32 = 1 << 1;
-pub const SUPPORTED_TARGET_TRIPLES: [&str; 6] = [
+pub const SUPPORTED_TARGET_TRIPLES: [&str; 7] = [
     "aarch64-apple-darwin",
     "aarch64-pc-windows-msvc",
     "aarch64-unknown-linux-gnu",
     "x86_64-apple-darwin",
     "x86_64-pc-windows-msvc",
     "x86_64-unknown-linux-gnu",
+    "x86_64-w64-windows-gnu",
 ];
 
 /// `build_tam` arguments. Integers are wide so out-of-range metadata values
