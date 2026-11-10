@@ -8,18 +8,18 @@ from pathlib import Path
 
 try:
     from .precompiled_title_layout import artifact
-    from .release_platform import WINDOWS, for_target
+    from .release_platform import WINDOWS, for_target, is_windows
     from .shader_preparation import RENDERER_CONTRACT
 except ImportError:
     from precompiled_title_layout import artifact
-    from release_platform import WINDOWS, for_target
+    from release_platform import WINDOWS, for_target, is_windows
     from shader_preparation import RENDERER_CONTRACT
 
 
 def bind_renderer_compiler(catalog: dict, compiler: Path,
                            dependencies: list[Path]) -> tuple[dict, list[dict]]:
     platform = for_target(catalog["target"])
-    suffix = ".exe" if platform == WINDOWS else ""
+    suffix = ".exe" if is_windows(platform) else ""
     destination = "forge/oot3d_native_pica_aot_compiler" + suffix
     records = []
     items = []

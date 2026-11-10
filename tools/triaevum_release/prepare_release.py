@@ -11,10 +11,10 @@ from pathlib import Path
 try:
     from .rust_forge_build import build as build_rust_forge
     from .common import atomic_write_json, load_json_object
-    from .release_platform import WINDOWS
+    from .release_platform import WINDOWS, WINDOWS_GNU
     from .package_release import package_release
     from .archive_release import create_release_archive
-    from .product_contract import query_product
+    from .product_contract import EXE_RUNNER_VARIABLE, query_product
     from .source_archive import create_source_archive
     from .toolchain_setup_layout import setup_layout
     from .precompiled_title_layout import title_layout
@@ -29,10 +29,10 @@ try:
 except ImportError:
     from rust_forge_build import build as build_rust_forge
     from common import atomic_write_json, load_json_object
-    from release_platform import WINDOWS
+    from release_platform import WINDOWS, WINDOWS_GNU
     from package_release import package_release
     from archive_release import create_release_archive
-    from product_contract import query_product
+    from product_contract import EXE_RUNNER_VARIABLE, query_product
     from source_archive import create_source_archive
     from toolchain_setup_layout import setup_layout
     from precompiled_title_layout import title_layout
@@ -58,6 +58,60 @@ def visual_cpp_runtime_artifacts(directory: Path) -> dict[str, Path]:
             raise ValueError(f"Missing Visual C++ redistributable {name} in {directory}; "
                              "supply --vc-redist-dir pointing to x64/Microsoft.VC143.CRT")
     return artifacts
+
+
+# The llvm-mingw Windows product (XBUILD Q2, x86_64-w64-windows-gnu): LLVM's
+# shared C++ runtime and shaderc's DLL sit beside the root executables, one copy
+# each (role root_runtime_library), so the installed game executable at the
+# root and every module it loads share one C++ runtime. Forge executables are
+# built with a static libunwind; the forge/ shader helpers need no libc++.dll.
+MINGW_RUNTIME_LIBRARIES = ("libc++.dll", "libunwind.dll")
+MINGW_LICENSES = (("LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
+                   "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt"),
+                  ("LICENSES/mingw-w64.txt", "LICENSES/mingw-w64.txt"))
+MSVC_ONLY_SOURCES = {"build-release/msvcp140.dll", "build-release/vcruntime140.dll",
+                     "build-release/vcruntime140_1.dll", "LICENSES/Microsoft-Visual-Cpp-Runtime.md"}
+
+
+def mingw_runtime_artifacts(directory: Path) -> dict[str, Path]:
+    """libc++.dll and libunwind.dll of the pinned llvm-mingw toolchain
+    (<toolchain>/x86_64-w64-mingw32/bin), never copies found elsewhere."""
+    artifacts = {name: directory / name for name in MINGW_RUNTIME_LIBRARIES}
+    for name, source in artifacts.items():
+        if not source.is_file() or source.is_symlink():
+            raise ValueError(f"Missing llvm-mingw runtime library {name} in {directory}; "
+                             "supply --mingw-runtime-dir pointing to <llvm-mingw>/x86_64-w64-mingw32/bin")
+    return artifacts
+
+
+def mingw_layout(files: list[dict]) -> list[dict]:
+    """The MSVC layout turned into the llvm-mingw one: no Visual C++ runtime or
+    its terms; shaderc_shared.dll moves to the root; libc++/libunwind join it,
+    with the LLVM and mingw-w64 runtime licences."""
+    result = []
+    for item in files:
+        if item["source"] in MSVC_ONLY_SOURCES:
+            continue
+        if item["source"] == "build-release/shaderc_shared.dll":
+            item = {**item, "path": "shaderc_shared.dll", "role": "root_runtime_library"}
+        result.append(item)
+    result += [{"source": f"build-release/{name}", "path": name, "role": "root_runtime_library"}
+               for name in MINGW_RUNTIME_LIBRARIES]
+    result += [{"source": source, "path": path, "role": "license"} for source, path in MINGW_LICENSES]
+    return result
+
+
+def explicit_dlss_targets(args) -> dict:
+    """--dlss-module/--dlss-runtime/--dlss-license: the separately built DLSS
+    module (the llvm-mingw cross-build builds it as its own MSVC-ABI DLL) with
+    NVIDIA's runtime and licence, given together or not at all."""
+    given = {key: getattr(args, key, None) for key in ("dlss_module", "dlss_runtime", "dlss_license")}
+    if not any(given.values()):
+        return {}
+    if not all(given.values()):
+        raise ValueError("--dlss-module, --dlss-runtime and --dlss-license are given together")
+    return {"dlss": str(given["dlss_module"]), "dlss_runtime": str(given["dlss_runtime"]),
+            "dlss_license": str(given["dlss_license"])}
 
 
 def clang_header_layout(llvm: Path) -> list[dict]:
@@ -104,7 +158,21 @@ def prepare(args) -> dict:
         raise ValueError("The MM3D release bundles Project Restoration: pass --restoration-resources")
     if args.title != "mm3d" and args.restoration_resources is not None:
         raise ValueError("--restoration-resources belongs to the MM3D release only")
-    crt_artifacts = visual_cpp_runtime_artifacts(args.vc_redist_dir.resolve())
+    target = getattr(args, "target", None) or WINDOWS.target
+    if target == WINDOWS_GNU.target:
+        if args.mingw_runtime_dir is None or args.vc_redist_dir is not None:
+            raise ValueError(f"{target} takes --mingw-runtime-dir, not --vc-redist-dir")
+        crt_artifacts = mingw_runtime_artifacts(args.mingw_runtime_dir.resolve())
+    elif target == WINDOWS.target:
+        if args.vc_redist_dir is None or getattr(args, "mingw_runtime_dir", None) is not None:
+            raise ValueError(f"{target} takes --vc-redist-dir")
+        crt_artifacts = visual_cpp_runtime_artifacts(args.vc_redist_dir.resolve())
+    else:
+        raise ValueError(f"No Windows release for {target}")
+    if getattr(args, "exe_runner", None) is not None:
+        # The executables this script queries (the runtime's --product-info and
+        # plugin preflight) run through it on a non-Windows build host.
+        os.environ[EXE_RUNNER_VARIABLE] = str(args.exe_runner.resolve(strict=True))
     build_dir = args.build_dir.resolve()
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=True)
@@ -118,6 +186,10 @@ def prepare(args) -> dict:
     targets = load_json_object(build_dir / "triaevum-runtime-targets-Release.json")
     if targets.get("format") != "triaevum_runtime_targets_v1":
         raise ValueError("CMake did not publish the product targets")
+    dlss_inputs = explicit_dlss_targets(args)
+    if dlss_inputs and any(key in targets for key in dlss_inputs):
+        raise ValueError("The build already publishes a DLSS module; do not pass --dlss-* as well")
+    targets.update(dlss_inputs)
     commit = targets["source_commit"]
     receipt = query_product(Path(targets["runtime"]), commit)
     if receipt["product"].get("private_title_loaded") is not False:
@@ -133,7 +205,9 @@ def prepare(args) -> dict:
     create_source_archive(ROOT, source_zip, source_commit=commit, forge_profile=layout["forge_profile"])
     # The Rust Forge (window, launcher and command line) with its build receipt
     # and crate notices; the public import path runs no Python.
-    forge = build_rust_forge(work / "forge-rust", target=WINDOWS.target, source_commit=commit,
+    if target == WINDOWS_GNU.target:
+        layout["files"] = mingw_layout(layout["files"])
+    forge = build_rust_forge(work / "forge-rust", target=target, source_commit=commit,
                              cargo=args.cargo, target_dir=args.cargo_target_dir,
                              features=title["forge_features"])
     layout["files"].extend(forge["files"])
@@ -248,8 +322,20 @@ def main() -> int:
     parser.add_argument("--cmake", type=Path, required=True)
     parser.add_argument("--cargo", default="cargo", help="Cargo of the pinned Rust toolchain")
     parser.add_argument("--cargo-target-dir", type=Path, help="Cargo target folder for the Rust Forge build")
-    parser.add_argument("--vc-redist-dir", type=Path, required=True,
-                        help="Licensed Visual Studio x64/Microsoft.VC143.CRT redistributable directory")
+    parser.add_argument("--target", choices=(WINDOWS.target, WINDOWS_GNU.target), default=WINDOWS.target,
+                        help="Windows product target (default MSVC; x86_64-w64-windows-gnu = llvm-mingw)")
+    parser.add_argument("--vc-redist-dir", type=Path,
+                        help="Licensed Visual Studio x64/Microsoft.VC143.CRT redistributable directory "
+                             "(required for the MSVC target)")
+    parser.add_argument("--mingw-runtime-dir", type=Path,
+                        help="llvm-mingw <toolchain>/x86_64-w64-mingw32/bin (libc++.dll, libunwind.dll); "
+                             "required for x86_64-w64-windows-gnu")
+    parser.add_argument("--exe-runner", type=Path,
+                        help="Runner for the Windows executables queried on a non-Windows build host "
+                             "(e.g. a wine wrapper script)")
+    parser.add_argument("--dlss-module", type=Path, help="Separately built triaevum_dlss.dll")
+    parser.add_argument("--dlss-runtime", type=Path, help="NVIDIA nvngx_dlss.dll (verified at its build)")
+    parser.add_argument("--dlss-license", type=Path, help="NVIDIA DLSS SDK licence text")
     parser.add_argument("--work", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--archive", type=Path, help="Optional audited portable ZIP outside the output directory")

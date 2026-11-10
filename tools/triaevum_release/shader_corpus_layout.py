@@ -19,7 +19,7 @@ try:
     from .merge_shader_packs import decode, MAX_BYTES
     from .precompiled_titles import checked_file
     from .precompiled_title_layout import artifact
-    from .release_platform import WINDOWS, for_target
+    from .release_platform import WINDOWS, for_target, is_windows
     from .shader_preparation import FORMAT as SEED_FORMAT
     from .device_pipeline_preparation import FORMAT as DEVICE_FORMAT
     from .shader_corpus_qualification import repository_reader, validate_qualification
@@ -28,7 +28,7 @@ except ImportError:
     from merge_shader_packs import decode, MAX_BYTES
     from precompiled_titles import checked_file
     from precompiled_title_layout import artifact
-    from release_platform import WINDOWS, for_target
+    from release_platform import WINDOWS, for_target, is_windows
     from shader_preparation import FORMAT as SEED_FORMAT
     from device_pipeline_preparation import FORMAT as DEVICE_FORMAT
     from shader_corpus_qualification import repository_reader, validate_qualification
@@ -155,7 +155,7 @@ def bind_shader_corpus(catalog: dict, pack: Path, manifests: list[Path],
                            manifest_sha256=[record['sha256'] for record in pipeline_records],
                            read=repository_reader(source_root))
     qualified = add(qualification, QUALIFICATION_PATH, 'portable_shader_qualification')
-    suffix = '.exe' if platform == WINDOWS else ''
+    suffix = '.exe' if is_windows(platform) else ''
     tool = add(helper, 'forge/oot3d_native_nri_pipeline_prepare' + suffix,
                'shader_preparation_tool')
     libraries = [add(path, 'forge/' + path.name, 'forge_runtime_module') for path in dependencies]

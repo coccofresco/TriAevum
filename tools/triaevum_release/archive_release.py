@@ -14,12 +14,12 @@ import zipfile
 try:
     from .audit_release import DEFAULT_POLICY, audit_release, release_signature_path
     from .common import load_json_object, normalize_relative_path, release_manifest_path, sha256_file
-    from .release_platform import WINDOWS, for_target
+    from .release_platform import WINDOWS, for_target, is_windows
     from . import release_signature
 except ImportError:
     from audit_release import DEFAULT_POLICY, audit_release, release_signature_path
     from common import load_json_object, normalize_relative_path, release_manifest_path, sha256_file
-    from release_platform import WINDOWS, for_target
+    from release_platform import WINDOWS, for_target, is_windows
     import release_signature
 
 
@@ -61,7 +61,7 @@ def create_release_archive(root: Path, output: Path, *, policy_path: Path = DEFA
     # Exclusive creation protects existing releases. Failed writes never leave an archive.
     with output.open("xb") as stream:
         try:
-            if platform == WINDOWS:
+            if is_windows(platform):
                 with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as archive:
                     for directory in sorted(directories):
                         info = zipfile.ZipInfo(directory + "/")

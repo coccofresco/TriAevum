@@ -26,13 +26,13 @@ try:
     from .audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
     from .common import atomic_write_json, load_json_object, sha256_file
     from .linux_elf_audit import glibc_errors, inspect_elf
-    from .release_platform import ANDROID, LINUX, MACOS, WINDOWS, for_target, host_platform
+    from .release_platform import ANDROID, LINUX, MACOS, WINDOWS, WINDOWS_GNU, for_target, host_platform
     from . import rust_forge_notices
 except ImportError:
     from audit_release import DEFAULT_POLICY, RUST_FORGE_RECEIPT_FORMAT, build_machine_path
     from common import atomic_write_json, load_json_object, sha256_file
     from linux_elf_audit import glibc_errors, inspect_elf
-    from release_platform import ANDROID, LINUX, MACOS, WINDOWS, for_target, host_platform
+    from release_platform import ANDROID, LINUX, MACOS, WINDOWS, WINDOWS_GNU, for_target, host_platform
     import rust_forge_notices
 
 
@@ -43,6 +43,15 @@ PACKAGES = ("forge-desktop", "forge-cli")
 # The Windows package also carries the update helper (UX plan WP-04B).
 TARGET_PACKAGES = {WINDOWS.target: (*PACKAGES, "forge-update-helper"), LINUX.target: PACKAGES,
                    MACOS.target: PACKAGES}
+# The llvm-mingw Windows product (XBUILD Q2): Rust's gnullvm target links
+# against the same UCRT and LLVM libunwind; same packages and binaries.
+TARGET_PACKAGES[WINDOWS_GNU.target] = TARGET_PACKAGES[WINDOWS.target]
+CARGO_TARGETS = {WINDOWS_GNU.target: "x86_64-pc-windows-gnullvm"}
+
+
+def cargo_target(target: str) -> str:
+    """Rust's target triple for a product target (the same except the gnu product)."""
+    return CARGO_TARGETS.get(target, target)
 # Cargo binary name -> (package path, release role), per desktop target.
 BINARIES = {
     WINDOWS.target: {"TriAevumForge.exe": (WINDOWS.forge, "forge_executable"),
@@ -53,6 +62,7 @@ BINARIES = {
     MACOS.target: {"TriAevumForge": (MACOS.forge, "forge_executable"),
                    "triaevum-forge": ("forge/triaevum-forge", "forge_command_line")},
 }
+BINARIES[WINDOWS_GNU.target] = BINARIES[WINDOWS.target]
 
 
 def toolchain_channel(root: Path = FORGE_ROOT) -> str:
@@ -73,10 +83,15 @@ def rustflags(target: str, target_dir: Path | None = None) -> list[str]:
     generate sources there that the binary names in panic locations (Linux
     glutin's EGL/GLX bindings)."""
     config = tomllib.loads((FORGE_ROOT / ".cargo/config.toml").read_text(encoding="utf-8"))
-    flags = [str(flag) for flag in config.get("target", {}).get(target, {}).get("rustflags", [])]
+    flags = [str(flag) for flag in config.get("target", {}).get(cargo_target(target), {}).get("rustflags", [])]
     flags += [f"--remap-path-prefix={source}={replacement}" for source, replacement in _remaps(target_dir)]
     if target == WINDOWS.target:
         flags += ["-C", "target-feature=+crt-static", "-C", "link-arg=/PDBALTPATH:%_PDB%"]
+    elif target == WINDOWS_GNU.target:
+        # gnullvm: +crt-static links LLVM libunwind statically, so the Forge
+        # executables (root and forge/) need no libunwind.dll; UCRT is a system
+        # component on Windows 10+.
+        flags += ["-C", "target-feature=+crt-static"]
     return flags
 
 
@@ -156,13 +171,13 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
         if flags:
             environment[variable] = flags
     features = target_features(target, features)
-    command = [cargo, "build", "--release", "--locked", "--target", target,
+    command = [cargo, "build", "--release", "--locked", "--target", cargo_target(target),
                *[argument for package in TARGET_PACKAGES[target] for argument in ("-p", package)],
                *feature_arguments(features)]
     subprocess.run(command, cwd=FORGE_ROOT, env=environment, check=True)
 
     policy = load_json_object(policy_path)
-    built = target_dir / target / "release"
+    built = target_dir / cargo_target(target) / "release"
     binaries = []
     output.mkdir(parents=True, exist_ok=True)
     for name, (relative, role) in BINARIES[target].items():
@@ -194,7 +209,7 @@ def build(output: Path, *, target: str, source_commit: str, cargo: str = "cargo"
         "toolchain": channel,
         "packages": list(TARGET_PACKAGES[target]),
         "features": list(features),
-        "static_crt": target == WINDOWS.target,
+        "static_crt": target in (WINDOWS.target, WINDOWS_GNU.target),
         "cargo_lock_sha256": sha256_file(FORGE_ROOT / "Cargo.lock"),
         "notices_sha256": sha256_file(rust_forge_notices.NOTICES),
         "binaries": binaries,
