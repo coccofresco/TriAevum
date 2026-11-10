@@ -1938,13 +1938,36 @@ void GfxRenderingAPIVulkan::ApplyPendingNativePicaMemoryFills(NativePicaRenderTa
             vkCmdClearAttachments(mCommandBuffers[mCurrentFrame], attachmentCount, attachments.data(), 1U, &clearRect);
         }
         mDiagnostics.RecordNriPicaMemoryFillClear(nriShadowClear, nriAttachmentClear, shadowBarrierCount);
+        if (RasterStats::PerDraw() && RasterStats::Collector::Instance().TraceFrame())
+            std::fprintf(stderr, "[raster-fill] before_order=%u color=%u depth=%u target=%08x %ux%u guides=%u\n",
+                         RasterStats::Collector::Instance().DrawOrder(mCurrentFrame), coversColor ? 1U : 0U,
+                         coversDepth ? 1U : 0U, target.Key.ColorPhysicalAddress, target.Width, target.Height,
+                         target.NormalGuideView != VK_NULL_HANDLE ? 1U : 0U);
         if (coversColor) {
             // Filled colour is new content: it carries no resolved scene
             // effects any more, so the provenance serial moves on.
             target.ContentWriteSerial = ++mGpuTextureCopyWriteSerial;
+            target.GeometryGuideResetSerial =
+                mActiveNativePicaAttachments.Binds(Extension::PicaColorAttachment::OutlineGeometryGuide)
+                ? target.ContentWriteSerial : 0U;
         }
         fill = mPendingNativePicaMemoryFills.erase(fill);
     }
+}
+
+bool GfxRenderingAPIVulkan::NativePicaGeometryGuideAtReset(const NativePicaRenderTarget& target) const {
+    if (target.GeometryGuideResetSerial != 0U && target.GeometryGuideResetSerial == target.ContentWriteSerial)
+        return true;
+    if (!ActivePicaAttachmentRequirements().Binds(Extension::PicaColorAttachment::OutlineGeometryGuide))
+        return false;
+    const uint64_t colorEnd = static_cast<uint64_t>(target.Key.ColorPhysicalAddress) +
+                              static_cast<uint64_t>(target.Key.Width) * target.Key.Height *
+                                  NativePicaColorBytesPerPixel(target.Key.ColorFormat);
+    for (const auto& fill : mPendingNativePicaMemoryFills)
+        if (fill.RenderTargetNamespace == target.Key.RenderTargetNamespace &&
+            fill.StartPhysicalAddress <= target.Key.ColorPhysicalAddress && fill.EndPhysicalAddress >= colorEnd)
+            return true;
+    return false;
 }
 
 void GfxRenderingAPIVulkan::PaintNativePicaPictureBars(

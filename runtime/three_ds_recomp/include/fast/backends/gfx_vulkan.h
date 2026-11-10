@@ -733,6 +733,11 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         // the first.
         uint64_t ContentWriteSerial = 0;
         uint64_t SceneEffectsResolvedSerial = 0;
+        // The content serial of the last full colour fill that also reset the
+        // bound outline geometry guide; equal to ContentWriteSerial while that
+        // guide still holds its cleared values everywhere (grass, which
+        // writes it without a serial, resets this to 0).
+        uint64_t GeometryGuideResetSerial = 0;
         // The content serial whose scene, before native UI, the boundary
         // before UI kept for an upscaler; native UI writes carry it like the
         // resolved serial, any other write ends it.
@@ -1126,6 +1131,13 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         bool requireVulkan = false,
         NativePicaPipelineAcquisition acquisition = NativePicaPipelineAcquisition::Blocking,
         bool* pending = nullptr);
+    // Whether the outline geometry guide of a target holds its cleared values
+    // everywhere when its next draw runs: a pending full colour fill resets it
+    // first, or no write has happened since the last one did.
+    [[nodiscard]] bool NativePicaGeometryGuideAtReset(const NativePicaRenderTarget& target) const;
+    // Set per native draw from NativePicaGeometryGuideAtReset; read by
+    // GetOrCreateNativePicaPipeline for the pipeline state.
+    bool mNativePicaDrawGeometryGuideAtReset = false;
     // `pixels` holds every level, or only the base when `lowerLevels` holds
     // the others (a custom replacement's chain, built apart from its base).
     void CreateNativePicaTextureImage(TextureRecord& texture,

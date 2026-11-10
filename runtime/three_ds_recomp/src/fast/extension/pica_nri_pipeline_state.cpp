@@ -2,6 +2,7 @@
 #include "fast/extension/pica_alpha_coverage_policy.h"
 #include "fast/extension/pica_attachment_formats.h"
 #include "fast/extension/outline_occlusion_pass.h"
+#include <cstdlib>
 #include <stdexcept>
 
 namespace Fast::Extension {
@@ -177,7 +178,7 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     const PicaFragmentInstrumentationOutputLayout& outputs,
     Renderer3ds::PicaAttachmentRequirements attachments,
     VkSampleCountFlagBits samples, VkFormat depthFormat,
-    bool writesReactiveMask, bool outlineOcclusionOnly) {
+    bool writesReactiveMask, bool outlineOcclusionOnly, bool geometryGuideAtReset) {
     VkPipelineDepthStencilStateCreateInfo depthStencil{
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO};
     depthStencil.depthTestEnable = draw.DepthTestEnabled ||
@@ -305,6 +306,25 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     outlineGeometryAttachment.colorWriteMask =
         (outputs.WritesOutlineGeometryGuide ? VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_A_BIT : 0U) |
         (outputs.WritesFaceNormalGuide ? VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT : 0U);
+    // A depth-initializing atmosphere draw (the title's sky: depth compare
+    // Always with depth writes, the instrumentation's raster initializer) is no
+    // geometric surface: its specialized program stores the cleared geometry
+    // guide (normal 0, kind 0, depth 1.0) in the channels it writes (R|A for
+    // outlines, G|B for the face normal). When the guide already holds those
+    // values everywhere (geometryGuideAtReset: a full colour fill reset it and
+    // nothing wrote it since - MM3D fills the scene colour right before its
+    // sky), the write is a partial read-modify-write of 16 B per pixel that
+    // changes nothing, and is masked. (The always-available program would
+    // also store a face normal and kind 1; masked, it keeps the cleared values
+    // its specialized program writes.) A sky that initializes the guide itself
+    // (no fill before it, as in OoT3D) keeps the write.
+    // TRIAEVUM_ATMOSPHERE_GEOMETRY_WRITE=1 keeps it always (developer A/B).
+    static const bool atmosphereGeometryWrite = std::getenv("TRIAEVUM_ATMOSPHERE_GEOMETRY_WRITE") != nullptr;
+    if (geometryGuideAtReset && !atmosphereGeometryWrite &&
+        draw.Composition.Layer == Renderer3ds::PicaCompositionLayer::Atmosphere && draw.DepthWriteEnabled &&
+        draw.DepthCompare == Renderer3ds::PicaCompareFunction::Always &&
+        (outputs.WritesOutlineGeometryGuide || outputs.WritesFaceNormalGuide))
+        outlineGeometryAttachment.colorWriteMask = 0U;
     VkPipelineColorBlendAttachmentState fogAttachment{};
     fogAttachment.colorWriteMask = outputs.WritesFogGuide ? 0xfU : 0U;
     VkPipelineColorBlendAttachmentState albedoAttachment{};

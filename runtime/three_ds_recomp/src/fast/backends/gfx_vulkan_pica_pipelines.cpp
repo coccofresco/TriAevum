@@ -134,7 +134,8 @@ Renderer3ds::PicaDevicePipelineRecord& GfxRenderingAPIVulkan::GetOrCreateNativeP
     }
     auto resolvedState = Extension::BuildPicaNriPipelineState(
         draw, shader.FragmentOutputs, ActivePicaAttachmentRequirements(),
-        mNativePicaSampleCount, mDepthFormat, writesReactiveMask, outlineOcclusionOnly);
+        mNativePicaSampleCount, mDepthFormat, writesReactiveMask, outlineOcclusionOnly,
+        mNativePicaDrawGeometryGuideAtReset);
     // The superset program declares every guide output; the attachments its
     // specialized program does not declare stay untouched, as they do there.
     for (size_t location = 1U; location < resolvedState.Colors.size(); ++location)

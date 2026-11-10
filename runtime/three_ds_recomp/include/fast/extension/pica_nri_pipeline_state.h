@@ -21,5 +21,6 @@ Renderer3ds::NriPicaGraphicsPipelineDesc BuildPicaNriPipelineState(
     const PicaFragmentInstrumentationOutputLayout& outputs,
     Renderer3ds::PicaAttachmentRequirements attachments,
     VkSampleCountFlagBits samples, VkFormat depthFormat,
-    bool writesReactiveMask = false, bool outlineOcclusionOnly = false);
+    bool writesReactiveMask = false, bool outlineOcclusionOnly = false,
+    bool geometryGuideAtReset = false);
 } // namespace Fast::Extension

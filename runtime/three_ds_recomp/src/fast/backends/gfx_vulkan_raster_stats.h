@@ -131,6 +131,10 @@ public:
     // Level 2: around one guided draw's commands, inside the scope.
     // Every 600 frames, draws of more than 1 M invocations are printed with this text.
     [[nodiscard]] bool TraceFrame() const noexcept { return mFrame % 600U == 5U; }
+    // Guided draws recorded so far in this slot's frame (the order of the next one).
+    [[nodiscard]] uint32_t DrawOrder(uint32_t slot) const noexcept {
+        return slot < kSlots ? mSlots[slot].DrawUsed : 0U;
+    }
 
     bool BeginDraw(VkDevice device, VkCommandBuffer commandBuffer, uint32_t slot, uint32_t frame, uint32_t drawKey,
                    std::string trace = {}) {
@@ -138,6 +142,13 @@ public:
         if (!gPipelineStatisticsEnabled || slot >= kSlots || !mSlots[slot].DrawReset ||
             mSlots[slot].DrawUsed >= kDrawQueriesPerSlot || mDrawPool == VK_NULL_HANDLE)
             return false;
+        // Traced draws carry their order in the frame: the index among this
+        // slot's guided draws and how many opaque draws preceded them.
+        if (!trace.empty())
+            trace = "order=" + std::to_string(mSlots[slot].DrawUsed) + " opaque_before=" +
+                    std::to_string(mSlots[slot].OpaqueUsed) + " " + trace;
+        if ((drawKey & 3U) == kOpaque || (drawKey & 3U) == kOpaqueDiscard)
+            ++mSlots[slot].OpaqueUsed;
         const uint32_t index = slot * kDrawQueriesPerSlot + mSlots[slot].DrawUsed++;
         mDrawClasses[index] = drawKey;
         mTraces[index] = std::move(trace);
@@ -172,6 +183,7 @@ private:
         uint32_t Frame = UINT32_MAX;
         uint32_t Used = 0;
         uint32_t DrawUsed = 0;
+        uint32_t OpaqueUsed = 0;
         bool DrawReset = false;
     };
 
@@ -266,6 +278,7 @@ private:
         state.Frame = frame;
         state.Used = 0;
         state.DrawUsed = 0;
+        state.OpaqueUsed = 0;
         state.DrawReset = false;
     }
 

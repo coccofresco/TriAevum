@@ -2178,6 +2178,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             cpuTimings.DirectionalShadowMilliseconds, cpuTimings.GrassRenderMilliseconds);
         auto& renderTarget = !nativeMemoryOnly && NativeSceneOverlayDraw(draw)
             ? ResolveNativePicaUiTarget(sceneTarget) : sceneTarget;
+        mNativePicaDrawGeometryGuideAtReset = !nativeMemoryOnly && NativePicaGeometryGuideAtReset(renderTarget);
         if (collectCpuTimings) cpuStageStart = CpuClock::now();
         renderTarget.WBuffering = draw.WBuffering;
         // The isolated title logo once the boundary before it has resolved the
@@ -3829,6 +3830,13 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                     draw.Blend.ConstantColor[3], static_cast<unsigned>(draw.Blend.SourceAlpha),
                     static_cast<unsigned>(draw.Blend.DestAlpha), static_cast<unsigned>(draw.CompositionDomain));
                 trace = text;
+                std::snprintf(text, sizeof(text),
+                              " layer=%u provenance=%u source_pc=%08x depth_compare=%u depth_range=%g near=%g wbuffer=%u fb_color=%08x",
+                              static_cast<unsigned>(draw.Composition.Layer),
+                              static_cast<unsigned>(draw.Composition.Provenance), draw.Composition.SourcePc,
+                              static_cast<unsigned>(draw.DepthCompare), draw.DepthRange, draw.NearPlane,
+                              draw.WBuffering ? 1U : 0U, draw.FramebufferColorPhysicalAddress);
+                trace += text;
                 trace += selectedDraw == &uberDraw ? " program=uber" : " program=specialized";
                 trace += coveragePipeline != nullptr ? " coverage_pass=1" : " coverage_pass=0";
                 trace += " fs_bytes=" + std::to_string(selectedDraw->FragmentShaderSource.size());
@@ -3854,6 +3862,15 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                                                   draw.DepthWriteEnabled)
                 ? 0U
                 : scissorParts.Count;
+        // Developer timeline split (TRIAEVUM_GPU_TIMELINE=1 with TRIAEVUM_ATMOSPHERE_MARKS=1): the
+        // guided target's atmosphere draws get their own timeline labels.
+        static const bool atmosphereMarks = std::getenv("TRIAEVUM_ATMOSPHERE_MARKS") != nullptr;
+        const bool markAtmosphere = atmosphereMarks && renderTarget.NormalGuideView != VK_NULL_HANDLE &&
+            draw.Composition.Layer == Renderer3ds::PicaCompositionLayer::Atmosphere;
+        if (markAtmosphere)
+            mGpuProfiler.Mark(mCurrentFrame,
+                              draw.DepthWriteEnabled ? "atmosphere depth-writing draw" : "atmosphere draw",
+                              commandBuffer);
         for (uint32_t scissorPart = 0; scissorPart < recordedScissorParts; ++scissorPart) {
             const auto part = scissorParts.Rects[scissorPart];
             mScissor = { { part.X, part.Y }, { part.Width, part.Height } };
@@ -3911,6 +3928,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
         }
         if (rasterDrawQuery)
             RasterStats::Collector::Instance().EndDraw(commandBuffer);
+        if (markAtmosphere)
+            mGpuProfiler.Mark(mCurrentFrame, "pica guides after atmosphere", commandBuffer);
         mScissor = originalScissor;
         if (coveragePipeline != nullptr) {
             ++mDrawCallCountThisFrame;
@@ -4074,6 +4093,8 @@ bool GfxRenderingAPIVulkan::TryRenderInteractiveGrass(
     bool executed = false;
     if (prepared) {
         BeginNativePicaRenderPass(target);
+        // Grass writes the geometry guide's face normal and kind.
+        target.GeometryGuideResetSerial = 0U;
         mGpuProfiler.Mark(mCurrentFrame, "grass_draw", mCommandBuffers[mCurrentFrame]);
         Extension::GrassStageTimer drawTimer(Extension::GrassStage::Draw);
         if (Extension::GrassStageProfileEnabled())
