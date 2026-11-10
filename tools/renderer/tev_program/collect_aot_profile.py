@@ -91,6 +91,12 @@ def main() -> int:
     parser.add_argument("--frames", type=int, default=900)
     parser.add_argument("--timeout-seconds", type=int, default=300)
     args = parser.parse_args()
+    # The Linux title build (TRIAEVUM_TITLE_PGO=GENERATE) records the title
+    # source and compiler beside the module; a USE build refuses a profile
+    # whose record does not match it (tools/triaevum_release/linux_title).
+    build_record = args.plugin.parent / "triaevum_title_aot.pgo.json"
+    instrumented_build = (json.loads(build_record.read_text(encoding="utf-8"))
+                          if build_record.is_file() else None)
     template = json.loads(args.invocation.read_text(encoding="utf-8"))
     if not isinstance(template, list):
         template = [str(args.executable), *template["arguments"]]
@@ -129,6 +135,7 @@ def main() -> int:
         "format": FORMAT,
         "plugin": str(args.plugin), "plugin_sha256": sha256(args.plugin),
         "executable": str(args.executable), "executable_sha256": sha256(args.executable),
+        "instrumented_build": instrumented_build,
         "frames_per_workload": args.frames,
         "runs": runs,
         "merge": merged,

@@ -18,7 +18,10 @@ def merge_profiles(
     profiles = sorted({path.resolve() for path in inputs if path.is_file()})
     if not profiles:
         raise ValueError("no LLVM raw profiles were found")
-    llvm_profdata = llvm_root.resolve() / "bin" / "llvm-profdata.exe"
+    bin_dir = llvm_root.resolve() / "bin"
+    candidates = [bin_dir / "llvm-profdata.exe", bin_dir / "llvm-profdata",
+                  *sorted(bin_dir.glob("llvm-profdata-[0-9]*"))]
+    llvm_profdata = next((path for path in candidates if path.is_file()), candidates[0])
     if not llvm_profdata.is_file():
         raise FileNotFoundError(f"llvm-profdata was not found: {llvm_profdata}")
     output = output.resolve()
