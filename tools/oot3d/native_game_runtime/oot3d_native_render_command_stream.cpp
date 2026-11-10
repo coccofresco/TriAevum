@@ -37,6 +37,12 @@ NativeRenderCommandStream::~NativeRenderCommandStream() {
     StopWorker();
 }
 
+void NativeRenderCommandStream::SetMaxFramesInFlight(size_t frames) {
+    Drain();
+    std::lock_guard lock(mMutex);
+    mMaxFramesInFlight = frames == 0U ? 1U : frames;
+}
+
 void NativeRenderCommandStream::SetMode(Mode mode) {
     Drain();
     if (mode == mMode) return;

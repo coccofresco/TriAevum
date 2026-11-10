@@ -303,6 +303,11 @@ bool ParseOot3dNativeGameArgs(int argc, char** argv, Oot3dNativeGameLaunch& laun
             launch.DisableAudio = true;
         } else if (arg == "--audio-pcm-dump" && index + 1 < argc) {
             launch.AudioPcmDumpPath = argv[++index];
+        } else if (arg == "--render-frames-in-flight" && index + 1 < argc) {
+            const std::string value = argv[++index];
+            if (value != "1" && value != "2" && value != "3" && value != "4")
+                throw std::runtime_error("--render-frames-in-flight expects 1 to 4");
+            launch.RenderFramesInFlight = static_cast<uint32_t>(value[0] - '0');
         } else if (arg == "--load-state" && index + 1 < argc) {
             launch.LoadStatePath = argv[++index];
         } else if (arg == "--load-state-with-settings") {

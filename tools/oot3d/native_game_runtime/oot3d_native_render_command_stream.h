@@ -52,6 +52,9 @@ class NativeRenderCommandStream final {
     [[nodiscard]] Mode CurrentMode() const noexcept { return mMode; }
     // Drains, then switches. Inline -> Worker starts the thread lazily.
     void SetMode(Mode mode);
+    // Drains, then allows up to `frames` (at least 1) pending frames.
+    void SetMaxFramesInFlight(size_t frames);
+    [[nodiscard]] size_t MaxFramesInFlight() const noexcept { return mMaxFramesInFlight; }
 
     void Submit(Command command, bool endsFrame = false);
     void Run(Command command);

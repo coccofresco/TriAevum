@@ -1956,6 +1956,14 @@ void NativeA32WindowSession::Setup() {
     rendererTiming = &workerPhaseTiming;
     renderStream.SetMode(
         Oot3dNativeGame::NativeRenderCommandStream::Mode::Worker);
+    // The launch profile chooses how far the guest loop may run ahead of the
+    // renderer; TRIAEVUM_RENDER_FRAMES_IN_FLIGHT (1-4) overrides it.
+    uint32_t framesInFlight = launch.RenderFramesInFlight;
+    if (const char *value = std::getenv("TRIAEVUM_RENDER_FRAMES_IN_FLIGHT");
+        value != nullptr && value[0] >= '1' && value[0] <= '4' && value[1] == '\0')
+      framesInFlight = static_cast<uint32_t>(value[0] - '0');
+    renderStream.SetMaxFramesInFlight(framesInFlight);
+    std::fprintf(stderr, "TRIAEVUM_RENDER_FRAMES_IN_FLIGHT frames=%u\n", framesInFlight);
     // The ImGui overlay (and the display composition it triggers) renders
     // in renderer order, from a copy of each frame's draw data.
     if (fast3dGui != nullptr) {

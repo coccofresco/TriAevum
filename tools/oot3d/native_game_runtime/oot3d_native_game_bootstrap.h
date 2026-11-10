@@ -81,6 +81,10 @@ struct Oot3dNativeGameLaunch {
     // cannot serialize the guest refresh with presentation select auto.
     Oot3dNativeGame::NativeInputAdmissionMode InputAdmission =
         Oot3dNativeGame::NativeInputAdmissionMode::On;
+    // Presentation frames the guest loop may run ahead of the renderer
+    // (parallel presentation). 1 = the frame being presented only; more lets
+    // presentation continue from queued frames while a long guest update runs.
+    uint32_t RenderFramesInFlight = 1U;
     // --initialize-config product: a missing configuration (or one without a
     // Graphics block) starts from the product defaults, as Forge does on the
     // desktop. Platforms without Forge select it in their launch profile.
