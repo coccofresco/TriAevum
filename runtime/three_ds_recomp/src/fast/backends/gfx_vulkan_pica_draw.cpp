@@ -2,6 +2,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "fast/renderer3ds/title_shader_preparation.h"
 #include "gfx_vulkan_pica_internal.h"
+#include "gfx_vulkan_raster_stats.h"
 #include "fast/renderer3ds/pica_exclude_scissor.h"
 #include "fast/renderer3ds/pica_draw_coverage.h"
 #include "fast/renderer3ds/pica_fragment_balance.h"
@@ -3874,6 +3875,22 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 ::Oot3d::Renderer::PicaCompositionDomain::Scene &&
             draw.DepthWriteEnabled) {
             ++mNativePicaDepthWritingDrawsThisFrame;
+        }
+        if (RasterStats::Enabled() && renderTarget.NormalGuideView != VK_NULL_HANDLE) {
+            // The selected program's source: specialized, instrumented or parametric.
+            const std::string_view fragment = selectedDraw->FragmentShaderSource;
+            uint32_t attachments = 0U;
+            for (const VkFormat format : Extension::BoundPicaColorAttachmentFormats(mActiveNativePicaAttachments))
+                attachments += format != VK_FORMAT_UNDEFINED ? 1U : 0U;
+            RasterStats::Collector::Instance().RecordDraw({
+                .ExplicitDepth = fragment.find("gl_FragDepth") != std::string_view::npos,
+                .Discard = RunsDiscardingAlphaTest(draw) || fragment.find("discard") != std::string_view::npos,
+                .DepthTest = draw.DepthTestEnabled,
+                .DepthWrite = draw.DepthWriteEnabled,
+                .Blend = UsesTranslucentBlend(draw.Blend),
+                .OpaqueWorld = opaqueWorldDraw,
+                .Attachments = attachments,
+            });
         }
         ++mDrawCallCountThisFrame;
         mDiagnostics.RecordNativePicaDraw(

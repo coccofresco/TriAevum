@@ -2,6 +2,7 @@
 // and the swapchain.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
+#include "gfx_vulkan_raster_stats.h"
 #include "fast/renderer3ds/vulkan_commands.h"
 #include "fast/renderer3ds/vulkan_memory_budget.h"
 #include "fast/renderer3ds/vulkan_device_path_report.h"
@@ -461,8 +462,13 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
                 }))
             extensions.push_back(required.c_str());
     }
-    const auto features = Renderer3ds::PicaVulkanCoreFeatures(
+    auto features = Renderer3ds::PicaVulkanCoreFeatures(
         supportedFeatures.features, driverProperties.driverID);
+    // Developer raster statistics count fragment-shader invocations.
+    if (RasterStats::Enabled() && supportedFeatures.features.pipelineStatisticsQuery == VK_TRUE) {
+        features.pipelineStatisticsQuery = VK_TRUE;
+        RasterStats::gPipelineStatisticsEnabled = true;
+    }
     // The chosen renderer path, in the release log beside the device line.
     SPDLOG_WARN("{}", Renderer3ds::DescribeVulkanDevicePath({
         deviceProperties.deviceName, driverProperties.driverID, libraryPolicy, librarySupported,

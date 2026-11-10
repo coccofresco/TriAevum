@@ -2,6 +2,7 @@
 // memory fills and descriptor sets. Other topics: gfx_vulkan_pica_*.cpp.
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_pica_internal.h"
+#include "gfx_vulkan_raster_stats.h"
 
 #include <cstdio>
 #include <cstring>
@@ -1626,6 +1627,10 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
         mRenderPassActive = false;
         mOverlayRenderPassActive = false;
     }
+    const bool rasterStatsQuery = RasterStats::Enabled() &&
+        RasterStats::Collector::Instance().PrepareScope(
+            mDevice, mCommandBuffers[mCurrentFrame], mCurrentFrame, mFrameCounter,
+            target.NormalGuideView != VK_NULL_HANDLE, target.Width, target.Height);
     if (mPicaDynamicRenderingScope.Available()) {
         const bool multisampled =
             mNativePicaSampleCount != VK_SAMPLE_COUNT_1_BIT;
@@ -1723,6 +1728,8 @@ void GfxRenderingAPIVulkan::BeginNativePicaRenderPass(
         vkCmdBeginRenderPass(mCommandBuffers[mCurrentFrame], &begin,
                              VK_SUBPASS_CONTENTS_INLINE);
     }
+    if (rasterStatsQuery)
+        RasterStats::Collector::Instance().BeginQuery(mCommandBuffers[mCurrentFrame]);
     mGpuProfiler.BeginScope(
         mCurrentFrame, Extension::GpuProfileScope::NativePica,
         mCommandBuffers[mCurrentFrame]);
@@ -1771,6 +1778,8 @@ void GfxRenderingAPIVulkan::EndNativePicaRenderPass(std::source_location where) 
             }
         }
     }
+    if (RasterStats::Enabled())
+        RasterStats::Collector::Instance().EndQuery(mCommandBuffers[mCurrentFrame]);
     if (mPicaDynamicRenderingScope.Active()) {
         mPicaDynamicRenderingScope.End(
             mCurrentFrame, mCommandBuffers[mCurrentFrame]);
