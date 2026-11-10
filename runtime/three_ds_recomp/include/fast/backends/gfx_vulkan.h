@@ -1156,8 +1156,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint32_t ComponentBytes = 0;
         VkImage Snapshot = VK_NULL_HANDLE;
         VkDeviceMemory SnapshotMemory = VK_NULL_HANDLE;
-        VkBuffer Readback[2]{};
-        VkDeviceMemory ReadbackMemory[2]{};
+        // [0] A, [1] B, [2] depth only: the depth before the A/B window.
+        VkBuffer Readback[3]{};
+        VkDeviceMemory ReadbackMemory[3]{};
         VkDeviceSize StencilOffset = 0; // depth: stencil bytes follow the depth texels
         VkDeviceSize Bytes = 0;
     };

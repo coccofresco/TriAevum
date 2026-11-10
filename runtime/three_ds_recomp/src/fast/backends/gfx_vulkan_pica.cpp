@@ -2074,7 +2074,8 @@ void GfxRenderingAPIVulkan::RunNativePicaAbDraw(NativePicaRenderTarget& target, 
         CheckNativeVk(vkBindImageMemory(mDevice, image.Snapshot, image.SnapshotMemory, 0), "vkBindImageMemory(A/B)");
         image.StencilOffset = pixels * image.TexelBytes;
         image.Bytes = image.StencilOffset + ((image.Aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0U ? pixels : 0U);
-        for (int side = 0; side < 2; ++side) {
+        const int sides = image.Aspect == VK_IMAGE_ASPECT_COLOR_BIT ? 2 : 3;
+        for (int side = 0; side < sides; ++side) {
             VkBufferCreateInfo buffer{ VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
             buffer.size = image.Bytes;
             buffer.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -2145,6 +2146,16 @@ void GfxRenderingAPIVulkan::RunNativePicaAbDraw(NativePicaRenderTarget& target, 
     transition(true, false, false);
     transition(true, true, true);
     copyImages(true);
+    // The depth before the window (classifies differing pixels: a tie with it
+    // or one inside the window).
+    transition(true, true, false);
+    for (const auto& image : ab.Images) {
+        if (image.Aspect == VK_IMAGE_ASPECT_COLOR_BIT) continue;
+        VkBufferImageCopy region{};
+        region.imageSubresource = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 0, 1 };
+        region.imageExtent = { target.Width, target.Height, 1 };
+        vkCmdCopyImageToBuffer(command, image.Snapshot, VK_IMAGE_LAYOUT_GENERAL, image.Readback[2], 1, &region);
+    }
     transition(false, false, false);
     BeginNativePicaRenderPass(target);
     record(true);
@@ -2173,9 +2184,30 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
     std::fprintf(stderr, "[ab] frame=%u %ux%u %s variant_b=%s\n", ab.RecordedFrame, ab.Width, ab.Height,
                  ab.Label.c_str(), ab.Control ? "same pipeline (control)" : "switch on");
     const uint64_t pixels = static_cast<uint64_t>(ab.Width) * ab.Height;
+    // Depth (always the last image) of A and before the window, mapped first:
+    // a differing colour/guide pixel whose final depth equals the depth before
+    // the window is a tie with the pre-window surface; otherwise the tie is
+    // inside the window.
+    auto& depthImage = ab.Images.back();
+    void* depthMapped[2]{};
+    vkMapMemory(mDevice, depthImage.ReadbackMemory[0], 0, VK_WHOLE_SIZE, 0, &depthMapped[0]);
+    vkMapMemory(mDevice, depthImage.ReadbackMemory[2], 0, VK_WHOLE_SIZE, 0, &depthMapped[1]);
+    {
+        const std::array<VkMappedMemoryRange, 2> ranges{{
+            {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, depthImage.ReadbackMemory[0], 0, VK_WHOLE_SIZE},
+            {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, depthImage.ReadbackMemory[2], 0, VK_WHOLE_SIZE}}};
+        vkInvalidateMappedMemoryRanges(mDevice, 2U, ranges.data());
+    }
+    const auto* depthFinal = static_cast<const uint8_t*>(depthMapped[0]);
+    const auto* depthBefore = static_cast<const uint8_t*>(depthMapped[1]);
+    const uint32_t depthBytes = depthImage.TexelBytes == 4U &&
+            (depthImage.Format == VK_FORMAT_D24_UNORM_S8_UINT || depthImage.Format == VK_FORMAT_X8_D24_UNORM_PACK32)
+        ? 3U : depthImage.TexelBytes;
     for (auto& image : ab.Images) {
+        const bool isDepth = &image == &depthImage;
         void* mapped[2]{};
-        vkMapMemory(mDevice, image.ReadbackMemory[0], 0, VK_WHOLE_SIZE, 0, &mapped[0]);
+        if (isDepth) mapped[0] = depthMapped[0];
+        else vkMapMemory(mDevice, image.ReadbackMemory[0], 0, VK_WHOLE_SIZE, 0, &mapped[0]);
         vkMapMemory(mDevice, image.ReadbackMemory[1], 0, VK_WHOLE_SIZE, 0, &mapped[1]);
         const std::array<VkMappedMemoryRange, 2> ranges{{
             {VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE, nullptr, image.ReadbackMemory[0], 0, VK_WHOLE_SIZE},
@@ -2188,7 +2220,8 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
             for (uint64_t pixel = 0; pixel < pixels; ++pixel) a[pixel * 4U + 3U] = b[pixel * 4U + 3U] = 0U;
         const auto compare = [&](const char* name, const uint8_t* left, const uint8_t* right, uint32_t texel,
                                  uint32_t component) {
-            uint64_t differing = 0, maxDiff = 0, nonZero = 0;
+            uint64_t differing = 0, maxDiff = 0, nonZero = 0, preWindowTie = 0;
+            std::string where;
             for (uint64_t pixel = 0; pixel < pixels; ++pixel) {
                 const uint8_t* l = left + pixel * texel;
                 const uint8_t* r = right + pixel * texel;
@@ -2196,6 +2229,16 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
                     if (l[byte] != 0U) { ++nonZero; break; }
                 if (std::memcmp(l, r, texel) == 0) continue;
                 ++differing;
+                const bool tie = std::memcmp(depthFinal + pixel * depthImage.TexelBytes,
+                                             depthBefore + pixel * depthImage.TexelBytes, depthBytes) == 0;
+                if (tie) ++preWindowTie;
+                if (differing <= 8U) {
+                    char item[64];
+                    std::snprintf(item, sizeof(item), " (%llu,%llu)%s",
+                                  static_cast<unsigned long long>(pixel % ab.Width),
+                                  static_cast<unsigned long long>(pixel / ab.Width), tie ? "pre" : "in");
+                    where += item;
+                }
                 for (uint32_t offset = 0; offset < texel; offset += component) {
                     uint64_t lv = 0, rv = 0;
                     std::memcpy(&lv, l + offset, component);
@@ -2206,13 +2249,21 @@ void GfxRenderingAPIVulkan::FinishNativePicaAb() {
             std::fprintf(stderr, "[ab]   %-14s differing_pixels=%llu max_abs_diff=%llu (raw units) nonzero_pixels_a=%llu\n",
                          name, static_cast<unsigned long long>(differing), static_cast<unsigned long long>(maxDiff),
                          static_cast<unsigned long long>(nonZero));
+            if (differing != 0U)
+                std::fprintf(stderr, "[ab]     %s: pre_window_depth_tie=%llu in_window=%llu at%s\n", name,
+                             static_cast<unsigned long long>(preWindowTie),
+                             static_cast<unsigned long long>(differing - preWindowTie), where.c_str());
         };
         compare(image.Name, a, b, image.TexelBytes, image.ComponentBytes);
         if ((image.Aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0U)
             compare("stencil", a + image.StencilOffset, b + image.StencilOffset, 1U, 1U);
-        vkUnmapMemory(mDevice, image.ReadbackMemory[0]);
+        if (!isDepth) vkUnmapMemory(mDevice, image.ReadbackMemory[0]);
         vkUnmapMemory(mDevice, image.ReadbackMemory[1]);
-        for (int side = 0; side < 2; ++side) {
+    }
+    vkUnmapMemory(mDevice, depthImage.ReadbackMemory[0]);
+    vkUnmapMemory(mDevice, depthImage.ReadbackMemory[2]);
+    for (auto& image : ab.Images) {
+        for (int side = 0; side < 3; ++side) {
             vkDestroyBuffer(mDevice, image.Readback[side], nullptr);
             vkFreeMemory(mDevice, image.ReadbackMemory[side], nullptr);
         }
