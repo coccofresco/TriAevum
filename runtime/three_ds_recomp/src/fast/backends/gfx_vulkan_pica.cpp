@@ -1994,6 +1994,9 @@ bool GfxRenderingAPIVulkan::NativePicaAbArmed() {
                 ab.Switches = Extension::kPicaAbGeometryGuidePartial;
             } else if (selected == "replace_blend") {
                 ab.Switches = Extension::kPicaAbReplaceBlend;
+            } else if (selected == "shadow_receiver_cull") {
+                // A uniform switch: draws whose light mask the cull cleared.
+                ab.Switches = Extension::kPicaAbShadowReceiverCull;
             } else if (selected == "depth_prepass") {
                 // A whole prepass window (FlushNativePicaPrepass), not one draw.
                 ab.Switches = 0U;

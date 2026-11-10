@@ -4,6 +4,7 @@
 #include "fast/renderer3ds/virtual_shadow_receiver_shader.h"
 
 #include <algorithm>
+#include <cmath>
 #include <string_view>
 
 namespace Fast::Extension {
@@ -173,6 +174,104 @@ BuildPicaSurfaceShadowReceiverBinding(const DirectionalShadowMatrix& currentView
     PackPicaDirectionalShadowReceiverUniforms(currentViewToWorld, history, result.Uniforms);
     result.Uniforms.Receiver[3] = static_cast<float>(mask);
     return result;
+}
+
+namespace {
+
+// One layout of pica_vsm_layout_visibility: true when every point of the
+// light-space box reads visibility exactly 1.0 (see the header).
+bool LayoutFullyLit(const Renderer3ds::ShadowBounds& world, const Renderer3ds::VirtualShadowLayout& layout,
+                    const std::array<uint32_t, Renderer3ds::kVirtualShadowTableEntries>& table,
+                    float maximumDistance, float normalBias, float extraGuard) noexcept {
+    const auto& m = layout.WorldToLight;
+    // An affine (orthographic) light: the shader's divide by w is by 1.
+    if (!layout.Valid() || layout.LevelCount > Renderer3ds::kVirtualShadowLevelCount || m[3] != 0.0F ||
+        m[7] != 0.0F || m[11] != 0.0F || m[15] != 1.0F)
+        return false;
+    // The normal bias moves a point by at most NormalBias texels of the level
+    // it reads (a vector of length <= 1), at most the coarsest level's texel.
+    const float coarsestTexel = layout.Levels[layout.LevelCount - 1U].PageWorldSize / 128.0F;
+    Renderer3ds::ShadowBounds grown = world;
+    for (size_t axis = 0; axis < 3; ++axis) {
+        const float extent = std::max(std::abs(world.Minimum[axis]), std::abs(world.Maximum[axis]));
+        const float guard = normalBias * coarsestTexel + 1.0F + extent * 1.0e-4F + extraGuard;
+        grown.Minimum[axis] -= guard;
+        grown.Maximum[axis] += guard;
+    }
+    const auto light = Renderer3ds::TransformShadowBounds(grown, m);
+    if (!light.Available)
+        return false;
+    for (size_t axis = 0; axis < 3; ++axis)
+        if (!std::isfinite(light.Minimum[axis]) || !std::isfinite(light.Maximum[axis]))
+            return false;
+    const auto& camera = layout.CameraLight;
+    const auto gap = [&](size_t axis) {
+        return std::max({0.0F, light.Minimum[axis] - camera[axis], camera[axis] - light.Maximum[axis]});
+    };
+    // Distance: world_distance >= MaximumDistance returns visibility 1.0.
+    const double depthScale = 2.0 * std::max(double(maximumDistance) * 4.0, 65536.0);
+    const double gx = gap(0), gy = gap(1), gz = double(gap(2)) * depthScale;
+    if (std::sqrt(gx * gx + gy * gy + gz * gz) >= double(maximumDistance) * 1.001 + 1.0)
+        return true;
+    // Pages: every level the loop may visit holds only empty or fully lit
+    // entries under the box (mix of equal 1.0 values stays 1.0).
+    const float finest = layout.Levels[0].PageWorldSize;
+    if (!(finest > 0.0F))
+        return false;
+    const float planeMin = std::max(gap(0), gap(1));
+    const float planeMax =
+        std::max({std::abs(light.Minimum[0] - camera[0]), std::abs(light.Maximum[0] - camera[0]),
+                  std::abs(light.Minimum[1] - camera[1]), std::abs(light.Maximum[1] - camera[1])});
+    const int count = int(layout.LevelCount);
+    int first = int(std::ceil(std::log2(std::max(planeMin * 0.999F / (3.0F * finest), 1.0F))));
+    first = std::clamp(first - 1, 0, count - 1);
+    for (int level = first; level < count; ++level) {
+        const auto& grid = layout.Levels[size_t(level)];
+        const float page = grid.PageWorldSize;
+        if (!(page > 0.0F))
+            return false;
+        const double lowX = std::floor(double(light.Minimum[0]) / page) - grid.OriginX;
+        const double highX = std::floor(double(light.Maximum[0]) / page) - grid.OriginX;
+        const double lowY = std::floor(double(light.Minimum[1]) / page) - grid.OriginY;
+        const double highY = std::floor(double(light.Maximum[1]) / page) - grid.OriginY;
+        // Cells outside the 8x8 grid read entry 0 (skipped).
+        const int x0 = int(std::clamp(lowX, 0.0, 8.0)), x1 = int(std::clamp(highX, -1.0, 7.0));
+        const int y0 = int(std::clamp(lowY, 0.0, 8.0)), y1 = int(std::clamp(highY, -1.0, 7.0));
+        const bool coversGrid = lowX >= 0.0 && highX <= 7.0 && lowY >= 0.0 && highY <= 7.0;
+        bool allPresent = coversGrid;
+        for (int y = y0; y <= y1; ++y)
+            for (int x = x0; x <= x1; ++x) {
+                const uint32_t entry = table[size_t(level * 64 + y * 8 + x)];
+                if (entry != 0U && entry != 0xffffffffU)
+                    return false;
+                allPresent = allPresent && entry != 0U;
+            }
+        // Every point found a page here and none blends into a coarser level.
+        if (allPresent && x0 <= x1 && y0 <= y1 && planeMax * 1.001F + 1.0F <= 2.75F * page)
+            return true;
+    }
+    return true;
+}
+
+} // namespace
+
+bool PicaDirectionalShadowReceiverFullyLit(const Renderer3ds::ShadowBounds& worldBounds,
+                                           const PicaDirectionalShadowHistoryState& history,
+                                           float extraGuard) noexcept {
+    if (!worldBounds.Available || !history.Valid() || history.ContactShadows || !(extraGuard >= 0.0F) ||
+        !std::isfinite(extraGuard))
+        return false;
+    const float normalBias = std::clamp(history.NormalBias, 0.0F, 10.0F);
+    const float maximumDistance = history.Virtual.MaximumDistance;
+    if (!(maximumDistance > 0.0F))
+        return false;
+    if (!LayoutFullyLit(worldBounds, history.Virtual, history.PageTable, maximumDistance, normalBias, extraGuard))
+        return false;
+    // While a dissolve runs both layouts are read and mixed.
+    if (history.Dissolving() &&
+        !LayoutFullyLit(worldBounds, history.Older->Virtual, history.Older->PageTable, maximumDistance, normalBias, extraGuard))
+        return false;
+    return true;
 }
 
 } // namespace Fast::Extension

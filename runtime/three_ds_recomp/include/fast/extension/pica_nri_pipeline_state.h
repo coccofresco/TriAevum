@@ -43,6 +43,10 @@ enum PicaAbSwitch : uint32_t {
     // Keep blending for destination-replacing blends (ONE/ZERO ADD) and the
     // COPY logic op (TRIAEVUM_REPLACE_BLEND_OFF=0).
     kPicaAbReplaceBlend = 1U << 3,
+    // Keep the directional shadow light mask the receiver cull cleared
+    // (TRIAEVUM_SHADOW_RECEIVER_CULL=0). A uniform, not a pipeline, switch:
+    // the draw path records B with the uncleared receiver block.
+    kPicaAbShadowReceiverCull = 1U << 4,
 };
 void SetPicaAbOverride(uint32_t switches);
 [[nodiscard]] uint32_t PicaAbOverride();

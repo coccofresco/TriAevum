@@ -152,4 +152,15 @@ BuildPicaSurfaceShadowReceiverBinding(
     std::span<const PicaSurfaceShadowLight> lights,
     const PicaDirectionalShadowHistoryState& history) noexcept;
 
+// True when every receiver point inside `worldBounds` (conservative world
+// bounds of the draw's positions) reads exactly 1.0 from pica_vsm_visibility:
+// the bounds, grown by the normal bias and a rounding margin, lie entirely at
+// or beyond MaximumDistance, or every page any level could select for them is
+// empty (0) or fully lit (0xffffffff). Contact shadows must be off. Clearing
+// the draw's light mask is then exact (pica_surface_shadow returns vec3(1.0)).
+// extraGuard (world units) widens the bounds further (pose reuse tolerance).
+[[nodiscard]] bool PicaDirectionalShadowReceiverFullyLit(
+    const Renderer3ds::ShadowBounds& worldBounds,
+    const PicaDirectionalShadowHistoryState& history, float extraGuard = 0.0F) noexcept;
+
 } // namespace Fast::Extension

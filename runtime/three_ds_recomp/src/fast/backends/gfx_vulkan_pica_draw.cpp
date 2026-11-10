@@ -32,6 +32,27 @@ bool PublishNativePicaGrassSurface(const GfxNativePicaDrawView& draw, uint64_t f
 void AuditNativePicaGrassGate(const GfxNativePicaDrawView& draw, const Extension::InteractiveGrassSettings& settings,
                               const char* gate);
 
+namespace {
+// The inputs a draw's caster bounds were computed from: geometry, vertex
+// uniforms and the captured view. The receiver cull uses the bounds only for
+// the same inputs.
+uint64_t ReceiverBoundsInputs(const GfxNativePicaDrawView& draw) {
+    uint64_t hash = 1469598103934665603ULL;
+    const auto mix = [&hash](const void* data, size_t size) {
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        for (size_t i = 0; i < size; ++i) hash = (hash ^ bytes[i]) * 1099511628211ULL;
+    };
+    mix(&draw.GeometryIdentity, sizeof(draw.GeometryIdentity));
+    mix(&draw.GeometryContentVersion, sizeof(draw.GeometryContentVersion));
+    mix(&draw.BaseVertex, sizeof(draw.BaseVertex));
+    mix(&draw.VertexCount, sizeof(draw.VertexCount));
+    mix(&draw.VertexShaderKey, sizeof(draw.VertexShaderKey));
+    mix(draw.VertexUniformBytes.data(), draw.VertexUniformBytes.size());
+    if (draw.LightBinding.WorldToView) mix(&*draw.LightBinding.WorldToView, sizeof(*draw.LightBinding.WorldToView));
+    return hash;
+}
+} // namespace
+
 Renderer3ds::PicaShadowCasterAnchor* GfxRenderingAPIVulkan::ShadowCasterAnchor(
     uint64_t geometryIdentity, const Renderer3ds::PicaTemporalIdentity& identity, uint64_t submissionId) {
     // Only a proven instance owns an anchor: without one, several placements
@@ -652,6 +673,13 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
         shadowCaster.Dynamic =
             draw.Composition.NativeActorGeometry && !draw.Composition.StaticShadowCacheEligible;
         shadowCaster.OwnerIdentity = draw.Composition.NativeActorIdentity;
+        if (shadowCaster.WorldBounds.Available) {
+            if (mReceiverBoundsFrame != mFrameCounter) {
+                mReceiverBounds.clear();
+                mReceiverBoundsFrame = mFrameCounter;
+            }
+            mReceiverBounds[draw.SubmissionId] = {ReceiverBoundsInputs(draw), shadowCaster.WorldBounds};
+        }
         static const bool poseDump = [] {
             const char* value = std::getenv("TRIAEVUM_VSM_POSE_DUMP");
             return value != nullptr && value[0] == '1';
@@ -2521,6 +2549,8 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
             directionalShadowHistory;
         Extension::PicaDirectionalShadowReceiverBinding
             directionalShadowBinding{};
+        // The light mask the receiver cull cleared (0: not cleared).
+        float shadowReceiverOriginalMask = 0.0F;
         const bool directionalShadowShaderApplied =
             drawVariant.DirectionalShadowEligibility ==
                 Extension::PicaDirectionalShadowLightingEligibility::VertexPrimary ||
@@ -2592,6 +2622,43 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                         directionalShadowBinding = Extension::BuildPicaSurfaceShadowReceiverBinding(
                             receiverViewToWorld,
                             lights, directionalShadowHistory.State);
+                        // Receiver cull: where every point of the draw's
+                        // conservative bounds reads visibility exactly 1.0
+                        // (beyond MaximumDistance or only fully lit pages),
+                        // the shader's result without the mask is identical.
+                        static const bool receiverCull = [] {
+                            const char* value = std::getenv("TRIAEVUM_SHADOW_RECEIVER_CULL");
+                            return value == nullptr || value[0] != '0';
+                        }();
+                        const auto bounds = mReceiverBoundsFrame == mFrameCounter
+                            ? mReceiverBounds.find(draw.SubmissionId) : mReceiverBounds.end();
+                        static const bool receiverCullStats = std::getenv("TRIAEVUM_SHADOW_RECEIVER_CULL_STATS") != nullptr;
+                        if (receiverCullStats && mShadowReceiverCullFrame != mFrameCounter) {
+                            if (mFrameCounter % 300U == 0U && mShadowReceiverCullFrame != 0U)
+                                std::fprintf(stderr, "[shadow-receiver-cull] frame=%llu candidates=%llu cleared=%llu\n",
+                                             static_cast<unsigned long long>(mFrameCounter),
+                                             static_cast<unsigned long long>(mShadowReceiverCullCandidates),
+                                             static_cast<unsigned long long>(mShadowReceiverCullDraws));
+                            mShadowReceiverCullFrame = mFrameCounter;
+                        }
+                        if (receiverCull && directionalShadowBinding.Uniforms.Receiver[3] != 0.0F &&
+                            bounds != mReceiverBounds.end() && bounds->second.Inputs == ReceiverBoundsInputs(draw)) {
+                            ++mShadowReceiverCullCandidates;
+                            // A reused caster pose may differ from this one by
+                            // the camera's rotation error times the distance.
+                            float reach = 0.0F;
+                            for (size_t axis = 0; axis < 3; ++axis)
+                                reach = std::max({reach, std::abs(bounds->second.World.Minimum[axis]),
+                                                  std::abs(bounds->second.World.Maximum[axis]),
+                                                  std::abs(receiverViewToWorld[12 + axis])});
+                            const float guard = 4.0F * draw.LightBinding.WorldToViewRotationError * 2.0F * reach;
+                            if (Extension::PicaDirectionalShadowReceiverFullyLit(
+                                    bounds->second.World, directionalShadowHistory.State, guard)) {
+                                shadowReceiverOriginalMask = directionalShadowBinding.Uniforms.Receiver[3];
+                                directionalShadowBinding.Uniforms.Receiver[3] = 0.0F;
+                                ++mShadowReceiverCullDraws;
+                            }
+                        }
                     }
                 }
             }
@@ -2717,6 +2784,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                                       seamData->Words.size() * sizeof(seamData->Words[0]))
             : std::span<const uint8_t>{};
         uniformBytes += (seamBytes.size() + mUniformBufferAlignment - 1U) & ~(mUniformBufferAlignment - 1U);
+        // Room for the receiver cull's A/B copy (uncleared mask).
+        if (uniformShadow && shadowReceiverOriginalMask != 0.0F)
+            uniformBytes += (directionalShadowUniformSize + mUniformBufferAlignment - 1U) &
+                            ~(mUniformBufferAlignment - 1U);
         EnsureFrameUniformCapacity(uniformBytes, mUniformBufferAlignment);
 
         const auto uploadUniform = [&](std::span<const uint8_t> bytes) {
@@ -2745,6 +2816,16 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 reinterpret_cast<const uint8_t*>(&directionalShadowUniforms),
                 static_cast<size_t>(directionalShadowUniformSize)))
             : fragmentUniformOffset;
+        // Same-frame A/B of the receiver cull (TRIAEVUM_AB_SWITCH=
+        // shadow_receiver_cull): variant B binds the uncleared mask.
+        std::optional<VkDeviceSize> shadowReceiverUnculledOffset;
+        if (uniformShadow && shadowReceiverOriginalMask != 0.0F && NativePicaAbArmed() &&
+            (NativePicaAbSwitches() & Extension::kPicaAbShadowReceiverCull) != 0U) {
+            auto unculled = directionalShadowUniforms;
+            unculled.Receiver[3] = shadowReceiverOriginalMask;
+            shadowReceiverUnculledOffset = uploadUniform(std::span<const uint8_t>(
+                reinterpret_cast<const uint8_t*>(&unculled), static_cast<size_t>(directionalShadowUniformSize)));
+        }
         // Inactive extension bindings reuse an existing range; no upload.
         const VkDeviceSize toonUniformOffset = uniformToon
             ? uploadUniform(toonBytes)
@@ -4093,7 +4174,31 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 abVariant = nullptr;
             }
         }
-        if (abVariant != nullptr) {
+        // The receiver cull is a uniform switch, not a pipeline one: a draw
+        // whose mask it cleared is recorded with the uncleared copy as B.
+        bool abShadowReceiver = false;
+        if (abVariant == nullptr && !prepassDeferred && NativePicaAbArmed() && nriOwnedDraw &&
+            shadowReceiverUnculledOffset.has_value() && renderTarget.NormalGuideView != VK_NULL_HANDLE &&
+            recordedScissorParts != 0U && !RasterStats::Enabled() && coveragePipeline == nullptr) {
+            if (mNativePicaAb.SkipRemaining != 0U)
+                --mNativePicaAb.SkipRemaining;
+            else
+                abShadowReceiver = true;
+        }
+        if (abShadowReceiver) {
+            char label[160];
+            std::snprintf(label, sizeof(label), "pipeline=%llx layer=%u shadow_receiver_cull mask=%u",
+                          static_cast<unsigned long long>(draw.CanonicalPipelineId),
+                          static_cast<unsigned>(draw.Composition.Layer),
+                          static_cast<unsigned>(shadowReceiverOriginalMask));
+            const bool control = NativePicaAbControl();
+            const uint64_t culledOffset = nriDraw.Uniforms[3].Offset;
+            RunNativePicaAbDraw(renderTarget, label, [&](bool variantB) {
+                if (variantB && !control) nriDraw.Uniforms[3].Offset = *shadowReceiverUnculledOffset;
+                recordScissorParts(pipelineRecord);
+                nriDraw.Uniforms[3].Offset = culledOffset;
+            });
+        } else if (abVariant != nullptr) {
             char label[160];
             std::snprintf(label, sizeof(label), "pipeline=%llx layer=%u blend=%u nri_owned=%u program=%s",
                           static_cast<unsigned long long>(draw.CanonicalPipelineId),
