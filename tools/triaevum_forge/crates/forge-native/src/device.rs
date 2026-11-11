@@ -312,6 +312,30 @@ pub fn prepare_title_device_pipelines(
     report: Report<'_>,
     cancel: &CancelToken,
 ) -> Result<Option<Map<String, Value>>> {
+    prepare_installed_device_pipelines(
+        pipeline_cache_namespace, services, root, data_root, title, pack, cache_directory, None, report, cancel,
+    )
+}
+
+/// [`prepare_title_device_pipelines`] for an activated installation: when the
+/// game executable is the helper (`helper_tool_mode`), the job runs through
+/// `installed_runtime` (the executable the player launches, under its final
+/// name and path, verified against the catalog's runtime record). The driver's
+/// per-application pipeline cache is keyed by that executable (Linux: a job run
+/// as `TriAevum` did not serve a game started as `Moonfall_Curse`).
+#[allow(clippy::too_many_arguments)]
+pub fn prepare_installed_device_pipelines(
+    pipeline_cache_namespace: &str,
+    services: &dyn NativeServices,
+    root: &Path,
+    data_root: &Path,
+    title: &Map<String, Value>,
+    pack: Option<&Path>,
+    cache_directory: Option<&Path>,
+    installed_runtime: Option<&Path>,
+    report: Report<'_>,
+    cancel: &CancelToken,
+) -> Result<Option<Map<String, Value>>> {
     let contract_value = get(title, "device_pipeline_preparation");
     if contract_value.is_null() {
         return Ok(None);
@@ -329,7 +353,20 @@ pub fn prepare_title_device_pipelines(
         return Err(contract("Device pipeline preparation requires prepared portable shaders"));
     };
     let verify = CancelToken::new();
-    let helper = checked_file(root, index(contract_value, "helper")?, &verify)?;
+    let helper_record = index(contract_value, "helper")?;
+    let installed_record = match (fields.get("helper_tool_mode"), installed_runtime) {
+        (Some(_), Some(installed)) => {
+            let relative = resolve(installed)?
+                .strip_prefix(resolve(root)?)
+                .map(|path| path.to_string_lossy().replace('\\', "/"))
+                .map_err(|_| contract("The installed runtime is outside the installation"))?;
+            let mut record = helper_record.clone();
+            record["path"] = json!(relative);
+            Some(record)
+        }
+        _ => None,
+    };
+    let helper = checked_file(root, installed_record.as_ref().unwrap_or(helper_record), &verify)?;
     let title_program_pack = title.get("title_program_pack")
         .map(|record| checked_file(root, record, &verify)).transpose()?;
     if fields.contains_key("manifest") && fields.contains_key("manifests") {

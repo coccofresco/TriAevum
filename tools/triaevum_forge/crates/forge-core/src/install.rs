@@ -33,7 +33,7 @@ use forge_catalog::{InputFile, TitleInputs, adapt_extracted_inputs, default_reci
 use forge_mods::{Catalog, PrepareContext, SystemBsdtar, UiTexturePack};
 use forge_mods::{prepare_romfs_mods, prepare_ui_texture_pack, romfs_service_view, ui_atlas_hd};
 use forge_native::{
-    InteriorSunRequest, LanguageQuery, NativeServices, adopt_existing_cache, installation_cache_directory, prepare_device_pipelines,
+    InteriorSunRequest, LanguageQuery, NativeServices, adopt_existing_cache, installation_cache_directory,
     prepare_renderer_shader_cache, prepare_shader_seed, query_product_at,
 };
 use forge_prepare::paths::{expanduser, path_string, resolve};
@@ -671,17 +671,10 @@ pub fn install_precompiled_title(
     };
     let renderer_preparation =
         prepare_renderer_shader_cache(services, root, data_root, &item, &renderer_cache, report).map_err(&helper)?;
-    let pipeline_preparation = prepare_device_pipelines(
-        services,
-        root,
-        data_root,
-        &item,
-        shader_pack.as_deref(),
-        Some(&renderer_cache),
-        report,
-        cancel,
-    )
-    .map_err(&helper)?;
+    // The device pipeline job runs after activation (below), through the
+    // installed game executable; it needs the pack and cache folder then.
+    let device_pack = shader_pack.clone();
+    let device_cache = renderer_cache.clone();
     cancel.check()?;
 
     let title_ui = forge_assets::mm3d_ui::prepare(
@@ -756,6 +749,37 @@ pub fn install_precompiled_title(
     .map_err(|error| error.during(Operation::Activate))?;
     // Committed: the package version beside the receipts it belongs to.
     crate::refresh::record_installed_package(root, &prepared.directory);
+    // Outside the activation transaction: an optional acceleration step. A
+    // failed or cancelled job leaves a playable install (its receipt says so;
+    // the game's own preparation screen covers the rest). It runs through the
+    // executable the player launches (final name and path): the driver keeps
+    // its per-application pipeline cache by executable.
+    let installed_runtime = match android {
+        None => Some(installed_runtime_path(root, &layout::host_platform()?)),
+        Some(_) => None,
+    };
+    let pipeline_preparation = if cancel.is_cancelled() {
+        None
+    } else {
+        forge_native::prepare_installed_device_pipelines(
+            forge_catalog::title::ACTIVE.pipeline_cache_namespace,
+            services,
+            root,
+            data_root,
+            &item,
+            device_pack.as_deref(),
+            Some(&device_cache),
+            installed_runtime.as_deref(),
+            report,
+            cancel,
+        )
+        .unwrap_or_else(|error| {
+            let mut failed = serde_json::Map::new();
+            failed.insert("device_pipeline_prewarm".into(), json!("failed"));
+            failed.insert("error".into(), json!(error.message));
+            Some(failed)
+        })
+    };
     Ok(json!({
         "status": "ready",
         "install_model": MODEL,

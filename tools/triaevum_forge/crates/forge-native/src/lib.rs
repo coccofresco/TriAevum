@@ -34,7 +34,8 @@ pub mod worker_job;
 pub use android::AndroidServices;
 pub use desktop::DesktopServices;
 pub use device::{
-    adopt_existing_cache, installation_cache_directory, prepare_device_pipelines, renderer_cache_directory,
+    adopt_existing_cache, installation_cache_directory, prepare_device_pipelines, prepare_installed_device_pipelines,
+    renderer_cache_directory,
 };
 pub use installed_runtime::{validate_installed_runtime, validate_installed_runtime_for};
 pub use product::{ensure_runtime_config, query_product, query_product_at, validate_product_info, ProductQuery};

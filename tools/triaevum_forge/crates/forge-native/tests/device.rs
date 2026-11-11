@@ -473,3 +473,40 @@ fn no_namespace_keeps_the_original_job() {
     std::fs::remove_file(fixture.cache.join("nri_pipeline_cache.bin")).unwrap();
     assert_eq!(fixture.prepare_title("").unwrap()["device_pipeline_prewarm"], "failed");
 }
+
+/// After activation the job runs through the installed game executable (its
+/// final name and path), verified against the catalog's runtime record.
+#[test]
+fn tool_mode_job_runs_through_the_installed_executable() {
+    let mut fixture = Fixture::new();
+    fixture.contract().insert("helper_tool_mode".into(), json!("--pipeline-prepare"));
+    let installed = fixture.root.join(format!("Moonfall_Curse{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(&fixture.helper, &installed).unwrap();
+    fn run(fixture: &Fixture, installed: &Path) -> forge_base::Result<Option<Map<String, Value>>> {
+        forge_native::prepare_installed_device_pipelines(
+            "",
+            &fixture.services,
+            &fixture.root,
+            &fixture.root.join("data"),
+            fixture.title.as_object().unwrap(),
+            Some(&fixture.pack),
+            Some(&fixture.cache),
+            Some(installed),
+            &mut |_, _| {},
+            &CancelToken::new(),
+        )
+    }
+    run(&fixture, &installed).unwrap();
+    let jobs = fixture.services.jobs.borrow();
+    assert_eq!(jobs.last().unwrap().helper, installed);
+    assert_eq!(jobs.last().unwrap().tool_mode.as_deref(), Some("--pipeline-prepare"));
+    drop(jobs);
+    // Negative: an installed file that is not the catalog's runtime is refused.
+    std::fs::write(&installed, b"another program").unwrap();
+    assert!(run(&fixture, &installed).is_err());
+    // Without the tool mode the catalog's separate helper still runs.
+    fixture.contract().remove("helper_tool_mode");
+    std::fs::copy(&fixture.helper, &installed).unwrap();
+    run(&fixture, &installed).unwrap();
+    assert_eq!(fixture.services.jobs.borrow().last().unwrap().helper, fixture.helper);
+}
