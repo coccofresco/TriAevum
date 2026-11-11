@@ -281,7 +281,13 @@ pub fn validate_bundled_corpus(root: &Path, catalog: &Map<String, Value>, declar
         expected.insert(py_str(pack_path));
         let helper = record_str(device, "helper")?;
         checked_file(root, helper, &cancel)?;
-        if !eq_str(role(declared, record_str(helper, "path")?), "shader_preparation_tool") {
+        // A Forge tool, or the game executable in its device tool mode.
+        let expected_role = match device.get("helper_tool_mode") {
+            None => "shader_preparation_tool",
+            Some(mode) if eq_str(mode, crate::device::RUNTIME_TOOL_MODE) => "runtime_executable",
+            Some(_) => return Err(invalid("Unsupported pipeline helper tool mode")),
+        };
+        if !eq_str(role(declared, record_str(helper, "path")?), expected_role) {
             return Err(invalid("Pipeline helper lacks its explicit release role"));
         }
         let manifests = device.get("manifests").unwrap_or(&Value::Null);

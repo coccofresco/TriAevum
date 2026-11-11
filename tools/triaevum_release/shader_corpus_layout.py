@@ -35,6 +35,8 @@ except ImportError:
 
 
 QUALIFICATION_PATH = 'forge/shader-corpus/qualification.json'
+# The game executable's device pipeline tool mode (oot3d_native_game.cpp).
+RUNTIME_TOOL_MODE = '--pipeline-prepare'
 
 
 def _validate_against_source_archive(root: Path, declared: dict, record: dict, **artifacts):
@@ -97,7 +99,12 @@ def validate_bundled_corpus(root: Path, catalog: dict, declared: dict):
         expected.add(pack['path'])
         helper = device['helper']
         checked_file(root, helper)
-        if declared.get(helper['path'], {}).get('role') != 'shader_preparation_tool':
+        # The helper is a Forge tool, or the game executable in its tool mode.
+        mode = device.get('helper_tool_mode')
+        if mode not in (None, RUNTIME_TOOL_MODE):
+            raise ValueError('Unsupported pipeline helper tool mode')
+        expected_role = 'runtime_executable' if mode else 'shader_preparation_tool'
+        if declared.get(helper['path'], {}).get('role') != expected_role:
             raise ValueError('Pipeline helper lacks its explicit release role')
         if not device.get('manifests'):
             raise ValueError('Bundled corpus requires observed pipeline recipes')
@@ -123,9 +130,14 @@ def validate_bundled_corpus(root: Path, catalog: dict, declared: dict):
 
 
 def bind_shader_corpus(catalog: dict, pack: Path, manifests: list[Path],
-                       helper: Path, dependencies: list[Path] = (), *, qualification: Path,
+                       helper: Path | None, dependencies: list[Path] = (), *, qualification: Path,
                        source_root: Path) -> tuple[dict, list[dict]]:
-    """Bind one qualified corpus to every supported recipe without modifying inputs."""
+    """Bind one qualified corpus to every supported recipe without modifying inputs.
+
+    With helper None the game executable (the catalog's runtime) runs the device
+    job in its --pipeline-prepare tool mode: NVIDIA's driver keeps pipeline-library
+    parts in a per-application cache, so only the game's own process warms the
+    cache its first launch reads."""
     platform = for_target(catalog['target'])
     if not catalog.get('titles'):
         raise ValueError('Shader corpus requires title recipes')
@@ -156,9 +168,14 @@ def bind_shader_corpus(catalog: dict, pack: Path, manifests: list[Path],
                            read=repository_reader(source_root))
     qualified = add(qualification, QUALIFICATION_PATH, 'portable_shader_qualification')
     suffix = '.exe' if is_windows(platform) else ''
-    tool = add(helper, 'forge/oot3d_native_nri_pipeline_prepare' + suffix,
-               'shader_preparation_tool')
-    libraries = [add(path, 'forge/' + path.name, 'forge_runtime_module') for path in dependencies]
+    if helper is None:
+        if dependencies:
+            raise ValueError('The game executable as pipeline helper takes no helper dependencies')
+        tool, libraries = copy.deepcopy(catalog['runtime']), []
+    else:
+        tool = add(helper, 'forge/oot3d_native_nri_pipeline_prepare' + suffix,
+                   'shader_preparation_tool')
+        libraries = [add(path, 'forge/' + path.name, 'forge_runtime_module') for path in dependencies]
     result = copy.deepcopy(catalog)
     for title in result['titles']:
         if 'renderer_shader_preparation' not in title:
@@ -174,5 +191,6 @@ def bind_shader_corpus(catalog: dict, pack: Path, manifests: list[Path],
         # startup program parts, so the first launch does not wait for them.
         title['device_pipeline_preparation'] = dict(format=DEVICE_FORMAT,
             helper=copy.deepcopy(tool), manifests=copy.deepcopy(pipeline_records),
-            dependencies=copy.deepcopy(libraries), startup_programs=True)
+            dependencies=copy.deepcopy(libraries), startup_programs=True,
+            **({'helper_tool_mode': RUNTIME_TOOL_MODE} if helper is None else {}))
     return result, items

@@ -25,6 +25,7 @@ except ImportError:
     from precompiled_titles import checked_file
 
 FORMAT = "triaevum_device_pipeline_preparation_v1"
+RUNTIME_TOOL_MODE = "--pipeline-prepare"
 CACHE_FILENAME = "nri_pipeline_cache.bin"
 
 
@@ -177,6 +178,11 @@ def prepare_device_pipelines(*, root: Path, data_root: Path, title: dict,
     startup_programs = contract.get("startup_programs", False)
     if type(startup_programs) is not bool:
         raise ValueError("Invalid device preparation startup programs")
+    # The game executable as helper (its --pipeline-prepare tool mode): the
+    # driver's per-application pipeline cache is then the game's own.
+    tool_mode = contract.get("helper_tool_mode")
+    if tool_mode not in (None, RUNTIME_TOOL_MODE):
+        raise ValueError("Unsupported device preparation helper tool mode")
     cache = (cache_directory or renderer_cache_directory()).resolve()
     receipts = data_root.resolve() / "shader-seeds" / "device-preparation"
     receipts.mkdir(parents=True, exist_ok=True)
@@ -185,7 +191,7 @@ def prepare_device_pipelines(*, root: Path, data_root: Path, title: dict,
     report("pipelines", "Preparing Vulkan pipelines on this GPU (no game boot)...")
     with tempfile.TemporaryDirectory(prefix=".preparing-", dir=receipts) as temporary:
         stage = Path(temporary)
-        command = [str(helper), "--pack", str(pack),
+        command = [str(helper), *([tool_mode] if tool_mode else []), "--pack", str(pack),
                    "--cache-dir", str(cache), "--report", str(stage / "result.json"),
                    "--cancel-file", str(stage / "cancel"), "--adapter", str(adapter)]
         if title_program_pack is not None:

@@ -236,6 +236,19 @@ fn startup_programs_join_the_same_job_with_a_longer_budget() {
 }
 
 #[test]
+fn the_game_executable_runs_the_job_in_its_tool_mode() {
+    let mut fixture = Fixture::new();
+    fixture.prepare().unwrap();
+    assert_eq!(fixture.services.jobs.borrow()[0].tool_mode, None);
+    fixture.contract().insert("helper_tool_mode".into(), json!("--pipeline-prepare"));
+    assert_eq!(fixture.prepare().unwrap()["device_pipeline_prewarm"], "complete");
+    assert_eq!(fixture.services.jobs.borrow()[1].tool_mode.as_deref(), Some("--pipeline-prepare"));
+    fixture.contract().insert("helper_tool_mode".into(), json!("--anything-else"));
+    assert!(fixture.prepare().unwrap_err().message.contains("tool mode"));
+    assert_eq!(fixture.services.jobs.borrow().len(), 2);
+}
+
+#[test]
 fn ambiguous_or_empty_manifests_do_not_run() {
     let mut fixture = Fixture::new();
     let manifest = fixture.contract()["manifest"].clone();

@@ -440,6 +440,7 @@ mod tests {
             manifests: vec![directory.path().join("pipelines-0.json")],
             startup_programs: true,
             timeout_seconds: 60.0,
+            tool_mode: None,
         };
         let mut messages = Vec::new();
         let status = services

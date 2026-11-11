@@ -24,6 +24,8 @@ use crate::pyerr::{io_failure, load_json_object, open_error, os_error};
 use crate::services::{DeviceJob, NativeServices, Report};
 
 pub const FORMAT: &str = "triaevum_device_pipeline_preparation_v1";
+/// The game executable's device pipeline tool mode (oot3d_native_game.cpp).
+pub const RUNTIME_TOOL_MODE: &str = "--pipeline-prepare";
 /// The renderer's NRI pipeline cache file of a title without a namespace
 /// (`Renderer3ds::kNriPipelineCacheFilename`).
 pub const CACHE_FILENAME: &str = "nri_pipeline_cache.bin";
@@ -371,6 +373,12 @@ pub fn prepare_title_device_pipelines(
         Some(Value::Bool(flag)) => *flag,
         Some(_) => return Err(contract("Invalid device preparation startup programs")),
     };
+    // The game executable as helper: only its known tool mode.
+    let tool_mode = match fields.get("helper_tool_mode") {
+        None => None,
+        Some(Value::String(mode)) if mode == RUNTIME_TOOL_MODE => Some(mode.clone()),
+        Some(_) => return Err(contract("Unsupported device preparation helper tool mode")),
+    };
     let cache = match cache_directory {
         Some(directory) => resolve(directory)?,
         None => resolve(&renderer_cache_directory()?)?,
@@ -399,6 +407,7 @@ pub fn prepare_title_device_pipelines(
         manifests: manifests.clone(),
         startup_programs,
         timeout_seconds: if startup_programs { STARTUP_PROGRAMS_TIMEOUT_SECONDS } else { TIMEOUT_SECONDS },
+        tool_mode,
     };
     let outcome =
         services.prepare_device_pipelines(&job, cancel, &mut *report).and_then(|status| evaluate(status, &job));

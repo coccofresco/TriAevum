@@ -360,6 +360,14 @@ std::optional<int> RunTriAevumToolMode(int argc, char** argv) {
         WriteTriAevumProductInfo(std::cout);
         return 0;
     }
+#if defined(TRIAEVUM_RUNTIME_PIPELINE_PREPARE)
+    // Forge's device pipeline job, run by the game executable itself: the
+    // driver's own per-application pipeline cache then serves the game's
+    // first launch (the separate helper warms only the helper's). The rest of
+    // the command line is the helper's (triaevum_nri_pipeline_prepare).
+    if (argc >= 2 && std::string_view(argv[1]) == "--pipeline-prepare")
+        return TriAevumPipelinePrepareMain(argc - 1, argv + 1);
+#endif
     return std::nullopt;
 }
 

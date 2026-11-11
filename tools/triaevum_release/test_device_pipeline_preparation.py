@@ -85,6 +85,18 @@ class DevicePreparationTests(unittest.TestCase):
             with self.assertRaises(ValueError): self.prepare()
             self.assertEqual(run.call_count, 1)
 
+    def test_the_game_executable_runs_the_job_in_its_tool_mode(self):
+        with patch("device_pipeline_preparation._run", side_effect=self.fake_run) as run:
+            self.prepare()
+            self.assertNotIn("--pipeline-prepare", run.call_args.args[0])
+            self.title["device_pipeline_preparation"]["helper_tool_mode"] = "--pipeline-prepare"
+            self.assertEqual(self.prepare()["device_pipeline_prewarm"], "complete")
+            self.assertEqual(run.call_args.args[0][1], "--pipeline-prepare")
+        self.title["device_pipeline_preparation"]["helper_tool_mode"] = "--anything-else"
+        with patch("device_pipeline_preparation._run") as run:
+            with self.assertRaisesRegex(ValueError, "tool mode"): self.prepare()
+            run.assert_not_called()
+
     def test_startup_programs_join_the_same_job_with_a_longer_budget(self):
         with patch("device_pipeline_preparation._run", side_effect=self.fake_run) as run:
             self.prepare()

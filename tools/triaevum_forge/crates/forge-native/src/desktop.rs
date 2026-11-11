@@ -118,8 +118,12 @@ impl NativeServices for DesktopServices {
     }
 
     fn prepare_device_pipelines(&self, job: &DeviceJob, cancel: &CancelToken, report: Report<'_>) -> Result<i64> {
+        let mut arguments = job.arguments();
+        if let Some(mode) = &job.tool_mode {
+            arguments.insert(0, mode.into());
+        }
         run_device_helper(
-            &program(&job.helper, job.arguments()),
+            &program(&job.helper, arguments),
             &job.root,
             &job.stage,
             cancel,

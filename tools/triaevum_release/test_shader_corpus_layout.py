@@ -83,6 +83,22 @@ class ShaderCorpusLayoutTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     prepare_shader_seed(root=package, data_root=package / 'data', title=catalog['titles'][0])
 
+    def test_game_executable_as_pipeline_helper(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            pack, manifest, helper = self.fixture(root)
+            runtime = {'path': 'TriAevum.exe', 'sha256': '0' * 64, 'bytes': 1}
+            catalog = dict(target=WINDOWS.target, runtime=runtime,
+                           titles=[dict(recipe='eur', renderer_shader_preparation={'compiler': {}})])
+            bound, items = self.bind(catalog, pack, [manifest], None)
+            device = bound['titles'][0]['device_pipeline_preparation']
+            self.assertEqual(device['helper'], runtime)
+            self.assertEqual(device['helper_tool_mode'], '--pipeline-prepare')
+            self.assertEqual(device['dependencies'], [])
+            self.assertNotIn('shader_preparation_tool', {item['role'] for item in items})
+            separate, _ = self.bind(catalog, pack, [manifest], helper)
+            self.assertNotIn('helper_tool_mode', separate['titles'][0]['device_pipeline_preparation'])
+
     def test_driver_cache_and_mismatching_schema_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

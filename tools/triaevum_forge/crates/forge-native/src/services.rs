@@ -181,6 +181,11 @@ pub struct DeviceJob {
     pub manifests: Vec<PathBuf>,
     pub startup_programs: bool,
     pub timeout_seconds: f64,
+    /// The helper is the game executable itself, run in this tool mode
+    /// (`--pipeline-prepare`), so the driver's per-application pipeline cache
+    /// is warmed for the program the player launches. A desktop process takes
+    /// it as its first argument; the Android library runs the tool in process.
+    pub tool_mode: Option<String>,
 }
 
 impl DeviceJob {

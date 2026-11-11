@@ -291,7 +291,8 @@ def prepare(args) -> dict:
         [artifacts["shaderc_shared.dll"]])
     layout["files"].extend(shader_files)
     catalog, corpus_files = bind_shader_corpus(catalog, args.shader_pack,
-        args.pipeline_manifest, args.pipeline_helper, qualification=args.shader_qualification,
+        args.pipeline_manifest, None if args.pipeline_helper_runtime else args.pipeline_helper,
+        qualification=args.shader_qualification,
         source_root=ROOT)
     layout["files"].extend(corpus_files)
     # The release's own interior-sun and scene-light results for the supported
@@ -379,7 +380,12 @@ def main() -> int:
     parser.add_argument("--pipeline-manifest", type=Path, action="append", required=True)
     parser.add_argument("--shader-qualification", type=Path, required=True,
                         help="qualification.json written by regenerate_shader_corpus.py with the pack")
-    parser.add_argument("--pipeline-helper", type=Path, required=True)
+    helpers = parser.add_mutually_exclusive_group(required=True)
+    helpers.add_argument("--pipeline-helper", type=Path,
+                         help="The separate device pipeline helper (triaevum_nri_pipeline_prepare)")
+    helpers.add_argument("--pipeline-helper-runtime", action="store_true",
+                         help="The game executable runs the device job (--pipeline-prepare), so the "
+                              "driver's per-application cache is warmed for the game itself")
     parser.add_argument("--precomputed", type=Path,
                         help="Publisher directory from precomputed_tables (interior-sun.masks, scene-lights.json)")
     args = parser.parse_args()

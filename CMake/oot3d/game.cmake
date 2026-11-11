@@ -286,6 +286,23 @@ target_sources(oot3d_native_game PRIVATE
     tools/oot3d/native_game_runtime/triaevum_data_routing.cpp
     tools/oot3d/native_game_runtime/triaevum_early_log.cpp
 )
+if(NOT ANDROID)
+    # Forge's device pipeline job runs in the game executable (--pipeline-prepare):
+    # NVIDIA's driver keeps pipeline-library parts in a per-application cache,
+    # so parts the separate helper created were not reused by the game's first
+    # launch. Android already runs the helper in process (ports/android/runtime).
+    set(_triaevum_pipeline_prepare "${CMAKE_CURRENT_SOURCE_DIR}/tools/renderer/pipeline_prepare/main.cpp")
+    target_sources(oot3d_native_game PRIVATE "${_triaevum_pipeline_prepare}")
+    set_source_files_properties("${_triaevum_pipeline_prepare}" TARGET_DIRECTORY oot3d_native_game
+        PROPERTIES COMPILE_DEFINITIONS "TRIAEVUM_TOOL_LIBRARY;ENABLE_RENDERER3DS_VULKAN;ENABLE_RENDERER3DS_NRI")
+    set_source_files_properties(tools/oot3d/native_game_runtime/oot3d_native_game.cpp TARGET_DIRECTORY oot3d_native_game
+        APPEND PROPERTY COMPILE_DEFINITIONS TRIAEVUM_RUNTIME_PIPELINE_PREPARE)
+    target_include_directories(oot3d_native_game PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/renderer/pipeline_prepare"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tools/oot3d/native_pica_frontend")
+    # The helper uses the renderer's NRI/Vulkan interfaces (as ports/android/runtime).
+    target_link_libraries(oot3d_native_game PRIVATE NRI)
+endif()
 # The product whose icon the executable carries: oot3d (TriAevum's game icon,
 # the default and the dual-title developer build) or mm3d (the MM3D product,
 # titles/mm3d/branding). Only the icon resource depends on it.
