@@ -165,6 +165,16 @@ struct Options {
     // Only the vertex donors of the recorded draws, for cache programs (EoT's
     // sources: the cache alone), on a title with several vertex programs.
     bool SynthesizeRecordedDonors = false;
+    // Synthesized programs contribute their NRI fragment module only (MC's renderer path).
+    bool SynthesizeNriOnly = false;
+    // Cache programs the sessions already drew are not synthesized again.
+    bool SynthesizeCacheUncovered = false;
+    // A cache program is resolved only under the N context classes the
+    // sessions drew most often per target effects (0: every class).
+    unsigned SynthesizeCacheContexts = 0;
+    // Recorded requests with one dynamic per-draw semantic flipped
+    // (kInferredSemantics names), added to the inventory (NRI module).
+    std::vector<std::string> Neighbours;
     bool RequireWitness = false;
     // Recover only output-equivalent legacy contexts, never synthesize new
     // coverage from unknown inputs. Original witnesses remain mandatory.
@@ -433,6 +443,8 @@ int Run(const Options& options) {
     }
     // Effects text -> context classes recorded under those effects.
     std::map<std::string, std::map<std::string, PicaShaderPipelineRequest>> contexts;
+    std::map<std::string, std::map<std::string, uint64_t>> contextUses;
+    uint64_t neighbourResolves = 0, neighbourModules = 0, cacheCovered = 0;
     std::optional<Oot3dPicaDrawPacket> donor;
     Oot3dPicaTevMode donorTevMode = Oot3dPicaTevMode::Specialized;
     bool donorUberFragments = false;
@@ -516,7 +528,7 @@ int Run(const Options& options) {
                 donorTevMode = shaderCache.TevMode;
                 donorUberFragments = raw.UberFragments;
             }
-            if (options.SynthesizeRecorded) {
+            if (options.SynthesizeRecorded || options.SynthesizeCacheUncovered) {
                 for (const auto& draw : raw.Draws) {
                     Oot3dPicaDrawPacket alone;
                     alone.Registers = draw.Packet.Registers;
@@ -527,7 +539,8 @@ int Run(const Options& options) {
                                                          Oot3dPicaShaderBuildPurpose::OfflineSource))
                         continue;  // counted as a source failure if synthesis meets it again
                     const auto id = Oot3d::Renderer::IdentifyPicaShaderSource(aloneShader.Source);
-                    if (recordedProgramIds.insert({id.Id, id.SecondaryHash, id.Size}).second)
+                    if (recordedProgramIds.insert({id.Id, id.SecondaryHash, id.Size}).second &&
+                        options.SynthesizeRecorded)
                         recordedPrograms.push_back(draw.Packet);
                 }
             }
@@ -541,8 +554,9 @@ int Run(const Options& options) {
                 const auto effects = targeted.find(record.EffectsId);
                 if (effects == targeted.end()) continue;
                 const auto context = ContextOf(record.Request);
-                contexts[effects->second].try_emplace(
-                    Fast::Extension::EncodePicaVariantRequest(0U, 0U, 0U, context, {}).dump(), context);
+                auto key = Fast::Extension::EncodePicaVariantRequest(0U, 0U, 0U, context, {}).dump();
+                ++contextUses[effects->second][key];
+                contexts[effects->second].try_emplace(std::move(key), context);
             }
         }
 
@@ -661,6 +675,40 @@ int Run(const Options& options) {
             recipeLinks[recorded].insert(current);
             regeneratedByIdentity.insert_or_assign(current, regenerated);
         }
+        for (const auto& name : options.Neighbours) {
+            const auto* semantic = std::find_if(std::begin(kInferredSemantics), std::end(kInferredSemantics),
+                                                [&](const auto& item) { return name == item.Name; });
+            if (semantic == std::end(kInferredSemantics)) throw std::runtime_error("unknown --neighbour " + name);
+            for (const auto* record : ordered) {
+                const auto plan = plans.find(record->CanonicalPipelineId);
+                if (plan == plans.end()) continue;
+                auto request = bind(*record, plan->second);
+                semantic->Apply(request);
+                cache.BeginFrame(record->EffectsId);
+                const Fast::Extension::PicaShaderPipelineResult* result = nullptr;
+                try {
+                    result = &cache.Resolve(request, requests.Effects.at(record->EffectsId));
+                } catch (const std::exception&) {
+                    continue;
+                }
+                ++neighbourResolves;
+                countUber(uberCounts, *result, plan->second);
+                const auto schema = plan->second.DescriptorSchemaVersion;
+                const auto observe = [&](uint32_t stage, Fast::Extension::PicaAotShaderStage aot, std::string_view source,
+                                         uint64_t key) {
+                    if (observedModules.insert({stage, Fast::Extension::IdentifyPicaAotShaderSource(source).Id}).second)
+                        ++neighbourModules;
+                    inventory.Observe(aot, source, schema, record->CanonicalPipelineId, key, record->SettingsRevision);
+                };
+                observe(1U, Fast::Extension::PicaAotShaderStage::Vertex, result->VertexShaderSource, result->VertexShaderKey);
+                if (const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(result->FragmentShaderSource);
+                    nri.Applied)
+                    observe(3U, Fast::Extension::PicaAotShaderStage::NriFragment, nri.Source, result->FragmentShaderKey);
+                else
+                    observe(2U, Fast::Extension::PicaAotShaderStage::Fragment, result->FragmentShaderSource,
+                            result->FragmentShaderKey);
+            }
+        }
         if (!options.InferReport.empty()) {
             for (const auto& semantic : kInferredSemantics) {
                 auto& entry = inferred[semantic.Name];
@@ -736,8 +784,18 @@ int Run(const Options& options) {
                 for (const auto& [key, context] : classes) trace << Json{{"context", key}}.dump() << '\n';
         }
         // One program source (a cache record's or a recorded draw's registers).
+        // The cache programs' context classes: the N most used per effects.
+        std::map<std::string, std::set<std::string>> cacheContexts;
+        for (const auto& [text, uses] : contextUses) {
+            std::vector<std::pair<uint64_t, std::string>> ranked;
+            for (const auto& [key, count] : uses) ranked.push_back({count, key});
+            std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+            for (size_t index = 0; index < ranked.size() &&
+                 (options.SynthesizeCacheContexts == 0U || index < options.SynthesizeCacheContexts); ++index)
+                cacheContexts[text].insert(ranked[index].second);
+        }
         const auto synthesizeProgram = [&](const std::array<uint32_t, 0x300>& registers,
-                                           const Oot3dPicaDrawPacket& donorPacket) {
+                                           const Oot3dPicaDrawPacket& donorPacket, bool fromCache = false) {
             {
                 const struct { const std::array<uint32_t, 0x300>& Registers; } record{registers};
                 ++records;
@@ -754,6 +812,11 @@ int Run(const Options& options) {
                 }
                 const auto program = Oot3d::Renderer::IdentifyPicaShaderSource(aloneShader.Source);
                 const bool recordRasterDepth = Oot3dPicaFragmentDepthIsRasterDepth(aloneState);
+                if (fromCache && options.SynthesizeCacheUncovered &&
+                    recordedProgramIds.contains({program.Id, program.SecondaryHash, program.Size})) {
+                    ++cacheCovered;
+                    return;
+                }
                 if (!programs.insert({program.Id, program.SecondaryHash, program.Size}).second) {
                     ++duplicates;
                     return;
@@ -807,6 +870,7 @@ int Run(const Options& options) {
                         cache.BeginFrame(++effectsIndex);
                         for (const auto& [key, context] : contexts[text]) {
                             ++contextIndex;
+                            if (fromCache && !cacheContexts[text].contains(key)) continue;
                             auto request = BindCanonical(context, canonical);
                             AssignOutputMergerState(request, plan.State.OutputMerger);
                             ++resolves;
@@ -826,9 +890,13 @@ int Run(const Options& options) {
                             };
                             observe(1U, Fast::Extension::PicaAotShaderStage::Vertex, result->VertexShaderSource,
                                     result->VertexShaderKey);
-                            observe(2U, Fast::Extension::PicaAotShaderStage::Fragment, result->FragmentShaderSource,
-                                    result->FragmentShaderKey);
                             const auto nri = Fast::Extension::BuildPicaNriFragmentShaderVariant(result->FragmentShaderSource);
+                            // The combined-sampler fragment module serves only the non-NRI
+                            // fallback and recipe prewarm; a synthesized program has no
+                            // recipe, so with --synthesize-nri-only an NRI module replaces it.
+                            if (!options.SynthesizeNriOnly || !nri.Applied)
+                                observe(2U, Fast::Extension::PicaAotShaderStage::Fragment, result->FragmentShaderSource,
+                                        result->FragmentShaderKey);
                             if (nri.Applied)
                                 observe(3U, Fast::Extension::PicaAotShaderStage::NriFragment, nri.Source,
                                         result->FragmentShaderKey);
@@ -904,7 +972,7 @@ int Run(const Options& options) {
             for (const auto& record : ReadPicaTransferableCache(stream, PicaTransferableDialect::CitraLegacy))
                 if (record.Stage == PicaTransferableStage::Fragment)
                     synthesizeProgram(record.Registers,
-                                      donorsByUse.empty() ? *cacheDonor : donorFor(record.Registers));
+                                      donorsByUse.empty() ? *cacheDonor : donorFor(record.Registers), true);
         }
         synthesis = {{"caches", options.SynthesizeCaches.size()},
                      {"target_effects", targetEffects.size()},
@@ -924,6 +992,8 @@ int Run(const Options& options) {
                      {"uber_programs", uberCounts},
                      {"rejected", rejected}};
         if (options.SynthesizeRecorded) synthesis["recorded_programs"] = recordedPrograms.size();
+        if (options.SynthesizeCacheUncovered) synthesis["cache_programs_covered_by_sessions"] = cacheCovered;
+        if (options.SynthesizeCacheContexts) synthesis["cache_contexts_per_effects"] = options.SynthesizeCacheContexts;
     }
     if (!inventory.Finish(&error)) throw std::runtime_error(error);
 
@@ -986,7 +1056,7 @@ int Run(const Options& options) {
                    {"output_contract_changed", contractChanged}};
     }
 
-    const Json report = {{"format", "oot3d_pica_variant_replay_v1"},
+    Json report = {{"format", "oot3d_pica_variant_replay_v1"},
                          {"sessions", sessions},
                          {"effective_shaders", inventory.EntryCount()},
                          {"recipes", recipes},
@@ -1001,6 +1071,9 @@ int Run(const Options& options) {
                               return samples;
                           }()},
                          {"require_uber", options.RequireUber}};
+    if (!options.Neighbours.empty())
+        report["neighbours"] = {{"semantics", options.Neighbours}, {"resolves", neighbourResolves},
+                                {"new_modules", neighbourModules}};
     std::ofstream(options.Report) << report.dump(2) << '\n';
     if (!options.InferReport.empty()) {
         Json semantics = Json::object();
@@ -1072,6 +1145,14 @@ int main(int argc, char** argv) {
             options.SynthesizeRecorded = true;
         } else if (argument == "--synthesize-recorded-donors") {
             options.SynthesizeRecordedDonors = true;
+        } else if (argument == "--synthesize-nri-only") {
+            options.SynthesizeNriOnly = true;
+        } else if (argument == "--synthesize-cache-uncovered") {
+            options.SynthesizeCacheUncovered = true;
+        } else if (argument == "--synthesize-cache-contexts") {
+            options.SynthesizeCacheContexts = static_cast<unsigned>(std::stoul(next()));
+        } else if (argument == "--neighbour") {
+            options.Neighbours.push_back(next());
         } else if (argument == "--synthesize-effects") {
             options.SynthesizeEffects.push_back(next());
         } else if (argument == "--synthesis-trace") {

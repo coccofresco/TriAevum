@@ -191,6 +191,21 @@ class VariantRecordTests(unittest.TestCase):
         step = next(step for step in receipt["steps"] if "variant_sessions" in step)
         self.assertNotIn("recorded_programs", step["synthesis"])
 
+    def test_replay_options_pass_through_and_cache_import_can_stay_out_of_the_pack(self):
+        cache = self.root / "cache.bin"
+        cache.write_bytes(b"cache")
+        _session(self.root / "product" / "boot")
+        _, output, commands, _ = self._regenerate(
+            [(1, 0x11, 0x12, 13), (2, 0x21, 0x22, 23)], caches=[cache],
+            synthesis_effects=[self.root / "product"],
+            replay_options=["--synthesize-nri-only", "--neighbour", "isolated_lighting"],
+            cache_import_in_pack=False)
+        replay = next(command for command in commands if "--session" in command)
+        at = replay.index("--synthesize-nri-only")
+        self.assertEqual(replay[at:at + 3], ["--synthesize-nri-only", "--neighbour", "isolated_lighting"])
+        compile_command = next(command for command in commands if "--pack" in command)
+        self.assertNotIn(str(output / "cache-0-inventory.json"), compile_command)
+
     def test_recorded_synthesis_without_effects_is_refused(self):
         with self.assertRaisesRegex(RuntimeError, "needs --synthesis-effects"):
             self._regenerate([(1, 0x11, 0x12, 13)], synthesis_recorded=True)

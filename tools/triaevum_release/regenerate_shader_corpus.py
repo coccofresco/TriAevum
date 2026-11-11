@@ -140,7 +140,8 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
                compile_cache: Path | None = None, jobs: int | None = None,
                synthesis_effects: list[Path] | None = None,
                capture_imports: list[tuple[Path, Path]] | None = None,
-               synthesis_recorded: bool = False, synthesis_recorded_donors: bool = False) -> dict:
+               synthesis_recorded: bool = False, synthesis_recorded_donors: bool = False,
+               replay_options: list[str] | None = None, cache_import_in_pack: bool = True) -> dict:
     output.mkdir(parents=True, exist_ok=True)
     suffix = ".exe" if (tools / "oot3d_native_pica_aot_compiler.exe").exists() else ""
     tool = {name: str(tools / f"oot3d_native_pica_{name}{suffix}")
@@ -187,7 +188,10 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
         report = _cache_report(log)
         if code == 3 and any(item["failures"] for item in report["inputs"]):
             raise RuntimeError(f"{cache}: fragment records failed to import; see {log}")
-        inventories.append(inventory)
+        # Its canonical modules carry no effects; a release corpus may keep
+        # only the variants the replay synthesizes from it.
+        if cache_import_in_pack:
+            inventories.append(inventory)
         steps.append({"input": str(cache), "input_sha256": _sha256(cache), "inventory": inventory.name,
                       "complete_import": report["complete_import"],
                       "vertex_records_not_imported": sum(item["vertex_records_not_imported"]
@@ -221,6 +225,7 @@ def regenerate(tools: Path, captures: list[Path], caches: list[Path], output: Pa
             command += ["--synthesize-recorded-donors"]
         for target in targets:
             command += ["--synthesize-effects", str(target["variant_requests"])]
+        command += list(replay_options or [])
         command += ["--shader-inventory", str(shaders), "--pipeline-manifest", str(manifest),
                     "--report", str(report_path), "--require-witness", "--require-uber"]
         # Exit 3: a request or recipe could not be rebuilt; exit 4: a rebuilt
@@ -320,6 +325,11 @@ def main() -> int:
     parser.add_argument("--synthesis-recorded-donors", action="store_true",
                         help="Cache programs borrow a recorded vertex program they compose with (a title with "
                              "several vertex programs, MM3D); the sources stay the caches' programs, as EoT's")
+    parser.add_argument("--replay-option", action="append", default=[],
+                        help="Extra oot3d_native_pica_variant_inventory option, passed through (e.g. "
+                             "--synthesize-nri-only, --synthesize-cache-uncovered, --neighbour=NAME); repeatable")
+    parser.add_argument("--no-cache-import-in-pack", action="store_true",
+                        help="Do not compile the Citra caches' canonical import into the pack")
     parser.add_argument("--output", type=Path, required=True, help="New private output directory")
     parser.add_argument("--compile-cache", type=Path,
                         help="Publisher SPIR-V cache shared between regenerations (private)")
@@ -332,7 +342,9 @@ def main() -> int:
                                 synthesis_effects=args.synthesis_effects,
                                 capture_imports=[tuple(pair) for pair in args.capture_inventory],
                                 synthesis_recorded=args.synthesis_recorded,
-                                synthesis_recorded_donors=args.synthesis_recorded_donors),
+                                synthesis_recorded_donors=args.synthesis_recorded_donors,
+                                replay_options=[part for option in args.replay_option for part in option.split("=", 1)],
+                                cache_import_in_pack=not args.no_cache_import_in_pack),
                      indent=2))
     return 0
 
