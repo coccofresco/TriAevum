@@ -57,6 +57,7 @@ def forge_rustflags() -> str:
 
 
 def recipe(title: str, *, ndk: Path, work: Path, translated_sources: Path, reference_package: Path,
+           a32_registry: Path | None = None,
            source_commit: str, gradle: str = "gradle", windows: bool = os.name == "nt",
            environ: dict | None = None, rustflags: str | None = None) -> list[tuple[str, list[str], dict]]:
     """[(step, argv, extra environment)] for `title`."""
@@ -64,6 +65,11 @@ def recipe(title: str, *, ndk: Path, work: Path, translated_sources: Path, refer
     environ = os.environ if environ is None else environ
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("--source-commit must be a full Git commit ID")
+    # Rule D8: the MM3D runtime compiles the A32 registry a32_generated_overlay_r18 (its
+    # guest-patch and lighting-hook blocks); without it the game stops at start.
+    if title == "mm3d" and a32_registry is None:
+        raise ValueError("the MM3D runtime needs --a32-registry (a32_generated_overlay_r18, rule D8)")
+    registry = [f"-DOOT3D_A32_AOT_GENERATED_DIR={a32_registry}"] if title == "mm3d" else []
     flavor = facts["flavor"][0].upper() + facts["flavor"][1:]
     # Runtime and Forge are per title: the runtime's adapters (runtime_titles)
     # and the Forge's features differ between the products.
@@ -75,7 +81,7 @@ def recipe(title: str, *, ndk: Path, work: Path, translated_sources: Path, refer
     steps = [
         ("runtime configure", cmake_base(ROOT / "ports/android/runtime", runtime, ndk) + [
             f"-DTRIAEVUM_TITLES={';'.join(facts['runtime_titles'])}", f"-DTRIAEVUM_PRODUCT_TITLE={title}",
-            "-DTRIAEVUM_DEVELOPER_TOOLS=OFF"], {}),
+            "-DTRIAEVUM_DEVELOPER_TOOLS=OFF", *registry], {}),
         ("runtime build", ["cmake", "--build", str(runtime), "--target", "oot3d_native_game", "--parallel", "2"], {}),
         ("title configure", cmake_base(ROOT / "ports/android/native", title_build, ndk) + [
             "-DTRIAEVUM_ANDROID_BUILD_NRI=OFF", f"-DTRIAEVUM_ANDROID_TITLE={title}",
@@ -115,6 +121,8 @@ def main(argv=None) -> int:
     parser.add_argument("--ndk", type=Path, required=True)
     parser.add_argument("--work", type=Path, required=True, help="build directory (outside the repository)")
     parser.add_argument("--translated-sources", type=Path, required=True)
+    parser.add_argument("--a32-registry", type=Path,
+                        help="MM3D: the A32 registry directory a32_generated_overlay_r18 (rule D8)")
     parser.add_argument("--reference-package", type=Path, required=True)
     parser.add_argument("--source-commit", required=True)
     parser.add_argument("--gradle", default="gradle")
@@ -123,6 +131,7 @@ def main(argv=None) -> int:
     if args.work.resolve().is_relative_to(ROOT):
         parser.error("--work must be outside the repository")
     steps = recipe(args.title, ndk=args.ndk, work=args.work, translated_sources=args.translated_sources,
+                   a32_registry=args.a32_registry,
                    reference_package=args.reference_package, source_commit=args.source_commit, gradle=args.gradle)
     for step, command, extra in steps:
         prefix = " ".join(f"{key}={shlex.quote(value)}" for key, value in extra.items())

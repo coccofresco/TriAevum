@@ -172,6 +172,7 @@ if (EXISTS "${_oot3d_a32_generated_header}" AND
                 "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/a32/check_registry_boundaries.py"
                 --sites "${_mm3d_guest_patch_sites}"
                 --registry "${_oot3d_a32_generated_registry}"
+                --lighting-sites "${CMAKE_CURRENT_SOURCE_DIR}/titles/mm3d/adapter/mm3d_lighting_hook_sites.h"
             RESULT_VARIABLE _mm3d_registry_check
             OUTPUT_VARIABLE _mm3d_registry_check_out
             ERROR_VARIABLE _mm3d_registry_check_err)
@@ -196,6 +197,12 @@ if (EXISTS "${_oot3d_a32_generated_header}" AND
     target_link_libraries(oot3d_native_a32_aot PUBLIC
         oot3d_native_a32_runtime)
     oot3d_target_defaults(oot3d_native_a32_aot FOLDER Tools)
+elseif (TRIAEVUM_PRODUCT_TITLE STREQUAL "mm3d" AND NOT TRIAEVUM_DEVELOPER_TOOLS)
+    # Without a generated registry Oot3dNativeA32Registry() is empty and the MM3D
+    # product stops at start ("MM3D lighting: wrong image or missing observer
+    # block"); refuse the configuration instead of shipping it (rule D8).
+    message(FATAL_ERROR "MM3D product runtime needs the rule-D8 A32 registry: set "
+        "OOT3D_A32_AOT_GENERATED_DIR to a32_generated_overlay_r18 (missing: ${_oot3d_a32_generated_registry})")
 endif()
 
 add_executable(oot3d_native_a32_runtime_tests EXCLUDE_FROM_ALL

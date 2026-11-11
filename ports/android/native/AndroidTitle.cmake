@@ -4,8 +4,9 @@
 # (tools/triaevum_release/whole_aot_plugin_backend.py: the wrapper in
 # tools/oot3d/native_game_runtime and OOT3D_NATIVE_GENERATED_WHOLE_AOT=1); a
 # title differs only by its verified translated sources, which are the desktop
-# release's (for MM3D the a32_generated_overlay_r18 registry, rule D8, is part
-# of those sources and is never regenerated here). The default oot3d leaves the
+# release's. The MM3D A32 registry (a32_generated_overlay_r18, rule D8) is NOT
+# part of them: the runtime compiles it (OOT3D_A32_AOT_GENERATED_DIR, passed by
+# tools/android/android_release.py --a32-registry). The default oot3d leaves the
 # Echoes of Time build unchanged.
 set(TRIAEVUM_ANDROID_TITLES oot3d mm3d)
 

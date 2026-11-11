@@ -10,6 +10,7 @@ from android_release import SIGNING_VARIABLES, main, recipe  # noqa: E402
 
 ARGS = dict(ndk=Path("/ndk"), work=Path("/work"), translated_sources=Path("/sources"),
             reference_package=Path("/reference"), source_commit="a" * 40, windows=False,
+            a32_registry=Path("/overlay_r18"),
             rustflags="-C\x1flink-arg=-Wl,-z,max-page-size=16384")
 
 
@@ -28,6 +29,12 @@ class AndroidReleaseRecipeTests(unittest.TestCase):
         package = result["forge package"][0]
         self.assertEqual(package[package.index("--title") + 1], "mm3d")
         self.assertNotIn("--sign", package)
+
+    def test_mc_runtime_compiles_the_rule_d8_registry(self):
+        self.assertIn(f"-DOOT3D_A32_AOT_GENERATED_DIR={Path('/overlay_r18')}", steps("mm3d")["runtime configure"][0])
+        self.assertFalse(any("OOT3D_A32_AOT_GENERATED_DIR" in arg for arg in steps("oot3d")["runtime configure"][0]))
+        with self.assertRaisesRegex(ValueError, "a32-registry"):
+            recipe("mm3d", environ={}, **dict(ARGS, a32_registry=None))
 
     def test_eot_recipe_has_no_forge_features(self):
         result = steps("oot3d")
