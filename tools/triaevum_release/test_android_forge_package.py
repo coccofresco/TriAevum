@@ -309,5 +309,47 @@ class AndroidForgePackageSignatureTests(unittest.TestCase):
                 sign_android_package(fixture.output / ASSET_ROOT, root / "keys/other.pem")
 
 
+class ShaderCorpusSubstitutionTests(unittest.TestCase):
+    def test_android_corpus_replaces_the_reference_corpus_in_data_and_catalog(self):
+        from unittest.mock import patch
+        import android_forge_package as module
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            corpus = root / "android"
+            corpus.mkdir()
+            for name, content in zip(module.CORPUS_FILES, (b"pack", b"{}", b"{}")):
+                (corpus / name).write_bytes(content)
+            old = root / "old.o3ps"
+            old.write_bytes(b"old")
+            data = {"forge/shader-corpus/portable.o3ps": ({"path": "forge/shader-corpus/portable.o3ps",
+                                                          "role": "portable_shader_corpus"}, old),
+                    "forge/shader-corpus/pipelines-1.json": ({"path": "forge/shader-corpus/pipelines-1.json",
+                                                             "role": "portable_pipeline_recipes"}, old),
+                    "data/other.bin": ({"path": "data/other.bin", "role": "revision_recipe"}, old)}
+            result = {"titles": [{"shader_preparation": {"mode": "portable_pack", "descriptor_schema_version": 2},
+                                  "device_pipeline_preparation": {"manifests": [{}, {}]}}]}
+            seen = {}
+            with patch.object(module, "read_portable_corpus", return_value=(3, None)), \
+                    patch.object(module, "read_pipeline_manifest", return_value={}), \
+                    patch.object(module, "validate_qualification",
+                                 side_effect=lambda record, **kwargs: seen.update(kwargs)):
+                module.substitute_shader_corpus(result, data, corpus, root)
+            self.assertEqual(sorted(data), ["data/other.bin", "forge/shader-corpus/pipelines-0.json",
+                                            "forge/shader-corpus/portable.o3ps", module.QUALIFICATION_PATH])
+            self.assertEqual(data["forge/shader-corpus/portable.o3ps"][1], corpus / "expanded-union.o3ps")
+            title = result["titles"][0]
+            self.assertEqual(title["shader_preparation"]["descriptor_schema_version"], 3)
+            self.assertEqual(title["shader_preparation"]["pack"]["sha256"],
+                             data["forge/shader-corpus/portable.o3ps"][0]["sha256"])
+            self.assertEqual(len(title["device_pipeline_preparation"]["manifests"]), 1)
+            self.assertEqual(seen["pack_sha256"], title["shader_preparation"]["pack"]["sha256"])
+
+    def test_missing_corpus_file_is_refused(self):
+        import android_forge_package as module
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "lacks"):
+                module.substitute_shader_corpus({"titles": []}, {}, Path(directory), Path(directory))
+
+
 if __name__ == "__main__":
     unittest.main()

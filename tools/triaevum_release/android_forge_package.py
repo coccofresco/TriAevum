@@ -24,6 +24,8 @@ try:
     from .precompiled_title_layout import artifact
     from .release_platform import ANDROID
     from . import release_signature
+    from .shader_corpus_layout import QUALIFICATION_PATH, read_pipeline_manifest, read_portable_corpus
+    from .shader_corpus_qualification import repository_reader, validate_qualification
 except ImportError:
     from audit_release import DEFAULT_POLICY, build_machine_path
     from common import atomic_write_json, load_json_object, normalize_relative_path, release_manifest_path, sha256_file
@@ -31,6 +33,8 @@ except ImportError:
     from precompiled_title_layout import artifact
     from release_platform import ANDROID
     import release_signature
+    from shader_corpus_layout import QUALIFICATION_PATH, read_pipeline_manifest, read_portable_corpus
+    from shader_corpus_qualification import repository_reader, validate_qualification
 
 
 ASSET_ROOT = "forge-package"
@@ -175,8 +179,47 @@ def _reference_data(reference_root: Path) -> dict[str, tuple[dict, Path]]:
     return data
 
 
+CORPUS_ROLES = ("portable_shader_corpus", "portable_pipeline_recipes", "portable_shader_qualification")
+CORPUS_FILES = ("expanded-union.o3ps", "runtime-pipelines.json", "qualification.json")
+
+
+def substitute_shader_corpus(result: dict, data: dict, corpus: Path, source_root: Path) -> dict:
+    """The Android corpus in place of the reference's (a per-platform pack: Android's
+    preset and capability set differ from the desktop's). The corpus directory holds
+    the three files regenerate_shader_corpus wrote; its qualification must validate
+    against source_root (the sources of this package), as prepare_release requires."""
+    pack, manifest, qualification = (corpus / name for name in CORPUS_FILES)
+    for path in (pack, manifest, qualification):
+        if not path.is_file() or path.is_symlink():
+            raise ValueError(f"Android shader corpus lacks {path.name}")
+    schema, _ = read_portable_corpus(pack)
+    read_pipeline_manifest(manifest, schema)
+    records = {
+        "pack": dict(artifact(pack, "forge/shader-corpus/portable.o3ps"), role="portable_shader_corpus"),
+        "manifest": dict(artifact(manifest, "forge/shader-corpus/pipelines-0.json"), role="portable_pipeline_recipes"),
+        "qualification": dict(artifact(qualification, QUALIFICATION_PATH), role="portable_shader_qualification"),
+    }
+    validate_qualification(load_json_object(qualification), pack_sha256=records["pack"]["sha256"],
+                           manifest_sha256=[records["manifest"]["sha256"]], read=repository_reader(source_root))
+    for relative in [path for path, (record, _) in data.items() if record["role"] in CORPUS_ROLES]:
+        del data[relative]
+    sources = {"pack": pack, "manifest": manifest, "qualification": qualification}
+    for key, record in records.items():
+        data[record["path"]] = ({k: record[k] for k in ("path", "role", "sha256", "bytes")}, sources[key])
+    catalog = lambda key: {k: v for k, v in records[key].items() if k != "role"}
+    for title in result["titles"]:
+        seed = title.get("shader_preparation")
+        device = title.get("device_pipeline_preparation")
+        if not isinstance(seed, dict) or seed.get("mode") != "portable_pack" or not isinstance(device, dict):
+            raise ValueError("The reference title has no bundled corpus to substitute")
+        seed.update(descriptor_schema_version=schema, pack=catalog("pack"), qualification=catalog("qualification"))
+        device["manifests"] = [catalog("manifest")]
+    return records
+
+
 def create_package(reference_root: Path, native_stage: Path, output: Path, *, source_commit: str,
-                   title: str | None = None) -> dict:
+                   title: str | None = None, shader_corpus: Path | None = None,
+                   source_root: Path | None = None) -> dict:
     if len(source_commit) != 40 or any(c not in "0123456789abcdef" for c in source_commit):
         raise ValueError("Platform source commit must be a full Git commit ID")
     libraries = native_stage / "arm64-v8a"
@@ -220,6 +263,10 @@ def create_package(reference_root: Path, native_stage: Path, output: Path, *, so
                 title[key].update(compiler=runtime_record, dependencies=[])
         if "device_pipeline_preparation" in title:
             title["device_pipeline_preparation"].update(helper=runtime_record, dependencies=[])
+    if shader_corpus is not None:
+        if source_root is None:
+            raise ValueError("--shader-corpus needs --source-root (the package's sources, for its qualification)")
+        substitute_shader_corpus(result, data, shader_corpus, source_root)
 
     # Every file the catalog names is either an APK library, corresponding
     # source published beside the APK, or a verified data file copied here.
@@ -316,6 +363,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--title", choices=TITLES,
                         help="the product of the APK; the reference release must be that title's")
+    parser.add_argument("--shader-corpus", type=Path,
+                        help="Android shader corpus directory (expanded-union.o3ps, runtime-pipelines.json, "
+                             "qualification.json) replacing the reference package's desktop corpus")
+    parser.add_argument("--source-root", type=Path,
+                        help="source tree of --source-commit, against which --shader-corpus is qualified")
     parser.add_argument("--sign", action="store_true",
                         help=f"sign the inventory with the key named by ${release_signature.KEY_VARIABLE}")
     args = parser.parse_args()
@@ -323,7 +375,8 @@ def main():
     if args.sign and not key:
         parser.error(f"--sign needs ${release_signature.KEY_VARIABLE}")
     inventory = create_package(args.reference_package, args.native_stage, args.output,
-                               source_commit=args.source_commit, title=args.title)
+                               source_commit=args.source_commit, title=args.title,
+                               shader_corpus=args.shader_corpus, source_root=args.source_root)
     print(f"{args.output / ASSET_ROOT}: {len(inventory['files'])} data files")
     if args.sign:
         print(sign_android_package(args.output / ASSET_ROOT, Path(key)))
