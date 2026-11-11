@@ -172,6 +172,8 @@ struct Options {
     // A cache program is resolved only under the N context classes the
     // sessions drew most often per target effects (0: every class).
     unsigned SynthesizeCacheContexts = 0;
+    // The same bound for the recorded programs (--synthesize-recorded).
+    unsigned SynthesizeRecordedContexts = 0;
     // Recorded requests with one dynamic per-draw semantic flipped
     // (kInferredSemantics names), added to the inventory (NRI module).
     std::vector<std::string> Neighbours;
@@ -785,14 +787,21 @@ int Run(const Options& options) {
         }
         // One program source (a cache record's or a recorded draw's registers).
         // The cache programs' context classes: the N most used per effects.
-        std::map<std::string, std::set<std::string>> cacheContexts;
+        std::map<std::string, std::set<std::string>> cacheContexts, recordedContexts;
+        Json contextRanking = Json::array();
         for (const auto& [text, uses] : contextUses) {
             std::vector<std::pair<uint64_t, std::string>> ranked;
             for (const auto& [key, count] : uses) ranked.push_back({count, key});
             std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-            for (size_t index = 0; index < ranked.size() &&
-                 (options.SynthesizeCacheContexts == 0U || index < options.SynthesizeCacheContexts); ++index)
-                cacheContexts[text].insert(ranked[index].second);
+            Json counts = Json::array();
+            for (size_t index = 0; index < ranked.size(); ++index) {
+                counts.push_back(ranked[index].first);
+                if (options.SynthesizeCacheContexts == 0U || index < options.SynthesizeCacheContexts)
+                    cacheContexts[text].insert(ranked[index].second);
+                if (options.SynthesizeRecordedContexts == 0U || index < options.SynthesizeRecordedContexts)
+                    recordedContexts[text].insert(ranked[index].second);
+            }
+            contextRanking.push_back(std::move(counts));
         }
         const auto synthesizeProgram = [&](const std::array<uint32_t, 0x300>& registers,
                                            const Oot3dPicaDrawPacket& donorPacket, bool fromCache = false) {
@@ -870,7 +879,7 @@ int Run(const Options& options) {
                         cache.BeginFrame(++effectsIndex);
                         for (const auto& [key, context] : contexts[text]) {
                             ++contextIndex;
-                            if (fromCache && !cacheContexts[text].contains(key)) continue;
+                            if (!(fromCache ? cacheContexts : recordedContexts)[text].contains(key)) continue;
                             auto request = BindCanonical(context, canonical);
                             AssignOutputMergerState(request, plan.State.OutputMerger);
                             ++resolves;
@@ -994,6 +1003,10 @@ int Run(const Options& options) {
         if (options.SynthesizeRecorded) synthesis["recorded_programs"] = recordedPrograms.size();
         if (options.SynthesizeCacheUncovered) synthesis["cache_programs_covered_by_sessions"] = cacheCovered;
         if (options.SynthesizeCacheContexts) synthesis["cache_contexts_per_effects"] = options.SynthesizeCacheContexts;
+        if (options.SynthesizeRecordedContexts)
+            synthesis["recorded_contexts_per_effects"] = options.SynthesizeRecordedContexts;
+        if (options.SynthesizeCacheContexts || options.SynthesizeRecordedContexts)
+            synthesis["context_uses_ranked"] = contextRanking;
     }
     if (!inventory.Finish(&error)) throw std::runtime_error(error);
 
@@ -1151,6 +1164,8 @@ int main(int argc, char** argv) {
             options.SynthesizeCacheUncovered = true;
         } else if (argument == "--synthesize-cache-contexts") {
             options.SynthesizeCacheContexts = static_cast<unsigned>(std::stoul(next()));
+        } else if (argument == "--synthesize-recorded-contexts") {
+            options.SynthesizeRecordedContexts = static_cast<unsigned>(std::stoul(next()));
         } else if (argument == "--neighbour") {
             options.Neighbours.push_back(next());
         } else if (argument == "--synthesize-effects") {
