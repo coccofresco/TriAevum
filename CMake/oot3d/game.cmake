@@ -295,7 +295,8 @@ if(NOT ANDROID)
     target_sources(oot3d_native_game PRIVATE "${_triaevum_pipeline_prepare}")
     set_source_files_properties("${_triaevum_pipeline_prepare}" TARGET_DIRECTORY oot3d_native_game
         PROPERTIES COMPILE_DEFINITIONS "TRIAEVUM_TOOL_LIBRARY;ENABLE_RENDERER3DS_VULKAN;ENABLE_RENDERER3DS_NRI")
-    set_source_files_properties(tools/oot3d/native_game_runtime/oot3d_native_game.cpp TARGET_DIRECTORY oot3d_native_game
+    # set_source_files_properties has no APPEND form; set_property appends.
+    set_property(SOURCE tools/oot3d/native_game_runtime/oot3d_native_game.cpp TARGET_DIRECTORY oot3d_native_game
         APPEND PROPERTY COMPILE_DEFINITIONS TRIAEVUM_RUNTIME_PIPELINE_PREPARE)
     target_include_directories(oot3d_native_game PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/tools/renderer/pipeline_prepare"
