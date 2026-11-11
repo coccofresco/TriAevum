@@ -174,6 +174,8 @@ struct Options {
     unsigned SynthesizeCacheContexts = 0;
     // The same bound for the recorded programs (--synthesize-recorded).
     unsigned SynthesizeRecordedContexts = 0;
+    // Only the depth form the program source itself has (not both forms).
+    bool SynthesizeOwnDepthOnly = false;
     // Recorded requests with one dynamic per-draw semantic flipped
     // (kInferredSemantics names), added to the inventory (NRI module).
     std::vector<std::string> Neighbours;
@@ -835,6 +837,7 @@ int Run(const Options& options) {
                 // (Oot3dPicaFragmentDepthIsRasterDepth), and the record holds
                 // the viewport of one draw only: emit both depth forms.
                 for (const bool rasterDepth : {true, false}) {
+                    if (options.SynthesizeOwnDepthOnly && rasterDepth != recordRasterDepth) continue;
                     const auto depthForm = [rasterDepth](Oot3dPicaDrawPacket& packet) {
                         packet.Registers[0x04DU] = 0xBF0000U;  // depth range -1.0 (float24)
                         packet.Registers[0x04EU] = 0U;         // near plane 0.0
@@ -1164,6 +1167,8 @@ int main(int argc, char** argv) {
             options.SynthesizeCacheUncovered = true;
         } else if (argument == "--synthesize-cache-contexts") {
             options.SynthesizeCacheContexts = static_cast<unsigned>(std::stoul(next()));
+        } else if (argument == "--synthesize-own-depth-only") {
+            options.SynthesizeOwnDepthOnly = true;
         } else if (argument == "--synthesize-recorded-contexts") {
             options.SynthesizeRecordedContexts = static_cast<unsigned>(std::stoul(next()));
         } else if (argument == "--neighbour") {
