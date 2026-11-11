@@ -5,6 +5,9 @@
 #include "fast/backends/gfx_startup_preparation_abandon.h"
 #include "fast/extension/pica_startup_uber_modules.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 namespace Fast {
 
 const char* GfxRenderingAPIVulkan::GetName() {
@@ -543,7 +546,21 @@ void GfxRenderingAPIVulkan::PrepareNativePicaPrograms(
     // About one thread per physical core, one left to the frame: driver
     // compilation oversubscribed across logical cores makes each part (and the
     // draw waiting for it) several times slower for no added throughput.
-    const unsigned threads = std::clamp(std::thread::hardware_concurrency() / 2U, 2U, 9U) - 1U;
+    const unsigned defaultThreads = std::clamp(std::thread::hardware_concurrency() / 2U, 2U, 9U) - 1U;
+    // Diagnostic override (TRIAEVUM_STARTUP_PART_THREADS=1..default): fewer
+    // parts created at once, to measure the driver memory a cold start takes.
+    unsigned threads = defaultThreads;
+    if (const char* requested = std::getenv("TRIAEVUM_STARTUP_PART_THREADS"); requested && *requested) {
+        char* end = nullptr;
+        const unsigned long value = std::strtoul(requested, &end, 10);
+        if (end && *end == '\0' && value >= 1UL && value <= defaultThreads) {
+            threads = static_cast<unsigned>(value);
+        } else {
+            std::fprintf(stderr, "TRIAEVUM_STARTUP_PART_THREADS=\"%s\" ignored (1..%u); using %u\n",
+                         requested, defaultThreads, defaultThreads);
+        }
+    }
+    std::fprintf(stderr, "TRIAEVUM_STARTUP_PART_WORKERS threads=%u default=%u\n", threads, defaultThreads);
     for (unsigned thread = 0; thread < threads; ++thread) {
         mStartupPreparationThreads.emplace_back([this, prepare, progress, finished] {
             Renderer3ds::LowerPicaPreparationThreadPriority();
