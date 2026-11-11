@@ -14,6 +14,7 @@
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace Fast {
 namespace {
@@ -443,19 +444,28 @@ bool GfxRenderingAPIVulkan::SetPinnedPicaTextureCopies(
 void GfxRenderingAPIVulkan::RetireGpuTextureCopyProducers(uint64_t completedFrame) {
     const auto retireStart = std::chrono::steady_clock::now();
     std::vector<uint64_t> retired;
+    // A pin keeps the versions a retained reference can still resolve: those a
+    // producer key maps to. A version whose key a later execution of the same
+    // copy (same completion and order boundary) took over is unreachable; a
+    // held guest frame re-executes its copies every presented frame, so such
+    // versions must not stay pinned (they grew by one per copy per frame).
+    std::unordered_set<uint64_t> reachable;
+    reachable.reserve(mGpuTextureCopyProducers.size());
+    for (const auto& [producer, identity] : mGpuTextureCopyProducers) reachable.insert(identity);
     for (const auto& [identity, surface] : mGpuTextureCopySurfaces) {
         if (surface.CapturedFrame > completedFrame ||
             surface.LastReferencedFrame > completedFrame ||
             (surface.GuestOwner && surface.GuestOwner.use_count() > 1))
             continue;
         if (mGpuTextureCopyPinsDeclared) {
-            if (mGpuTextureCopyPins.contains({surface.RenderTargetNamespace, surface.CompletionId}))
+            if (reachable.contains(identity) &&
+                mGpuTextureCopyPins.contains({surface.RenderTargetNamespace, surface.CompletionId}))
                 continue;
         } else {
             const auto current = mHandledNativePicaTextureCopies.find(
                 {surface.RenderTargetNamespace, surface.DestinationAddress});
             if (current != mHandledNativePicaTextureCopies.end() &&
-                current->second.first == surface.CompletionId) continue;
+                current->second.first == surface.CompletionId && reachable.contains(identity)) continue;
         }
         retired.push_back(identity);
     }
