@@ -22,9 +22,15 @@ class WindowsGnuLayoutTests(unittest.TestCase):
         paths = {item["path"]: item for item in files}
         for name in ("libc++.dll", "libunwind.dll", "shaderc_shared.dll"):
             self.assertEqual(paths[name]["role"], "root_runtime_library")
-        for name in ("runtime/shaderc_shared.dll", "runtime/msvcp140.dll", "runtime/vcruntime140.dll",
+        for name in ("runtime/msvcp140.dll", "runtime/vcruntime140.dll",
                      "runtime/vcruntime140_1.dll", "LICENSES/Microsoft-Visual-Cpp-Runtime.md"):
             self.assertNotIn(name, paths)
+        # Windows searches the executable's own directory, never its parent.
+        for name, role in (("runtime/libc++.dll", "runtime_library"), ("runtime/libunwind.dll", "runtime_library"),
+                           ("runtime/shaderc_shared.dll", "runtime_library"),
+                           ("forge/libc++.dll", "forge_runtime_module"), ("forge/libunwind.dll", "forge_runtime_module")):
+            self.assertEqual(paths[name]["role"], role)
+            self.assertEqual(paths[name]["source"], "build-release/" + name.split("/")[1])
         policy = json.loads((ROOT / "tools/triaevum_release/release_policy.json").read_text(encoding="utf-8"))
         required = policy["platforms"][WINDOWS_GNU.target]["required_paths"]
         for path in ("libc++.dll", "libunwind.dll", "shaderc_shared.dll",
@@ -140,6 +146,11 @@ class WindowsGnuPackageAuditTests(unittest.TestCase):
             "libc++.dll": ("root_runtime_library", b"MZ libc++ fixture"),
             "libunwind.dll": ("root_runtime_library", b"MZ libunwind fixture"),
             "shaderc_shared.dll": ("root_runtime_library", b"MZ shaderc fixture"),
+            "runtime/libc++.dll": ("runtime_library", b"MZ libc++ fixture"),
+            "runtime/libunwind.dll": ("runtime_library", b"MZ libunwind fixture"),
+            "runtime/shaderc_shared.dll": ("runtime_library", b"MZ shaderc fixture"),
+            "forge/libc++.dll": ("forge_runtime_module", b"MZ libc++ fixture"),
+            "forge/libunwind.dll": ("forge_runtime_module", b"MZ libunwind fixture"),
             "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt": ("license", b"LLVM licence fixture\n"),
             "LICENSES/mingw-w64.txt": ("license", b"mingw-w64 licence fixture\n"),
         })
@@ -174,6 +185,53 @@ class WindowsGnuPackageAuditTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("unknown release role for libc++.dll: root_runtime_library", result.errors)
         self.assertIn("required release file is missing: runtime/vcruntime140.dll", result.errors)
+
+
+class PeImportTests(unittest.TestCase):
+    """pe_dependencies: every non-system import beside the PE (or in its hosts)."""
+
+    def check(self, files, config=None):
+        from pe_dependencies import pe_import_errors
+        from test_vulkan_imports import pe_import_fixture
+        policy = json.loads((ROOT / "tools/triaevum_release/release_policy.json").read_text(encoding="utf-8"))
+        config = config or policy["platforms"][WINDOWS_GNU.target]["pe_imports"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); declared = {}
+            for relative, (role, imports) in files.items():
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_bytes(pe_import_fixture({name: ["f"] for name in imports}) if imports is not None
+                                              else b"MZ library")
+                declared[relative] = {"role": role}
+            return pe_import_errors(root, declared, config)
+
+    RUNTIME = {"runtime/TriAevum.exe": ("runtime_executable", ["KERNEL32.dll", "libc++.dll", "vulkan-1.dll",
+                                                               "api-ms-win-crt-runtime-l1-1-0.dll"])}
+
+    def test_import_only_in_the_parent_directory_is_refused(self):
+        errors = self.check({**self.RUNTIME, "libc++.dll": ("root_runtime_library", None)})
+        self.assertEqual(len(errors), 1)
+        self.assertIn("runtime/TriAevum.exe imports libc++.dll", errors[0])
+
+    def test_import_beside_the_executable_passes(self):
+        self.assertEqual(self.check({**self.RUNTIME, "runtime/libc++.dll": ("runtime_library", None)}), [])
+
+    def test_title_module_resolves_from_every_host_directory(self):
+        plugin = {"titles/mm3d/triaevum_title_aot.dll": ("precompiled_title", ["KERNEL32.dll", "libc++.dll"])}
+        self.assertEqual(self.check({**plugin, "libc++.dll": ("root_runtime_library", None),
+                                     "runtime/libc++.dll": ("runtime_library", None)}), [])
+        self.assertEqual(len(self.check({**plugin, "libc++.dll": ("root_runtime_library", None)})), 1)
+
+    def test_executables_get_no_host_fallback(self):
+        exe = {"titles/mm3d/tool.exe": ("precompiled_title", ["libc++.dll"]),
+               "runtime/libc++.dll": ("runtime_library", None), "libc++.dll": ("root_runtime_library", None)}
+        self.assertEqual(len(self.check(exe)), 1)
+
+    def test_optional_vulkan_runtime_may_miss_only_the_visual_cpp_runtime(self):
+        fsr = {"runtime/amd_fidelityfx_vk.dll": ("optional_vulkan_runtime",
+                                                 ["KERNEL32.dll", "MSVCP140.dll", "VCRUNTIME140.dll", "vulkan-1.dll"])}
+        self.assertEqual(self.check(fsr), [])
+        other = {"runtime/triaevum_immerse.dll": ("separately_licensed_module", ["MSVCP140.dll"])}
+        self.assertEqual(len(self.check(other)), 1)
 
 
 class GnullvmForgeTests(unittest.TestCase):

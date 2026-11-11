@@ -29,6 +29,7 @@ try:
     from .precomputed_tables import validate_precomputed_tables
     from .qualified_input_coverage import require_coverage
     from .vulkan_imports import vulkan_import_errors
+    from .pe_dependencies import pe_import_errors
     from . import release_signature
 except ImportError:
     from product_contract import validate_product_info
@@ -46,6 +47,7 @@ except ImportError:
     from precomputed_tables import validate_precomputed_tables
     from qualified_input_coverage import require_coverage
     from vulkan_imports import vulkan_import_errors
+    from pe_dependencies import pe_import_errors
     import release_signature
 
 
@@ -656,6 +658,12 @@ def audit_release(
             reject(f"required release role is missing: {role}")
     if rust_binary_roles:
         for error in _rust_forge_errors(root, declared, release, platform.target, rust_binary_roles):
+            reject(error)
+    # Windows resolves DLL imports only beside the process executable and in the
+    # system (a target opts in with "pe_imports": the llvm-mingw product).
+    pe_imports = policy.get("platforms", {}).get(platform.target, {}).get("pe_imports")
+    if pe_imports:
+        for error in pe_import_errors(root, declared, pe_imports):
             reject(error)
 
     title_roles = {"precompiled_catalog", "precompiled_title", "translated_title_source", "title_build_source"}

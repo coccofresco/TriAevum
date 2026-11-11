@@ -60,12 +60,19 @@ def visual_cpp_runtime_artifacts(directory: Path) -> dict[str, Path]:
     return artifacts
 
 
-# The llvm-mingw Windows product (XBUILD Q2, x86_64-w64-windows-gnu): LLVM's
-# shared C++ runtime and shaderc's DLL sit beside the root executables, one copy
-# each (role root_runtime_library), so the installed game executable at the
-# root and every module it loads share one C++ runtime. Forge executables are
-# built with a static libunwind; the forge/ shader helpers need no libc++.dll.
+# The llvm-mingw Windows product (XBUILD Q2, x86_64-w64-windows-gnu): Windows
+# resolves a PE's DLL imports from the directory of the process executable, not
+# from a parent folder, so every directory that holds an executable or a module
+# with non-system imports carries its own copies: the root (the installed game
+# executable, role root_runtime_library), runtime/ (runtime/TriAevum.exe, which
+# Forge's preflight starts before installing, and iMMERSE) and forge/ (the game
+# module). The loader maps one module per base name, so a process still shares
+# one C++ runtime. Forge executables link libunwind statically and need neither.
 MINGW_RUNTIME_LIBRARIES = ("libc++.dll", "libunwind.dll")
+# Directory -> (DLL, role) copies beside the root ones (audit_release checks the
+# same rule offline: release_policy.json "pe_imports").
+MINGW_DIRECTORY_COPIES = (("runtime/", ("libc++.dll", "libunwind.dll", "shaderc_shared.dll"), "runtime_library"),
+                          ("forge/", ("libc++.dll", "libunwind.dll"), "forge_runtime_module"))
 MINGW_LICENSES = (("LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
                    "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt"),
                   ("LICENSES/mingw-w64.txt", "LICENSES/mingw-w64.txt"))
@@ -97,6 +104,8 @@ def mingw_layout(files: list[dict]) -> list[dict]:
         result.append(item)
     result += [{"source": f"build-release/{name}", "path": name, "role": "root_runtime_library"}
                for name in MINGW_RUNTIME_LIBRARIES]
+    result += [{"source": f"build-release/{name}", "path": directory + name, "role": role}
+               for directory, names, role in MINGW_DIRECTORY_COPIES for name in names]
     result += [{"source": source, "path": path, "role": "license"} for source, path in MINGW_LICENSES]
     return result
 

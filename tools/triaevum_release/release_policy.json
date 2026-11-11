@@ -113,8 +113,70 @@
         "libunwind.dll",
         "shaderc_shared.dll",
         "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
-        "LICENSES/mingw-w64.txt"
+        "LICENSES/mingw-w64.txt",
+        "runtime/libc++.dll",
+        "runtime/libunwind.dll",
+        "runtime/shaderc_shared.dll",
+        "forge/libc++.dll",
+        "forge/libunwind.dll"
       ],
+      "pe_imports": {
+        "system": [
+          "advapi32.dll",
+          "bcrypt.dll",
+          "bcryptprimitives.dll",
+          "cfgmgr32.dll",
+          "combase.dll",
+          "comctl32.dll",
+          "comdlg32.dll",
+          "crypt32.dll",
+          "d3d11.dll",
+          "d3d12.dll",
+          "dbghelp.dll",
+          "dwmapi.dll",
+          "dxgi.dll",
+          "gdi32.dll",
+          "hid.dll",
+          "imm32.dll",
+          "kernel32.dll",
+          "kernelbase.dll",
+          "ntdll.dll",
+          "ole32.dll",
+          "oleaut32.dll",
+          "opengl32.dll",
+          "powrprof.dll",
+          "psapi.dll",
+          "rpcrt4.dll",
+          "rstrtmgr.dll",
+          "secur32.dll",
+          "setupapi.dll",
+          "shell32.dll",
+          "shlwapi.dll",
+          "ucrtbase.dll",
+          "uiautomationcore.dll",
+          "user32.dll",
+          "userenv.dll",
+          "uxtheme.dll",
+          "version.dll",
+          "vulkan-1.dll",
+          "winmm.dll",
+          "ws2_32.dll",
+          "xinput1_4.dll"
+        ],
+        "hosts": {
+          "titles/": [
+            "runtime/",
+            ""
+          ]
+        },
+        "optional_missing": {
+          "optional_vulkan_runtime": [
+            "msvcp140.dll",
+            "vcruntime140.dll",
+            "vcruntime140_1.dll"
+          ]
+        }
+      },
       "forbidden_basenames": [
         "msvcp140.dll",
         "msvcp140_1.dll",
