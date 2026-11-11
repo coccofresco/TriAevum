@@ -7,6 +7,8 @@
 #include "fast/renderer3ds/pica_surface_emission.h"
 #include "fast/backends/startup_checkpoints.h"
 #include <atomic>
+#include <cstdio>
+#include <cstdlib>
 
 namespace Fast {
 
@@ -872,6 +874,29 @@ void GfxRenderingAPIVulkan::StartFrame() {
     mFrameActive = true;
     PrepareRecordedDlssFeature();
     ++mFrameCounter;
+    // Diagnostic (TRIAEVUM_GPU_MEMORY_TRACE=1, default off): the per-frame
+    // resource populations that can hold device memory, every 5 frames.
+    static const bool memoryTrace = [] {
+        const char* value = std::getenv("TRIAEVUM_GPU_MEMORY_TRACE");
+        return value != nullptr && value[0] == '1';
+    }();
+    if (memoryTrace && mFrameCounter % 5U == 0U) {
+        size_t poolEntries = 0;
+        uint64_t poolBytes = 0;
+        {
+            std::lock_guard lock(mGpuCopyImagePoolMutex);
+            poolEntries = mGpuCopyImagePool.Entries();
+            poolBytes = mGpuCopyImagePool.Bytes();
+        }
+        uint64_t surfaceBytes = 0;
+        for (const auto& [identity, surface] : mGpuTextureCopySurfaces) surfaceBytes += surface.DestinationBytes;
+        std::fprintf(stderr,
+                     "TRIAEVUM_GPU_MEMORY_TRACE frame=%llu copy_surfaces=%zu copy_surface_bytes=%llu "
+                     "handled_copies=%zu native_textures=%zu pool_entries=%zu pool_bytes=%llu\n",
+                     static_cast<unsigned long long>(mFrameCounter), mGpuTextureCopySurfaces.size(),
+                     static_cast<unsigned long long>(surfaceBytes), mHandledNativePicaTextureCopies.size(),
+                     mNativePicaTextures.size(), poolEntries, static_cast<unsigned long long>(poolBytes));
+    }
     mBreadcrumbs.SetFrame(mFrameCounter);
     mBreadcrumbs.Record(mCommandBuffers[mCurrentFrame], "frame_begin");
     Extension::BeginGrassStageFrame(mFrameCounter);
