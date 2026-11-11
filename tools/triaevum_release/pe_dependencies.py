@@ -10,6 +10,12 @@ another program's process (release_policy.json "pe_imports" "hosts") may
 instead find it in every directory of its host executables. A role may list
 imports it is allowed to miss when the module is optional and loaded on demand
 ("optional_missing").
+
+"activation" checks the layout after Forge's activation (forge-core layout.rs
+place_installed_runtime): the packaged runtime executable is moved to the root,
+and every root DLL that also exists beside it is removed unless it is one the
+root keeps a fresh copy of ("keep_at_root"). The moved executable's imports must
+still resolve there.
 """
 
 from __future__ import annotations
@@ -66,4 +72,17 @@ def pe_import_errors(root: Path, declared: Mapping[str, dict], config: Mapping) 
                 continue
             where = f"its directory {directory or '(root)'}" + (f" or every host directory {host}" if host else "")
             errors.append(f"{relative} imports {name}, which is neither a system DLL nor in {where}")
+    activation = config.get("activation")
+    if activation:
+        runtime = str(activation["runtime"])
+        keep = {str(name).lower() for name in activation.get("keep_at_root", [])}
+        if runtime in declared and is_pe((root / runtime).read_bytes()):
+            runtime_directory = str(PurePosixPath(runtime).parent)
+            beside = {name for name in by_directory.get(runtime_directory, set()) if name.endswith(".dll")}
+            root_after = (by_directory.get("", set()) - (beside - keep)) | (beside & keep)
+            for name in eager_imports((root / runtime).read_bytes()):
+                lower = name.lower()
+                if not _is_system(name, system) and lower not in root_after:
+                    errors.append(f"after activation the installed runtime (from {runtime}) imports {name}, "
+                                  "which Forge does not keep at the root")
     return errors

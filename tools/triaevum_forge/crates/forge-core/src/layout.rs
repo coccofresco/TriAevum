@@ -299,7 +299,24 @@ pub fn ensure_runtime_closed(root: &Path, platform: &ReleasePlatform) -> Result<
 /// finds beside it) cannot be deleted but can be renamed aside (issue #110);
 /// later runs remove released `.stale` files. Read-only files are replaced,
 /// briefly locked ones retried, and a file still held names its holder.
+/// DLLs the installed root executable of the llvm-mingw product imports
+/// statically (release_policy.json role root_runtime_library). Windows resolves
+/// them only beside the executable, so placing the runtime at the root keeps a
+/// fresh copy of runtime/'s file there instead of removing it. The MSVC product
+/// imports none of its runtime/ DLLs statically: every one is removed (#110).
+pub fn root_runtime_libraries(platform: &ReleasePlatform) -> &'static [&'static str] {
+    if *platform == WINDOWS && forge_catalog::platform::WINDOWS_TARGET == "x86_64-w64-windows-gnu" {
+        &["libc++.dll", "libunwind.dll", "shaderc_shared.dll"]
+    } else {
+        &[]
+    }
+}
+
 pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Result<PathBuf> {
+    place_installed_runtime_with(root, platform, root_runtime_libraries(platform))
+}
+
+fn place_installed_runtime_with(root: &Path, platform: &ReleasePlatform, root_libraries: &[&str]) -> Result<PathBuf> {
     if *platform == MACOS || (*platform == LINUX && sealed_linux_payload(root)) {
         return Ok(root.join(platform.runtime));
     }
@@ -320,7 +337,18 @@ pub fn place_installed_runtime(root: &Path, platform: &ReleasePlatform) -> Resul
             for library in libraries.flatten() {
                 let name = library.file_name();
                 if Path::new(&name).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("dll")) {
-                    remove_shadowing_library(&root.join(&name))?;
+                    // Stale root copies never shadow runtime/ (#110): each one is
+                    // removed, and a statically imported one is replaced by a
+                    // fresh copy of the runtime/ file it would shadow.
+                    let target = root.join(&name);
+                    remove_shadowing_library(&target)?;
+                    let text = name.to_string_lossy();
+                    if root_libraries.iter().any(|library| library.eq_ignore_ascii_case(&text)) {
+                        let fresh = library.path();
+                        let staged = root.join(format!(".{text}.{}.new", std::process::id()));
+                        std::fs::copy(&fresh, &staged).map_err(|error| file_error("Cannot copy", &fresh, error))?;
+                        fsutil::replace_file(&staged, &target).map_err(|error| file_error("Cannot place", &target, error))?;
+                    }
                 }
             }
         }
@@ -476,6 +504,34 @@ mod tests {
         assert!(!root.join(".vcruntime140.dll.1.stale").exists());
         assert!(root.join("unrelated.dll").is_file());
         assert_eq!(installed_runtime_path(root, &WINDOWS), product);
+    }
+
+    #[test]
+    fn statically_imported_root_libraries_stay_beside_the_installed_runtime() {
+        // The gnu product: the moved executable imports libc++.dll, libunwind.dll
+        // and shaderc_shared.dll; Windows resolves them only beside it.
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::create_dir(root.join("runtime")).unwrap();
+        std::fs::write(root.join(WINDOWS.runtime), b"new runtime").unwrap();
+        for name in ["libc++.dll", "libunwind.dll", "shaderc_shared.dll", "triaevum_immerse.dll"] {
+            std::fs::write(root.join("runtime").join(name), format!("new {name}")).unwrap();
+        }
+        std::fs::write(root.join("libc++.dll"), b"stale libc++").unwrap();
+        std::fs::write(root.join("triaevum_immerse.dll"), b"stale immerse").unwrap();
+        let libraries = ["libc++.dll", "libunwind.dll", "shaderc_shared.dll"];
+        let product = place_installed_runtime_with(root, &WINDOWS, &libraries).unwrap();
+        assert_eq!(std::fs::read(&product).unwrap(), b"new runtime");
+        for name in libraries {
+            // Present at the root again, and the runtime/ file, never a stale one.
+            assert_eq!(std::fs::read(root.join(name)).unwrap(), format!("new {name}").as_bytes(), "{name}");
+            assert!(root.join("runtime").join(name).is_file(), "{name} stays in runtime/");
+        }
+        // Not statically imported: removed from the root as before (#110).
+        assert!(!root.join("triaevum_immerse.dll").exists());
+        assert!(std::fs::read_dir(root).unwrap().all(|e| !e.unwrap().file_name().to_string_lossy().ends_with(".new")));
+        // The MSVC product keeps the old rule.
+        assert!(root_runtime_libraries(&LINUX).is_empty());
     }
 
     fn read_only(path: &Path, contents: &[u8]) {

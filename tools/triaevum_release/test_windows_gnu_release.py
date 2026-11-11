@@ -226,6 +226,25 @@ class PeImportTests(unittest.TestCase):
                "runtime/libc++.dll": ("runtime_library", None), "libc++.dll": ("root_runtime_library", None)}
         self.assertEqual(len(self.check(exe)), 1)
 
+    def test_activation_keeps_the_runtime_imports_at_the_root(self):
+        package = {**self.RUNTIME, "runtime/libc++.dll": ("runtime_library", None),
+                   "libc++.dll": ("root_runtime_library", None)}
+        self.assertEqual(self.check(package), [])
+        # Forge before the fix removed every root DLL that runtime/ also holds.
+        policy = json.loads((ROOT / "tools/triaevum_release/release_policy.json").read_text(encoding="utf-8"))
+        config = dict(policy["platforms"][WINDOWS_GNU.target]["pe_imports"])
+        config["activation"] = dict(config["activation"], keep_at_root=[])
+        errors = self.check(package, config)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("after activation the installed runtime", errors[0])
+        self.assertEqual(config["activation"]["runtime"], "runtime/TriAevum.exe")
+        # The simulated rule is Forge's own: layout.rs root_runtime_libraries keeps these at the root.
+        import re
+        layout = (ROOT / "tools/triaevum_forge/crates/forge-core/src/layout.rs").read_text(encoding="utf-8")
+        listed = re.search(r'&\["libc\+\+\.dll"[^]]*\]', layout).group(0)
+        self.assertEqual(sorted(re.findall(r'"([^"]+)"', listed)),
+                         sorted(policy["platforms"][WINDOWS_GNU.target]["pe_imports"]["activation"]["keep_at_root"]))
+
     def test_optional_vulkan_runtime_may_miss_only_the_visual_cpp_runtime(self):
         fsr = {"runtime/amd_fidelityfx_vk.dll": ("optional_vulkan_runtime",
                                                  ["KERNEL32.dll", "MSVCP140.dll", "VCRUNTIME140.dll", "vulkan-1.dll"])}

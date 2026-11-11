@@ -175,6 +175,14 @@
             "vcruntime140.dll",
             "vcruntime140_1.dll"
           ]
+        },
+        "activation": {
+          "runtime": "runtime/TriAevum.exe",
+          "keep_at_root": [
+            "libc++.dll",
+            "libunwind.dll",
+            "shaderc_shared.dll"
+          ]
         }
       },
       "forbidden_basenames": [
