@@ -115,6 +115,12 @@
         "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt",
         "LICENSES/mingw-w64.txt"
       ],
+      "forbidden_basenames": [
+        "msvcp140.dll",
+        "msvcp140_1.dll",
+        "vcruntime140.dll",
+        "vcruntime140_1.dll"
+      ],
       "forge_profiles": {
         "python_pyinstaller": {
           "required_paths": [

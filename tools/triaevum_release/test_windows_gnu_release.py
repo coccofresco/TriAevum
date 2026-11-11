@@ -66,6 +66,116 @@ class WindowsGnuLayoutTests(unittest.TestCase):
                                                        vc_redist_dir=None, mingw_runtime_dir=Path("x")))
 
 
+class WindowsGnuTargetTests(unittest.TestCase):
+    """The gnu layout names its target, so packaging and the audit apply the
+    gnu platform policy; the MSVC layout and policy stay as they were."""
+
+    def example(self):
+        return json.loads(EXAMPLE.read_text(encoding="utf-8"))
+
+    def test_gnu_layout_names_its_target_and_msvc_layout_is_returned_unchanged(self):
+        msvc = self.example()
+        self.assertIs(prepare_release.windows_layout(msvc, WINDOWS.target), msvc)
+        self.assertEqual(msvc, self.example())
+        self.assertNotIn("target", msvc)
+        gnu = prepare_release.windows_layout(self.example(), WINDOWS_GNU.target)
+        self.assertEqual(gnu["target"], WINDOWS_GNU.target)
+        self.assertEqual(gnu["files"], prepare_release.mingw_layout(self.example()["files"]))
+
+    def test_policy_roles_and_required_files_per_target(self):
+        from platform_policy import resolve_policy
+        policy = json.loads((ROOT / "tools/triaevum_release/release_policy.json").read_text(encoding="utf-8"))
+        gnu = resolve_policy(policy, WINDOWS_GNU.target, "rust")
+        self.assertEqual(gnu["allowed_roles"]["root_runtime_library"],
+                         ["libc++.dll", "libunwind.dll", "shaderc_shared.dll"])
+        for path in ("libc++.dll", "libunwind.dll", "shaderc_shared.dll", "runtime/TriAevum.exe",
+                     "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt", "LICENSES/mingw-w64.txt"):
+            self.assertIn(path, gnu["required_paths"])
+        for name in ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"):
+            self.assertNotIn(f"runtime/{name}", gnu["required_paths"])
+            self.assertIn(name, gnu["forbidden_basenames"])
+        self.assertNotIn("LICENSES/Microsoft-Visual-Cpp-Runtime.md", gnu["required_paths"])
+        msvc = resolve_policy(policy, WINDOWS.target, "rust")
+        self.assertNotIn("root_runtime_library", msvc["allowed_roles"])
+        for path in ("runtime/msvcp140.dll", "runtime/vcruntime140.dll", "runtime/vcruntime140_1.dll",
+                     "LICENSES/Microsoft-Visual-Cpp-Runtime.md"):
+            self.assertIn(path, msvc["required_paths"])
+        self.assertNotIn("vcruntime140.dll", msvc.get("forbidden_basenames", []))
+
+    def test_rust_forge_receipt_must_name_the_release_target(self):
+        import audit_release
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            declared = {"docs/forge-build.json": {"role": "forge_build_receipt"}}
+
+            def errors(receipt_target, release_target):
+                (root / "docs").mkdir(exist_ok=True)
+                (root / "docs/forge-build.json").write_text(json.dumps(
+                    {"format": audit_release.RUST_FORGE_RECEIPT_FORMAT, "target": receipt_target,
+                     "binaries": []}), encoding="utf-8")
+                return list(audit_release._rust_forge_errors(root, declared, {}, release_target, set()))
+            mismatch = "Rust Forge build receipt target differs from the release target"
+            self.assertNotIn(mismatch, errors(WINDOWS_GNU.target, WINDOWS_GNU.target))
+            self.assertIn(mismatch, errors(WINDOWS.target, WINDOWS_GNU.target))
+            self.assertIn(mismatch, errors(WINDOWS_GNU.target, WINDOWS.target))
+
+    def test_catalog_target_follows_the_title_build(self):
+        from release_platform import catalog_platform
+        self.assertEqual(catalog_platform({"target": WINDOWS_GNU.target}), WINDOWS_GNU)
+        self.assertEqual(catalog_platform({}), WINDOWS)
+        self.assertNotEqual(catalog_platform({"target": WINDOWS.target}), WINDOWS_GNU)
+
+
+class WindowsGnuPackageAuditTests(unittest.TestCase):
+    """A whole gnu package through audit_release (the MSVC fixture of
+    test_release_audit, turned into the llvm-mingw layout)."""
+
+    def gnu_package(self, root: Path, extra: dict | None = None, release_target=WINDOWS_GNU.target):
+        from unittest.mock import patch
+        import test_release_audit as fixture
+        files = {path: value for path, value in fixture.FILES.items()
+                 if path not in ("runtime/msvcp140.dll", "runtime/vcruntime140.dll", "runtime/vcruntime140_1.dll",
+                                 "LICENSES/Microsoft-Visual-Cpp-Runtime.md")}
+        files.update({
+            "libc++.dll": ("root_runtime_library", b"MZ libc++ fixture"),
+            "libunwind.dll": ("root_runtime_library", b"MZ libunwind fixture"),
+            "shaderc_shared.dll": ("root_runtime_library", b"MZ shaderc fixture"),
+            "LICENSES/LLVM-Apache-2.0-WITH-LLVM-exception.txt": ("license", b"LLVM licence fixture\n"),
+            "LICENSES/mingw-w64.txt": ("license", b"mingw-w64 licence fixture\n"),
+        })
+        files.update(extra or {})
+        with patch.dict(fixture.FILES, files, clear=True):
+            fixture.write_clean_package(root)
+        manifest = root / fixture.MANIFEST
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        if release_target is not None:
+            data["release"]["target"] = release_target
+        manifest.write_text(json.dumps(data), encoding="utf-8")
+
+    def audit(self, **kwargs):
+        from audit_release import audit_release
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.gnu_package(root, **kwargs)
+            return audit_release(root)
+
+    def test_gnu_package_passes_with_root_runtime_libraries(self):
+        result = self.audit()
+        self.assertTrue(result.ok, result.errors)
+
+    def test_gnu_package_with_a_visual_cpp_runtime_dll_is_refused(self):
+        result = self.audit(extra={"runtime/vcruntime140.dll": ("runtime_library", b"MZ runtime fixture")})
+        self.assertFalse(result.ok)
+        self.assertTrue(any("vcruntime140.dll" in error for error in result.errors), result.errors)
+
+    def test_gnu_layout_audited_as_msvc_is_refused(self):
+        # What the package_release audit reported before the layout named its target.
+        result = self.audit(release_target=None)
+        self.assertFalse(result.ok)
+        self.assertIn("unknown release role for libc++.dll: root_runtime_library", result.errors)
+        self.assertIn("required release file is missing: runtime/vcruntime140.dll", result.errors)
+
+
 class GnullvmForgeTests(unittest.TestCase):
     def test_cargo_target_and_flags(self):
         self.assertEqual(rust_forge_build.cargo_target(WINDOWS_GNU.target), "x86_64-pc-windows-gnullvm")

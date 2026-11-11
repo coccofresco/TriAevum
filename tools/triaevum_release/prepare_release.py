@@ -101,6 +101,16 @@ def mingw_layout(files: list[dict]) -> list[dict]:
     return result
 
 
+def windows_layout(layout: dict, target: str) -> dict:
+    """The release layout of the selected Windows target. The MSVC layout is
+    returned as it is (its package keeps the implicit msvc target); the
+    llvm-mingw one gets its own files and names its target, so that
+    package_release and audit_release apply the gnu platform policy."""
+    if target != WINDOWS_GNU.target:
+        return layout
+    return {**layout, "target": target, "files": mingw_layout(layout["files"])}
+
+
 def explicit_dlss_targets(args) -> dict:
     """--dlss-module/--dlss-runtime/--dlss-license: the separately built DLSS
     module (the llvm-mingw cross-build builds it as its own MSVC-ABI DLL) with
@@ -205,8 +215,7 @@ def prepare(args) -> dict:
     create_source_archive(ROOT, source_zip, source_commit=commit, forge_profile=layout["forge_profile"])
     # The Rust Forge (window, launcher and command line) with its build receipt
     # and crate notices; the public import path runs no Python.
-    if target == WINDOWS_GNU.target:
-        layout["files"] = mingw_layout(layout["files"])
+    layout = windows_layout(layout, target)
     forge = build_rust_forge(work / "forge-rust", target=target, source_commit=commit,
                              cargo=args.cargo, target_dir=args.cargo_target_dir,
                              features=title["forge_features"])
