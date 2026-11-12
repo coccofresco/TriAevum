@@ -41,7 +41,11 @@ pub const MAX_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
 pub const SIGNATURE_NAME: &str = "release-signature.json";
 
 /// The top-level names a package may own (UX plan WP-04B step 1).
-pub const OWNED_ROOTS: [&str; 13] = [
+///
+/// The three DLLs are the gnu Windows product's root runtime libraries
+/// (`crate::layout::root_runtime_libraries`, release_policy.json role
+/// root_runtime_library): that package ships them beside TriAevumForge.exe.
+pub const OWNED_ROOTS: [&str; 16] = [
     "runtime",
     "forge",
     "titles",
@@ -55,6 +59,9 @@ pub const OWNED_ROOTS: [&str; 13] = [
     "LICENSE",
     "TriAevumForge.exe",
     "gamecontrollerdb.txt",
+    "libc++.dll",
+    "libunwind.dll",
+    "shaderc_shared.dll",
 ];
 
 /// `release_policy.json` `forbidden_basenames` (kept equal by a test).
