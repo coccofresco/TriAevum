@@ -445,6 +445,9 @@ mod tests {
         assert_eq!(order("0.8.0-beta.1.2", "0.8.0-beta.2"), Ordering::Less);
         assert_eq!(order("0.8.0-beta.2", "0.8.0-beta.1.2"), Ordering::Greater);
         assert_eq!(order("0.8.0-beta.2", "0.8.0-beta.2"), Ordering::Equal);
+        // The corrected beta.2 release updates beta.2 in place.
+        assert_eq!(order("0.8.0-beta.2.1", "0.8.0-beta.2"), Ordering::Greater);
+        assert_eq!(order("0.8.0-beta.2.1", "0.8.1"), Ordering::Less);
         assert_eq!(order("0.1.0-alpha.1", "0.1.0-alpha.2"), Ordering::Less);
         assert_eq!(order("0.1.0-alpha.1", "0.1.0-beta.1"), Ordering::Less);
         assert_eq!(order("0.1.0-alpha.1", "0.1.0"), Ordering::Less);
