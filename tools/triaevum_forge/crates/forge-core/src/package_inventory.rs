@@ -64,6 +64,10 @@ pub const OWNED_ROOTS: [&str; 16] = [
     "shaderc_shared.dll",
 ];
 
+/// The root DLLs of [`OWNED_ROOTS`] and the only role they may have there.
+pub const ROOT_RUNTIME_LIBRARIES: [&str; 3] = ["libc++.dll", "libunwind.dll", "shaderc_shared.dll"];
+pub const ROOT_RUNTIME_LIBRARY_ROLE: &str = "root_runtime_library";
+
 /// `release_policy.json` `forbidden_basenames` (kept equal by a test).
 pub const FORBIDDEN_BASENAMES: [&str; 7] = [
     "AGENTS.md",
@@ -269,6 +273,13 @@ pub fn check_update_manifest(manifest: &ReleaseManifest, host_target: &str) -> R
         let top = record.path.split('/').next().unwrap_or_default();
         if !OWNED_ROOTS.contains(&top) {
             return Err(package_error(format!("The package places a file outside its own folders: {}", record.path)));
+        }
+        // The root DLLs are owned only as what the gnu product ships them as.
+        if ROOT_RUNTIME_LIBRARIES.contains(&top) && record.role != ROOT_RUNTIME_LIBRARY_ROLE {
+            return Err(package_error(format!(
+                "The package places {} at its root with role {}, not {ROOT_RUNTIME_LIBRARY_ROLE}",
+                record.path, record.role
+            )));
         }
         check_public_member(&record.path, &record.role)?;
     }
@@ -545,6 +556,42 @@ mod tests {
         json!({"format": MANIFEST_FORMAT, "release": {"version": "1", "target": "x86_64-pc-windows-msvc"}, "files": files})
             .to_string()
             .into_bytes()
+    }
+
+    /// A gnu update package owns its three root DLLs (role
+    /// root_runtime_library); any other root file is still refused.
+    #[test]
+    fn gnu_root_runtime_libraries_are_owned_by_the_update() {
+        let digest = "b".repeat(64);
+        let entry = |path: &str, role: &str| json!({"path": path, "role": role, "bytes": 1, "sha256": digest});
+        let target = "x86_64-w64-windows-gnu";
+        let gnu = |extra: Vec<Value>| {
+            let mut files = vec![
+                entry("TriAevumForge.exe", "forge_executable"),
+                entry("runtime/TriAevum.exe", "runtime_executable"),
+                entry("recipes/precompiled-titles.json", "precompiled_title_recipe"),
+                entry(forge_catalog::title::ACTIVE.packaged_recipes, "recipe"),
+                entry("titles/t/triaevum_title_aot.dll", "precompiled_title"),
+            ];
+            files.extend(extra);
+            let bytes = json!({"format": MANIFEST_FORMAT,
+                "release": {"version": "1", "target": target, "distribution_model": PRECOMPILED_MODEL},
+                "files": files})
+            .to_string()
+            .into_bytes();
+            parse_manifest("docs/release-manifest.json", bytes).unwrap()
+        };
+        let roots: Vec<Value> = ROOT_RUNTIME_LIBRARIES.iter().map(|name| entry(name, ROOT_RUNTIME_LIBRARY_ROLE)).collect();
+        check_update_manifest(&gnu(roots), target).unwrap();
+        for (path, role) in [
+            ("unknown.dll", ROOT_RUNTIME_LIBRARY_ROLE),
+            ("vcruntime140.dll", "runtime_library"),
+            ("libc++.dll", "runtime_library"),
+            ("notes.txt", "documentation"),
+        ] {
+            let error = check_update_manifest(&gnu(vec![entry(path, role)]), target).unwrap_err();
+            assert!(error.message.contains(path), "{path}: {}", error.message);
+        }
     }
 
     #[test]
