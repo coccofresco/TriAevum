@@ -310,6 +310,10 @@ pub struct Plan {
     pub changes: ChangeSet,
     /// The installation state before the update (`InstallationState::code`).
     pub installed_state: String,
+    /// Why the installation was incompatible before the update
+    /// (`IncompatibleReason::code`); `target_mismatch` marks a platform
+    /// migration (an MSVC installation updated by a gnu package).
+    pub installed_reason: Option<String>,
     pub recipe: Option<String>,
     members: Members,
 }
@@ -522,6 +526,10 @@ pub fn plan(request: &UpdateRequest, options: &PlanOptions) -> Result<Planned> {
         authenticity,
         changes,
         installed_state: state.code().to_string(),
+        installed_reason: match &state {
+            InstallationState::Incompatible { reason, .. } => Some(reason.code().to_string()),
+            _ => None,
+        },
         recipe,
         members,
     })))
@@ -537,6 +545,7 @@ impl Plan {
             "version": self.new.version(),
             "authenticity": self.authenticity.to_value(),
             "installed_state": self.installed_state,
+            "installed_reason": self.installed_reason,
             "recipe": self.recipe,
             "replace": count(Action::Replace),
             "add": count(Action::Add),
@@ -752,6 +761,7 @@ fn stage_into(plan: &Plan, commands: &Commands, staging: &Path, cancel: &CancelT
         "new_manifest_sha256": sha256_hex(&plan.new.bytes),
         "authenticity": plan.authenticity.to_value(),
         "installed_state": plan.installed_state,
+        "installed_reason": plan.installed_reason,
         "recipe": plan.recipe,
         "hud_layout": plan.request.hud_layout.code(),
         "allow_downgrade": plan.request.allow_downgrade,

@@ -280,12 +280,10 @@ fn apply(journal: &mut Journal, quiet: &mut Option<crate::session::Quiescence>, 
     let validate = Program::parse(journal.value.get("validate").unwrap_or(&Value::Null))
         .ok_or_else(|| update_error(ErrorKind::InvalidInput, "The update proposal has no validation command"))?;
     let state = run_engine(&validate, journal.id(), "The updated installation could not be checked")?;
-    let expected = match journal.text("installed_state") {
-        "ready" | "update_available" => "ready",
-        other => other,
-    };
     let actual = state["state"].as_str().unwrap_or_default();
-    if actual != expected {
+    let reason = journal.value.get("installed_reason").and_then(Value::as_str);
+    if !accepted_after_update(journal.text("installed_state"), reason, actual) {
+        let expected = expected_after_update(journal.text("installed_state"), reason);
         return Err(update_error(
             ErrorKind::PreparationFailed,
             format!("The updated installation is {actual}, not {expected}; the previous version was restored"),
@@ -294,6 +292,33 @@ fn apply(journal: &mut Journal, quiet: &mut Option<crate::session::Quiescence>, 
     journal.advance("committed")?;
     faults.boundary("committed");
     Ok(())
+}
+
+/// The states an update may leave, given the state before it.
+///
+/// Normally the installation keeps its state (`ready` and `update_available`
+/// both must end `ready`). A platform migration (before: `incompatible`
+/// because the installed package targets another platform, an MSVC package
+/// under the gnu Forge) is what the update cures: the new package matches the
+/// host, so the installation may become `ready`, stay `not_installed` (a
+/// package folder nothing was prepared in) or need the game again
+/// (`needs_game_input`). Any other incompatibility must stay as it was.
+pub fn accepted_after_update(before: &str, before_reason: Option<&str>, after: &str) -> bool {
+    if before == "incompatible" && before_reason == Some("target_mismatch") {
+        return matches!(after, "ready" | "update_available" | "not_installed" | "needs_game_input");
+    }
+    match before {
+        "ready" | "update_available" => after == "ready",
+        other => after == other,
+    }
+}
+
+fn expected_after_update(before: &str, before_reason: Option<&str>) -> String {
+    match (before, before_reason) {
+        ("incompatible", Some("target_mismatch")) => "ready, not_installed or needs_game_input".into(),
+        ("update_available", _) => "ready".into(),
+        (other, _) => other.into(),
+    }
 }
 
 fn engine_failure(context: &str, output: &Value) -> ForgeError {
@@ -373,6 +398,7 @@ fn preflight(proposal: &Map<String, Value>, activation: &Path) -> Result<Map<Str
         "version",
         "authenticity",
         "installed_state",
+        "installed_reason",
         "recipe",
         "hud_layout",
         "allow_downgrade",
@@ -692,5 +718,36 @@ mod platform {
 
     pub fn in_use(_path: &Path) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::accepted_after_update;
+
+    #[test]
+    fn a_platform_migration_may_leave_the_states_it_cures() {
+        let migration = Some("target_mismatch");
+        for after in ["ready", "update_available", "not_installed", "needs_game_input"] {
+            assert!(accepted_after_update("incompatible", migration, after), "{after}");
+        }
+        for after in ["incompatible", "repair_needed", "failed", "preparing"] {
+            assert!(!accepted_after_update("incompatible", migration, after), "{after}");
+        }
+    }
+
+    #[test]
+    fn other_states_must_stay_as_they_were() {
+        assert!(accepted_after_update("ready", None, "ready"));
+        assert!(accepted_after_update("update_available", None, "ready"));
+        assert!(!accepted_after_update("ready", None, "update_available"));
+        assert!(!accepted_after_update("ready", None, "repair_needed"));
+        assert!(accepted_after_update("not_installed", None, "not_installed"));
+        assert!(!accepted_after_update("not_installed", None, "ready"));
+        // Any other incompatibility is not cured by an update.
+        assert!(!accepted_after_update("incompatible", Some("package_integrity"), "ready"));
+        assert!(!accepted_after_update("incompatible", Some("missing_title_module"), "not_installed"));
+        assert!(!accepted_after_update("incompatible", None, "ready"));
+        assert!(accepted_after_update("incompatible", Some("package_integrity"), "incompatible"));
     }
 }
