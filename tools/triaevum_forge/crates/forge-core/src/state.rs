@@ -343,6 +343,17 @@ fn incompatible(reason: IncompatibleReason, details: impl Into<String>) -> Insta
     InstallationState::Incompatible { reason, details: details.into() }
 }
 
+/// The Windows product's two platform keys: the MSVC-ABI build and the
+/// llvm-mingw build (XBUILD Q2). Only one is known to a given Forge build.
+const WINDOWS_TARGETS: [&str; 2] = ["x86_64-pc-windows-msvc", "x86_64-w64-windows-gnu"];
+
+/// A catalog of the same Windows product built for the other Windows key
+/// (an MSVC package read by the gnu Forge, or the reverse): a platform
+/// migration, not a missing catalog.
+pub fn other_windows_target(catalog_target: &str, host_target: &str) -> bool {
+    catalog_target != host_target && WINDOWS_TARGETS.contains(&catalog_target) && WINDOWS_TARGETS.contains(&host_target)
+}
+
 fn file_sha256(path: &Path) -> Result<String> {
     Ok(hex(&sha256_file(path, &CancelToken::new())?.1))
 }
@@ -412,7 +423,20 @@ impl<'a> Context<'a> {
     fn inspect(&self) -> Result<InstallationState> {
         let catalog = match load_catalog(&self.package).and_then(|catalog| Ok((catalog_platform(&catalog)?, catalog))) {
             Ok(loaded) => loaded,
-            Err(error) => return Ok(incompatible(IncompatibleReason::MissingCatalogue, error.message)),
+            Err(error) => {
+                // This Forge knows only its own Windows key: a catalog of the
+                // other one is the same product on another platform (an MSVC
+                // package under the gnu Forge), which an update cures.
+                if error.kind == ErrorKind::IncompatibleTarget {
+                    let raw = load_json_object(&self.package.join(forge_catalog::precompiled::CATALOG)).ok();
+                    let target = raw.as_ref().and_then(|raw| raw.get("target")).and_then(Value::as_str).unwrap_or("");
+                    if other_windows_target(target, self.platform.target) {
+                        let details = format!("This package targets {target}, not {}", self.platform.target);
+                        return Ok(incompatible(IncompatibleReason::TargetMismatch, details));
+                    }
+                }
+                return Ok(incompatible(IncompatibleReason::MissingCatalogue, error.message));
+            }
         };
         let (platform, catalog) = catalog;
         if !recipes_path(&self.package).is_file() {
@@ -669,5 +693,21 @@ impl<'a> Context<'a> {
     fn language(&self) -> Option<String> {
         let settings = load_json_object(&forge_native::language::config_path(&self.data_root)).ok()?;
         settings.get("selected")?.as_str().map(str::to_string)
+    }
+}
+
+#[cfg(test)]
+mod platform_key_tests {
+    use super::other_windows_target;
+
+    #[test]
+    fn only_the_other_windows_key_of_the_product_is_a_migration() {
+        assert!(other_windows_target("x86_64-pc-windows-msvc", "x86_64-w64-windows-gnu"));
+        assert!(other_windows_target("x86_64-w64-windows-gnu", "x86_64-pc-windows-msvc"));
+        assert!(!other_windows_target("x86_64-w64-windows-gnu", "x86_64-w64-windows-gnu"));
+        assert!(!other_windows_target("x86_64-unknown-linux-gnu", "x86_64-w64-windows-gnu"));
+        assert!(!other_windows_target("aarch64-pc-windows-msvc", "x86_64-w64-windows-gnu"));
+        assert!(!other_windows_target("", "x86_64-w64-windows-gnu"));
+        assert!(!other_windows_target("x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"));
     }
 }

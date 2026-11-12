@@ -204,6 +204,34 @@ fn a_package_for_another_target_is_incompatible() {
     assert_eq!(state.explanation().unwrap().id, "incompatible_target");
 }
 
+/// The other Windows key of the same product (an MSVC beta.1.x package read
+/// by the gnu Forge, or the reverse) is a platform migration, even though
+/// this Forge cannot parse that catalog's target; an unknown target is still
+/// a missing catalog.
+#[cfg(windows)]
+#[test]
+fn the_other_windows_key_is_a_target_mismatch_not_a_missing_catalogue() {
+    let other = ["x86_64-pc-windows-msvc", "x86_64-w64-windows-gnu"]
+        .into_iter()
+        .find(|target| *target != forge_catalog::WINDOWS.target)
+        .unwrap();
+    for fixture in [Fixture::new(), installed()] {
+        edit_json(&catalog_path(&fixture), |catalog| catalog["target"] = json!(other));
+        let state = inspected(&fixture);
+        let InstallationState::Incompatible { reason: IncompatibleReason::TargetMismatch, details } = &state else {
+            panic!("{state:?}")
+        };
+        assert!(details.contains(other), "{details}");
+    }
+    let fixture = Fixture::new();
+    edit_json(&catalog_path(&fixture), |catalog| catalog["target"] = json!("x86_64-unknown-freebsd"));
+    let state = inspected(&fixture);
+    assert!(
+        matches!(state, InstallationState::Incompatible { reason: IncompatibleReason::MissingCatalogue, .. }),
+        "{state:?}"
+    );
+}
+
 #[test]
 fn a_package_with_another_runtime_offers_an_update() {
     let fixture = installed();
