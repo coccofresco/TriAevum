@@ -694,7 +694,7 @@ class TitleAwareAuditTests(unittest.TestCase):
         self.assertTrue(any("README.md is not the title's README" in e for e in errors), errors)
         # Each OoT3D-only resource or licence, one at a time.
         for planted in topscreen + ["LICENSES/OoT3D-Vanilla-UI-HUD.md", "LICENSES/Vanilla-Plus-Link-Remodel.md",
-                                    "docs/releases/v0.8.0-beta.1.md", "docs/TRIAEVUM_TOPSCREEN_INSTALLATION.md"]:
+                                    "docs/releases/v0.8.0-beta.2.md", "docs/TRIAEVUM_TOPSCREEN_INSTALLATION.md"]:
             kept = [path for path in topscreen if path != planted]
             plant = {} if planted in FILES else {planted: ("license" if planted.startswith("LICENSES/")
                                                            else "documentation", b"planted\n")}

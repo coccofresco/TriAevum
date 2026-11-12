@@ -61,7 +61,7 @@ class TitleReleaseTests(unittest.TestCase):
                          ["resources/topscreen/singlescreen-3.1/ltn16.qbf"])
         self.assertIn("LICENSES/SingleScreen-3.0.md", paths)
         for gone in ("LICENSES/OoT3D-Vanilla-UI-HUD.md",
-                     "LICENSES/Vanilla-Plus-Link-Remodel.md", "docs/releases/v0.8.0-beta.1.md", "docs/USER_GUIDE.md"):
+                     "LICENSES/Vanilla-Plus-Link-Remodel.md", "docs/releases/v0.8.0-beta.2.md", "docs/USER_GUIDE.md"):
             self.assertNotIn(gone, paths)
         self.assertEqual(paths["README.md"]["source"], "titles/mm3d/releases/README.md")
         for added in ("LICENSES/mm3d-dekui.md", "LICENSES/Project-Restoration.md",
