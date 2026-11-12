@@ -132,3 +132,18 @@ class AppImageTests(unittest.TestCase):
                 self.assertIn("Actions=Play;Forge;\n", entry)
                 self.assertIn(f"[Desktop Action Play]\nName=Play\nExec={command}\n", entry)
                 self.assertIn(f"[Desktop Action Forge]\nName=Prepare or repair game\nExec={command} --forge\n", entry)
+
+
+class SignedAppImageTests(unittest.TestCase):
+    def test_signed_package_keeps_its_signature_in_the_payload(self):
+        from signed_package_fixture import audit_trusting, write_signed_linux_package
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            keys = write_signed_linux_package(root / "package", root)
+            with patch("tools.triaevum_release.appimage_package.audit_native_elfs"), \
+                 patch("tools.triaevum_release.appimage_package.audit_release", audit_trusting(keys)):
+                appdir = stage_appimage(root / "package", root / "AppDir")
+            payload = appdir / "usr/lib/triaevum"
+            self.assertEqual((payload / "release-signature.json").read_bytes(),
+                             (root / "package/release-signature.json").read_bytes())
+            self.assertTrue(audit_release(payload, signing_keys=keys).summary["signed"])

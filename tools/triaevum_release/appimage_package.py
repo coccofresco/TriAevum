@@ -10,7 +10,7 @@ from pathlib import Path
 import shutil
 
 from .audit_release import DEFAULT_POLICY, audit_release
-from .common import load_json_object, release_manifest_path
+from .common import load_json_object, release_inventory, release_manifest_path
 from .release_platform import LINUX
 from .linux_elf_audit import audit_native_elfs
 
@@ -93,7 +93,7 @@ def stage_appimage(package: Path, output: Path, *, policy_path: Path = DEFAULT_P
     output.mkdir(parents=True)
     try:
         payload = output / "usr/lib/triaevum"
-        for entry in [*manifest["files"], {"path": "release-manifest.json", "role": "manifest"}]:
+        for entry in release_inventory(package, manifest):
             destination = payload / entry["path"]
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(package / entry["path"], destination)

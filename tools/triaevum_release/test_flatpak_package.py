@@ -98,3 +98,22 @@ class FlatpakPackageTests(unittest.TestCase):
         desktop = (ASSETS / "io.github.coccofresco.TriAevum.desktop").read_text()
         self.assertIn("Exec=triaevum\n", desktop)
         self.assertIn("Exec=triaevum --forge\n", desktop)
+
+
+class SignedFlatpakTests(unittest.TestCase):
+    def test_signed_package_keeps_its_signature_in_the_build_inputs(self):
+        from signed_package_fixture import audit_trusting, write_signed_linux_package
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            keys = write_signed_linux_package(root / "source", root)
+            with patch("flatpak_package.audit_release", audit_trusting(keys)):
+                stage_flatpak(root / "source", root / "inputs")
+            copied = root / "inputs/package/release-signature.json"
+            self.assertEqual(copied.read_bytes(), (root / "source/release-signature.json").read_bytes())
+
+    def test_unsigned_package_has_no_signature_in_the_build_inputs(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            write_linux_package(root / "source")
+            stage_flatpak(root / "source", root / "inputs")
+            self.assertFalse((root / "inputs/package/release-signature.json").exists())

@@ -78,6 +78,19 @@ def release_manifest_relative(target: str) -> str:
         else RELEASE_MANIFEST_PATHS[0]
 
 
+def release_inventory(package, manifest: dict) -> list[dict]:
+    """The files a bundle copies from an audited package: the manifest's files,
+    the manifest, and the publisher signature beside it when the package is
+    signed (release_signature; the bundle's copy audit verifies it)."""
+    from pathlib import Path
+    manifest_path = release_manifest_path(Path(package))
+    entries = [*manifest["files"], {"path": manifest_path.relative_to(package).as_posix(), "role": "manifest"}]
+    signature = manifest_path.with_name("release-signature.json")
+    if signature.is_file():
+        entries.append({"path": signature.relative_to(package).as_posix(), "role": "release_signature"})
+    return entries
+
+
 def release_manifest_path(package: Path) -> Path:
     for relative in RELEASE_MANIFEST_PATHS:
         candidate = package / relative
