@@ -354,19 +354,21 @@ pub fn prepare_installed_device_pipelines(
     };
     let verify = CancelToken::new();
     let helper_record = index(contract_value, "helper")?;
-    let installed_record = match (fields.get("helper_tool_mode"), installed_runtime) {
+    // The installed executable (also outside the package: an AppImage runs a
+    // copy in its activation folder) is verified against the catalog's runtime
+    // record (size and SHA-256) in its own folder.
+    let helper = match (fields.get("helper_tool_mode"), installed_runtime) {
         (Some(_), Some(installed)) => {
-            let relative = resolve(installed)?
-                .strip_prefix(resolve(root)?)
-                .map(|path| path.to_string_lossy().replace('\\', "/"))
-                .map_err(|_| contract("The installed runtime is outside the installation"))?;
+            let installed = resolve(installed)?;
+            let (Some(folder), Some(name)) = (installed.parent(), installed.file_name()) else {
+                return Err(contract("Invalid installed runtime path"));
+            };
             let mut record = helper_record.clone();
-            record["path"] = json!(relative);
-            Some(record)
+            record["path"] = json!(name.to_string_lossy());
+            checked_file(folder, &record, &verify)?
         }
-        _ => None,
+        _ => checked_file(root, helper_record, &verify)?,
     };
-    let helper = checked_file(root, installed_record.as_ref().unwrap_or(helper_record), &verify)?;
     let title_program_pack = title.get("title_program_pack")
         .map(|record| checked_file(root, record, &verify)).transpose()?;
     if fields.contains_key("manifest") && fields.contains_key("manifests") {

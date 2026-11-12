@@ -501,6 +501,12 @@ fn tool_mode_job_runs_through_the_installed_executable() {
     assert_eq!(jobs.last().unwrap().helper, installed);
     assert_eq!(jobs.last().unwrap().tool_mode.as_deref(), Some("--pipeline-prepare"));
     drop(jobs);
+    // An AppImage runs a copy outside the package (its activation folder).
+    let outside = tempfile::tempdir().unwrap();
+    let copy = outside.path().join("TriAevum");
+    std::fs::copy(&fixture.helper, &copy).unwrap();
+    run(&fixture, &copy).unwrap();
+    assert_eq!(fixture.services.jobs.borrow().last().unwrap().helper, forge_prepare::paths::resolve(&copy).unwrap());
     // Negative: an installed file that is not the catalog's runtime is refused.
     std::fs::write(&installed, b"another program").unwrap();
     assert!(run(&fixture, &installed).is_err());
