@@ -755,7 +755,7 @@ pub fn install_precompiled_title(
     // executable the player launches (final name and path): the driver keeps
     // its per-application pipeline cache by executable.
     let installed_runtime = match android {
-        None => Some(installed_runtime_path(root, &layout::host_platform()?)),
+        None => Some(layout::launch_runtime_path(root)?),
         Some(_) => None,
     };
     let pipeline_preparation = if cancel.is_cancelled() {

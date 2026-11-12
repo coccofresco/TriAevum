@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use forge_base::{ForgeError, Result};
-use forge_core::layout::{self, HostLayout, HostOs, ReleasePlatform};
+use forge_core::layout::{self, HostLayout, HostOs};
 use forge_core::state::{inspect, InspectRequest, InstallationState};
 use forge_prepare::paths::resolve;
 
@@ -45,7 +45,7 @@ impl Installation {
 
     /// `forge_gui.runtime_path()`.
     pub fn runtime_path(&self) -> Result<PathBuf> {
-        resolve(&layout::installed_runtime_path(&self.root, &host_platform()?))
+        resolve(&layout::launch_runtime_path(&self.root)?)
     }
 
     /// The installation state (`forge_core::state::inspect`). An interrupted
@@ -60,11 +60,6 @@ impl Installation {
         }
         inspect(&InspectRequest { data_root: Some(self.data_root.clone()), ..InspectRequest::package(&self.root) })
     }
-}
-
-/// The release platform this build runs on (`release_platform.host_platform`).
-pub fn host_platform() -> Result<ReleasePlatform> {
-    layout::for_target(forge_core::jobs::target_triple())
 }
 
 #[cfg(test)]

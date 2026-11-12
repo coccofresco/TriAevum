@@ -161,6 +161,79 @@ fn macos_layout(package: PathBuf, get: &dyn Fn(&str) -> String) -> Result<HostLa
     Ok(HostLayout { package, activation, use_file_portal: false })
 }
 
+/// The folder in an AppImage activation that holds the stable game executable.
+pub const APPIMAGE_RUNTIME_DIRECTORY: &str = "appimage-runtime";
+
+/// The executable the player's game runs from (Play and the device pipeline
+/// job). An AppImage mounts its payload at a new path on every start, and the
+/// driver's disk cache of compiled pipelines did not serve the game across
+/// mounts (every launch compiled the startup parts again); a real copy at a
+/// fixed path did. So an AppImage runs a copy of the payload executable kept in
+/// the activation folder ([`appimage_stable_runtime`]); every other package
+/// keeps its installed runtime.
+pub fn launch_runtime_path(package: &Path) -> Result<PathBuf> {
+    let platform = host_platform()?;
+    if HostOs::current() == HostOs::Linux && appimage_root(&resolve(package)?, &process_env("APPDIR").unwrap_or_default()).is_some() {
+        let layout = for_package(package, &process_env, HostOs::Linux)?;
+        return appimage_stable_runtime(&layout.package, &layout.activation, &platform);
+    }
+    Ok(installed_runtime_path(package, &platform))
+}
+
+/// `<activation>/appimage-runtime/`: a real copy of the payload's game
+/// executable (replaced when its size or modification time differs, so a new
+/// AppImage never runs a stale copy) and a symbolic link to every other entry
+/// of the payload (resources, libraries, modules), refreshed to the current
+/// mount. Returns the copy's path.
+pub fn appimage_stable_runtime(package: &Path, activation: &Path, platform: &ReleasePlatform) -> Result<PathBuf> {
+    let directory = activation.join(APPIMAGE_RUNTIME_DIRECTORY);
+    std::fs::create_dir_all(&directory).map_err(|error| file_error("Cannot create", &directory, error))?;
+    let source = package.join(platform.runtime);
+    let target = directory.join(platform.runtime);
+    let metadata = |path: &Path| std::fs::metadata(path).ok().map(|m| (m.len(), m.modified().ok()));
+    let source_metadata = metadata(&source).ok_or_else(|| ForgeError::invalid(format!(
+        "TriAevum runtime is missing: {}", source.display())))?;
+    if metadata(&target) != Some(source_metadata.clone()) {
+        let staged = directory.join(format!(".{}.{}.new", platform.runtime, std::process::id()));
+        std::fs::copy(&source, &staged).map_err(|error| file_error("Cannot copy", &source, error))?;
+        let file = std::fs::File::options().write(true).open(&staged)
+            .map_err(|error| file_error("Cannot open", &staged, error))?;
+        if let Some(modified) = source_metadata.1 {
+            file.set_modified(modified).map_err(|error| file_error("Cannot date", &staged, error))?;
+        }
+        drop(file);
+        fsutil::replace_file(&staged, &target).map_err(|error| file_error("Cannot place", &target, error))?;
+    }
+    let entries = std::fs::read_dir(package).map_err(|error| file_error("Cannot list", package, error))?;
+    let mut wanted = std::collections::BTreeSet::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        if name == std::ffi::OsStr::new(platform.runtime) {
+            continue;
+        }
+        wanted.insert(name.clone());
+        let link = directory.join(&name);
+        let points = entry.path();
+        if std::fs::read_link(&link).ok().as_deref() == Some(points.as_path()) {
+            continue;
+        }
+        let _ = fsutil::try_remove_file(&link);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&points, &link).map_err(|error| file_error("Cannot link", &link, error))?;
+    }
+    // Links of entries a newer payload no longer has.
+    if let Ok(current) = std::fs::read_dir(&directory) {
+        for entry in current.flatten() {
+            let name = entry.file_name();
+            let is_link = entry.file_type().is_ok_and(|kind| kind.is_symlink());
+            if is_link && !wanted.contains(&name) {
+                let _ = fsutil::try_remove_file(&entry.path());
+            }
+        }
+    }
+    Ok(target)
+}
+
 pub fn process_env(name: &str) -> Option<String> {
     std::env::var(name).ok()
 }
@@ -532,6 +605,42 @@ mod tests {
         assert!(std::fs::read_dir(root).unwrap().all(|e| !e.unwrap().file_name().to_string_lossy().ends_with(".new")));
         // The MSVC product keeps the old rule.
         assert!(root_runtime_libraries(&LINUX).is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn appimage_runtime_is_a_stable_copy_beside_links_to_the_current_mount() {
+        let directory = tempfile::tempdir().unwrap();
+        let activation = directory.path().join("data/TriAevum-MM3D");
+        let mount = |name: &str, runtime: &[u8]| {
+            let payload = directory.path().join(name).join("usr/lib/triaevum");
+            std::fs::create_dir_all(payload.join("resources")).unwrap();
+            std::fs::create_dir_all(payload.join("lib")).unwrap();
+            std::fs::write(payload.join(LINUX.runtime), runtime).unwrap();
+            payload
+        };
+        let first = mount("mount-1", b"runtime v1");
+        std::fs::write(first.join("only-in-first.so"), b"x").unwrap();
+        let stable = appimage_stable_runtime(&first, &activation, &LINUX).unwrap();
+        assert_eq!(stable, activation.join(APPIMAGE_RUNTIME_DIRECTORY).join(LINUX.runtime));
+        assert!(!std::fs::symlink_metadata(&stable).unwrap().file_type().is_symlink(), "a real file, not a link");
+        assert_eq!(std::fs::read(&stable).unwrap(), b"runtime v1");
+        let resources = stable.with_file_name("resources");
+        assert_eq!(std::fs::read_link(&resources).unwrap(), first.join("resources"));
+        // A later start from another mount of the same AppImage: the same file, links follow the mount.
+        let inode = |path: &Path| std::os::unix::fs::MetadataExt::ino(&std::fs::metadata(path).unwrap());
+        let before = inode(&stable);
+        let second = mount("mount-2", b"runtime v1");
+        let modified = std::fs::metadata(first.join(LINUX.runtime)).unwrap().modified().unwrap();
+        std::fs::File::options().write(true).open(second.join(LINUX.runtime)).unwrap().set_modified(modified).unwrap();
+        assert_eq!(appimage_stable_runtime(&second, &activation, &LINUX).unwrap(), stable);
+        assert_eq!(inode(&stable), before, "an unchanged executable is not copied again");
+        assert_eq!(std::fs::read_link(&resources).unwrap(), second.join("resources"));
+        assert!(std::fs::symlink_metadata(stable.with_file_name("only-in-first.so")).is_err(), "stale link removed");
+        // A replaced AppImage (another executable): the copy is refreshed.
+        let third = mount("mount-3", b"runtime v2 longer");
+        appimage_stable_runtime(&third, &activation, &LINUX).unwrap();
+        assert_eq!(std::fs::read(&stable).unwrap(), b"runtime v2 longer");
     }
 
     fn read_only(path: &Path, contents: &[u8]) {
