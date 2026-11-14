@@ -28,6 +28,22 @@ ResolvePresentationPacingPolicy(FrameRateMode mode) {
             return {90U, true,
                     {NativeVisualInterpolationMode::Fixed3x, 30U, 90U, 3U,
                      true}};
+        case FrameRateMode::Interpolated4x:
+            return {120U, true,
+                    {NativeVisualInterpolationMode::Fixed4x, 30U, 120U, 4U,
+                     true}};
+        case FrameRateMode::Interpolated6x:
+            return {180U, true,
+                    {NativeVisualInterpolationMode::Fixed6x, 30U, 180U, 6U,
+                     true}};
+        case FrameRateMode::Interpolated8x:
+            return {240U, true,
+                    {NativeVisualInterpolationMode::Fixed8x, 30U, 240U, 8U,
+                     true}};
+        case FrameRateMode::Interpolated12x:
+            return {360U, true,
+                    {NativeVisualInterpolationMode::Fixed12x, 30U, 360U, 12U,
+                     true}};
         case FrameRateMode::Uncapped:
             return {0U, false,
                     {NativeVisualInterpolationMode::Adaptive, 30U, 0U, 0U,
