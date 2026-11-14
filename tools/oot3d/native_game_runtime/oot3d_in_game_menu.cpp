@@ -458,9 +458,16 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
       "VSync", "Waits for the display refresh: no tearing, a little more latency.",
       [](const auto &s) { return s.VSync; }, [](auto &s, bool value) { s.VSync = value; }, true));
   tab.Rows.push_back(graphicsChoice(
-      "Frame rate", "The game runs at its original 30 frames per second; the interpolated modes present 60 or 90 by "
-                    "interpolating the rendered frames. Uncapped presents every rendered frame as it is ready.",
-      {"Original 30 FPS", "Interpolated 2x (60 FPS)", "Interpolated 3x (90 FPS)", "Uncapped"},
+      "Frame rate", "The game runs at its original 30 frames per second; the interpolated modes present 60, 90, 120, "
+                    "180, 240 or 360 by interpolating the rendered frames. Uncapped presents every rendered frame as it is ready.",
+      {"Original 30 FPS",
+       "Interpolated 2x (60 FPS)",
+       "Interpolated 3x (90 FPS)",
+       "Interpolated 4x (120 FPS)",
+       "Interpolated 6x (180 FPS)",
+       "Interpolated 8x (240 FPS)",
+       "Interpolated 12x (360 FPS)",
+       "Uncapped"},
       [](const auto &s) { return static_cast<int>(s.FrameRate); },
       [](auto &s, int value) { s.FrameRate = static_cast<FrameRateMode>(value); }));
   {
