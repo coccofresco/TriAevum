@@ -129,8 +129,14 @@ bool GraphicsSettingsPanel::DrawMotionSettings(GraphicsSettings& settings,
     bool changed = false;
     ImGui::SeparatorText("Motion and camera");
     const char* const frameRates[] = {
-        "Original 30 FPS", "Interpolated 2x (60 FPS)",
-        "Interpolated 3x (90 FPS)", "Uncapped"};
+        "Original 30 FPS",
+        "Interpolated 2x (60 FPS)",
+        "Interpolated 3x (90 FPS)",
+        "Interpolated 4x (120 FPS)",
+        "Interpolated 6x (180 FPS)",
+        "Interpolated 8x (240 FPS)",
+        "Interpolated 12x (360 FPS)",
+        "Uncapped"};
     changed |= EnumCombo("Frame rate", settings.FrameRate, frameRates);
     // The title applies the FOV to its own projection; without that, the
     // stored value is kept and has no effect.
