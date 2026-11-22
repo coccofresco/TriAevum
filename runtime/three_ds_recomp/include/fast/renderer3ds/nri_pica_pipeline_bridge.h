@@ -111,6 +111,7 @@ struct NriPicaTextureBindingDesc {
     bool Integer = false;
     // Anisotropic samples (1: off; Graphics.Textures.Anisotropy).
     uint8_t Anisotropy = 1;
+    uint32_t BorderColor = 0;
 };
 
 inline constexpr size_t kNriPicaUniformBindingCount = 7U;

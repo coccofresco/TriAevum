@@ -729,6 +729,10 @@ bool GfxRenderingAPIVulkan::PreparePicaSequenceDraw(
                 destination.NativeType = texture.NativeType;
                 destination.NativeWrapS = texture.NativeWrapS;
                 destination.NativeWrapT = texture.NativeWrapT;
+                destination.NativeBorderColor =
+                    Renderer3ds::EffectivePicaBorderColor(
+                        texture.NativeWrapS, texture.NativeWrapT,
+                        texture.NativeBorderColor);
                 destination.MinMipLevel = texture.MinMipLevel;
                 destination.MaxMipLevel = texture.MaxMipLevel;
                 destination.MinLinear = texture.MinLinear;
@@ -3341,6 +3345,7 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 destination.MipmapMode = ToNativePicaVkMipmapMode(sampler.SamplerState.MinFilter);
                 destination.AddressU = ToNativePicaVkAddressMode(sampler.SamplerState.WrapS);
                 destination.AddressV = ToNativePicaVkAddressMode(sampler.SamplerState.WrapT);
+                destination.BorderColor = sampler.SamplerState.BorderColor;
                 destination.MipBias = sampler.SamplerState.LodBias;
                 const uint32_t highestMip = texture.UploadedMipLevels > 0U ? texture.UploadedMipLevels - 1U : 0U;
                 destination.MaxLod = static_cast<float>(std::min(sampler.SamplerState.MaxMipLevel, highestMip));
@@ -3650,6 +3655,10 @@ bool GfxRenderingAPIVulkan::SubmitPicaDraw(
                 destination.NativeType = texture.NativeType;
                 destination.NativeWrapS = texture.NativeWrapS;
                 destination.NativeWrapT = texture.NativeWrapT;
+                destination.NativeBorderColor =
+                    Renderer3ds::EffectivePicaBorderColor(
+                        texture.NativeWrapS, texture.NativeWrapT,
+                        texture.NativeBorderColor);
                 destination.MinMipLevel = texture.MinMipLevel;
                 destination.MaxMipLevel = texture.MaxMipLevel;
                 destination.Bound = true;

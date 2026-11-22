@@ -1351,6 +1351,34 @@ int main(int argc, char** argv) {
         Require(hash==2600785150143357462ULL,"native lighting template differs from fixed5cf052e");
     }
 
+    {
+        auto packet = std::make_unique<Oot3dNativeGame::Oot3dPicaDrawPacket>();
+        packet->Registers[0x080U] = 0x7U;
+        packet->Registers[0x081U] = 0x11223344U;
+        packet->Registers[0x083U] = (1U << 12U) | (2U << 8U);
+        packet->Registers[0x091U] = 0x55667788U;
+        packet->Registers[0x093U] = (3U << 12U) | (1U << 8U);
+        packet->Registers[0x099U] = 0x99AABBCCU;
+        packet->Registers[0x09BU] = (1U << 12U) | (1U << 8U);
+        Oot3dNativeGame::Oot3dPicaDecodedDrawState decoded;
+        std::string decodeError;
+        Require(Oot3dNativeGame::DecodeOot3dPicaDrawState(*packet, decoded, &decodeError),
+                decodeError);
+        Require(decoded.Textures[0].Enabled &&
+                    decoded.Textures[0].WrapS == 1U &&
+                    decoded.Textures[0].WrapT == 2U &&
+                    decoded.Textures[0].BorderColor == 0x11223344U &&
+                    decoded.Textures[1].Enabled &&
+                    decoded.Textures[1].WrapS == 3U &&
+                    decoded.Textures[1].WrapT == 1U &&
+                    decoded.Textures[1].BorderColor == 0x55667788U &&
+                    decoded.Textures[2].Enabled &&
+                    decoded.Textures[2].WrapS == 1U &&
+                    decoded.Textures[2].WrapT == 1U &&
+                    decoded.Textures[2].BorderColor == 0x99AABBCCU,
+                "texture clamp-to-border wrap or border color register was not decoded");
+    }
+
     std::cout << "oot3d_native_pica_frontend_tests: ok\n";
     return 0;
 }

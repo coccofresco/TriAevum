@@ -395,6 +395,9 @@ uint64_t ComputeStructuralDrawIdentity(
         HashValue(hash, texture.State.WrapT);
         HashValue(hash, texture.State.MinLinear);
         HashValue(hash, texture.State.MagLinear);
+        if (texture.State.WrapS == 1U || texture.State.WrapT == 1U) {
+            HashValue(hash, texture.State.BorderColor);
+        }
     }
     HashValue(hash, plan.State.Framebuffer.Width);
     HashValue(hash, plan.State.Framebuffer.Height);
@@ -494,10 +497,19 @@ bool HaveMatchingStructuralLayout(const Oot3dPicaVulkanDrawPlan& previous,
     for (size_t index = 0; index < previous.Textures.size(); ++index) {
         const auto& left = previous.Textures[index];
         const auto& right = current.Textures[index];
+        const uint32_t leftBorder =
+            (left.State.WrapS == 1U || left.State.WrapT == 1U)
+                ? left.State.BorderColor
+                : 0U;
+        const uint32_t rightBorder =
+            (right.State.WrapS == 1U || right.State.WrapT == 1U)
+                ? right.State.BorderColor
+                : 0U;
         if (left.Slot != right.Slot || left.State.Enabled != right.State.Enabled ||
             left.State.Width != right.State.Width || left.State.Height != right.State.Height ||
             left.State.Format != right.State.Format || left.State.Type != right.State.Type ||
             left.State.WrapS != right.State.WrapS || left.State.WrapT != right.State.WrapT ||
+            leftBorder != rightBorder ||
             left.State.MinLinear != right.State.MinLinear || left.State.MagLinear != right.State.MagLinear) {
             return false;
         }

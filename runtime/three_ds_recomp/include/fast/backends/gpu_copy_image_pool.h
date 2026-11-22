@@ -218,6 +218,8 @@ struct GpuCopySamplerKey {
     uint32_t MaxLodBits = 0;
     uint32_t AnisotropyEnable = 0;
     uint32_t MaxAnisotropyBits = 0;
+    uint32_t BorderColor = 0;
+    uint32_t BorderColorRgba = 0;
 
     friend bool operator==(const GpuCopySamplerKey&, const GpuCopySamplerKey&) = default;
 };
@@ -227,7 +229,8 @@ struct GpuCopySamplerKeyHash {
         uint64_t hash = 1469598103934665603ULL;
         for (uint32_t value : {key.MagFilter, key.MinFilter, key.MipmapMode, key.AddressU,
                                key.AddressV, key.AddressW, key.MipLodBiasBits, key.MinLodBits,
-                               key.MaxLodBits, key.AnisotropyEnable, key.MaxAnisotropyBits}) {
+                               key.MaxLodBits, key.AnisotropyEnable, key.MaxAnisotropyBits,
+                               key.BorderColor, key.BorderColorRgba}) {
             hash = (hash ^ value) * 1099511628211ULL;
         }
         return static_cast<size_t>(hash);

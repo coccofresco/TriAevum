@@ -71,6 +71,7 @@ enum class NativeTextureFilter : uint8_t {
 
 enum class NativeTextureWrap : uint8_t {
     ClampToEdge,
+    ClampToBorder,
     Repeat,
     MirroredRepeat,
 };
@@ -83,6 +84,7 @@ struct NativeSamplerState {
     float LodBias = 0.0F;
     uint32_t MinMipLevel = 0;
     uint32_t MaxMipLevel = 0;
+    uint32_t BorderColor = 0;
 };
 
 enum class PicaTopology : uint8_t {
@@ -194,6 +196,7 @@ struct PicaTextureView {
     // texture's physical byte range, so the union is exactly what the producer
     // covers and a partially covered texture stays CPU-owned.
     std::span<const PicaTextureCopyReference> CopyReferences;
+    uint32_t NativeBorderColor = 0;
 };
 
 // Whether a native texture format stores alpha per texel. RGB8, RGB565,

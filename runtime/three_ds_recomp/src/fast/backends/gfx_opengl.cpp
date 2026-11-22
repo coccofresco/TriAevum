@@ -20,6 +20,7 @@
 #endif
 
 #include "fast/backends/gfx_opengl.h"
+#include "fast/renderer3ds/pica_border_color.h"
 #include "ship/window/gui/Gui.h"
 #include <prism/processor.h>
 #include <fstream>
@@ -791,6 +792,12 @@ static GLint gfx_native_wrap_to_opengl(GfxNativeTextureWrap wrap) {
     switch (wrap) {
         case GfxNativeTextureWrap::ClampToEdge:
             return GL_CLAMP_TO_EDGE;
+        case GfxNativeTextureWrap::ClampToBorder:
+#ifdef GL_CLAMP_TO_BORDER
+            return GL_CLAMP_TO_BORDER;
+#else
+            return GL_CLAMP_TO_EDGE;
+#endif
         case GfxNativeTextureWrap::Repeat:
             return GL_REPEAT;
         case GfxNativeTextureWrap::MirroredRepeat:
@@ -826,6 +833,14 @@ bool GfxRenderingAPIOGL::SetNativeSamplerParameters(int tile, const GfxNativeSam
                     gfx_native_wrap_to_opengl(state.WrapS));
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
                     gfx_native_wrap_to_opengl(state.WrapT));
+#ifdef GL_TEXTURE_BORDER_COLOR
+    if (state.WrapS == GfxNativeTextureWrap::ClampToBorder ||
+        state.WrapT == GfxNativeTextureWrap::ClampToBorder) {
+        const auto rgba =
+            Renderer3ds::DecodePicaBorderColorFloat(state.BorderColor);
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, rgba.data());
+    }
+#endif
 
     bool complete = true;
 #ifdef GL_TEXTURE_BASE_LEVEL

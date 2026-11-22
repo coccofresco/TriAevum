@@ -570,7 +570,10 @@ void GfxRenderingAPIVulkan::ReleaseGpuCopySamplerCache() {
 }
 
 VkSampler GfxRenderingAPIVulkan::AcquireSharedGpuCopySampler(const TextureRecord& texture) {
-    const VkSamplerCreateInfo info = BuildTextureSamplerInfo(texture);
+    VkSamplerCustomBorderColorCreateInfoEXT customBorderColorInfo{
+        VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT};
+    const VkSamplerCreateInfo info =
+        BuildTextureSamplerInfo(texture, customBorderColorInfo);
     const auto bits = [](float value) {
         uint32_t out = 0;
         std::memcpy(&out, &value, sizeof(out));
@@ -588,6 +591,12 @@ VkSampler GfxRenderingAPIVulkan::AcquireSharedGpuCopySampler(const TextureRecord
     key.MaxLodBits = bits(info.maxLod);
     key.AnisotropyEnable = info.anisotropyEnable;
     key.MaxAnisotropyBits = bits(info.maxAnisotropy);
+    key.BorderColor = static_cast<uint32_t>(info.borderColor);
+    key.BorderColorRgba =
+        (info.addressModeU == VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER ||
+         info.addressModeV == VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER)
+            ? texture.SamplerState.BorderColor
+            : 0U;
     std::lock_guard lock(mGpuCopyImagePoolMutex);
     const auto found = mGpuCopySamplerCache.find(key);
     if (found != mGpuCopySamplerCache.end()) {

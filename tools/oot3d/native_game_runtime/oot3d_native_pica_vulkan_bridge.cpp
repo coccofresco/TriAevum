@@ -241,7 +241,7 @@ bool WithOot3dPicaVulkanDrawView(
             texture.NativeContentHashAvailable,
             texture.NativeBaseLevelContentHash,
             texture.NativeBaseLevelContentHashAvailable,
-            texture.CopyReferences};
+            texture.CopyReferences, texture.State.BorderColor};
     }
 
     Oot3d::Renderer::PicaDrawView draw;

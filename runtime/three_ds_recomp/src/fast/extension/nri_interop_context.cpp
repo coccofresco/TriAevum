@@ -65,6 +65,7 @@ struct NriInteropContext::Impl {
     UpscalerInstances<TriaevumDlssFeature*> Dlss;
     std::string DlssReason = "the DLSS module is unavailable";
     bool DynamicRendering = false;
+    bool CustomBorderColor = false;
     nri::PipelineCache* LentPipelineCache = nullptr;
     std::unordered_map<uint32_t, nri::CommandBuffer*> CommandBuffers;
     struct WrappedTexture {
@@ -528,7 +529,8 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
                                    RendererValidationTelemetry*
                                        validationTelemetry,
                                    bool graphicsPipelineLibrariesEnabled,
-                                   bool extendedDynamicStateEnabled) {
+                                   bool extendedDynamicStateEnabled,
+                                   bool customBorderColorEnabled) {
     Shutdown();
     mImpl->ValidationTelemetry = validationTelemetry;
 #ifdef ENABLE_OOT3D_NRI
@@ -579,6 +581,8 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
     // VRS phase A: NRI loads vkCmdSetFragmentShadingRateKHR only for a listed extension.
     if (Renderer3ds::PicaVrs::Dynamic())
         deviceExtensions.push_back(VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME);
+    if (customBorderColorEnabled)
+        deviceExtensions.push_back(VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
     desc.vkExtensions.deviceExtensions = deviceExtensions.data();
     desc.vkExtensions.deviceExtensionNum =
         static_cast<uint32_t>(deviceExtensions.size());
@@ -603,6 +607,7 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
         return false;
     }
     mImpl->DynamicRendering = dynamicRenderingEnabled;
+    mImpl->CustomBorderColor = customBorderColorEnabled;
     if (nriGetInterface(*mImpl->Device, "CoreInterface", sizeof(nri::CoreInterface), &mImpl->Core) !=
             nri::Result::SUCCESS ||
         nriGetInterface(*mImpl->Device, "WrapperVKInterface", sizeof(nri::WrapperVKInterface), &mImpl->Wrapper) !=
@@ -638,12 +643,14 @@ bool NriInteropContext::Initialize(VkInstance instance, VkPhysicalDevice physica
     (void)swapchainExtensionsEnabled;
     (void)graphicsPipelineLibrariesEnabled;
     (void)extendedDynamicStateEnabled;
+    (void)customBorderColorEnabled;
     return false;
 #endif
 }
 
 void NriInteropContext::Shutdown() {
 #ifdef ENABLE_OOT3D_NRI
+    mImpl->CustomBorderColor = false;
     if (mImpl->Device != nullptr) {
         if (mImpl->Nis != nullptr &&
             mImpl->UpscalerInterface.DestroyUpscaler != nullptr) {
@@ -988,6 +995,14 @@ uint64_t NriInteropContext::TextureGeneration(VkImage image) const {
 bool NriInteropContext::DynamicRenderingAvailable() const {
 #ifdef ENABLE_OOT3D_NRI
     return Available() && mImpl->DynamicRendering;
+#else
+    return false;
+#endif
+}
+
+bool NriInteropContext::CustomBorderColorSupported() const {
+#ifdef ENABLE_OOT3D_NRI
+    return Available() && mImpl->CustomBorderColor;
 #else
     return false;
 #endif

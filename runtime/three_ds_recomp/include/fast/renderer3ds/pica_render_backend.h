@@ -238,6 +238,7 @@ struct PicaTextureCacheEntrySnapshot {
     bool HasCopyProducer = false;
     PicaTextureCopyIdentity CopyProducer;
     std::vector<uint8_t> PixelBytes;
+    uint32_t NativeBorderColor = 0;
 };
 
 // Portable color state for an incrementally rendered native PICA target.

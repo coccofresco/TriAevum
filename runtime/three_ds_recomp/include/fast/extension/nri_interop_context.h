@@ -103,7 +103,8 @@ class NriInteropContext final {
                     bool swapchainExtensionsEnabled = false,
                     RendererValidationTelemetry* validationTelemetry = nullptr,
                     bool graphicsPipelineLibrariesEnabled = false,
-                    bool extendedDynamicStateEnabled = false);
+                    bool extendedDynamicStateEnabled = false,
+                    bool customBorderColorEnabled = false);
     void Shutdown();
     Renderer::CachedPassShaderCompiler& Shaders() { return mShaders; }
 
@@ -125,6 +126,7 @@ class NriInteropContext final {
     // even if Vulkan recycles an image handle or the device is reinitialized.
     [[nodiscard]] uint64_t TextureGeneration(VkImage image) const;
     [[nodiscard]] bool DynamicRenderingAvailable() const;
+    [[nodiscard]] bool CustomBorderColorSupported() const;
     void DestroyOwnedTexture(VkImage image);
     void ForgetTexture(VkImage image);
     void ForgetBuffer(VkBuffer buffer);

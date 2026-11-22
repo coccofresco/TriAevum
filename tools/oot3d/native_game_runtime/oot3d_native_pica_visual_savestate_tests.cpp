@@ -116,6 +116,9 @@ int main() {
     texture.State.Enabled = true;
     texture.State.Width = 16U;
     texture.State.Height = 16U;
+    texture.State.WrapS = 1U;
+    texture.State.WrapT = 1U;
+    texture.State.BorderColor = 0xCC884422U;
     texture.State.MipLinear = true;
     texture.State.LodBiasRaw = -256;
     texture.State.MinMipLevel = 1U;
@@ -185,6 +188,12 @@ int main() {
                         .Composition.SourcePc == 0x0030F4D0U &&
                 decoded.Scheduler.Accumulator.PendingDraws[0]
                         .Composition.NativeValue == 1U &&
+                decoded.Scheduler.Accumulator.PendingDraws[0]
+                        .Textures[0].State.WrapS == 1U &&
+                decoded.Scheduler.Accumulator.PendingDraws[0]
+                        .Textures[0].State.WrapT == 1U &&
+                decoded.Scheduler.Accumulator.PendingDraws[0]
+                        .Textures[0].State.BorderColor == 0xCC884422U &&
                 decoded.Scheduler.Accumulator.PendingDraws[0]
                         .Textures[0].State.MipLinear &&
                 decoded.Scheduler.Accumulator.PendingDraws[0]

@@ -211,6 +211,8 @@ VkSamplerAddressMode ToVulkanAddressMode(GfxNativeTextureWrap wrap) {
     switch (wrap) {
         case GfxNativeTextureWrap::ClampToEdge:
             return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        case GfxNativeTextureWrap::ClampToBorder:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
         case GfxNativeTextureWrap::MirroredRepeat:
             return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         case GfxNativeTextureWrap::Repeat:
@@ -223,6 +225,7 @@ bool SameSamplerState(const GfxNativeSamplerState& left,
                       const GfxNativeSamplerState& right) {
     return left.MinFilter == right.MinFilter && left.MagFilter == right.MagFilter &&
            left.WrapS == right.WrapS && left.WrapT == right.WrapT &&
+           left.BorderColor == right.BorderColor &&
            left.LodBias == right.LodBias && left.MaxMipLevel == right.MaxMipLevel;
 }
 
