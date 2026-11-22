@@ -88,6 +88,7 @@
 #endif
 #include "oot3d_top_screen_camera_guest.h"
 #include "oot3d_top_screen_controls.h"
+#include "oot3d_top_screen_dialogue_scale.h"
 #include "oot3d_top_screen_frontend_composition.h"
 #include "oot3d_top_screen_gameplay_actions.h"
 #include "oot3d_top_screen_gameplay_action_consumer.h"
@@ -709,6 +710,9 @@ struct NativeCandidateDispatchState {
   bool TopScreenSuppressTextboxIcon = false;
   uint32_t TopScreenTextboxIconRestoreAddress = 0U;
   uint8_t TopScreenTextboxIconRestoreValue = 0U;
+  // The dialogue size: the window's element matrices scaled for its draw
+  // and restored after it (TopScreenUiConfig::DialogueScalePercent).
+  Oot3dNativeGame::TopScreenDialogueScaleState TopScreenDialogueScale;
   Oot3dNativeGame::TopScreenRendererVisibilityRouteState
       TopScreenRendererVisibilityRoute;
   uint32_t TopScreenGameOverDrawPhase = 0U;

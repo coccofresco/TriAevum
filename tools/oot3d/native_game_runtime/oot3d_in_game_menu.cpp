@@ -590,6 +590,43 @@ void InGameMenu::BuildVideoTab(Menu::Document &document) {
     };
     labels.Modified = [this] { return mTopScreen.HudButtonLabels != TopScreenHudButtonLabels::Controller; };
     tab.Rows.push_back(std::move(labels));
+    // F1 > Display > TopScreen > Dialogue: the message window's size and its
+    // Latin font.
+    tab.Rows.push_back(Heading("Dialogue"));
+    Row dialogueSize;
+    dialogueSize.Key = "Dialogue size";
+    dialogueSize.Kind = RowKind::Number;
+    dialogueSize.Help = "Shrinks the dialogue boxes (the box, its text, icons and the ocarina staff) around their "
+                        "place on the screen. 100% is the game's own size.";
+    dialogueSize.Minimum = kTopScreenDialogueScaleMinimum;
+    dialogueSize.Maximum = kTopScreenDialogueScaleMaximum;
+    dialogueSize.Step = kTopScreenDialogueScaleStep;
+    dialogueSize.Format = Percent;
+    dialogueSize.Read = [this] { return static_cast<int>(mTopScreen.DialogueScalePercent); };
+    dialogueSize.Write = [this](int value) {
+      auto config = mTopScreen;
+      config.DialogueScalePercent = static_cast<std::uint8_t>(value);
+      return ApplyTopScreen(config);
+    };
+    dialogueSize.Modified = [this] {
+      return mTopScreen.DialogueScalePercent != TopScreenUiConfig{}.DialogueScalePercent;
+    };
+    tab.Rows.push_back(std::move(dialogueSize));
+    Row font;
+    font.Key = "Dialogue font";
+    font.Kind = RowKind::Choice;
+    font.Help = "Automatic uses the SingleScreen HD font from 480 window lines and the 3DS font below them. "
+                "Original always uses the 3DS font. N64 style uses the N64-style font you gave Forge "
+                "(mods/n64_font/ltn16.qbf in the data folder); without it, Automatic. Latin text only.";
+    font.Choices = {"Automatic", "Original 3DS", "N64 style"};
+    font.Read = [this] { return static_cast<int>(mTopScreen.DialogueFont); };
+    font.Write = [this](int value) {
+      auto config = mTopScreen;
+      config.DialogueFont = static_cast<TopScreenDialogueFont>(value);
+      return ApplyTopScreen(config);
+    };
+    font.Modified = [this] { return mTopScreen.DialogueFont != TopScreenDialogueFont::Automatic; };
+    tab.Rows.push_back(std::move(font));
   }
   document.Tabs.push_back(std::move(tab));
 }

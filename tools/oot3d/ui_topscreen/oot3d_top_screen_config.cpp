@@ -198,7 +198,7 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
     return false;
   }
 
-  constexpr std::array<std::string_view, 40> kAllowedFields{
+  constexpr std::array<std::string_view, 41> kAllowedFields{
       "schema",
       "hud_layout",
       "hud_scale",
@@ -217,6 +217,8 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
       "render_dpad_icons",
       "render_items_hint",
       "hud_button_labels",
+      "dialogue_scale_percent",
+      "dialogue_font",
       "select_action",
       "exit_items_to_save_screen",
       "camera_zoom_percent",
@@ -358,6 +360,27 @@ bool DecodeTopScreenUiConfig(const nlohmann::json &document,
     SetError(error, "TopScreen hud_button_labels must be controller or original");
     return false;
   }
+  if (!ReadInteger(document, "dialogue_scale_percent",
+                   kTopScreenDialogueScaleMinimum,
+                   kTopScreenDialogueScaleMaximum, &integer, error)) {
+    return false;
+  }
+  if (document.contains("dialogue_scale_percent")) {
+    if (integer % kTopScreenDialogueScaleStep != 0) {
+      SetError(error,
+               "TopScreen dialogue_scale_percent must use 5 percent steps");
+      return false;
+    }
+    parsed.DialogueScalePercent = static_cast<std::uint8_t>(integer);
+  }
+  if (document.contains("dialogue_font") &&
+      (!document.at("dialogue_font").is_string() ||
+       !ParseTopScreenDialogueFont(
+           document.at("dialogue_font").get<std::string>(),
+           &parsed.DialogueFont))) {
+    SetError(error, "TopScreen dialogue_font must be automatic, original or n64");
+    return false;
+  }
   if (document.contains("free_camera_smoothing") &&
       (!document.at("free_camera_smoothing").is_string() ||
        !ParseTopScreenFreeCameraSmoothing(
@@ -470,6 +493,34 @@ bool ParseTopScreenHudLayout(std::string_view value,
     return true;
   }
   return false;
+}
+
+const char *TopScreenDialogueFontName(TopScreenDialogueFont font) noexcept {
+  switch (font) {
+  case TopScreenDialogueFont::Automatic:
+    return "automatic";
+  case TopScreenDialogueFont::Original:
+    return "original";
+  case TopScreenDialogueFont::N64:
+    return "n64";
+  }
+  return "unknown";
+}
+
+bool ParseTopScreenDialogueFont(std::string_view value,
+                                TopScreenDialogueFont *font) noexcept {
+  if (font == nullptr)
+    return false;
+  if (value == "automatic") {
+    *font = TopScreenDialogueFont::Automatic;
+  } else if (value == "original") {
+    *font = TopScreenDialogueFont::Original;
+  } else if (value == "n64") {
+    *font = TopScreenDialogueFont::N64;
+  } else {
+    return false;
+  }
+  return true;
 }
 
 const char *TopScreenHudButtonLabelsName(TopScreenHudButtonLabels labels) noexcept {
@@ -711,6 +762,10 @@ bool SerializeTopScreenUiConfigText(const TopScreenUiConfig &config,
   if (config.HudButtonLabels != TopScreenHudButtonLabels::Controller)
     document["hud_button_labels"] =
         TopScreenHudButtonLabelsName(config.HudButtonLabels);
+  if (config.DialogueScalePercent != kTopScreenDialogueScaleMaximum)
+    document["dialogue_scale_percent"] = config.DialogueScalePercent;
+  if (config.DialogueFont != TopScreenDialogueFont::Automatic)
+    document["dialogue_font"] = TopScreenDialogueFontName(config.DialogueFont);
   TopScreenUiConfig validated;
   if (!DecodeTopScreenUiConfig(document, &validated, error)) {
     return false;

@@ -2,6 +2,7 @@
 // glyphs of the bound inputs.
 #include "oot3d_top_screen_button_labels.h"
 
+#include "oot3d_top_screen_dialogue_scale.h"
 #include "oot3d_top_screen_items_shortcuts.h"
 #include "oot3d_top_screen_mod_profile_internal.h"
 
@@ -295,7 +296,8 @@ bool ReadTopScreenActionLetter(NativeA32Memory &memory, std::uint32_t renderBuff
 }
 
 bool ReadTopScreenOcarinaStaffNotes(NativeA32Memory &memory, std::vector<TopScreenHudLabelSlot> *notes,
-                                    std::string *error, std::uint32_t messageContext) {
+                                    std::string *error, std::uint32_t messageContext,
+                                    std::uint8_t dialogueScalePercent) {
   if (notes == nullptr) {
     SetError(error, "missing TopScreen staff note output");
     return false;
@@ -369,6 +371,15 @@ bool ReadTopScreenOcarinaStaffNotes(NativeA32Memory &memory, std::vector<TopScre
     slot.Owner = kMessageDrawOwner;
     slot.Descriptor = messageContext;
     notes->push_back(slot);
+  }
+  if (const auto dialogue = ResolveTopScreenDialogueTransform(memory, messageContext + kTopScreenDialogueWindowOffset,
+                                                              dialogueScalePercent);
+      dialogue.Active) {
+    for (auto &note : *notes) {
+      note.CenterX = dialogue.PivotX + (note.CenterX - dialogue.PivotX) * dialogue.Scale;
+      note.CenterY = dialogue.PivotY + (note.CenterY - dialogue.PivotY) * dialogue.Scale;
+      note.Height *= dialogue.Scale;
+    }
   }
   return true;
 }

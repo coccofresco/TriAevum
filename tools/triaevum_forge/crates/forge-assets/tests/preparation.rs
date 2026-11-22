@@ -176,6 +176,52 @@ fn topscreen_font_failure_is_not_cached_and_package_damage_is_fatal() {
         .contains(topscreen::UI_ATLAS));
 }
 
+#[test]
+fn n64_font_is_built_reused_reported_and_removed_with_the_users_file() {
+    let package = package();
+    let mut messages = Vec::new();
+    let pack = prepare(&package, &package.romfs, None, &mut messages).unwrap().unwrap();
+    let n64_pack = pack.with_file_name(topscreen::N64_FONT_PACK);
+    let n64_receipt = pack.with_file_name(topscreen::N64_FONT_RECEIPT);
+    assert!(!n64_pack.exists() && topscreen::user_n64_font(&package.data).is_none());
+
+    // The user's font (here the shipped HD font, which covers the ROM's).
+    let font = package.data.join("mods/n64_font").join(topscreen::HD_FONT);
+    std::fs::create_dir_all(font.parent().unwrap()).unwrap();
+    std::fs::copy(package.root.join("resources/topscreen/singlescreen-3.1").join(topscreen::HD_FONT), &font).unwrap();
+    let start = messages.len();
+    assert_eq!(prepare(&package, &package.romfs, None, &mut messages).unwrap().unwrap(), pack);
+    assert_eq!(messages[start..], ["Preparing the N64-style font...".to_string()]);
+    assert!(n64_pack.is_file());
+    let receipt: Value = serde_json::from_slice(&std::fs::read(&n64_receipt).unwrap()).unwrap();
+    assert_eq!(receipt["attribution"], topscreen::N64_FONT_ATTRIBUTION);
+    assert_eq!(receipt["source"]["font_import_version"], topscreen::N64_FONT_IMPORT_VERSION);
+    let built = std::fs::read(&n64_pack).unwrap();
+    assert!(String::from_utf8_lossy(&built).contains(topscreen::N64_FONT_ATTRIBUTION));
+
+    // Reused while the receipt matches.
+    let start = messages.len();
+    prepare(&package, &package.romfs, None, &mut messages).unwrap();
+    assert_eq!(messages.len(), start);
+
+    // An unusable font is reported, not fatal, and leaves no pack.
+    std::fs::write(&font, b"not a font").unwrap();
+    let start = messages.len();
+    assert_eq!(prepare(&package, &package.romfs, None, &mut messages).unwrap().unwrap(), pack);
+    assert!(messages[start..].iter().any(|text| text.starts_with("The N64-style font (")));
+    assert!(!n64_pack.exists() && !n64_receipt.exists());
+
+    // A removed font removes its pack.
+    std::fs::copy(package.root.join("resources/topscreen/singlescreen-3.1").join(topscreen::HD_FONT), &font).unwrap();
+    prepare(&package, &package.romfs, None, &mut messages).unwrap();
+    assert!(n64_pack.is_file());
+    std::fs::remove_file(&font).unwrap();
+    prepare(&package, &package.romfs, None, &mut messages).unwrap();
+    assert!(!n64_pack.exists() && !n64_receipt.exists());
+    // The SingleScreen HD font is untouched throughout.
+    assert!(pack.with_file_name("font_coverage.zip").is_file());
+}
+
 fn collect(directory: &Path, out: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(directory).into_iter().flatten().flatten() {
         if entry.path().is_dir() {

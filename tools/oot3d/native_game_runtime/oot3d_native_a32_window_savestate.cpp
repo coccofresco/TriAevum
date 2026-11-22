@@ -523,6 +523,9 @@ bool NativeA32WindowSession::LoadState(const std::filesystem::path &path,
   nativeCandidateDispatch.TopScreenPauseRoute = {};
   nativeCandidateDispatch.TopScreenTouchCoordinateRoute = {};
   nativeCandidateDispatch.TopScreenRendererVisibilityRoute = {};
+  // Matrices saved from the previous state's memory are never written into
+  // the loaded one.
+  nativeCandidateDispatch.TopScreenDialogueScale = {};
   nativeCandidateDispatch.TopScreenGameOverDrawPhase = 0U;
   nativeCandidateDispatch.TopScreenVisionsRouted = false;
   nativeCandidateDispatch.TopScreenVisionsFadeStep = 0;

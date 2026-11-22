@@ -54,6 +54,12 @@ inline constexpr std::uint8_t kTopScreenCameraFovMaximum = 140U;
 inline constexpr std::uint16_t kTopScreenRainDensityMinimum = 25U;
 inline constexpr std::uint16_t kTopScreenRainDensityMaximum = 300U;
 inline constexpr std::uint16_t kTopScreenRainDensityStep = 25U;
+// TriAevum's dialogue size, not a SingleScreen option: the message window
+// (text, its box, icons and the ocarina staff) drawn at 50..100 percent in 5
+// percent steps. Written only when not 100, so older builds read the file.
+inline constexpr std::uint8_t kTopScreenDialogueScaleMinimum = 50U;
+inline constexpr std::uint8_t kTopScreenDialogueScaleMaximum = 100U;
+inline constexpr std::uint8_t kTopScreenDialogueScaleStep = 5U;
 
 enum class TopScreenHudLayout {
   Normal,
@@ -76,6 +82,20 @@ enum class TopScreenHudButtonLabels : std::uint8_t {
 const char *TopScreenHudButtonLabelsName(TopScreenHudButtonLabels labels) noexcept;
 bool ParseTopScreenHudButtonLabels(std::string_view value,
                                    TopScreenHudButtonLabels *labels) noexcept;
+
+// The Latin dialogue font: Automatic is the SingleScreen HD font from 480
+// output lines (the native font below them); Original always the 3DS font;
+// N64 the N64-style font the user supplied to Forge (Automatic without it).
+// Written only when not Automatic, so the file stays readable by older builds.
+enum class TopScreenDialogueFont : std::uint8_t {
+  Automatic,
+  Original,
+  N64,
+};
+
+const char *TopScreenDialogueFontName(TopScreenDialogueFont font) noexcept;
+bool ParseTopScreenDialogueFont(std::string_view value,
+                                TopScreenDialogueFont *font) noexcept;
 
 enum class TopScreenSelectAction : std::uint8_t {
   SaveScreen,
@@ -156,6 +176,8 @@ struct TopScreenUiConfig {
   bool RenderDpadIcons = true;
   bool RenderItemsHint = true;
   TopScreenHudButtonLabels HudButtonLabels = TopScreenHudButtonLabels::Controller;
+  std::uint8_t DialogueScalePercent = kTopScreenDialogueScaleMaximum;
+  TopScreenDialogueFont DialogueFont = TopScreenDialogueFont::Automatic;
   TopScreenSelectAction SelectAction = TopScreenSelectAction::SaveScreen;
   bool ExitItemsToSaveScreen = true;
   std::uint8_t CameraZoomPercent = 100U;

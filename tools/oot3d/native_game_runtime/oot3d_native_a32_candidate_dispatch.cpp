@@ -922,6 +922,11 @@ bool ExecuteTopScreenUiSourcePortBlock(
       (void)memory.Write8(dispatch.TopScreenTextboxIconRestoreAddress, dispatch.TopScreenTextboxIconRestoreValue);
       dispatch.TopScreenTextboxIconRestoreAddress = 0U;
     }
+    // The dialogue size, for this draw only (restored at the return below).
+    if (dispatch.TopScreenConfig != nullptr)
+      (void)Oot3dNativeGame::BeginTopScreenDialogueScale(
+          memory, state.r[0], dispatch.TopScreenConfig->DialogueScalePercent,
+          dispatch.TopScreenDialogueScale);
     if (!dispatch.TopScreenSuppressTextboxIcon) return false;
     // Without its active byte (+4) the window returns before its entries.
     uint8_t active = 0U;
@@ -941,6 +946,7 @@ bool ExecuteTopScreenUiSourcePortBlock(
       (void)memory.Write8(dispatch.TopScreenTextboxIconRestoreAddress, dispatch.TopScreenTextboxIconRestoreValue);
       dispatch.TopScreenTextboxIconRestoreAddress = 0U;
     }
+    Oot3dNativeGame::EndTopScreenDialogueScale(memory, dispatch.TopScreenDialogueScale);
     return false;
   case kPauseUiNativeUpdateCall: {
     uint32_t pauseState = 0U;

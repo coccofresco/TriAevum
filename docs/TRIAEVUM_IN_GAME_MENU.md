@@ -52,7 +52,7 @@ presets by name, the dev tools and the rest).
 
 | Tab | Rows |
 | --- | --- |
-| Video | Graphics preset (Authentic / Enhanced / Toon, on Android also Enhanced for Mobile; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Anisotropic filtering (Off / 2x / 4x / 8x / 16x; 4x in Enhanced), Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile), Button labels (Controller / Original 3DS, see "HUD button labels") |
+| Video | Graphics preset (Authentic / Enhanced / Toon, on Android also Enhanced for Mobile; Custom is the result of any change), Window mode, Aspect ratio (Original 3DS 5:3 / 16:9 / 21:9 / Free), Resolution (the common sizes; a custom size is typed in F1), VSync, Frame rate, **Reset display settings**, Render scale, Anti-aliasing, Upscaler and quality, Anisotropic filtering (Off / 2x / 4x / 8x / 16x; 4x in Enhanced), Scene FOV, Extended draw distance, HUD size (Native / Optimized, the TopScreen profile), Button labels (Controller / Original 3DS, see "HUD button labels"), Dialogue size (50-100%) and Dialogue font (Automatic / Original 3DS / N64 style), see "Dialogue size and font" |
 | Graphics | Lighting model, Global illumination, Ambient occlusion, Shadows (modern lighting only), Reflections, Toon, Grass quality, Distant grass cards, Textures > Custom textures (F1's "Load custom textures"; keeps the preset) |
 | Controls | Keyboard / Mouse / Controller / Capture mouse, Rumble (Off / Light / Strong, F1 > Controls > Devices > Controller), Button prompts, Control preset, Aim source, Invert aim X / Y; with the TopScreen profile, Camera (Gameplay camera, speed, smoothing, invert X / Y, Camera zoom, Camera FOV) and C-Stick aiming (speed, invert X / Y) |
 | Photo mode | Photo camera (F6), Hide HUD, Photo camera speed, Back to the game's view, then the camera's controls as read-only rows (F6, WASD / left stick, Q / E / shoulders, mouse drag / right stick, Shift / Ctrl) |
@@ -359,6 +359,44 @@ A glyph that follows the slide needs that transition's transform.
 
 The SingleScreen Items page's native "BACK" key (with its B) is not drawn on
 the pages TopScreen shows and is not covered.
+
+## Dialogue size and font
+
+TriAevum options, not SingleScreen ones; the TopScreen profile owns both
+(`TopScreenUiConfig`, `topscreen_ui.json`, each written only when changed so
+older builds still read the file). F1 > Display > TopScreen > **Dialogue** is
+their control; the menu's Video > Dialogue rows mirror it. Both apply and
+save at once.
+
+- **Dialogue size** (`dialogue_scale_percent`, 50..100 in 5 percent steps,
+  default 100). `MessageWindow_Draw` (0x004421B8, r0 the message context's
+  window at +0x44) draws the window's 256 elements (+0x524); each element's
+  renderer (+0x64) holds the 3 x 4 world matrix the draw uses (+0x0C, canvas
+  units, Y down), and its second renderer (+0x68, the text's shadow, drawn
+  by 0x002F1280 while +0x6E is set) one alike (both written by the element's
+  update, 0x002F2D88..0x002F2E24). For that draw only, every element's
+  matrices are scaled about
+  the dialogue's pivot (X 200, the boxes are centred; Y the middle of the
+  visible elements' origins) and restored when the draw returns
+  (0x004421EC), with a missed return restored by the next draw first
+  (`oot3d_top_screen_dialogue_scale.h`). The box, its text, the icons and
+  the ocarina staff shrink together; the native layout, wrapping, timing and
+  animation never see the change. The staff notes' button labels are read
+  after the draw, so they take the same transform. Not applied while a pause
+  page (Gear, Items, Map, System) is open: the item description uses the same
+  window, placed by the page.
+- **Dialogue font** (`dialogue_font`: `automatic`, `original`, `n64`).
+  Automatic is the SingleScreen HD font from 480 output lines and the native
+  font below them (see [HD fonts](TRIAEVUM_ISSUE44_HD_FONTS.md)); Original
+  always the native 3DS font; N64 style the N64-style font the user gave
+  Forge, at every output height. TriAevum does not ship or download that
+  font: its `ltn16.qbf` (for instance from the N64-style HD font mod,
+  gamebanana.com/mods/713226) goes in `mods/n64_font/` in the data folder,
+  and Forge's Prepare and install pairs it with the ROM's own font into
+  `font_coverage_n64.zip` beside the HD pack, by character code, with the
+  native metrics, exactly as the HD font. An unusable file is reported and
+  skipped; a removed one removes its pack. Without the pack, N64 style is
+  Automatic. Latin text only, as the HD font.
 
 ## Pause
 

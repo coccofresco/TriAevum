@@ -24,8 +24,9 @@ NATIVE_FONTS = ("message/eu/ltn16.qbf", "message/us/ltn16.qbf")
 ATTRIBUTION = "SingleScreen (TopScreen / Single Screen Experience) by M-1 / rlgcarrot"
 
 
-def prepare_font_pack(*, font: Path, romfs: Path, output: Path) -> dict:
-    """Pair the ROM's Latin fonts with the HD font."""
+def prepare_font_pack(*, font: Path, romfs: Path, output: Path, attribution: str = ATTRIBUTION) -> dict:
+    """Pair the ROM's Latin fonts with the HD font (or another replacement
+    Latin font, such as a user's N64-style font, credited by `attribution`)."""
     if font.stat().st_size > MAX_FONT_BYTES:
         raise ValueError(f"oversized QBF: {font}")
     font_bytes = font.read_bytes()
@@ -51,7 +52,7 @@ def prepare_font_pack(*, font: Path, romfs: Path, output: Path) -> dict:
                 "status": "native_atlas_coverage_ready",
                 "fonts": fonts,
                 "source_font_sha256": hashlib.sha256(font_bytes).hexdigest(),
-                "attribution": ATTRIBUTION}
+                "attribution": attribution}
     output.parent.mkdir(parents=True, exist_ok=True)
     # Publish only after validating every font. Fixed ZIP timestamps permit
     # byte-for-byte reproducibility and keep generated data separate from code.

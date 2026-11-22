@@ -222,6 +222,12 @@ void NativeA32WindowSession::Setup() {
       hdFontsLoaded = hdFonts.Load(fontPath, &error);
       if (!hdFontsLoaded) std::cerr << "HD font coverage unavailable; re-run Forge: " << error << '\n';
     }
+    // The N64-style font, when the user gave it to Forge (the dialogue font
+    // setting chooses it).
+    const auto n64FontPath = fontPath.parent_path() / "font_coverage_n64.zip";
+    if (hdFontsLoaded && std::filesystem::is_regular_file(n64FontPath) &&
+        !hdFonts.LoadAlternate(n64FontPath, &error))
+      std::cerr << "N64-style font coverage unavailable; re-run Forge: " << error << '\n';
   }
   if (!launch.TopScreenTextureOverridePackPath.empty()) {
     if (!topScreenTextureOverridePack.Load(
