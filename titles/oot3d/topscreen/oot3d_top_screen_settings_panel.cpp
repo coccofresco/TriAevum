@@ -9,8 +9,8 @@ namespace Oot3dNativeGame {
 namespace {
 
 // The TopScreen section of the Display tab. The standard profile fixes the
-// HUD layout; the user chooses only its size and its button labels. A choice
-// applies and saves at once.
+// HUD layout; the user chooses its size and its button labels, and the
+// dialogue's size and font. A choice applies and saves at once.
 class TopScreenSettingsPanel final
     : public Fast::Extension::GraphicsSettingsPanelTab {
 public:
@@ -71,6 +71,45 @@ public:
     labels("Original 3DS##hud_button_labels", TopScreenHudButtonLabels::Original);
     if (ImGui::IsItemHovered())
       ImGui::SetTooltip("The 3DS letters: A, B, X, Y, L, R, ZL, ZR and SELECT.");
+    ImGui::SeparatorText("Dialogue");
+    // The message window drawn smaller around its place on the screen; the
+    // native layout and wrapping are unchanged.
+    int dialogueSize = config.DialogueScalePercent;
+    ImGui::SetNextItemWidth(200.0F);
+    if (ImGui::SliderInt("Dialogue size", &dialogueSize, kTopScreenDialogueScaleMinimum,
+                         kTopScreenDialogueScaleMaximum, "%d%%")) {
+      // Commit whole 5 percent steps only (the configuration rejects others).
+      const int step = kTopScreenDialogueScaleStep;
+      dialogueSize = (dialogueSize + step / 2) / step * step;
+      if (dialogueSize != config.DialogueScalePercent) {
+        config.DialogueScalePercent = static_cast<std::uint8_t>(dialogueSize);
+        Store(config);
+      }
+    }
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Shrinks the dialogue boxes (the box, its text, icons and the\n"
+                        "ocarina staff) around their place on the screen.\n"
+                        "100%% is the game's own size.");
+    const auto font = [&](const char *label, TopScreenDialogueFont value) {
+      if (ImGui::RadioButton(label, config.DialogueFont == value) && config.DialogueFont != value) {
+        config.DialogueFont = value;
+        Store(config);
+      }
+    };
+    ImGui::TextUnformatted("Dialogue font");
+    font("Automatic##dialogue_font", TopScreenDialogueFont::Automatic);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The SingleScreen HD font from 480 window lines, the 3DS font below them.");
+    ImGui::SameLine();
+    font("Original 3DS##dialogue_font", TopScreenDialogueFont::Original);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Always the game's own 3DS font.");
+    ImGui::SameLine();
+    font("N64 style##dialogue_font", TopScreenDialogueFont::N64);
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("The N64-style font you gave Forge: put its ltn16.qbf in\n"
+                        "mods/n64_font/ in the TriAevum data folder and run Forge's\n"
+                        "Prepare and install. Without it, Automatic. Latin text only.");
     if (!mRuntime->Persistent()) {
       ImGui::TextDisabled("TopScreen: session only");
     } else if (!mStatus.empty()) {

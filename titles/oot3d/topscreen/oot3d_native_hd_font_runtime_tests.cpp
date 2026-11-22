@@ -67,6 +67,33 @@ int main(int argc, char** argv) {
         Check(second.SharedBytes == result.SharedBytes && runtime.Rebuilds == 1, "reuse immutable HD surface");
         Check(second.ContentHashAvailable && second.BaseLevelContentHashAvailable &&
               second.ContentHash == HashOot3dPicaSnapshot(second.ResolvedBytes()), "cached content hash");
+        // The dialogue font: an alternate (N64-style) pack for the same native
+        // font, the native glyphs, and back to the automatic HD font.
+        const auto alternatePath = std::filesystem::temp_directory_path() / "triaevum-hd-font-test-n64.zip";
+        const auto n64 = Font(64, 0x33), foreign = Font(16, 0xee);
+        const auto writePack = [&](const std::vector<std::uint8_t>& nativeFont) {
+            zip = zip_open(alternatePath.string().c_str(), ZIP_CREATE | ZIP_TRUNCATE, nullptr);
+            Check(zip != nullptr, "create alternate fixture");
+            add("manifest.json", manifest.data(), manifest.size());
+            add("native.qbf", nativeFont.data(), nativeFont.size());
+            add("hd.qbf", n64.data(), n64.size());
+            Check(zip_close(zip) == 0, "close alternate fixture");
+        };
+        writePack(foreign);
+        Check(!runtime.LoadAlternate(alternatePath, &error) && !runtime.HasAlternate(),
+              "an alternate pack for another native font");
+        writePack(native);
+        Check(runtime.LoadAlternate(alternatePath, &error) && runtime.HasAlternate(), "load the alternate pack");
+        std::filesystem::remove(alternatePath);
+        runtime.ObserveBlit(state, memory);
+        Check(resolve(720).ResolvedBytes()[0] == 0x88, "automatic keeps the HD font");
+        runtime.SetMode(NativeHdFontMode::Alternate);
+        Check(resolve(720).ResolvedBytes()[0] == 0x33, "the alternate font");
+        Check(resolve(240).ResolvedBytes()[0] == 0x33, "the alternate font at every output height");
+        runtime.SetMode(NativeHdFontMode::Native);
+        Check(resolve(1080).ReplacementWidth == 0, "the native font at any height");
+        runtime.SetMode(NativeHdFontMode::Automatic);
+        Check(resolve(720).ResolvedBytes()[0] == 0x88, "back to the HD font");
         Check(resolve(240).ReplacementWidth == 0, "resolution downgrade disables immediately");
         atlas.assign(128, 0);
         Check(memory.WriteBytes(0x4000, atlas), "clear native atlas");
@@ -85,6 +112,7 @@ int main(int argc, char** argv) {
         add("native.a4",atlas.data(),atlas.size());add("hd.a4",staticHd.data(),staticHd.size());
         Check(zip_close(zip)==0 && runtime.Load(path,&error),"load static fixture");
         Check(!runtime.NeedsBlitObserver(),"MM static atlas borrowed OoT PC");
+        Check(!runtime.HasAlternate(),"a new pack keeps the previous pack's alternate");
         Check(resolve(479).ReplacementWidth==0,"static threshold");
         Check(resolve(480).ResolvedBytes()[0]==0x99,"static replacement");
         runtime.Reset();Check(resolve(720).ReplacementWidth==64,"static source identity survives restore");

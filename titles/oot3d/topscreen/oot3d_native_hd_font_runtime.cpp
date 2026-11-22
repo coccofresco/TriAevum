@@ -31,12 +31,15 @@ std::vector<std::uint8_t> ReadZip(zip_t* zip, const std::string& name) {
     if (count < 0 || static_cast<std::size_t>(count) != data.size()) throw std::runtime_error("truncated HD font entry");
     return data;
 }
+zip_t* OpenZip(const std::filesystem::path& path) {
+    const auto utf8 = path.u8string();
+    const std::string name(reinterpret_cast<const char*>(utf8.data()), utf8.size());
+    return zip_open(name.c_str(), ZIP_RDONLY, nullptr);
+}
 }
 
 bool NativeHdFontRuntime::Load(const std::filesystem::path& path, std::string* error) {
-    const auto utf8 = path.u8string();
-    const std::string name(reinterpret_cast<const char*>(utf8.data()), utf8.size());
-    auto* zip = zip_open(name.c_str(), ZIP_RDONLY, nullptr);
+    auto* zip = OpenZip(path);
     if (!zip) { if (error) *error = "cannot open HD font coverage pack"; return false; }
     try {
         const auto bytes = ReadZip(zip, "manifest.json");
@@ -66,7 +69,8 @@ bool NativeHdFontRuntime::Load(const std::filesystem::path& path, std::string* e
                 atlas.Coverage = std::make_shared<const std::vector<std::uint8_t>>(std::move(coverage));
                 atlases.push_back(std::move(atlas));
             }
-            mFonts.clear(); mStaticAtlases = std::move(atlases); Reset();
+            mFonts.clear(); mStaticAtlases = std::move(atlases);
+            mAlternate.clear(); mAlternateLoaded = false; Reset();
             zip_close(zip); return true;
         }
         if (manifest.at("format") != "oot3d_qbf_coverage_v1" || manifest.at("fonts").size() > 8)
@@ -83,6 +87,49 @@ bool NativeHdFontRuntime::Load(const std::filesystem::path& path, std::string* e
         if (fonts.empty()) throw std::runtime_error("empty HD font pack");
         mFonts = std::move(fonts);
         mStaticAtlases.clear();
+        // An alternate pack was paired with the previous native fonts.
+        mAlternate.clear();
+        mAlternateLoaded = false;
+        Reset();
+        zip_close(zip);
+        return true;
+    } catch (const std::exception& exception) {
+        zip_close(zip);
+        if (error) *error = exception.what();
+        return false;
+    }
+}
+
+bool NativeHdFontRuntime::LoadAlternate(const std::filesystem::path& path, std::string* error) {
+    if (mFonts.empty()) {
+        if (error) *error = "the alternate font needs the HD font coverage pack";
+        return false;
+    }
+    auto* zip = OpenZip(path);
+    if (!zip) { if (error) *error = "cannot open alternate font coverage pack"; return false; }
+    try {
+        const auto manifest = nlohmann::json::parse(ReadZip(zip, "manifest.json"));
+        if (manifest.at("format") != "oot3d_qbf_coverage_v1" || manifest.at("fonts").size() > 8)
+            throw std::runtime_error("invalid alternate font manifest");
+        std::vector<std::optional<NativeFontCoverage>> alternate(mFonts.size());
+        bool paired = false;
+        for (const auto& entry : manifest.at("fonts")) {
+            const auto native = ReadZip(zip, entry.at("native_file").get<std::string>());
+            const auto index = static_cast<std::size_t>(
+                std::find_if(mFonts.begin(), mFonts.end(), [&](const Font& font) { return font.Native == native; }) -
+                mFonts.begin());
+            // A native font the loaded pack does not observe is never drawn.
+            if (index == mFonts.size()) continue;
+            const auto coverage = ReadZip(zip, entry.at("coverage_file").get<std::string>());
+            NativeFontCoverage font;
+            std::string reason;
+            if (!font.Load(native, coverage, &reason)) throw std::runtime_error(reason);
+            alternate[index] = std::move(font);
+            paired = true;
+        }
+        if (!paired) throw std::runtime_error("alternate font pack pairs none of the loaded native fonts");
+        mAlternate = std::move(alternate);
+        mAlternateLoaded = true;
         Reset();
         zip_close(zip);
         return true;
@@ -140,7 +187,12 @@ void NativeHdFontRuntime::ObserveBlit(const oot3d::recomp::a32::GuestState& stat
 void NativeHdFontRuntime::Resolve(const Oot3dPicaPhysicalMemoryView& memory,
                                   const Oot3dPicaTextureState& texture,
                                   Oot3dPicaResourceSnapshot& resource) {
-    if (mOutputHeight < 480 || texture.Format != 11 || texture.MaxMipLevel != 0) return;
+    // Native: the game's glyphs. Alternate is a style the player chose, so it
+    // applies at every output height; the HD coverage only from 480 lines.
+    const auto mode = mMode.load(std::memory_order_relaxed);
+    if (mode == NativeHdFontMode::Native) return;
+    const bool alternate = mode == NativeHdFontMode::Alternate && mAlternateLoaded;
+    if ((!alternate && mOutputHeight < 480) || texture.Format != 11 || texture.MaxMipLevel != 0) return;
     const auto native = resource.ResolvedBytes();
     // Static title-native atlases (MM GZFX) need no OoT blit PC or guest
     // pointer cache. Exact full source bytes bind coverage to the native asset;
@@ -177,7 +229,7 @@ void NativeHdFontRuntime::Resolve(const Oot3dPicaPhysicalMemoryView& memory,
     auto& surface = found->second;
     if (surface.Width != texture.Width || surface.Height != texture.Height ||
         native.size() != static_cast<std::size_t>(surface.Width) * surface.Height / 2) return;
-    if (surface.Dirty || surface.LastNative.size() != native.size() ||
+    if (surface.Dirty || surface.Alternate != alternate || surface.LastNative.size() != native.size() ||
         !std::equal(native.begin(), native.end(), surface.LastNative.begin())) {
         surface.Encoded.reset();
         std::vector<const Placement*> valid;
@@ -191,8 +243,9 @@ void NativeHdFontRuntime::Resolve(const Oot3dPicaPhysicalMemoryView& memory,
                     const auto value = (font.Native[p.Offset + (y * w + x) / 2] >> ((1 - (x & 1U)) * 4)) & 15U;
                     if (ReadA4(native, Pixel(p.X + x, p.Y + y, surface.Width)) != value) { matches = false; break; }
                 }
-            if (matches && (!density || density == font.Coverage.Density())) {
-                valid.push_back(&p); density = font.Coverage.Density();
+            const auto& coverage = CoverageFor(p.FontIndex, alternate);
+            if (matches && (!density || density == coverage.Density())) {
+                valid.push_back(&p); density = coverage.Density();
             }
         }
         if (!valid.empty() && static_cast<std::uint64_t>(surface.Width) * surface.Height * density * density / 2 <= kMaxFontBytes) {
@@ -202,9 +255,9 @@ void NativeHdFontRuntime::Resolve(const Oot3dPicaPhysicalMemoryView& memory,
                 for (std::uint32_t x = 0; x < hdWidth; ++x)
                     WriteA4(*encoded, Pixel(x, y, hdWidth), ReadA4(native, Pixel(x / density, y / density, surface.Width)));
             for (const auto* p : valid) {
-                const auto& font = mFonts[p->FontIndex];
-                const auto glyph = font.Coverage.Glyph(p->Offset);
-                const auto w = font.Coverage.LogicalWidth() * density, h = font.Coverage.LogicalHeight() * density;
+                const auto& coverage = CoverageFor(p->FontIndex, alternate);
+                const auto glyph = coverage.Glyph(p->Offset);
+                const auto w = coverage.LogicalWidth() * density, h = coverage.LogicalHeight() * density;
                 for (std::uint32_t y = 0; y < h; ++y)
                     for (std::uint32_t x = 0; x < w; ++x)
                         WriteA4(*encoded, Pixel(p->X * density + x, p->Y * density + y, hdWidth), glyph[y * w + x] / 17);
@@ -216,6 +269,7 @@ void NativeHdFontRuntime::Resolve(const Oot3dPicaPhysicalMemoryView& memory,
         }
         surface.LastNative.assign(native.begin(), native.end());
         surface.Dirty = false;
+        surface.Alternate = alternate;
     }
     if (!surface.Encoded) return;
     resource.SharedBytes = surface.Encoded;

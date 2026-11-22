@@ -56,6 +56,16 @@ BUNDLED_ASSETS = {
     LINK_ANIMATIONS: (186404, "06d60e05c493e86677497eb935b49951d613249c43f896816ae898bb8b005902"),
 }
 BUNDLED_FONT = (427592, "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169")
+# The N64-style Latin font, only when the user supplies it: TriAevum neither
+# ships nor downloads it. Its ltn16.qbf (4-bit glyphs at a whole multiple of
+# the native 16x16 cell, like SingleScreen's) goes in <data folder>/mods/n64_font/
+# and is paired with the ROM's own font exactly like the HD font; the runtime's
+# dialogue font setting chooses it (font_coverage_n64.zip beside the HD pack).
+N64_FONT_DIRECTORY = Path("mods/n64_font")
+N64_FONT_PACK = "font_coverage_n64.zip"
+N64_FONT_RECEIPT = "fonts_n64_import.json"
+N64_FONT_IMPORT_VERSION = 1
+N64_FONT_ATTRIBUTION = "N64-style font supplied by the user (e.g. gamebanana.com/mods/713226)"
 # The HD custom_ui01 of the texture pack's author, an emulator texture
 # replacement. It also draws elements the native atlas lacks (SELECT/START,
 # ZL/ZR labels). TriAevum uses it as the 3.0 atlas, keyed by its native content.
@@ -106,6 +116,12 @@ def topscreen_link_animations(pack: Path | None) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+def user_n64_font(data_root: Path) -> Path | None:
+    """The user's N64-style ltn16.qbf, when present."""
+    candidate = data_root / N64_FONT_DIRECTORY / HD_FONT
+    return candidate if candidate.is_file() else None
+
+
 def prepare_topscreen_assets(*, root: Path, data_root: Path, recipe: dict,
                              romfs: Path, ui_atlas_hd: Path | None = None,
                              report: Callable[[str, str], None] = lambda *_: None) -> Path | None:
@@ -145,7 +161,21 @@ def prepare_topscreen_assets(*, root: Path, data_root: Path, recipe: dict,
         receipt = load_json_object(font_receipt_path)
         fonts_valid = (receipt.get("source") == font_identity and
                        receipt.get("pack_sha256") == sha256_file(font_pack))
-    if textures_valid and fonts_valid:
+    n64_font = user_n64_font(data_root)
+    n64_pack = directory / N64_FONT_PACK
+    n64_receipt_path = directory / N64_FONT_RECEIPT
+    n64_identity = None if n64_font is None else {
+        "font_import_version": N64_FONT_IMPORT_VERSION, "font_sha256": sha256_file(n64_font),
+        "romfs_sha256": identity["romfs_sha256"]}
+    if n64_identity is None:
+        n64_valid = not n64_pack.exists() and not n64_receipt_path.exists()
+    elif n64_pack.is_file() and n64_receipt_path.is_file():
+        receipt = load_json_object(n64_receipt_path)
+        n64_valid = (receipt.get("source") == n64_identity and
+                     receipt.get("pack_sha256") == sha256_file(n64_pack))
+    else:
+        n64_valid = False
+    if textures_valid and fonts_valid and n64_valid:
         return pack
 
     directory.mkdir(parents=True, exist_ok=True)
@@ -174,4 +204,23 @@ def prepare_topscreen_assets(*, root: Path, data_root: Path, recipe: dict,
             "font_count": len(manifest["fonts"]),
             "attribution": FONT_ATTRIBUTION,
             "source_url": MOD_PAGE})
+    if not n64_valid:
+        # A removed or changed font never leaves an old pack behind.
+        n64_pack.unlink(missing_ok=True)
+        n64_receipt_path.unlink(missing_ok=True)
+        if n64_font is not None:
+            report("topscreen", "Preparing the N64-style font...")
+            try:
+                manifest = prepare_font_pack(font=n64_font, romfs=romfs, output=n64_pack,
+                                             attribution=N64_FONT_ATTRIBUTION)
+            except (OSError, ValueError) as error:
+                # The user's own file: an unusable font is reported, not fatal.
+                n64_pack.unlink(missing_ok=True)
+                report("topscreen", f"The N64-style font ({N64_FONT_DIRECTORY / HD_FONT}) was not used: {error}")
+            else:
+                atomic_write_json(n64_receipt_path, {
+                    "source": n64_identity, "pack_sha256": sha256_file(n64_pack),
+                    "runtime_enabled": True,
+                    "font_count": len(manifest["fonts"]),
+                    "attribution": N64_FONT_ATTRIBUTION})
     return pack

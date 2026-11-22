@@ -6,7 +6,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-from topscreen_assets import (BUNDLED_DIRECTORY, BUNDLED_FONT_DIRECTORY, HD_FONT, LINK_ANIMATIONS, TITLE,
+from topscreen_assets import (BUNDLED_DIRECTORY, BUNDLED_FONT_DIRECTORY, HD_FONT, LINK_ANIMATIONS,
+                              N64_FONT_DIRECTORY, N64_FONT_PACK, N64_FONT_RECEIPT, TITLE,
                               UI_ATLAS, checked_ui_atlas_hd, prepare_topscreen_assets,
                               topscreen_link_animations, topscreen_ui_atlas_hd)
 from tools.oot3d.decomp_support.scripts.build_topscreen_texture_override_pack import (
@@ -130,6 +131,65 @@ class TopScreenAssetsTests(unittest.TestCase):
         self.assertFalse(list(self.data.rglob("fonts_import.json")))
         with patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_font_pack):
             self.prepare()
+
+    def n64_font(self, payload=b"user N64-style font"):
+        path = self.data / N64_FONT_DIRECTORY / HD_FONT
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        return path
+
+    @staticmethod
+    def fake_any_font_pack(*, font, romfs, output, **kwargs):
+        output.write_bytes(b"validated font fixture " + font.read_bytes())
+        return {"fonts": [{"romfs_path": "message/eu/ltn16.qbf"}]}
+
+    def test_without_a_user_n64_font_nothing_is_prepared_for_it(self):
+        with patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_any_font_pack) as fonts:
+            pack = self.prepare()
+        self.assertEqual(fonts.call_count, 1)
+        self.assertFalse((pack.parent / N64_FONT_PACK).exists())
+
+    def test_user_n64_font_is_paired_beside_the_hd_font(self):
+        user = self.n64_font()
+        messages = []
+        with patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_any_font_pack) as fonts:
+            pack = self.prepare(report=lambda _, text: messages.append(text))
+        self.assertEqual(fonts.call_count, 2)
+        self.assertEqual(fonts.call_args.kwargs["font"], user)
+        self.assertEqual(fonts.call_args.kwargs["output"], pack.parent / N64_FONT_PACK)
+        self.assertIn("N64", fonts.call_args.kwargs["attribution"])
+        self.assertTrue((pack.parent / N64_FONT_PACK).is_file())
+        self.assertTrue(any("N64-style font" in text for text in messages))
+        # Prepared once; a changed font is prepared again; a removed one
+        # leaves no pack behind.
+        with patch("topscreen_assets.prepare_font_pack", side_effect=self.fake_any_font_pack) as again:
+            self.assertEqual(self.prepare(), pack)
+            again.assert_not_called()
+            self.n64_font(b"another N64-style font")
+            self.prepare()
+            self.assertEqual(again.call_count, 1)
+            self.assertIn(b"another", (pack.parent / N64_FONT_PACK).read_bytes())
+            user.unlink()
+            self.prepare()
+            self.assertEqual(again.call_count, 1)
+        self.assertFalse((pack.parent / N64_FONT_PACK).exists())
+        self.assertFalse((pack.parent / N64_FONT_RECEIPT).exists())
+
+    def test_unusable_user_n64_font_is_reported_and_not_fatal(self):
+        user = self.n64_font(b"not a QBF")
+
+        def fonts(*, font, romfs, output, **kwargs):
+            if font == user:
+                output.write_bytes(b"partial")
+                raise ValueError("invalid QBF header or size")
+            return self.fake_any_font_pack(font=font, romfs=romfs, output=output)
+
+        messages = []
+        with patch("topscreen_assets.prepare_font_pack", side_effect=fonts):
+            pack = self.prepare(report=lambda _, text: messages.append(text))
+        self.assertTrue((pack.parent / "font_coverage.zip").is_file())
+        self.assertFalse((pack.parent / N64_FONT_PACK).exists())
+        self.assertTrue(any("was not used: invalid QBF" in text for text in messages))
 
     def test_hd_ui_atlas_must_be_a_two_to_one_png(self):
         for name, atlas in (("square", self.png_header(2048, 2048)), ("odd", self.png_header(4000, 2000)),

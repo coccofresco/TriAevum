@@ -28,6 +28,17 @@ pub const ATTRIBUTION: &str = "SingleScreen (TopScreen / Single Screen Experienc
 /// Pairs the RomFS image's Latin fonts with `font` and publishes `output`
 /// only after every font validated. Returns the manifest.
 pub fn prepare_font_pack(font: &Path, romfs: &Path, output: &Path) -> Result<Map<String, Value>> {
+    prepare_font_pack_with_attribution(font, romfs, output, ATTRIBUTION)
+}
+
+/// `prepare_font_pack(..., attribution=...)`: another replacement Latin font,
+/// such as a user's N64-style font, credited by `attribution`.
+pub fn prepare_font_pack_with_attribution(
+    font: &Path,
+    romfs: &Path,
+    output: &Path,
+    attribution: &str,
+) -> Result<Map<String, Value>> {
     let read_error = |error| ForgeError::io(format!("Cannot read {}", font.display()), error);
     let size = std::fs::metadata(font).map_err(read_error)?.len();
     if size > MAX_FONT_BYTES as u64 {
@@ -62,7 +73,7 @@ pub fn prepare_font_pack(font: &Path, romfs: &Path, output: &Path) -> Result<Map
         "status": "native_atlas_coverage_ready",
         "fonts": fonts,
         "source_font_sha256": sha256_hex(&font_bytes),
-        "attribution": ATTRIBUTION,
+        "attribution": attribution,
     });
     let mut archive = StoredZip::new();
     for (name, payload) in &assets {

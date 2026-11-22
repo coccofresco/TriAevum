@@ -107,6 +107,25 @@ void TestRebound() {
           "a disabled mouse shows nothing: the label stays");
 }
 
+// Nintendo-style face buttons: the HUD shows the buttons gameplay reads, so
+// the top (X) ring shows Triangle and the left (Y) ring Square. A Nintendo pad
+// is not swapped (SDL maps it by its labels already).
+void TestNintendoFaceLayout() {
+  auto controls = NativeControlDefaults();
+  controls.NintendoFaceLayout = true;
+  const auto ps = ResolveTopScreenHudButtonGlyphs(NativePromptSet::PlayStation, controls);
+  Require(GlyphOf(ps, TopScreenHudButton::A) == ButtonGlyph::Symbol(ButtonGlyphIcon::PsCircle) &&
+              GlyphOf(ps, TopScreenHudButton::B) == ButtonGlyph::Symbol(ButtonGlyphIcon::PsCross) &&
+              GlyphOf(ps, TopScreenHudButton::X) == ButtonGlyph::Symbol(ButtonGlyphIcon::PsTriangle) &&
+              GlyphOf(ps, TopScreenHudButton::Y) == ButtonGlyph::Symbol(ButtonGlyphIcon::PsSquare),
+          "PlayStation with the Nintendo face layout");
+  const auto button = [](const char *label) { return ButtonGlyph::Framed(ButtonGlyphFrame::Button, label); };
+  const auto nintendo = ResolveTopScreenHudButtonGlyphs(NativePromptSet::Nintendo, controls);
+  Require(GlyphOf(nintendo, TopScreenHudButton::A) == button("A") &&
+              GlyphOf(nintendo, TopScreenHudButton::X) == button("X"),
+          "a Nintendo pad keeps its labels");
+}
+
 void TestApply() {
   oot3d::ui::UiPrimitive label;
   label.subsystem = oot3d::ui::UiSubsystem::GameplayHud;
@@ -258,6 +277,7 @@ int main() {
   TestActive();
   TestDefaults();
   TestRebound();
+  TestNintendoFaceLayout();
   TestApply();
   TestNativeLabelFrames();
   TestActionLetterPairing();

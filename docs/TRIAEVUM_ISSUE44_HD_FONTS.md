@@ -31,6 +31,14 @@ Earlier implementation checkpoints below are historical, not the current status.
   The default applies to the Latin font actually supplied in TopScreen; absent
   HD system/Japanese fonts, unsupported encodings and unobserved glyphs remain
   native. This is not a claim of newly invented artwork for every font.
+- The TopScreen **Dialogue font** setting chooses the coverage
+  (`NativeHdFontMode`): Automatic is the behaviour above, Original never
+  replaces the native glyphs, and N64 style uses an alternate pack
+  (`font_coverage_n64.zip`, from the user's own N64-style `ltn16.qbf`, see
+  [Dialogue size and font](TRIAEVUM_IN_GAME_MENU.md#dialogue-size-and-font))
+  at every output height. The alternate pack must pair the same native fonts
+  as the HD pack, byte for byte, so one blit observer serves both; a surface
+  is rebuilt when the chosen coverage changes.
 
 ### Verification
 

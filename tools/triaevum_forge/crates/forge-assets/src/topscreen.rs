@@ -13,7 +13,7 @@ use forge_base::hashing::{hex, sha256_file};
 use forge_base::{CancelToken, ForgeError, Result};
 use serde_json::{json, Map, Value};
 
-use crate::font_pack::{prepare_font_pack, ATTRIBUTION as FONT_ATTRIBUTION};
+use crate::font_pack::{prepare_font_pack, prepare_font_pack_with_attribution, ATTRIBUTION as FONT_ATTRIBUTION};
 use crate::pyvalue::{identity_key, py_eq};
 use crate::texture_pack::build_texture_pack;
 use crate::Report;
@@ -36,6 +36,16 @@ pub const UI_ATLAS_IDENTITY: (u64, &str) =
 pub const LINK_ANIMATIONS_IDENTITY: (u64, &str) =
     (186_404, "06d60e05c493e86677497eb935b49951d613249c43f896816ae898bb8b005902");
 pub const HD_FONT_IDENTITY: (u64, &str) = (427_592, "8b83e081f721c6e1842b0a9cd90b71a3fb2849674d2b1040f3dc5c3221594169");
+/// The N64-style Latin font, only when the user supplies it: TriAevum neither
+/// ships nor downloads it. Its `ltn16.qbf` goes in `<data folder>/mods/n64_font/`
+/// and is paired with the ROM's own font exactly like the HD font; the
+/// runtime's dialogue font setting chooses it (`font_coverage_n64.zip` beside
+/// the HD pack).
+pub const N64_FONT_DIRECTORY: [&str; 2] = ["mods", "n64_font"];
+pub const N64_FONT_PACK: &str = "font_coverage_n64.zip";
+pub const N64_FONT_RECEIPT: &str = "fonts_n64_import.json";
+pub const N64_FONT_IMPORT_VERSION: i64 = 1;
+pub const N64_FONT_ATTRIBUTION: &str = "N64-style font supplied by the user (e.g. gamebanana.com/mods/713226)";
 
 /// The package's verified SingleScreen assets.
 #[derive(Clone, Debug)]
@@ -113,6 +123,21 @@ fn beside(pack: Option<&Path>, name: &str) -> Option<PathBuf> {
     candidate.is_file().then_some(candidate)
 }
 
+/// `user_n64_font`: the user's N64-style `ltn16.qbf`, when present.
+pub fn user_n64_font(data_root: &Path) -> Option<PathBuf> {
+    let candidate = N64_FONT_DIRECTORY.iter().fold(data_root.to_path_buf(), |path, part| path.join(part)).join(HD_FONT);
+    candidate.is_file().then_some(candidate)
+}
+
+fn remove_if_present(path: &Path) -> Result<()> {
+    match std::fs::remove_file(path) {
+        Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+            Err(ForgeError::io(format!("Cannot remove {}", path.display()), error))
+        }
+        _ => Ok(()),
+    }
+}
+
 fn recipe_romfs_sha256(recipe: &Value) -> Result<&Value> {
     recipe
         .get("inputs")
@@ -183,7 +208,28 @@ pub fn prepare_topscreen_assets(
     let fonts_valid = font_pack.is_file()
         && font_receipt_path.is_file()
         && receipt_matches(&font_receipt_path, &font_identity, &font_pack, cancel)?;
-    if textures_valid && fonts_valid {
+    let n64_font = user_n64_font(data_root);
+    let n64_pack = directory.join(N64_FONT_PACK);
+    let n64_receipt_path = directory.join(N64_FONT_RECEIPT);
+    let n64_identity = n64_font
+        .as_deref()
+        .map(|font| -> Result<Value> {
+            Ok(json!({
+                "font_import_version": N64_FONT_IMPORT_VERSION,
+                "font_sha256": sha256_hex_file(font, cancel)?,
+                "romfs_sha256": identity["romfs_sha256"].clone(),
+            }))
+        })
+        .transpose()?;
+    let n64_valid = match &n64_identity {
+        None => !n64_pack.exists() && !n64_receipt_path.exists(),
+        Some(identity) => {
+            n64_pack.is_file()
+                && n64_receipt_path.is_file()
+                && receipt_matches(&n64_receipt_path, identity, &n64_pack, cancel)?
+        }
+    };
+    if textures_valid && fonts_valid && n64_valid {
         return Ok(Some(pack));
     }
 
@@ -229,6 +275,39 @@ pub fn prepare_topscreen_assets(
                 "source_url": MOD_PAGE,
             }),
         )?;
+    }
+    if !n64_valid {
+        // A removed or changed font never leaves an old pack behind.
+        remove_if_present(&n64_pack)?;
+        remove_if_present(&n64_receipt_path)?;
+        if let (Some(font), Some(identity)) = (&n64_font, n64_identity) {
+            report("topscreen", "Preparing the N64-style font...");
+            match prepare_font_pack_with_attribution(font, romfs, &n64_pack, N64_FONT_ATTRIBUTION) {
+                Ok(manifest) => {
+                    let font_count = manifest.get("fonts").and_then(Value::as_array).map_or(0, Vec::len);
+                    atomic_write_json(
+                        &n64_receipt_path,
+                        &json!({
+                            "source": identity,
+                            "pack_sha256": sha256_hex_file(&n64_pack, cancel)?,
+                            "runtime_enabled": true,
+                            "font_count": font_count,
+                            "attribution": N64_FONT_ATTRIBUTION,
+                        }),
+                    )?;
+                }
+                Err(error) if error.kind == forge_base::ErrorKind::Cancelled => return Err(error),
+                Err(error) => {
+                    // The user's own file: an unusable font is reported, not fatal.
+                    remove_if_present(&n64_pack)?;
+                    let relative: PathBuf = N64_FONT_DIRECTORY.iter().copied().chain([HD_FONT]).collect();
+                    report(
+                        "topscreen",
+                        &format!("The N64-style font ({}) was not used: {}", relative.display(), error.message),
+                    );
+                }
+            }
+        }
     }
     Ok(Some(pack))
 }

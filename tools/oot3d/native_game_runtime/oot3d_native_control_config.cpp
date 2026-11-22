@@ -157,10 +157,11 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
     SetError(error, "native control config root/output is invalid");
     return false;
   }
-  constexpr std::array<std::string_view, 16> kAllowedFields{
+  constexpr std::array<std::string_view, 17> kAllowedFields{
       "schema", "profile", "devices", "bindings", "analog", "aim",
       "free_camera", "controller_guid", "controller_serial", "calibration", "capture_mouse", "controller_touchpad",
-      "button_prompts", "rumble", "title_gameplay", "native_button_labels"};
+      "button_prompts", "rumble", "title_gameplay", "native_button_labels",
+      "nintendo_face_layout"};
   const std::set<std::string_view> allowed(kAllowedFields.begin(),
                                            kAllowedFields.end());
   for (const auto& [key, value] : document.items()) {
@@ -249,6 +250,14 @@ bool DecodeNativeControlConfig(const nlohmann::json& document,
       return false;
     }
     parsed.NativeButtonLabels = document.at("native_button_labels").get<bool>();
+  }
+
+  if (document.contains("nintendo_face_layout")) {
+    if (!document.at("nintendo_face_layout").is_boolean()) {
+      SetError(error, "nintendo_face_layout must be a boolean");
+      return false;
+    }
+    parsed.NintendoFaceLayout = document.at("nintendo_face_layout").get<bool>();
   }
 
   if (!ReadNamedField(document, "rumble", &parsed.Rumble,
@@ -754,6 +763,7 @@ bool SerializeNativeControlConfigText(const NativeControlConfig& config,
   // Written only when fixed: a file with the default stays readable by a
   // build that does not know the field.
   if (!config.NativeButtonLabels) document["native_button_labels"] = false;
+  if (config.NintendoFaceLayout) document["nintendo_face_layout"] = true;
   if (config.ButtonPrompts != NativeButtonPrompts::Automatic)
     document["button_prompts"] = ThreeDsRecomp::Input::ButtonPromptsName(config.ButtonPrompts);
   if (config.Rumble != NativeRumbleStrength::Off)
@@ -1063,7 +1073,15 @@ NativeControlConfig ControlsForDevice(const NativeControlConfig& config,
     effective.GyroscopeBiasDegreesPerSecond = {};
     effective.AccelerometerNeutral = {0.0F, -1.0F, 0.0F};
   }
+  ApplyFaceLayout(effective, device ? device->Prompts : NativePromptSet::Generic);
   return effective;
+}
+
+void ApplyFaceLayout(NativeControlConfig& config, NativePromptSet family) noexcept {
+  if (!config.NintendoFaceLayout || family == NativePromptSet::Nintendo) return;
+  using ThreeDsRecomp::Input::GamepadButton;
+  ThreeDsRecomp::Input::SwapGamepadSources(config.Bindings, GamepadButton::A, GamepadButton::B);
+  ThreeDsRecomp::Input::SwapGamepadSources(config.Bindings, GamepadButton::X, GamepadButton::Y);
 }
 
 } // namespace Oot3dNativeGame

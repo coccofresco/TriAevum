@@ -112,6 +112,64 @@ void EmitMouseAimTimeline(const std::filesystem::path& path, std::string_view ax
         {"frame_origin", "run"}, {"segments", segments}}.dump(2));
 }
 
+// Nintendo-style face buttons: off by default and not written, on survives
+// save and reload, a wrong type is refused, presets keep the default, and the
+// effective bindings swap A/B and X/Y for every pad but a Nintendo one (SDL
+// already maps those by their labels). The saved bindings never change.
+void TestNintendoFaceLayout() {
+    using ThreeDsRecomp::Input::IsHostBindingHeld;
+    auto config = NativeControlPreset(NativeControlProfile::Controller);
+    std::string json, error;
+    NativeControlConfig loaded;
+    Require(!config.NintendoFaceLayout, "the face layout starts off");
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("nintendo_face_layout") == std::string::npos,
+            "off is not written (older builds still read the file)");
+    config.NintendoFaceLayout = true;
+    Require(SerializeNativeControlConfigText(config, &json, &error) &&
+                json.find("\"nintendo_face_layout\": true") != std::string::npos &&
+                ParseNativeControlConfigText(json, &loaded, &error) && loaded == config,
+            "the face layout survives save and reload");
+    auto document = nlohmann::json::parse(json);
+    document["nintendo_face_layout"] = "yes";
+    Require(!ParseNativeControlConfigText(document.dump(), &loaded, &error) &&
+                error.find("nintendo_face_layout") != std::string::npos,
+            "a non-boolean face layout is refused");
+    for (const auto profile : {NativeControlProfile::Keyboard, NativeControlProfile::KeyboardMouse,
+                               NativeControlProfile::Controller})
+        Require(!NativeControlPreset(profile).NintendoFaceLayout, "a preset chose the face layout");
+
+    const auto gamepad = [](const NativeControlConfig& controls, NativeControlAction action) {
+        return controls.Bindings[static_cast<std::size_t>(action)].Gamepad;
+    };
+    NativeControlDeviceDescriptor dualSense;
+    dualSense.Prompts = NativePromptSet::PlayStation;
+    NativeControlDeviceDescriptor switchPro;
+    switchPro.Prompts = NativePromptSet::Nintendo;
+    const auto swapped = ControlsForDevice(config, &dualSense);
+    Require(gamepad(swapped, NativeControlAction::A) == NativeGamepadButton::B &&
+                gamepad(swapped, NativeControlAction::B) == NativeGamepadButton::A &&
+                gamepad(swapped, NativeControlAction::X) == NativeGamepadButton::Y &&
+                gamepad(swapped, NativeControlAction::Y) == NativeGamepadButton::X,
+            "a PlayStation pad takes the Nintendo face layout");
+    Require(gamepad(config, NativeControlAction::A) == NativeGamepadButton::A,
+            "the saved bindings are not changed");
+    Require(ControlsForDevice(config, &switchPro).Bindings == config.Bindings,
+            "a Nintendo pad is not swapped twice");
+    auto off = config;
+    off.NintendoFaceLayout = false;
+    Require(ControlsForDevice(off, &dualSense).Bindings == off.Bindings, "off leaves the bindings alone");
+
+    // Circle (SDL east, B) is the 3DS A in the native HID frame.
+    ControllerButtonSource physical;
+    physical.Held = NativeGamepadButton::B;
+    NativeControlHostInputState host;
+    for (std::size_t j = 0; j < host.Actions.size(); ++j)
+        host.Actions[j] = IsHostBindingHeld(swapped.Bindings[j], {}, physical);
+    Require(MapNativeControlInput(swapped, host).Hid.Buttons == NativeA32HidButtonMask(NativeA32HidButton::A),
+            "the east button did not press the 3DS A");
+}
+
 // Rumble belongs to the controls owner: Off by default and not written, a
 // chosen strength survives save and reload, an unknown one is refused, and a
 // preset never chooses it.
@@ -363,6 +421,7 @@ int main(int argc, char** argv) {
     TestMenuPressesTimeline();
     TestButtonPromptsOwner();
     TestRumbleSetting();
+    TestNintendoFaceLayout();
     const auto mousePreset = NativeControlPreset(NativeControlProfile::KeyboardMouse);
     const auto controllerPreset = NativeControlPreset(NativeControlProfile::Controller);
     Require(mousePreset.NativeAimSource == NativeMotionSource::Mouse &&

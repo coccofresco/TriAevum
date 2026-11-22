@@ -315,6 +315,15 @@ Actual-widget smoke: **11,956 assertions** (full run), including the control
 below the HUD size, Controller as the default, Original 3DS applied alone (the
 size and an external margin kept) and Controller again.
 
+## TopScreen dialogue size and font (2026-11-21)
+
+**Display > TopScreen > Dialogue**, below the HUD button labels: **Dialogue
+size** (a 50..100% slider in 5% steps, `dialogue_scale_percent`, written only
+when not 100) and **Dialogue font** (**Automatic**, **Original 3DS** or **N64
+style**, `dialogue_font`, written only when not `automatic`). Both apply and
+save at once; the in-game menu's Video > Dialogue rows mirror them. Design and
+rules: [In-game menu, Dialogue size and font](TRIAEVUM_IN_GAME_MENU.md#dialogue-size-and-font).
+
 ## Grass masks (2026-10-11, round 36)
 
 Grass > Masks identifies current overlay/source overlaps with thumbnails,

@@ -384,6 +384,14 @@ bool NativeA32WindowSession::RunFrame() {
   }
 #endif
   hdFonts.SetOutputHeight(height);
+  // TopScreen's dialogue font; other UI profiles keep the automatic HD font.
+  hdFonts.SetMode(!nativeCandidateDispatch.TopScreenUiProfile
+                      ? Oot3dNativeGame::NativeHdFontMode::Automatic
+                  : activeTopScreenConfig.DialogueFont == Oot3dNativeGame::TopScreenDialogueFont::Original
+                      ? Oot3dNativeGame::NativeHdFontMode::Native
+                  : activeTopScreenConfig.DialogueFont == Oot3dNativeGame::TopScreenDialogueFont::N64
+                      ? Oot3dNativeGame::NativeHdFontMode::Alternate
+                      : Oot3dNativeGame::NativeHdFontMode::Automatic);
   UpdateScenePresentation();
 #if defined(__APPLE__)
   // Input uses window points, but UI draws share the scene's drawable-pixel
@@ -2341,7 +2349,9 @@ void NativeA32WindowSession::RecordNativeButtonLabels() {
   auto &uiLifecycleBridge = *uiLifecycleBridgeStorage;
   Oot3dNativeGame::TopScreenNativeLabelRecord record;
   record.ThroughDraw = lastSubmittedDrawId;
-  if (!Oot3dNativeGame::ReadTopScreenOcarinaStaffNotes(process.Memory(), &record.StaffNotes))
+  if (!Oot3dNativeGame::ReadTopScreenOcarinaStaffNotes(process.Memory(), &record.StaffNotes, nullptr,
+                                                      Oot3dNativeGame::kTopScreenMessageContext,
+                                                      activeTopScreenConfig.DialogueScalePercent))
     record.StaffNotes.clear();
   // The Items labels while the page is redrawn on the upper screen.
   if (widescreenProjection.TopScreenPausePageRedrawActive &&

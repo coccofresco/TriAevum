@@ -701,6 +701,7 @@ void RunTopScreenItemDispatchTests();
 void RunTopScreenOcarinaTests();
 void RunTopScreenDpadPresentationTests();
 void RunTopScreenButtonLabelsTests();
+void RunTopScreenDialogueScaleTests();
 
 int main() {
   TestGearTextureFilters();
@@ -710,6 +711,7 @@ int main() {
   RunTopScreenOcarinaTests();
   RunTopScreenDpadPresentationTests();
   RunTopScreenButtonLabelsTests();
+  RunTopScreenDialogueScaleTests();
   using namespace Oot3dNativeGame;
 
   Oot3dUiProfile profile = Oot3dUiProfile::Oot3d;

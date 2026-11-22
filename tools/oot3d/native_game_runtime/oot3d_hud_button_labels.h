@@ -30,7 +30,7 @@ using TopScreenHudButtonGlyphs = std::array<std::optional<Menu::ButtonGlyph>, kT
 // Each HUD button's glyph in the family; nothing where that device has no
 // binding (the label stays). The mouse counts only while it is enabled.
 [[nodiscard]] TopScreenHudButtonGlyphs ResolveTopScreenHudButtonGlyphs(NativePromptSet set,
-                                                                     const NativeControlConfig &controls);
+                                                                     NativeControlConfig controls);
 
 // Black and white: a white body (dimmed as the label is) and black ink.
 [[nodiscard]] Menu::ButtonGlyphColors TopScreenHudButtonGlyphColors(const oot3d::ui::UiColor &label) noexcept;

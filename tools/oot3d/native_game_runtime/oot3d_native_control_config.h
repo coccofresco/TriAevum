@@ -94,6 +94,11 @@ struct NativeControlConfig {
   // Native-layout title adapters use controller glyphs by default. TopScreen
   // retains its own HUD setting. Omitted at default for legacy file identity.
   bool NativeButtonLabels = true;
+  // Nintendo-style face buttons on a non-Nintendo pad: the east button is A,
+  // south B, north X and west Y (SDL already maps a Nintendo pad by its
+  // labels). Applied to the effective bindings, never to the saved ones. Not
+  // part of a preset ("nintendo_face_layout", written only when on).
+  bool NintendoFaceLayout = false;
   // The selected pad's rumble for the events the title publishes (damage,
   // hard landings). Off by default: the 3DS has none. Not part of a preset
   // ("rumble", written only when not Off).
@@ -155,6 +160,10 @@ using NativeControlMotionObservation =
 
 NativeControlConfig ControlsForDevice(const NativeControlConfig& config,
     const NativeControlDeviceDescriptor* device);
+
+// Exchanges A/B and X/Y in the bindings when NintendoFaceLayout is on and the
+// pad family is not Nintendo (whose pads SDL already maps by their labels).
+void ApplyFaceLayout(NativeControlConfig& config, NativePromptSet family) noexcept;
 
 struct NativeControlCalibrationStatus {
   bool Active = false;

@@ -113,12 +113,15 @@ bool ReadTopScreenActionLetter(NativeA32Memory &memory, std::uint32_t renderBuff
                                std::string *error = nullptr);
 
 // The native message staff's notes as drawn this frame (read only), in draw
-// order: nothing while the message window does not draw them. Exposed for
-// tests with any message context address.
+// order: nothing while the message window does not draw them. Read after the
+// draw restored the elements, so the dialogue size (dialogueScalePercent,
+// TopScreenUiConfig::DialogueScalePercent) is applied to them here as the
+// draw applied it. Exposed for tests with any message context address.
 inline constexpr std::uint32_t kTopScreenMessageContext = 0x005C1878U;
 bool ReadTopScreenOcarinaStaffNotes(NativeA32Memory &memory, std::vector<TopScreenHudLabelSlot> *notes,
                                     std::string *error = nullptr,
-                                    std::uint32_t messageContext = kTopScreenMessageContext);
+                                    std::uint32_t messageContext = kTopScreenMessageContext,
+                                    std::uint8_t dialogueScalePercent = 100U);
 
 // The native Items page's slot labels as drawn (read only): the label model
 // of its state (0x005066F8 + 0x30), quads whose UVs are the X / Y / I / II
