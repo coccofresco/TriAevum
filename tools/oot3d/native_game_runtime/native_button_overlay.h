@@ -31,6 +31,12 @@ inline std::optional<Menu::ButtonGlyph> NativeButtonOverlayGlyph(
   const auto index = static_cast<std::size_t>(action);
   if (!controls.NativeButtonLabels || index >= controls.Bindings.size()) return {};
   auto binding = controls.Bindings[index];
+  if (controls.NintendoFaceLayout) {
+    // The binding gameplay reads: the face layout swaps it for this family.
+    auto effective = controls;
+    ApplyFaceLayout(effective, prompts);
+    binding = effective.Bindings[index];
+  }
   if (!controls.MouseEnabled) binding.Mouse = NativeMouseButton::None;
   return Menu::ResolveButtonGlyph(prompts, binding);
 }

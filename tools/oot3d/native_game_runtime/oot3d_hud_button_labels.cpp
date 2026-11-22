@@ -24,7 +24,9 @@ bool TopScreenHudButtonGlyphsActive(TopScreenHudButtonLabels setting, NativeProm
   return setting == TopScreenHudButtonLabels::Controller && set != NativePromptSet::Touch;
 }
 
-TopScreenHudButtonGlyphs ResolveTopScreenHudButtonGlyphs(NativePromptSet set, const NativeControlConfig &controls) {
+TopScreenHudButtonGlyphs ResolveTopScreenHudButtonGlyphs(NativePromptSet set, NativeControlConfig controls) {
+  // The bindings gameplay reads: the face layout swaps them for this family.
+  ApplyFaceLayout(controls, set);
   TopScreenHudButtonGlyphs glyphs;
   for (std::size_t index = 0; index < glyphs.size(); ++index) {
     const auto action = TopScreenHudButtonAction(static_cast<TopScreenHudButton>(index));

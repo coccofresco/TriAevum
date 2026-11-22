@@ -42,6 +42,15 @@ Built-in presets:
   right stick for both native aiming and freecam. Physical motion is opt-in.
 - `custom`: assigned automatically after editing a preset.
 
+`Nintendo-style face buttons` (`"nintendo_face_layout": true`, F1 →
+Controls → Devices or Esc → Controls) swaps A/B and X/Y on non-Nintendo pads,
+so the east button is A, south B, north X and west Y, as on a 3DS. It is
+applied to the effective bindings in `ControlsForDevice`, keyed on the selected
+pad's prompt family; the saved bindings are unchanged and the HUD glyphs
+resolve the same swap. Nintendo pads are skipped: SDL already maps them by
+their printed labels. It is off by default, written only when on, and kept
+across presets. Esc-menu Confirm/Back stay on the south/east buttons.
+
 Every binding has two keyboard slots, one mouse button and one controller
 button. The title labels describe intent, but their output remains native:
 movement is Circle Pad, look is C-Stick, buttons remain their HID buttons, and

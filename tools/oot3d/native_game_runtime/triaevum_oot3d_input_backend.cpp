@@ -89,12 +89,18 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
   SDL_GameController *controller = mConfig.ControllerEnabled ? selected.Controller : nullptr;
   const std::int16_t triggerThreshold = static_cast<std::int16_t>(
       32767 * std::clamp(mConfig.TriggerDeadZonePercent, 0, 95) / 100);
+  // The device's effective controls (its calibration, the face layout) before
+  // the bindings are read.
+  const auto selectedDevice = std::find_if(selected.Devices.begin(), selected.Devices.end(),
+      [](const auto& device) { return device.Selected; });
+  const auto effective = ControlsForDevice(mConfig,
+      selectedDevice != selected.Devices.end() ? &*selectedDevice : nullptr);
   WindowButtonSource buttonSource(window, controller, triggerThreshold);
   const ThreeDsRecomp::Input::HostDeviceEnablement enabled{
       mConfig.KeyboardEnabled, mConfig.MouseEnabled, mConfig.ControllerEnabled};
   for (std::size_t index = 0U; index < kNativeControlActionCount; ++index) {
     host.Actions[index] = ThreeDsRecomp::Input::IsHostBindingHeld(
-        mConfig.Bindings[index], enabled, buttonSource);
+        effective.Bindings[index], enabled, buttonSource);
   }
 
   ThreeDsRecomp::Input::SampleSdlController(controller, host, true,
@@ -104,10 +110,6 @@ bool TriAevumOot3dInputBackend::Poll(Fast::Fast3dWindow &window,
   const bool mouseOwned = mConfig.MouseEnabled && !window.IsMouseCaptureReleased();
   host.MouseDeltaX = mouseOwned ? mouseDelta.x : 0;
   host.MouseDeltaY = mouseOwned ? mouseDelta.y : 0;
-  const auto selectedDevice = std::find_if(selected.Devices.begin(), selected.Devices.end(),
-      [](const auto& device) { return device.Selected; });
-  const auto effective = ControlsForDevice(mConfig,
-      selectedDevice != selected.Devices.end() ? &*selectedDevice : nullptr);
   auto frame =
       MapNativeControlInput(effective, host, {}, &mRightStickProfile, true, &mVirtualMotion);
   ApplyNativeControlShortcutTouch(host, frame);

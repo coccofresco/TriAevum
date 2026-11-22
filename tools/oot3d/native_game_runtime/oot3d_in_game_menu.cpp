@@ -781,6 +781,11 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
   tab.Rows.push_back(controlToggle("Controller", "The selected game controller drives the game.", &NativeControlConfig::ControllerEnabled));
   tab.Rows.push_back(controlToggle("Capture mouse", "Hides and locks the pointer while the mouse is used in gameplay.",
                                    &NativeControlConfig::CaptureMouseInGameplay));
+  // The same choice as F1 > Controls > Devices > Nintendo-style face buttons.
+  tab.Rows.push_back(controlToggle("Nintendo-style face buttons",
+                                   "Swaps A/B and X/Y on Xbox and PlayStation pads, as on a 3DS: the right button is "
+                                   "A, the bottom B, the top X and the left Y. Nintendo pads already use this layout.",
+                                   &NativeControlConfig::NintendoFaceLayout));
   {
     // The same choice as F1 > Controls > Devices > Controller > Rumble (the
     // controls owner keeps it).
@@ -854,6 +859,7 @@ void InGameMenu::BuildControlsTab(Menu::Document &document) {
       config.AccelerometerNeutral = previous.AccelerometerNeutral;
       config.ButtonPrompts = previous.ButtonPrompts;
       config.NativeButtonLabels = previous.NativeButtonLabels;
+      config.NintendoFaceLayout = previous.NintendoFaceLayout;
       config.Rumble = previous.Rumble;
       config.QuickPutAway = previous.QuickPutAway;
       config.RollDash = previous.RollDash;
