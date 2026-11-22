@@ -350,6 +350,7 @@ class NativeControlsSettingsPanel final
         mControlDraft.ControllerTouchpadIndex = previous.ControllerTouchpadIndex;
         mControlDraft.ButtonPrompts = previous.ButtonPrompts;
         mControlDraft.NativeButtonLabels = previous.NativeButtonLabels;
+        mControlDraft.NintendoFaceLayout = previous.NintendoFaceLayout;
         mControlDraft.Rumble = previous.Rumble;
         mControlDraft.QuickPutAway = previous.QuickPutAway;
         mControlDraft.RollDash = previous.RollDash;
@@ -391,6 +392,11 @@ class NativeControlsSettingsPanel final
       ImGui::SetTooltip("The button-glyph family for menus and controller labels. Automatic follows the device used last.");
     if (mControlDraft.ButtonPrompts == NativeButtonPrompts::Automatic)
       ImGui::TextDisabled("Now: %s", ThreeDsRecomp::Input::PromptSetLabel(mControls->AutomaticPromptSet()));
+    // Not a binding: the bindings stay as they are, gameplay reads them swapped.
+    if (ImGui::Checkbox("Nintendo-style face buttons", &mControlDraft.NintendoFaceLayout)) mControlDirty = true;
+    if (ImGui::IsItemHovered())
+      ImGui::SetTooltip("Swaps A/B and X/Y on Xbox and PlayStation pads, as on a 3DS: the right button is A, "
+                        "the bottom B, the top X and the left Y. Nintendo pads already use this layout.");
     if (mNativeButtonOverlay) {
       int labels = mControlDraft.NativeButtonLabels ? 0 : 1;
       const char* choices[]{"Controller", "Original 3DS"};
