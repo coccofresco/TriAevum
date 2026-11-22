@@ -460,6 +460,7 @@ bool GfxRenderingAPIVulkan::CapturePicaTextureCache(
             snapshot.NativeType = key.Type;
             snapshot.NativeWrapS = key.WrapS;
             snapshot.NativeWrapT = key.WrapT;
+            snapshot.NativeBorderColor = key.BorderColor;
             snapshot.MinLinear = key.MinLinear;
             snapshot.MagLinear = key.MagLinear;
             snapshot.MipLinear = key.MipLinear;
@@ -607,6 +608,9 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
             key.Type = snapshot.NativeType;
             key.WrapS = snapshot.NativeWrapS;
             key.WrapT = snapshot.NativeWrapT;
+            key.BorderColor = Renderer3ds::EffectivePicaBorderColor(
+                snapshot.NativeWrapS, snapshot.NativeWrapT,
+                snapshot.NativeBorderColor);
             key.MinLinear = snapshot.MinLinear;
             key.MagLinear = snapshot.MagLinear;
             key.MipLinear = snapshot.MipLinear;
@@ -700,6 +704,9 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
             key.Type = snapshot.NativeType;
             key.WrapS = snapshot.NativeWrapS;
             key.WrapT = snapshot.NativeWrapT;
+            key.BorderColor = Renderer3ds::EffectivePicaBorderColor(
+                snapshot.NativeWrapS, snapshot.NativeWrapT,
+                snapshot.NativeBorderColor);
             key.MinLinear = snapshot.MinLinear;
             key.MagLinear = snapshot.MagLinear;
             key.MipLinear = snapshot.MipLinear;
@@ -732,6 +739,10 @@ bool GfxRenderingAPIVulkan::RestorePicaTextureCache(
                 DecodeNativePicaWrap(snapshot.NativeWrapS);
             texture.SamplerState.WrapT =
                 DecodeNativePicaWrap(snapshot.NativeWrapT);
+            texture.SamplerState.BorderColor = key.BorderColor;
+            texture.IntegerFormat =
+                snapshot.ImageFormat ==
+                GfxNativePicaTextureSnapshotFormat::R32Uint;
             texture.SamplerState.LodBias = 0.0F;
             texture.SamplerState.MinMipLevel = snapshot.NativeType != 2U
                 ? snapshot.MinMipLevel : 0U;

@@ -33,6 +33,7 @@ constexpr uint32_t kVisualReplayMagicV18 = 0x49525650U; // PVRI: native scene di
 constexpr uint32_t kVisualReplayMagicV19 = 0x4A525650U; // PVRJ: native actor geometry ownership
 constexpr uint32_t kVisualReplayMagicV20 = 0x4B525650U; // PVRK: continuous scene light
 constexpr uint32_t kVisualReplayMagicV21 = 0x4C525650U; // PVRL: colour-target captures
+constexpr uint32_t kVisualReplayMagicV22 = 0x4D525650U; // PVRM: texture border colour
 constexpr uint32_t kMaximumCopyReferencesPerTexture = 4096U;
 constexpr uint32_t kMaximumPlans = 4096U;
 constexpr uint32_t kMaximumResources = 4096U;
@@ -97,6 +98,7 @@ class Reader final {
     bool HasNativeActorGeometry = false;
     bool HasContinuousSceneLight = false;
     bool HasRenderTargetCapture = false;
+    bool HasTextureBorderColor = false;
     std::vector<std::shared_ptr<const Fast::Renderer3ds::PicaScenePointLights>> ScenePoints;
     std::vector<std::shared_ptr<const Fast::Renderer3ds::PicaSceneDirectionalLights>> SceneDirectionals;
     explicit Reader(std::span<const uint8_t> bytes) : mBytes(bytes) {}
@@ -275,10 +277,12 @@ void WriteTextureState(Writer& writer, const Oot3dPicaTextureState& value) {
     writer.I16(value.LodBiasRaw);
     writer.U8(value.MinMipLevel);
     writer.U8(value.MaxMipLevel);
+    writer.U32(value.BorderColor);
 }
 
 bool ReadTextureState(Reader& reader, Oot3dPicaTextureState& value,
                       bool extended) {
+    value.BorderColor = 0U;
     if (!(reader.Bool(value.Enabled) && reader.U16(value.Width) &&
            reader.U16(value.Height) && reader.U32(value.PhysicalAddress) &&
            reader.U8(value.Format) && reader.U8(value.Type) &&
@@ -288,7 +292,8 @@ bool ReadTextureState(Reader& reader, Oot3dPicaTextureState& value,
     }
     return !extended ||
            (reader.Bool(value.MipLinear) && reader.I16(value.LodBiasRaw) &&
-            reader.U8(value.MinMipLevel) && reader.U8(value.MaxMipLevel));
+            reader.U8(value.MinMipLevel) && reader.U8(value.MaxMipLevel) &&
+            (!reader.HasTextureBorderColor || reader.U32(value.BorderColor)));
 }
 
 void WriteDrawState(Writer& writer, const Oot3dPicaDecodedDrawState& value) {
@@ -1204,7 +1209,7 @@ bool ReadOptionalFrame(Reader& reader,
 void WriteReplayState(Writer& writer,
                       const Oot3dPicaVisualReplayState& value) {
     const auto lightingLuts = BuildLightingLutDictionary(value);
-    writer.U32(kVisualReplayMagicV21);
+    writer.U32(kVisualReplayMagicV22);
     WriteLightingLutDictionary(writer, lightingLuts);
     const auto& accumulator = value.Scheduler.Accumulator;
     writer.U64(accumulator.NextSequence);
@@ -1241,7 +1246,8 @@ bool ReadReplayState(Reader& reader, Oot3dPicaVisualReplayState& value) {
     uint32_t magic = 0U;
     auto& accumulator = value.Scheduler.Accumulator;
     if (!reader.U32(magic)) return false;
-    reader.HasRenderTargetCapture = magic == kVisualReplayMagicV21;
+    reader.HasTextureBorderColor = magic == kVisualReplayMagicV22;
+    reader.HasRenderTargetCapture = magic == kVisualReplayMagicV21 || reader.HasTextureBorderColor;
     reader.HasContinuousSceneLight = magic == kVisualReplayMagicV20 || reader.HasRenderTargetCapture;
     reader.HasNativeActorGeometry = magic == kVisualReplayMagicV19 || reader.HasContinuousSceneLight;
     reader.HasSceneDirectionals = magic == kVisualReplayMagicV18 || reader.HasNativeActorGeometry;

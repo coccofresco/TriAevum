@@ -3,6 +3,7 @@
 #ifdef ENABLE_OOT3D_VULKAN
 #include "gfx_vulkan_internal.h"
 #include "fast/extension/pica_attachment_formats.h"
+#include "fast/renderer3ds/pica_border_color.h"
 
 namespace Fast {
 
@@ -734,7 +735,8 @@ void GfxRenderingAPIVulkan::CreateTextureImage(TextureRecord& texture,
 }
 
 VkSamplerCreateInfo GfxRenderingAPIVulkan::BuildTextureSamplerInfo(
-    const TextureRecord& texture) const {
+    const TextureRecord& texture,
+    VkSamplerCustomBorderColorCreateInfoEXT& customBorderColorInfo) const {
     VkSamplerCreateInfo samplerInfo{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
     samplerInfo.magFilter = ToVulkanFilter(texture.SamplerState.MagFilter);
     samplerInfo.minFilter = ToVulkanFilter(texture.SamplerState.MinFilter);
@@ -756,6 +758,9 @@ VkSamplerCreateInfo GfxRenderingAPIVulkan::BuildTextureSamplerInfo(
         samplerInfo.anisotropyEnable = VK_TRUE;
         samplerInfo.maxAnisotropy = mTextureAnisotropy;
     }
+    Renderer3ds::ApplyVulkanBorderColor(
+        samplerInfo, customBorderColorInfo, texture.SamplerState.BorderColor,
+        texture.IntegerFormat, mCustomBorderColorEnabled);
     return samplerInfo;
 }
 
@@ -769,7 +774,10 @@ void GfxRenderingAPIVulkan::RecreateSampler(TextureRecord& texture) {
         mRetiredSamplers.push_back(texture.Sampler);
     }
     texture.SamplerShared = false;
-    const VkSamplerCreateInfo samplerInfo = BuildTextureSamplerInfo(texture);
+    VkSamplerCustomBorderColorCreateInfoEXT customBorderColorInfo{
+        VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT};
+    const VkSamplerCreateInfo samplerInfo =
+        BuildTextureSamplerInfo(texture, customBorderColorInfo);
     CheckVk(vkCreateSampler(mDevice, &samplerInfo, nullptr, &texture.Sampler),
             "vkCreateSampler");
     texture.AppliedSamplerState = texture.SamplerState;

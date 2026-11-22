@@ -38,6 +38,7 @@
 #include "fast/extension/pica_uber_effect_program.h"
 #include "fast/extension/pica_nri_vertex_input.h"
 #include "fast/extension/pica_nri_pipeline_state.h"
+#include "fast/renderer3ds/pica_border_color.h"
 #include "fast/renderer3ds/pica_pipeline_identity.h"
 #include "fast/renderer3ds/pica_surface_lighting.h"
 #include "fast/renderer3ds/pica_tev_program.h"
@@ -218,6 +219,8 @@ uint64_t HashAlphaCasterMaterial(const GfxNativePicaDrawView& draw,
         mix(uint64_t{texture.NativeWrapS} | uint64_t{texture.NativeWrapT} << 8U |
             uint64_t{texture.MinLinear} << 16U | uint64_t{texture.MagLinear} << 17U |
             uint64_t{texture.MipLinear} << 18U);
+        mix(Renderer3ds::EffectivePicaBorderColor(
+            texture.NativeWrapS, texture.NativeWrapT, texture.NativeBorderColor));
     }
     return hash;
 }
@@ -256,15 +259,14 @@ GfxNativeTextureWrap DecodeNativePicaWrap(uint8_t wrap) {
     switch (wrap) {
         case 0:
             return GfxNativeTextureWrap::ClampToEdge;
+        case 1:
+            return GfxNativeTextureWrap::ClampToBorder;
         case 2:
         case 6:
         case 7:
             return GfxNativeTextureWrap::Repeat;
         case 3:
             return GfxNativeTextureWrap::MirroredRepeat;
-        case 1:
-            throw std::runtime_error(
-                "native PICA clamp-to-border requires border color state");
         case 4:
         case 5:
             throw std::runtime_error(
@@ -316,6 +318,8 @@ VkSamplerAddressMode ToNativePicaVkAddressMode(
     switch (wrap) {
         case GfxNativeTextureWrap::ClampToEdge:
             return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        case GfxNativeTextureWrap::ClampToBorder:
+            return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
         case GfxNativeTextureWrap::MirroredRepeat:
             return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
         case GfxNativeTextureWrap::Repeat:

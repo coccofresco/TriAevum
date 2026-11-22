@@ -364,10 +364,22 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         deviceFault.pNext = supportedFeatures.pNext;
         supportedFeatures.pNext = &deviceFault;
     }
+    const bool hasCustomBorderColorExtension =
+        hasExtension(VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
+    VkPhysicalDeviceCustomBorderColorFeaturesEXT customBorderColorFeatures{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_FEATURES_EXT};
+    if (hasCustomBorderColorExtension) {
+        customBorderColorFeatures.pNext = supportedFeatures.pNext;
+        supportedFeatures.pNext = &customBorderColorFeatures;
+    }
     RequiredInstanceCommand<PFN_vkGetPhysicalDeviceFeatures2>(mInstance, "vkGetPhysicalDeviceFeatures2")(
         mPhysicalDevice, &supportedFeatures);
     const bool deviceFaultEnabled =
         Renderer3ds::VulkanDeviceFaultSupported(hasDeviceFaultExtension, deviceFault);
+    mCustomBorderColorEnabled =
+        hasCustomBorderColorExtension &&
+        customBorderColorFeatures.customBorderColors == VK_TRUE &&
+        customBorderColorFeatures.customBorderColorWithoutFormat == VK_TRUE;
     const char* breadcrumbEnvironment = std::getenv("TRIAEVUM_VULKAN_BREADCRUMBS");
     const bool breadcrumbsRequested = Renderer3ds::VulkanBreadcrumbsRequested(breadcrumbEnvironment);
     mBreadcrumbMechanism = Renderer3ds::ResolveVulkanBreadcrumbMechanism(
@@ -498,6 +510,8 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         extensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
     if (const char* breadcrumbExtension = Renderer3ds::VulkanBreadcrumbExtension(mBreadcrumbMechanism))
         extensions.push_back(breadcrumbExtension);
+    if (mCustomBorderColorEnabled)
+        extensions.push_back(VK_EXT_CUSTOM_BORDER_COLOR_EXTENSION_NAME);
     // Release logs keep warnings only: whether a device loss can be described
     // belongs in a tester's report next to the device line.
     SPDLOG_WARN("OOT3D Vulkan diagnostics: device_fault={} breadcrumbs={}",
@@ -608,6 +622,14 @@ void GfxRenderingAPIVulkan::CreateLogicalDevice() {
         enabledShadingRate.pipelineFragmentShadingRate = VK_TRUE;
         enabledShadingRate.pNext = featureChain;
         featureChain = &enabledShadingRate;
+    }
+    VkPhysicalDeviceCustomBorderColorFeaturesEXT enabledCustomBorderColor{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CUSTOM_BORDER_COLOR_FEATURES_EXT};
+    if (mCustomBorderColorEnabled) {
+        enabledCustomBorderColor.customBorderColors = VK_TRUE;
+        enabledCustomBorderColor.customBorderColorWithoutFormat = VK_TRUE;
+        enabledCustomBorderColor.pNext = featureChain;
+        featureChain = &enabledCustomBorderColor;
     }
     createInfo.pNext = featureChain;
     CheckVk(vkCreateDevice(mPhysicalDevice, &createInfo, nullptr, &mDevice), "vkCreateDevice");

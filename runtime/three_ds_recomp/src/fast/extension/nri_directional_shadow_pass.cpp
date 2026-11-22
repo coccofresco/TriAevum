@@ -8,6 +8,7 @@
 #include "fast/extension/pica_directional_shadow_caster.h"
 #include "fast/extension/pica_directional_shadow_semantics.h"
 #include "fast/extension/resource_state_tracker.h"
+#include "fast/renderer3ds/pica_border_color.h"
 #include "fast/renderer3ds/pica_room_shadow_selection.h"
 #include "fast/renderer3ds/pica_native_point_replacement.h"
 #include "fast/renderer3ds/shadow_caster_stability_trace.h"
@@ -151,9 +152,13 @@ VkFormat CasterTextureFormat(const PicaSceneTextureBinding& texture) noexcept {
 // The sampler the ordered draw binds for this texture: native filters (a mip
 // filter only with more than one uploaded level), PICA wrap modes and the
 // native LOD clamp within the uploaded chain. The LOD bias stays in the program.
-nri::SamplerDesc CasterSamplerDesc(const PicaSceneTextureBinding& texture) noexcept {
+nri::SamplerDesc CasterSamplerDesc(
+    const PicaSceneTextureBinding& texture,
+    bool customBorderColorSupported) noexcept {
     const auto address = [](uint8_t wrap) {
         switch (wrap) {
+            case 1U:
+                return nri::AddressMode::CLAMP_TO_BORDER;
             case 2U:
             case 6U:
             case 7U:
@@ -173,6 +178,35 @@ nri::SamplerDesc CasterSamplerDesc(const PicaSceneTextureBinding& texture) noexc
     desc.mipMax = static_cast<float>(std::min<uint32_t>(texture.MaxMipLevel, highestMip));
     desc.addressModes = { address(texture.NativeWrapS), address(texture.NativeWrapT), nri::AddressMode::REPEAT };
     desc.isInteger = texture.ImageFormat == PicaSceneTextureImageFormat::R32Uint;
+    if (Renderer3ds::PicaUsesBorderColor(texture.NativeWrapS, texture.NativeWrapT)) {
+        const uint32_t borderColor = Renderer3ds::EffectivePicaBorderColor(
+            texture.NativeWrapS, texture.NativeWrapT, texture.NativeBorderColor);
+        if (desc.isInteger) {
+            if (borderColor == 0U) {
+                desc.borderColor.ui = {0U, 0U, 0U, 0U};
+            } else if (customBorderColorSupported) {
+                desc.borderColor.ui = {borderColor, 0U, 0U, 0U};
+            } else {
+                desc.borderColor.ui = {1U, 1U, 1U, 1U};
+            }
+        } else {
+            if (borderColor == 0x00000000U) {
+                desc.borderColor.f = {0.0F, 0.0F, 0.0F, 0.0F};
+            } else if (borderColor == 0xFF000000U) {
+                desc.borderColor.f = {0.0F, 0.0F, 0.0F, 1.0F};
+            } else if (borderColor == 0xFFFFFFFFU) {
+                desc.borderColor.f = {1.0F, 1.0F, 1.0F, 1.0F};
+            } else if (customBorderColorSupported) {
+                const auto rgba =
+                    Renderer3ds::DecodePicaBorderColorFloat(borderColor);
+                desc.borderColor.f = {rgba[0], rgba[1], rgba[2], rgba[3]};
+            } else {
+                const auto rgba =
+                    Renderer3ds::QuantizePicaBorderColorFloatFallback(borderColor);
+                desc.borderColor.f = {rgba[0], rgba[1], rgba[2], rgba[3]};
+            }
+        }
+    }
     return desc;
 }
 
@@ -185,6 +219,10 @@ uint64_t CasterSamplerKey(const nri::SamplerDesc& desc) noexcept {
     hash = HashValue(hash, desc.mipMax);
     hash = HashValue(hash, desc.addressModes.u);
     hash = HashValue(hash, desc.addressModes.v);
+    hash = HashValue(hash, desc.borderColor.ui.x);
+    hash = HashValue(hash, desc.borderColor.ui.y);
+    hash = HashValue(hash, desc.borderColor.ui.z);
+    hash = HashValue(hash, desc.borderColor.ui.w);
     return HashValue(hash, desc.isInteger);
 }
 #endif
@@ -479,7 +517,8 @@ struct NriDirectionalShadowPass::Impl {
     }
 
     nri::Descriptor* Sampler(const PicaSceneTextureBinding& texture) {
-        const auto desc = CasterSamplerDesc(texture);
+        const auto desc =
+            CasterSamplerDesc(texture, Interop->CustomBorderColorSupported());
         auto [found, inserted] = CasterSamplers.try_emplace(CasterSamplerKey(desc), nullptr);
         if (inserted &&
             Core->CreateSampler(*NriInteropAccess::Device(*Interop), desc, found->second) != nri::Result::SUCCESS) {

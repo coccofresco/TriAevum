@@ -410,6 +410,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         GfxNativeSamplerState SamplerState{};
         GfxNativeSamplerState AppliedSamplerState{};
         bool SamplerStateApplied = false;
+        bool IntegerFormat = false;
         bool NriOwnedImage = false;
         // Ownership is explicit, never inferred from ImageLayout: the image is
         // another owner's (a live Shadow2D render target, or an immutable raw
@@ -656,6 +657,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
         uint8_t Type = 0;
         uint8_t WrapS = 0;
         uint8_t WrapT = 0;
+        uint32_t BorderColor = 0;
         bool MinLinear = false;
         bool MagLinear = false;
         bool MipLinear = false;
@@ -1348,6 +1350,7 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     // VK_EXT_extended_dynamic_state, enabled whenever offered (libraries or
     // not), so the library policy no longer switches NRI's pipeline path.
     bool mExtendedDynamicStateEnabled = false;
+    bool mCustomBorderColorEnabled = false;
     NativePicaPreparationMode mNativePicaPreparationMode = NativePicaPreparationMode::Synchronous;
     bool mFrameReproducibleProgramSelection = false;
     bool mNativePicaProgramsPrepared = false;
@@ -1815,7 +1818,9 @@ class GfxRenderingAPIVulkan final : public GfxRenderingAPI,
     void TrimGpuCopyImagePool();
     void ReleaseGpuCopyImagePool();
     void ReleaseGpuCopySamplerCache();
-    VkSamplerCreateInfo BuildTextureSamplerInfo(const TextureRecord& texture) const;
+    VkSamplerCreateInfo BuildTextureSamplerInfo(
+        const TextureRecord& texture,
+        VkSamplerCustomBorderColorCreateInfoEXT& customBorderColorInfo) const;
     VkSampler AcquireSharedGpuCopySampler(const TextureRecord& texture);
     // Why a view that carries producer references cannot be served from the
     // immutable GPU copy. None of these is allowed to pass as a GPU result.

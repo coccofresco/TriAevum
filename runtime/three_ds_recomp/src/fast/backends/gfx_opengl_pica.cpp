@@ -4,6 +4,7 @@
 
 #include "fast/extension/pica_geometry_registry.h"
 #include "fast/extension/pica_shadow2d.h"
+#include "fast/renderer3ds/pica_border_color.h"
 #include "fast/renderer3ds/pica_composition_schedule.h"
 #include "fast/renderer3ds/pica_gl_shader_dialect.h"
 #include "oot3d/renderer/pica_texture_decode.h"
@@ -81,6 +82,7 @@ struct PicaGlTextureKey {
     uint8_t Type = 0U;
     uint8_t WrapS = 0U;
     uint8_t WrapT = 0U;
+    uint32_t BorderColor = 0U;
     bool MinLinear = false;
     bool MagLinear = false;
     bool MipLinear = false;
@@ -90,13 +92,13 @@ struct PicaGlTextureKey {
 
     bool operator<(const PicaGlTextureKey& other) const noexcept {
         return std::tie(ContentHash, PhysicalAddress, Width, Height, Format,
-                        Type, WrapS, WrapT, MinLinear, MagLinear, MipLinear,
-                        LodBiasRaw, MinMipLevel, MaxMipLevel) <
+                        Type, WrapS, WrapT, BorderColor, MinLinear, MagLinear,
+                        MipLinear, LodBiasRaw, MinMipLevel, MaxMipLevel) <
                std::tie(other.ContentHash, other.PhysicalAddress,
                         other.Width, other.Height, other.Format, other.Type,
-                        other.WrapS, other.WrapT, other.MinLinear,
-                        other.MagLinear, other.MipLinear, other.LodBiasRaw,
-                        other.MinMipLevel, other.MaxMipLevel);
+                        other.WrapS, other.WrapT, other.BorderColor,
+                        other.MinLinear, other.MagLinear, other.MipLinear,
+                        other.LodBiasRaw, other.MinMipLevel, other.MaxMipLevel);
     }
 };
 
@@ -331,13 +333,11 @@ GLenum ToPicaGlVertexType(GfxNativePicaVertexFormat format) {
 GLenum ToPicaGlWrap(uint8_t wrap) {
     switch (wrap) {
         case 0U: return GL_CLAMP_TO_EDGE;
+        case 1U: return GL_CLAMP_TO_BORDER;
         case 2U:
         case 6U:
         case 7U: return GL_REPEAT;
         case 3U: return GL_MIRRORED_REPEAT;
-        case 1U:
-            throw std::runtime_error(
-                "PICA clamp-to-border requires border color state");
         case 4U:
         case 5U:
             throw std::runtime_error("PICA asymmetric wrap is unsupported");
@@ -852,12 +852,16 @@ PicaGlTexture& GetPicaGlTexture(
     const uint64_t contentHash = texture.NativeContentHashAvailable
         ? texture.NativeContentHash
         : HashBytes(texture.NativeBytes);
+    const uint32_t effectiveBorderColor =
+        Renderer3ds::EffectivePicaBorderColor(
+            texture.NativeWrapS, texture.NativeWrapT,
+            texture.NativeBorderColor);
     const PicaGlTextureKey key{
         contentHash, texture.PhysicalAddress, texture.Width, texture.Height,
         texture.NativeFormat, texture.NativeType, texture.NativeWrapS,
-        texture.NativeWrapT, texture.MinLinear, texture.MagLinear,
-        texture.MipLinear, texture.LodBiasRaw, texture.MinMipLevel,
-        texture.MaxMipLevel,
+        texture.NativeWrapT, effectiveBorderColor, texture.MinLinear,
+        texture.MagLinear, texture.MipLinear, texture.LodBiasRaw,
+        texture.MinMipLevel, texture.MaxMipLevel,
     };
     auto [found, inserted] = state.Textures.try_emplace(key);
     if (!inserted) {
@@ -934,6 +938,19 @@ PicaGlTexture& GetPicaGlTexture(
                         ToPicaGlWrap(texture.NativeWrapS));
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T,
                         ToPicaGlWrap(texture.NativeWrapT));
+        if (Renderer3ds::PicaUsesBorderColor(texture.NativeWrapS,
+                                             texture.NativeWrapT)) {
+            if (texture.NativeType == 2U) {
+                const GLuint border[4]{effectiveBorderColor, 0U, 0U, 0U};
+                glTexParameterIuiv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR,
+                                   border);
+            } else {
+                const auto rgba = Renderer3ds::DecodePicaBorderColorFloat(
+                    effectiveBorderColor);
+                glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR,
+                                 rgba.data());
+            }
+        }
     } catch (...) {
         glDeleteTextures(1, &result.Handle);
         state.Textures.erase(found);

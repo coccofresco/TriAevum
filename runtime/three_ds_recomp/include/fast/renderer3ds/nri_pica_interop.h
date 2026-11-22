@@ -22,6 +22,9 @@ class NriPicaInterop {
 
     [[nodiscard]] virtual bool Available() const = 0;
     [[nodiscard]] virtual const std::string& UnavailableReason() const = 0;
+    [[nodiscard]] virtual bool CustomBorderColorSupported() const {
+        return false;
+    }
 
 #ifdef ENABLE_RENDERER3DS_NRI
     virtual bool WrapBuffer(VkBuffer buffer, uint64_t size,

@@ -25,6 +25,9 @@ class NriPicaPipelineBridge::InteropAdapter final
     [[nodiscard]] const std::string& UnavailableReason() const override {
         return mContext.UnavailableReason();
     }
+    [[nodiscard]] bool CustomBorderColorSupported() const override {
+        return mContext.CustomBorderColorSupported();
+    }
 
 #ifdef ENABLE_OOT3D_NRI
     bool WrapBuffer(VkBuffer buffer, uint64_t size,

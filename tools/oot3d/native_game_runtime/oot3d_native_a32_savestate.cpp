@@ -101,7 +101,7 @@ constexpr uint64_t kMaximumPicaDisplayImageBytes = 512ULL << 20U;
 
 using PicaTextureSnapshotIdentity =
     std::tuple<uint64_t, uint64_t, uint32_t, uint16_t, uint16_t,
-               uint8_t, uint8_t, uint8_t, uint8_t, bool, bool, bool,
+               uint8_t, uint8_t, uint8_t, uint8_t, uint32_t, bool, bool, bool,
                int16_t, uint8_t, uint8_t, bool>;
 
 std::optional<uint64_t> PicaDecodedMipChainBytes(
@@ -362,6 +362,10 @@ bool SaveNativeA32State(
                               texture.NativeType,
                               texture.NativeWrapS,
                               texture.NativeWrapT,
+                              (texture.NativeWrapS == 1U ||
+                               texture.NativeWrapT == 1U)
+                                  ? texture.NativeBorderColor
+                                  : 0U,
                               texture.MinLinear,
                               texture.MagLinear,
                               texture.MipLinear,
@@ -399,6 +403,7 @@ bool SaveNativeA32State(
                  {"native_type", texture.NativeType},
                  {"native_wrap_s", texture.NativeWrapS},
                  {"native_wrap_t", texture.NativeWrapT},
+                 {"native_border_color", texture.NativeBorderColor},
                  {"min_linear", texture.MinLinear},
                  {"mag_linear", texture.MagLinear},
                  {"mip_linear", texture.MipLinear},
@@ -1241,6 +1246,8 @@ bool LoadNativeA32State(
                     encoded.at("native_wrap_s").get<uint8_t>();
                 texture.NativeWrapT =
                     encoded.at("native_wrap_t").get<uint8_t>();
+                texture.NativeBorderColor =
+                    encoded.value("native_border_color", uint32_t{0});
                 texture.MinLinear =
                     encoded.at("min_linear").get<bool>();
                 texture.MagLinear =
@@ -1376,6 +1383,10 @@ bool LoadNativeA32State(
                                   texture.NativeType,
                                   texture.NativeWrapS,
                                   texture.NativeWrapT,
+                                  (texture.NativeWrapS == 1U ||
+                                   texture.NativeWrapT == 1U)
+                                      ? texture.NativeBorderColor
+                                      : 0U,
                                   texture.MinLinear,
                                   texture.MagLinear,
                                   texture.MipLinear,

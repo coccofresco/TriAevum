@@ -459,7 +459,7 @@ void Oot3dPicaSemanticTraceWriter::RecordDraw(
             : cpuContent ? HashOot3dPicaCanonicalBytes(bytes) : 0U;
         const uint64_t baseLevelHash = texture.NativeBaseLevelContentHashAvailable
             ? texture.NativeBaseLevelContentHash : resourceHash;
-        textures.push_back({
+        nlohmann::json textureJson{
             {"slot", texture.Slot},
             {"physical_address", texture.State.PhysicalAddress},
             {"width", texture.State.Width},
@@ -485,7 +485,11 @@ void Oot3dPicaSemanticTraceWriter::RecordDraw(
              FormatOot3dPicaCanonicalId(resourceHash)},
             {"copy_references",
              CopyReferenceJson(texture.CopyReferences)},
-        });
+        };
+        if (texture.State.WrapS == 1U || texture.State.WrapT == 1U) {
+            textureJson["border_color"] = texture.State.BorderColor;
+        }
+        textures.push_back(std::move(textureJson));
     }
     nlohmann::json vertexBindings = nlohmann::json::array();
     for (const auto& binding : plan.VertexBindings) {

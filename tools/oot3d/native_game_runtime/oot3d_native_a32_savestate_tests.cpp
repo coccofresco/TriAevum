@@ -765,6 +765,89 @@ int main() {
         Require(external.Directory() == gone, "a missing folder outside the installation was replaced");
     }
 
+    {
+        const auto borderRoot = root / "border-color-roundtrip";
+        const auto borderStatePath = borderRoot / "border.oot3dsav";
+        Oot3dNativePicaFrontend borderFrontend;
+        NativeA32CtrHostConfig borderHostConfig;
+        borderHostConfig.LinearHeapBaseAddress = 0x00100000U;
+        borderHostConfig.LinearHeapSize = 0x1000U;
+        borderHostConfig.HeapBaseAddress = 0x00200000U;
+        borderHostConfig.HeapSize = 0x1000U;
+        borderHostConfig.PicaFrontend = &borderFrontend;
+        borderHostConfig.SaveDataDirectory = borderRoot / "savedata";
+        NativeA32CtrHostServices borderHost(borderHostConfig);
+        NativeA32Process borderProcess(oot3d::recomp::a32::Registry{}, borderHost);
+        std::string borderError;
+        Require(borderProcess.MapRegion(
+                    {"test", 0x00100000U, 0x1000U, true, false, {}}, &borderError),
+                borderError);
+        Oot3dPicaPhysicalMemoryView borderPicaMemory(
+            borderProcess.Memory(), {{0x20000000U, 0x00100000U, 0x1000U}});
+        Oot3dNativePicaSubmissionQueue borderQueue(borderPicaMemory, true);
+        NativeA32DspHle borderDsp({{0x20000000U, 0x00100000U, 0x1000U}});
+        const NativeA32SavestateCompatibility borderCompatibility{
+            "code-sha", "oot3d", "source-snapshot"};
+        NativeA32SavestateRuntimeState borderRuntime{
+            10U, 0U, 0x1000ULL,
+            static_cast<uint32_t>(NativeA32ProcessRunKind::Waiting)};
+        borderRuntime.PicaTextureCacheAvailable = true;
+
+        Oot3d::Renderer::PicaTextureCacheEntrySnapshot borderA;
+        borderA.ContentHash = 0x123456789ABCDEF0ULL;
+        borderA.PhysicalAddress = 0x20000100U;
+        borderA.SourceWidth = 1U;
+        borderA.SourceHeight = 1U;
+        borderA.NativeFormat = 0U;
+        borderA.NativeType = 0U;
+        borderA.NativeWrapS = 1U;
+        borderA.NativeWrapT = 0U;
+        borderA.NativeBorderColor = 0x80112233U;
+        borderA.MinLinear = true;
+        borderA.MagLinear = true;
+        borderA.ImageWidth = 1U;
+        borderA.ImageHeight = 1U;
+        borderA.MipLevels = 1U;
+        borderA.PixelBytes = {1U, 2U, 3U, 4U};
+
+        auto borderB = borderA;
+        borderB.NativeBorderColor = 0xFF445566U;
+        borderRuntime.PicaTextureCache.push_back(borderA);
+        borderRuntime.PicaTextureCache.push_back(borderB);
+
+        NativeA32SavestateIoResult borderSaveIo;
+        Require(SaveNativeA32State(
+                    borderStatePath, borderCompatibility, borderRuntime,
+                    borderProcess, borderHost, borderFrontend, borderQueue,
+                    borderDsp, &borderSaveIo, &borderError),
+                borderError);
+
+        NativeA32CtrHostServices loadedHost(borderHostConfig);
+        NativeA32Process loadedProcess(oot3d::recomp::a32::Registry{}, loadedHost);
+        Require(loadedProcess.MapRegion(
+                    {"test", 0x00100000U, 0x1000U, true, false, {}}, &borderError),
+                borderError);
+        Oot3dNativePicaFrontend loadedFrontend;
+        Oot3dPicaPhysicalMemoryView loadedPicaMemory(
+            loadedProcess.Memory(), {{0x20000000U, 0x00100000U, 0x1000U}});
+        Oot3dNativePicaSubmissionQueue loadedQueue(loadedPicaMemory, true);
+        NativeA32DspHle loadedDsp({{0x20000000U, 0x00100000U, 0x1000U}});
+        NativeA32SavestateRuntimeState loadedRuntime;
+        NativeA32SavestateIoResult borderLoadIo;
+        Require(LoadNativeA32State(
+                    borderStatePath, borderCompatibility, loadedRuntime,
+                    loadedProcess, loadedHost, loadedFrontend, loadedQueue,
+                    loadedDsp, &borderLoadIo, &borderError),
+                borderError);
+        Require(loadedRuntime.PicaTextureCacheAvailable &&
+                    loadedRuntime.PicaTextureCache.size() == 2U &&
+                    loadedRuntime.PicaTextureCache[0].NativeWrapS == 1U &&
+                    loadedRuntime.PicaTextureCache[0].NativeBorderColor == 0x80112233U &&
+                    loadedRuntime.PicaTextureCache[1].NativeWrapS == 1U &&
+                    loadedRuntime.PicaTextureCache[1].NativeBorderColor == 0xFF445566U,
+                "native PICA clamp-to-border color did not survive A32 savestate round-trip");
+    }
+
     std::filesystem::remove_all(root, cleanupError);
     std::cout << "oot3d_native_a32_savestate_tests: ok\n";
     return 0;

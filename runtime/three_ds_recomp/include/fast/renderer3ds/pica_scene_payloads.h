@@ -118,6 +118,7 @@ struct PicaSceneTextureBinding {
     bool MinLinear = false;
     bool MagLinear = false;
     bool MipLinear = false;
+    uint32_t NativeBorderColor = 0;
 };
 
 // Native register values and the exact viewport/scissor applied to the

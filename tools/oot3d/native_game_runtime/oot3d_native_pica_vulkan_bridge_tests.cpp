@@ -4,9 +4,14 @@
 #include "oot3d_static_shadow_actor_catalog.h"
 
 #include "fast/extension/pica_uniform_layout.h"
+#if __has_include(<vulkan/vulkan.h>)
+#include <vulkan/vulkan.h>
+#endif
+#include "fast/renderer3ds/pica_border_color.h"
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <cstdlib>
 #include <iostream>
@@ -61,6 +66,9 @@ class RecordingBackend final : public Oot3d::Renderer::PicaRenderBackend {
                                draw.VertexBindings[0].Bytes.end());
         DrawTextureBytes.assign(draw.Textures[0].NativeBytes.begin(),
                                 draw.Textures[0].NativeBytes.end());
+        DrawTextureWrapS = draw.Textures[0].NativeWrapS;
+        DrawTextureWrapT = draw.Textures[0].NativeWrapT;
+        DrawTextureBorderColor = draw.Textures[0].NativeBorderColor;
         DrawTextureMipLinear = draw.Textures[0].MipLinear;
         DrawTextureLodBiasRaw = draw.Textures[0].LodBiasRaw;
         DrawTextureMinMip = draw.Textures[0].MinMipLevel;
@@ -145,6 +153,9 @@ class RecordingBackend final : public Oot3d::Renderer::PicaRenderBackend {
     std::vector<uint8_t> DrawFragmentUniformBytes;
     std::vector<uint8_t> DrawVertexBytes;
     std::vector<uint8_t> DrawTextureBytes;
+    uint8_t DrawTextureWrapS = 0;
+    uint8_t DrawTextureWrapT = 0;
+    uint32_t DrawTextureBorderColor = 0;
     bool DrawTextureMipLinear = false;
     int16_t DrawTextureLodBiasRaw = 0;
     uint8_t DrawTextureMinMip = 0;
@@ -237,6 +248,9 @@ int main() {
     texture.Slot = 1;
     texture.State.Width = 2;
     texture.State.Height = 2;
+    texture.State.WrapS = 1U;
+    texture.State.WrapT = 1U;
+    texture.State.BorderColor = 0xAA553311U;
     texture.State.MipLinear = true;
     texture.State.LodBiasRaw = -384;
     texture.State.MinMipLevel = 1U;
@@ -379,6 +393,9 @@ int main() {
                 backend.DrawVertexBytes == std::vector<uint8_t>({1, 2, 3, 4}) &&
                 backend.DrawTextureBytes ==
                     std::vector<uint8_t>({5, 6, 7, 8}) &&
+                backend.DrawTextureWrapS == 1U &&
+                backend.DrawTextureWrapT == 1U &&
+                backend.DrawTextureBorderColor == 0xAA553311U &&
                 backend.DrawTextureMipLinear &&
                 backend.DrawTextureLodBiasRaw == -384 &&
                 backend.DrawTextureMinMip == 1U &&
@@ -889,6 +906,103 @@ int main() {
                     aheadBackend.GuestCopyCompletions == 1U,
                 "split frames executed native work twice");
     }
+
+    {
+        using namespace Fast::Renderer3ds;
+        Require(EffectivePicaBorderColor(0U, 2U, 0x12345678U) == 0U &&
+                    EffectivePicaBorderColor(1U, 2U, 0x12345678U) == 0x12345678U &&
+                    EffectivePicaBorderColor(2U, 1U, 0x12345678U) == 0x12345678U,
+                "EffectivePicaBorderColor did not mask or preserve border color properly");
+
+        const auto decodedRgba = DecodePicaBorderColorFloat(0xFF804020U);
+        const auto nearFloat = [](float actual, float expected) {
+            return std::fabs(actual - expected) <= 1e-5F;
+        };
+        Require(nearFloat(decodedRgba[0], 32.0F / 255.0F) &&
+                    nearFloat(decodedRgba[1], 64.0F / 255.0F) &&
+                    nearFloat(decodedRgba[2], 128.0F / 255.0F) &&
+                    nearFloat(decodedRgba[3], 1.0F),
+                "DecodePicaBorderColorFloat decoded channels in wrong order");
+
+        const auto fallbackTransparent =
+            QuantizePicaBorderColorFloatFallback(0x40FFFFFFU);
+        const auto fallbackDark =
+            QuantizePicaBorderColorFloatFallback(0xFF102030U);
+        const auto fallbackLight =
+            QuantizePicaBorderColorFloatFallback(0xFFC0C0C0U);
+        Require(fallbackTransparent == std::array<float, 4>{0.0F, 0.0F, 0.0F, 0.0F} &&
+                    fallbackDark == std::array<float, 4>{0.0F, 0.0F, 0.0F, 1.0F} &&
+                    fallbackLight == std::array<float, 4>{1.0F, 1.0F, 1.0F, 1.0F},
+                "QuantizePicaBorderColorFloatFallback returned unexpected fallback color");
+
+#if defined(VK_VERSION_1_0)
+        {
+            VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
+            VkSamplerCustomBorderColorCreateInfoEXT customInfo{
+                VK_STRUCTURE_TYPE_SAMPLER_CUSTOM_BORDER_COLOR_CREATE_INFO_EXT};
+            info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+            ApplyVulkanBorderColor(info, customInfo, 0x80402010U, false, true);
+            Require(info.borderColor == VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK &&
+                        info.pNext == nullptr,
+                    "non-border float sampler unexpectedly attached custom border info");
+
+            ApplyVulkanBorderColor(info, customInfo, 0x80402010U, true, true);
+            Require(info.borderColor == VK_BORDER_COLOR_INT_TRANSPARENT_BLACK &&
+                        info.pNext == nullptr,
+                    "non-border integer sampler unexpectedly attached custom border info");
+
+            info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+            ApplyVulkanBorderColor(info, customInfo, 0x00000000U, false, true);
+            Require(info.borderColor == VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK &&
+                        info.pNext == nullptr,
+                    "transparent black border did not use standard float border enum");
+
+            ApplyVulkanBorderColor(info, customInfo, 0xFF000000U, false, true);
+            Require(info.borderColor == VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK &&
+                        info.pNext == nullptr,
+                    "opaque black border did not use standard float border enum");
+
+            ApplyVulkanBorderColor(info, customInfo, 0xFFFFFFFFU, false, true);
+            Require(info.borderColor == VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE &&
+                        info.pNext == nullptr,
+                    "opaque white border did not use standard float border enum");
+
+            ApplyVulkanBorderColor(info, customInfo, 0x80402010U, false, true);
+            Require(info.borderColor == VK_BORDER_COLOR_FLOAT_CUSTOM_EXT &&
+                        info.pNext == &customInfo &&
+                        customInfo.format == VK_FORMAT_UNDEFINED &&
+                        nearFloat(customInfo.customBorderColor.float32[0], 16.0F / 255.0F) &&
+                        nearFloat(customInfo.customBorderColor.float32[1], 32.0F / 255.0F) &&
+                        nearFloat(customInfo.customBorderColor.float32[2], 64.0F / 255.0F) &&
+                        nearFloat(customInfo.customBorderColor.float32[3], 128.0F / 255.0F),
+                    "custom float border color info was not chained or encoded properly");
+
+            info.pNext = nullptr;
+            ApplyVulkanBorderColor(info, customInfo, 0xFFEEEEEEU, false, false);
+            Require(info.borderColor == VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE &&
+                        info.pNext == nullptr,
+                    "unsupported custom float border fallback failed");
+
+            ApplyVulkanBorderColor(info, customInfo, 0x00ABCDEFU, true, true);
+            Require(info.borderColor == VK_BORDER_COLOR_INT_CUSTOM_EXT &&
+                        info.pNext == &customInfo &&
+                        customInfo.format == VK_FORMAT_UNDEFINED &&
+                        customInfo.customBorderColor.uint32[0] == 0x00ABCDEFU &&
+                        customInfo.customBorderColor.uint32[1] == 0U &&
+                        customInfo.customBorderColor.uint32[2] == 0U &&
+                        customInfo.customBorderColor.uint32[3] == 0U,
+                    "custom integer border color info was not chained or encoded properly");
+
+            info.pNext = nullptr;
+            ApplyVulkanBorderColor(info, customInfo, 0x00ABCDEFU, true, false);
+            Require(info.borderColor == VK_BORDER_COLOR_INT_OPAQUE_WHITE &&
+                        info.pNext == nullptr,
+                    "unsupported custom integer border fallback failed");
+        }
+#endif
+    }
+
     std::cout << "oot3d_native_pica_vulkan_bridge_tests: ok\n";
     return 0;
 }

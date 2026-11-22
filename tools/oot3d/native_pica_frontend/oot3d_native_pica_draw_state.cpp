@@ -129,6 +129,7 @@ Oot3dPicaTextureState DecodeTexture(
     result.LodBiasRaw = DecodeSigned13(lod);
     result.MaxMipLevel = static_cast<uint8_t>((lod >> 16U) & 0xFU);
     result.MinMipLevel = static_cast<uint8_t>((lod >> 24U) & 0xFU);
+    result.BorderColor = registers[base];
     return result;
 }
 

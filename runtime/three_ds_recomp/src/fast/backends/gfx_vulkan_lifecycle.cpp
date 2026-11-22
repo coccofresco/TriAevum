@@ -204,7 +204,8 @@ void GfxRenderingAPIVulkan::Init() {
                                mVulkanValidation.Enabled()
                                    ? &mValidationTelemetry : nullptr,
                                mGraphicsPipelineLibrariesEnabled,
-                               mExtendedDynamicStateEnabled)) {
+                               mExtendedDynamicStateEnabled,
+                               mCustomBorderColorEnabled)) {
         SPDLOG_INFO("OOT3D Vulkan NRI v180 interop enabled");
         // A pass replacing screen resources mid-frame may have recorded them
         // earlier in this frame: execute the recorded prefix, then everything

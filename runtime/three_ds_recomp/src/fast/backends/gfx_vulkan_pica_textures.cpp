@@ -105,6 +105,8 @@ GfxRenderingAPIVulkan::CreateGpuCopiedTextureRecord(
         : GfxNativeTextureFilter::Nearest;
     record.SamplerState.WrapS = DecodeNativePicaWrap(texture.NativeWrapS);
     record.SamplerState.WrapT = DecodeNativePicaWrap(texture.NativeWrapT);
+    record.SamplerState.BorderColor = Renderer3ds::EffectivePicaBorderColor(
+        texture.NativeWrapS, texture.NativeWrapT, texture.NativeBorderColor);
     record.SamplerState.LodBias = 0.0F;
     record.SamplerState.MinMipLevel = texture.MinMipLevel;
     record.SamplerState.MaxMipLevel = texture.MaxMipLevel;
@@ -174,6 +176,9 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
         key.Type = texture.NativeType;
         key.WrapS = texture.NativeWrapS;
         key.WrapT = texture.NativeWrapT;
+        key.BorderColor = Renderer3ds::EffectivePicaBorderColor(
+            texture.NativeWrapS, texture.NativeWrapT,
+            texture.NativeBorderColor);
         key.MinLinear = texture.MinLinear;
         key.MagLinear = texture.MagLinear;
         key.MipLinear = texture.MipLinear;
@@ -390,6 +395,11 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     DecodeNativePicaWrap(texture.NativeWrapS);
                 record.SamplerState.WrapT =
                     DecodeNativePicaWrap(texture.NativeWrapT);
+                record.SamplerState.BorderColor =
+                    Renderer3ds::EffectivePicaBorderColor(
+                        texture.NativeWrapS, texture.NativeWrapT,
+                        texture.NativeBorderColor);
+                record.IntegerFormat = format == VK_FORMAT_R32_UINT;
                 record.SamplerState.LodBias = 0.0F;
                 record.SamplerState.MinMipLevel = !shadow2d
                     ? texture.MinMipLevel : 0U;
@@ -460,6 +470,7 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                             !textureKey.CustomReplacement
                         ? VK_FORMAT_R32_UINT
                         : VK_FORMAT_R8G8B8A8_UNORM;
+                record.IntegerFormat = format == VK_FORMAT_R32_UINT;
                 CreateNativePicaTextureImage(
                     record, pixels, record.Width, record.Height,
                     record.MipLevels, format);
@@ -568,6 +579,11 @@ GfxRenderingAPIVulkan::ResolveNativePicaTexture(
                     DecodeNativePicaWrap(texture.NativeWrapS);
                 record.SamplerState.WrapT =
                     DecodeNativePicaWrap(texture.NativeWrapT);
+                record.SamplerState.BorderColor =
+                    Renderer3ds::EffectivePicaBorderColor(
+                        texture.NativeWrapS, texture.NativeWrapT,
+                        texture.NativeBorderColor);
+                record.IntegerFormat = true;
                 record.SamplerState.MaxMipLevel = 0U;
                 record.SamplerState.MinMipLevel = 0U;
                 VkImageViewCreateInfo view{

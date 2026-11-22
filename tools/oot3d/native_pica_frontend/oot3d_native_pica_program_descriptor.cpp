@@ -272,6 +272,9 @@ uint64_t BuildRasterStateId(const Oot3dPicaDrawPacket& packet,
         hash.AppendU8(texture.WrapT);
         hash.AppendBool(texture.MinLinear);
         hash.AppendBool(texture.MagLinear);
+        if (texture.WrapS == 1U || texture.WrapT == 1U) {
+            hash.AppendU32(texture.BorderColor);
+        }
     }
     // Preserve raw output-merger encodings as a collision guard while the
     // decoded contract grows to cover remaining PICA modes.

@@ -144,6 +144,7 @@ struct Oot3dPicaTextureState {
     int16_t LodBiasRaw = 0;
     uint8_t MinMipLevel = 0;
     uint8_t MaxMipLevel = 0;
+    uint32_t BorderColor = 0;
 };
 
 uint8_t Oot3dPicaTextureMipLevelCount(

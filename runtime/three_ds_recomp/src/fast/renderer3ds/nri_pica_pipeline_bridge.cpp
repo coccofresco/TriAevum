@@ -3,6 +3,7 @@
 
 #ifdef ENABLE_RENDERER3DS_VULKAN
 
+#include "fast/renderer3ds/pica_border_color.h"
 #include "fast/renderer3ds/pica_nri_shader_contract.h"
 #include "fast/renderer3ds/nri_pica_pipeline_identity.h"
 #include "fast/renderer3ds/pica_device_pipeline_pool.h"
@@ -194,6 +195,8 @@ nri::AddressMode ToNriAddressMode(VkSamplerAddressMode mode) {
     switch (mode) {
         case VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE:
             return nri::AddressMode::CLAMP_TO_EDGE;
+        case VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER:
+            return nri::AddressMode::CLAMP_TO_BORDER;
         case VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT:
             return nri::AddressMode::MIRRORED_REPEAT;
         default:
@@ -210,6 +213,7 @@ struct NriPicaSamplerKey {
     VkSamplerMipmapMode MipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
     VkSamplerAddressMode AddressU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     VkSamplerAddressMode AddressV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    uint32_t BorderColor = 0U;
     float MipBias = 0.0F;
     float MinLod = 0.0F;
     float MaxLod = 0.0F;
@@ -1147,9 +1151,13 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
             mImpl->Interop->TextureView(source.Image, false);
         if (textures[index] == nullptr)
             return false;
+        const bool usesBorder =
+            source.AddressU == VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER ||
+            source.AddressV == VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+        const uint32_t borderColor = usesBorder ? source.BorderColor : 0U;
         const NriPicaSamplerKey key{
             source.MinFilter, source.MagFilter, source.MipmapMode,
-            source.AddressU, source.AddressV, source.MipBias,
+            source.AddressU, source.AddressV, borderColor, source.MipBias,
             source.MinLod, source.MaxLod, source.Integer, source.Anisotropy};
         // Consecutive draws mostly repeat each slot's sampler. Equal keys are
         // equivalent under the map's ordering, and map entries live until
@@ -1179,6 +1187,36 @@ bool NriPicaPipelineBridge::BindOwnedDraw(
                 ToNriAddressMode(source.AddressV),
                 nri::AddressMode::REPEAT};
             samplerDesc.isInteger = source.Integer;
+            if (usesBorder) {
+                const bool customSupported =
+                    mImpl->Interop->CustomBorderColorSupported();
+                if (source.Integer) {
+                    if (borderColor == 0U) {
+                        samplerDesc.borderColor.ui = {0U, 0U, 0U, 0U};
+                    } else if (customSupported) {
+                        samplerDesc.borderColor.ui = {borderColor, 0U, 0U, 0U};
+                    } else {
+                        samplerDesc.borderColor.ui = {1U, 1U, 1U, 1U};
+                    }
+                } else {
+                    if (borderColor == 0x00000000U) {
+                        samplerDesc.borderColor.f = {0.0F, 0.0F, 0.0F, 0.0F};
+                    } else if (borderColor == 0xFF000000U) {
+                        samplerDesc.borderColor.f = {0.0F, 0.0F, 0.0F, 1.0F};
+                    } else if (borderColor == 0xFFFFFFFFU) {
+                        samplerDesc.borderColor.f = {1.0F, 1.0F, 1.0F, 1.0F};
+                    } else if (customSupported) {
+                        const auto rgba = DecodePicaBorderColorFloat(borderColor);
+                        samplerDesc.borderColor.f = {
+                            rgba[0], rgba[1], rgba[2], rgba[3]};
+                    } else {
+                        const auto rgba =
+                            QuantizePicaBorderColorFloatFallback(borderColor);
+                        samplerDesc.borderColor.f = {
+                            rgba[0], rgba[1], rgba[2], rgba[3]};
+                    }
+                }
+            }
             if (core->CreateSampler(
                     *mImpl->Interop->Device(),
                     samplerDesc, sampler->second) !=
